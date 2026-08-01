@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # 验签：微信支付公钥模式（官方推荐，无过期时间）
     wxpay_public_key_id: str = ""
     wxpay_public_key_path: str = ""
+    # 灰度兼容：平台证书（切换灰度期内回调/应答可能仍用平台证书签名）
+    wxpay_platform_cert_path: str = ""
     wxpay_notify_url: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

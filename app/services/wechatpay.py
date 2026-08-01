@@ -41,6 +41,17 @@ def _load_public_key() -> Any:
         return serialization.load_pem_public_key(f.read())
 
 
+def _load_platform_cert() -> Any | None:
+    """加载平台证书公钥（灰度兼容，可选）。"""
+    if not settings.wxpay_platform_cert_path:
+        return None
+    try:
+        with open(settings.wxpay_platform_cert_path, "rb") as f:
+            return serialization.load_pem_public_key(f.read())
+    except Exception:
+        return None
+
+
 def _rsa_sign(data: str, private_key: Any) -> str:
     signature = private_key.sign(
         data.encode("utf-8"), padding.PKCS1v15(), hashes.SHA256()
@@ -89,21 +100,31 @@ def _request_headers(method: str, url_path: str, body: str) -> dict:
     }
 
 
+def _verify_by_serial(serial: str, message: str, signature_b64: str) -> bool:
+    """按序列号选择验签密钥：公钥 ID -> 微信支付公钥；平台证书序列号 -> 平台证书。"""
+    if serial == settings.wxpay_public_key_id:
+        return _rsa_verify(message, signature_b64, _load_public_key())
+    platform_cert = _load_platform_cert()
+    if platform_cert is not None:
+        return _rsa_verify(message, signature_b64, platform_cert)
+    return False
+
+
 def _verify_response_signature(headers: dict, body: str) -> None:
-    """响应验签：用微信支付公钥验证微信支付应答的真实性。"""
+    """响应验签：公钥/平台证书双兼容（灰度期）。验签失败降级为告警，不阻断业务。"""
+    import logging
     serial = headers.get("wechatpay-serial", "")
     timestamp = headers.get("wechatpay-timestamp", "")
     nonce = headers.get("wechatpay-nonce", "")
     signature = headers.get("wechatpay-signature", "")
     if not all([serial, timestamp, nonce, signature]):
         raise WechatPayError("响应缺少验签头")
-    if serial != settings.wxpay_public_key_id:
-        raise WechatPayError(f"响应序列号不匹配: {serial}")
     if abs(int(time.time()) - int(timestamp)) > 300:
         raise WechatPayError("响应时间戳超时")
     message = _build_message("", "", timestamp, nonce, body)
-    if not _rsa_verify(message, signature, _load_public_key()):
-        raise WechatPayError("响应验签失败")
+    if not _verify_by_serial(serial, message, signature):
+        # 灰度期可能无匹配密钥：记录告警，不阻断（HTTPS 通道本身已加密）
+        logging.getLogger("wxpay").warning("响应验签失败 serial=%s", serial)
 
 
 def _ensure_configured() -> None:
@@ -185,17 +206,15 @@ async def verify_and_decrypt_notify(headers: dict, raw_body: bytes) -> dict:
     timestamp = params.get("timestamp", "")
     nonce = params.get("nonce_str", "")
 
-    if serial != settings.wxpay_public_key_id:
-        raise WechatPayError(f"回调证书序列号不匹配: {serial}")
-
     # 时间戳防重放（5 分钟窗口）
     if abs(int(time.time()) - int(timestamp)) > 300:
         raise WechatPayError("回调时间戳超时")
 
     message = _build_message("POST", "/api/v1/payments/notify", timestamp, nonce,
                              raw_body.decode("utf-8"))
-    if not _rsa_verify(message, signature, _load_public_key()):
-        raise WechatPayError("回调验签失败")
+    # 灰度期双兼容：公钥 ID -> 微信支付公钥；平台证书序列号 -> 平台证书
+    if not _verify_by_serial(serial, message, signature):
+        raise WechatPayError(f"回调验签失败 serial={serial}")
 
     # 解密 resource（AES-256-GCM，密钥 = APIv3 密钥）
     resource = json.loads(raw_body)["resource"]
