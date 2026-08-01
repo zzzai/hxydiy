@@ -75,8 +75,8 @@ docker compose up -d --build   # 更新代码后重新部署
 
 ## 微信小程序联调
 
-- 小程序 `services/http.js` 的 `CUSTOMER_API_BASE` 指向 `https://hxyapi.hexiaoyue.com/api/v1/customer`
-- 微信公众平台 → 开发管理 → 开发设置 → 服务器域名：把 `hxyapi.hexiaoyue.com` 加入 request 合法域名
+- 小程序 `services/http.js` 的 `CUSTOMER_API_BASE` 指向 `https://miniapp.hexiaoyue.com/api/v1/customer`
+- 微信公众平台 → 开发管理 → 开发设置 → 服务器域名：把 `miniapp.hexiaoyue.com` 加入 request 合法域名
 - 本地联调可在开发者工具勾选"不校验合法域名"
 
 ## 约定

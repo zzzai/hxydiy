@@ -21,4 +21,4 @@ done
 
 echo "==> 4/4 验证"
 curl -s http://127.0.0.1:8010/api/v1/health && echo ""
-echo "部署完成。外部访问：https://hxyapi.hexiaoyue.com/api/v1/health"
+echo "部署完成。外部访问：https://miniapp.hexiaoyue.com/api/v1/health"
