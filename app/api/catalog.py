@@ -1,12 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
-from app.models import PriceBook, Project, Store
+from app.models import Addon, PriceBook, Project, Store
 from app.schemas.catalog import ProjectListResponse, ProjectOut, StoreOut
 
 router = APIRouter(tags=["catalog"])
+
+
+class AddonOut(BaseModel):
+    id: int
+    name: str
+    duration_min: int | None = None
+    price_cents: int
+
+    model_config = {"from_attributes": True}
 
 
 def _project_to_out(db: Session, p: Project) -> ProjectOut:
@@ -56,3 +66,14 @@ def get_project(project_id: int, db: Session = Depends(get_db)) -> ProjectOut:
     if not project or project.publication_status != "published":
         raise HTTPException(status_code=404, detail="项目不存在或未发布")
     return _project_to_out(db, project)
+
+
+@router.get("/addons", response_model=list[AddonOut])
+def list_addons(
+    store_id: int = Query(..., description="门店 ID"),
+    db: Session = Depends(get_db),
+) -> list[Addon]:
+    """门店可用加项（仅 published）。"""
+    return list(db.scalars(select(Addon).where(
+        Addon.store_id == store_id, Addon.publication_status == "published"
+    ).order_by(Addon.price_cents)))
