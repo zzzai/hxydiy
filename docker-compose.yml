@@ -21,6 +21,8 @@ services:
     env_file: .env
     ports:
       - "18086:8010"   # 供服务器统一 Nginx 反代（与 CRMEB 的 FRP 模式一致）
+    volumes:
+      - /etc/hxy/certs:/etc/hxy/certs:ro   # 微信支付证书（宿主目录，容器只读）
     depends_on:
       db:
         condition: service_healthy
