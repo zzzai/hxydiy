@@ -9,6 +9,16 @@ from app.schemas.catalog import ProjectListResponse, ProjectOut, StoreOut
 router = APIRouter(tags=["catalog"])
 
 
+def _project_to_out(db: Session, p: Project) -> ProjectOut:
+    prices = list(db.scalars(select(PriceBook).where(PriceBook.project_id == p.id)))
+    return ProjectOut(
+        id=p.id, code=p.code, category=p.category, category_mark=p.category_mark,
+        name=p.name, duration_min=p.duration_min, summary=p.summary,
+        image_url=p.image_url, tags=p.tags, price_label=p.price_label,
+        prices=[{"price_type": x.price_type, "amount_cents": x.amount_cents} for x in prices],
+    )
+
+
 @router.get("/stores", response_model=list[StoreOut])
 def list_stores(db: Session = Depends(get_db)) -> list[Store]:
     return list(db.scalars(select(Store).order_by(Store.id)))
@@ -35,18 +45,14 @@ def list_projects(
     if category:
         stmt = stmt.where(Project.category == category)
     projects = list(db.scalars(stmt.order_by(Project.id)))
-
-    items: list[ProjectOut] = []
-    for p in projects:
-        prices = list(
-            db.scalars(select(PriceBook).where(PriceBook.project_id == p.id))
-        )
-        items.append(
-            ProjectOut(
-                id=p.id, code=p.code, category=p.category, category_mark=p.category_mark,
-                name=p.name, duration_min=p.duration_min, summary=p.summary,
-                image_url=p.image_url, tags=p.tags, price_label=p.price_label,
-                prices=[{"price_type": x.price_type, "amount_cents": x.amount_cents} for x in prices],
-            )
-        )
+    items = [_project_to_out(db, p) for p in projects]
     return ProjectListResponse(items=items, total=len(items))
+
+
+@router.get("/projects/{project_id}", response_model=ProjectOut)
+def get_project(project_id: int, db: Session = Depends(get_db)) -> ProjectOut:
+    """项目详情（仅 published）。"""
+    project = db.get(Project, project_id)
+    if not project or project.publication_status != "published":
+        raise HTTPException(status_code=404, detail="项目不存在或未发布")
+    return _project_to_out(db, project)
