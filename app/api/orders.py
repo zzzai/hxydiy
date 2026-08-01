@@ -66,39 +66,55 @@ def create_order(
     discount_cents = 0
     order_items: list[dict] = []
 
-    for item in body.items:
-        project = db.get(Project, item.project_id)
-        if not project or project.publication_status != "published":
-            raise HTTPException(status_code=404, detail=f"项目 {item.project_id} 不存在或未发布")
-
-        # 服务端读价：会员取 member 价，否则取 store 价
-        price_row = db.scalar(select(PriceBook).where(
-            PriceBook.project_id == project.id,
-            PriceBook.price_type == ("member" if user.is_member else "store"),
-        ))
-        if price_row is None:
-            price_row = db.scalar(select(PriceBook).where(
-                PriceBook.project_id == project.id, PriceBook.price_type == "store"
-            ))
-        unit_price = price_row.amount_cents if price_row else 0
-
-        addon_price = 0
-        for addon_id in item.addon_ids:
-            from app.models import Addon
-            addon = db.get(Addon, addon_id)
-            if addon and addon.publication_status == "published":
-                addon_price += addon.price_cents
-
-        subtotal = (unit_price + addon_price) * item.quantity
-        total_cents += subtotal
+    # 会员订单：按 member_plans 计价（年度卡/月卡/储值）
+    if body.order_type == "member":
+        if not body.member_plan_id:
+            raise HTTPException(status_code=400, detail="请选择会员方案")
+        from app.models import MemberPlan
+        plan = db.get(MemberPlan, body.member_plan_id)
+        if not plan or plan.status != "published":
+            raise HTTPException(status_code=404, detail="会员方案不存在或未发布")
+        total_cents = plan.price_cents
         order_items.append({
-            "project_id": project.id,
-            "name": project.name,
-            "unit_price_cents": unit_price,
-            "addon_price_cents": addon_price,
-            "quantity": item.quantity,
-            "subtotal_cents": subtotal,
+            "name": plan.name,
+            "unit_price_cents": plan.price_cents,
+            "quantity": 1,
+            "subtotal_cents": plan.price_cents,
         })
+    else:
+        for item in body.items:
+            project = db.get(Project, item.project_id)
+            if not project or project.publication_status != "published":
+                raise HTTPException(status_code=404, detail=f"项目 {item.project_id} 不存在或未发布")
+
+            # 服务端读价：会员取 member 价，否则取 store 价
+            price_row = db.scalar(select(PriceBook).where(
+                PriceBook.project_id == project.id,
+                PriceBook.price_type == ("member" if user.is_member else "store"),
+            ))
+            if price_row is None:
+                price_row = db.scalar(select(PriceBook).where(
+                    PriceBook.project_id == project.id, PriceBook.price_type == "store"
+                ))
+            unit_price = price_row.amount_cents if price_row else 0
+
+            addon_price = 0
+            for addon_id in item.addon_ids:
+                from app.models import Addon
+                addon = db.get(Addon, addon_id)
+                if addon and addon.publication_status == "published":
+                    addon_price += addon.price_cents
+
+            subtotal = (unit_price + addon_price) * item.quantity
+            total_cents += subtotal
+            order_items.append({
+                "project_id": project.id,
+                "name": project.name,
+                "unit_price_cents": unit_price,
+                "addon_price_cents": addon_price,
+                "quantity": item.quantity,
+                "subtotal_cents": subtotal,
+            })
 
     # 优惠券锁定（支付成功后变 used，失败/过期释放）
     if body.coupon_id:

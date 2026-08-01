@@ -11,7 +11,8 @@ class OrderItemIn(BaseModel):
 
 class OrderCreate(BaseModel):
     order_type: str = "service"  # service / product / member
-    items: list[OrderItemIn]
+    items: list[OrderItemIn] = []
+    member_plan_id: int | None = None  # order_type=member 时必填
     store_id: int
     booking_date: str | None = None
     booking_time: str | None = None
