@@ -42,58 +42,36 @@ cp .env.example .env
 | GET | /api/v1/orders | 我的订单 |
 | GET | /api/v1/orders/{id} | 订单详情 |
 
-## 生产部署（服务器，Linux）
+## 生产部署（服务器 2核4G + Docker，推荐）
 
 ```bash
-# 1. 安装 PostgreSQL
-sudo apt update && sudo apt install -y postgresql postgresql-contrib nginx
-sudo -u postgres createuser hxy --pwprompt   # 设密码
-sudo -u postgres createdb -O hxy hxy
+# 0. 准备：把 hxy-server 目录传到服务器（scp / git clone / 面板上传均可），
+#    并在服务器上创建证书目录、放入域名证书（fullchain.pem + privkey.pem）
+mkdir -p /etc/ssl/hxy
+# 将证书文件放到 /etc/ssl/hxy/ 下（文件名必须与 nginx.conf 一致）
 
-# 2. 上传代码并安装依赖（服务器 Python 3.11+）
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-
-# 3. 配置 .env（生产）——凭证从服务器安全位置读取，绝不在仓库/聊天中
+# 1. 配置生产环境变量（凭证只在这里填，绝不入库/进聊天）
 cp .env.example .env
-# DATABASE_URL=postgresql+psycopg://hxy:密码@localhost:5432/hxy
-# 填入 WX_APPSECRET / WXPAY_APIV3_KEY / 证书路径等
+#   编辑 .env：
+#   ENVIRONMENT=production
+#   POSTGRES_PASSWORD=<随机强密码>
+#   DATABASE_URL=postgresql+psycopg://hxy:<密码>@db:5432/hxy   # 注意主机名是 db（compose 服务名）
+#   JWT_SECRET=<长随机串>
+#   WX_APPSECRET=<公众平台重置后的新值>
+#   WXPAY_APIV3_KEY / WXPAY_CERT_SERIAL_NO / WXPAY_PRIVATE_KEY_PATH 等支付凭证
+#   SEED_ON_START=true   # 首店验证阶段开；正式运营改 false
 
-# 4. 执行迁移（生产用 Alembic）
-.venv/bin/alembic upgrade head
+# 2. 一键部署（构建镜像 + 启动三容器 + 健康检查）
+bash deploy.sh
 
-# 5. 用 systemd 托管（示例见下）+ Nginx 反代 + HTTPS
+# 3. 常用运维命令
+docker compose logs -f api     # 看 API 日志
+docker compose restart api     # 重启 API
+docker compose down            # 停止（数据在 pgdata 卷，不会丢）
+docker compose up -d --build   # 更新代码后重新部署
 ```
 
-systemd 服务（/etc/systemd/system/hxy-api.service）：
-```ini
-[Unit]
-Description=HXY Customer API
-After=network.target postgresql.service
-
-[Service]
-WorkingDirectory=/srv/hxy-server
-ExecStart=/srv/hxy-server/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010
-Restart=always
-User=hxy
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Nginx（server 块内）：
-```nginx
-server {
-    listen 443 ssl;
-    server_name api.hexiaoyue.com;
-    ssl_certificate /etc/ssl/hxy/fullchain.pem;
-    ssl_certificate_key /etc/ssl/hxy/privkey.pem;
-    location / {
-        proxy_pass http://127.0.0.1:8010;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
+> 备选：不用 Docker 的手动部署（PostgreSQL + systemd + Nginx）见仓库早期版本 README；Docker 方案优先。
 
 ## 微信小程序联调
 
