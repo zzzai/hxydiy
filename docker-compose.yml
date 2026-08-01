@@ -19,6 +19,8 @@ services:
     build: .
     container_name: hxy-api
     env_file: .env
+    ports:
+      - "18086:8010"   # 供服务器统一 Nginx 反代（与 CRMEB 的 FRP 模式一致）
     depends_on:
       db:
         condition: service_healthy
