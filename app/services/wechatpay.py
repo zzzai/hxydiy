@@ -81,10 +81,29 @@ def _request_headers(method: str, url_path: str, body: str) -> dict:
             f'timestamp="{timestamp}",'
             f'serial_no="{settings.wxpay_cert_serial_no}"'
         ),
+        # 微信支付公钥模式：商户请求时声明签名所用证书序列号（微信支付据此验商户请求签名）
+        "Wechatpay-Serial": settings.wxpay_cert_serial_no,
         "Accept": "application/json",
         "Content-Type": "application/json",
         "User-Agent": "hxy-miniapp/1.0",
     }
+
+
+def _verify_response_signature(headers: dict, body: str) -> None:
+    """响应验签：用微信支付公钥验证微信支付应答的真实性。"""
+    serial = headers.get("wechatpay-serial", "")
+    timestamp = headers.get("wechatpay-timestamp", "")
+    nonce = headers.get("wechatpay-nonce", "")
+    signature = headers.get("wechatpay-signature", "")
+    if not all([serial, timestamp, nonce, signature]):
+        raise WechatPayError("响应缺少验签头")
+    if serial != settings.wxpay_public_key_id:
+        raise WechatPayError(f"响应序列号不匹配: {serial}")
+    if abs(int(time.time()) - int(timestamp)) > 300:
+        raise WechatPayError("响应时间戳超时")
+    message = _build_message("", "", timestamp, nonce, body)
+    if not _rsa_verify(message, signature, _load_public_key()):
+        raise WechatPayError("响应验签失败")
 
 
 def _ensure_configured() -> None:
@@ -126,6 +145,7 @@ async def create_jsapi_payment(out_trade_no: str, description: str,
             headers=_request_headers("POST", path, body),
             content=body,
         )
+    _verify_response_signature(dict(resp.headers), resp.text)
     if resp.status_code != 200:
         raise WechatPayError(f"统一下单失败 {resp.status_code}: {resp.text[:200]}")
 
