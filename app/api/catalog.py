@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
-from app.models import Addon, PriceBook, Project, Store
+from app.models import Addon, PriceBook, Product, Project, Store
 from app.schemas.catalog import ProjectListResponse, ProjectOut, StoreOut
 
 router = APIRouter(tags=["catalog"])
@@ -15,6 +15,18 @@ class AddonOut(BaseModel):
     name: str
     duration_min: int | None = None
     price_cents: int
+
+    model_config = {"from_attributes": True}
+
+
+class ProductOut(BaseModel):
+    id: int
+    name: str
+    desc: str = ""
+    spec: str = ""
+    product_type: str
+    price_cents: int
+    image_url: str = ""
 
     model_config = {"from_attributes": True}
 
@@ -77,3 +89,18 @@ def list_addons(
     return list(db.scalars(select(Addon).where(
         Addon.store_id == store_id, Addon.publication_status == "published"
     ).order_by(Addon.price_cents)))
+
+
+@router.get("/products", response_model=list[ProductOut])
+def list_products(
+    store_id: int = Query(..., description="门店 ID"),
+    product_type: str | None = None,
+    db: Session = Depends(get_db),
+) -> list[Product]:
+    """商城商品（仅 published，到店自提）。"""
+    stmt = select(Product).where(
+        Product.store_id == store_id, Product.publication_status == "published"
+    )
+    if product_type:
+        stmt = stmt.where(Product.product_type == product_type)
+    return list(db.scalars(stmt.order_by(Product.id)))

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
-    Addon, CouponTemplate, MemberPlan, PriceBook, Project, Store, UserCoupon, User,
+    Addon, CouponTemplate, MemberPlan, PriceBook, Product, Project, Store, UserCoupon, User,
 )
 
 STORE = {
@@ -78,6 +78,22 @@ NEW_USER_COUPON = {
     "auto_grant_new_user": True,
 }
 
+# 商城商品（价格 9.9 暂定，待门店复核）
+PRODUCTS = [
+    ("hxy-p-foot-ai", "艾草草本泡脚包", "门店同源草本香，适合日常泡一泡。", "10 包 / 袋", "foot", 990,
+     "/assets/products/herbal-foot-bath-bag.png"),
+    ("hxy-p-foot-chenpi", "桂艾陈皮泡脚包", "香气更有记忆点，家庭装 10 包。", "10 包 / 袋", "foot", 990,
+     "/assets/products/chenpi-foot-bath-pouch.png"),
+    ("hxy-p-heat-ai", "艾草热敷袋", "肩颈、腰背日常热敷放松。", "1 只 / 袋", "heat", 990,
+     "/assets/products/herbal-heat-pack.png"),
+    ("hxy-p-heat-film", "一次性泡脚桶膜", "家用干净方便，20 片装。", "20 片 / 包", "heat", 990,
+     "/assets/products/daily-care-pack.png"),
+    ("hxy-p-gift-home", "家门口放松礼盒", "泡脚包、热敷袋、到店券组合。", "组合礼袋", "gift", 990,
+     "/assets/products/home-relax-gift.png"),
+    ("hxy-p-gift-family", "爸妈常来礼卡", "到店项目券 + 草本包，适合送家人。", "礼卡 1 张", "gift", 990,
+     "/assets/products/family-relax-card.png"),
+]
+
 
 def seed(db: Session) -> None:
     if db.scalar(select(Store).limit(1)):
@@ -112,4 +128,11 @@ def seed(db: Session) -> None:
 
     tpl = CouponTemplate(**NEW_USER_COUPON, status="published")
     db.add(tpl)
+
+    for code, name, desc, spec, ptype, price, img in PRODUCTS:
+        db.add(Product(
+            store_id=store.id, code=code, name=name, desc=desc, spec=spec,
+            product_type=ptype, price_cents=price, image_url=img,
+            publication_status="published",
+        ))
     db.commit()

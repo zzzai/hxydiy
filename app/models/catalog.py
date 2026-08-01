@@ -57,3 +57,21 @@ class Addon(Base):
     price_cents: Mapped[int] = mapped_column(Integer)
     publication_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Product(Base):
+    """商城商品（到店自提；定价 9.9 暂定，待门店复核）。"""
+
+    __tablename__ = "products"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    desc: Mapped[str] = mapped_column(String(256), default="")
+    spec: Mapped[str] = mapped_column(String(64), default="")
+    product_type: Mapped[str] = mapped_column(String(16), index=True)  # foot/heat/gift
+    price_cents: Mapped[int] = mapped_column(Integer)
+    image_url: Mapped[str] = mapped_column(String(512), default="")
+    publication_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
