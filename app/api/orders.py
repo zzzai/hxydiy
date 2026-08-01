@@ -152,6 +152,24 @@ def create_order(
     return CreateOrderResponse(data=OrderOut.model_validate(order))
 
 
+def _lazy_expire(db: Session, order: Order) -> bool:
+    """惰性过期：pending_payment 且超过 expire_at -> expired，并释放锁定的优惠券。"""
+    from datetime import datetime, timezone
+    if order.status == "pending_payment" and order.expire_at:
+        if datetime.now(timezone.utc) > order.expire_at:
+            _record_event(db, order.id, order.status, "expired", "expire", "system",
+                          "支付超时自动过期")
+            order.status = "expired"
+            if order.coupon_id:
+                uc = db.get(UserCoupon, order.coupon_id)
+                if uc and uc.status == "locked":
+                    uc.status = "unused"
+                    uc.locked_order_id = None
+            db.commit()
+            return True
+    return False
+
+
 @router.get("", response_model=list[OrderOut])
 def list_orders(
     authorization: str | None = Header(default=None),
@@ -160,9 +178,12 @@ def list_orders(
     user_id = _current_user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
-    return list(db.scalars(
+    orders = list(db.scalars(
         select(Order).where(Order.user_id == user_id).order_by(Order.id.desc()).limit(50)
     ))
+    for o in orders:
+        _lazy_expire(db, o)
+    return orders
 
 
 @router.get("/{order_id}", response_model=OrderOut)
@@ -175,4 +196,6 @@ def get_order(
     order = db.get(Order, order_id)
     if not order or order.user_id != user_id:
         raise HTTPException(status_code=404, detail="订单不存在")
+    _lazy_expire(db, order)
+    db.refresh(order)
     return order
