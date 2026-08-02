@@ -9,20 +9,24 @@ from app.db.session import Base
 
 
 class CouponTemplate(Base):
-    """券定义（后台配置）：新客自动发券等。"""
+    """券定义（后台配置）：新客自动发券、领券中心、分享有礼等。"""
 
     __tablename__ = "coupon_templates"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(64))
-    # fixed 满减券（amount_cents 为面额）；discount 折扣券（percent_off 为折扣率）
+    # fixed 满减券（amount_cents 为面额）；percent 折扣券（percent_off 为折扣率）
     coupon_type: Mapped[str] = mapped_column(String(16), default="fixed")
     amount_cents: Mapped[int] = mapped_column(Integer, default=0)
     percent_off: Mapped[int | None] = mapped_column(Integer, nullable=True)
     min_spend_cents: Mapped[int] = mapped_column(Integer, default=0)
     validity_days: Mapped[int] = mapped_column(Integer, default=30)
     auto_grant_new_user: Mapped[bool] = mapped_column(default=False)
+    # 领券中心：可公开领取 / 每人限领总数(0=不限) / 每日可领
+    is_claimable: Mapped[bool] = mapped_column(default=False)
+    claim_limit: Mapped[int] = mapped_column(Integer, default=1)
+    daily_claimable: Mapped[bool] = mapped_column(default=False)
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft/published/archived
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

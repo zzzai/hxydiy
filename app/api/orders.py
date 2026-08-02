@@ -116,14 +116,17 @@ def create_order(
                 "subtotal_cents": subtotal,
             })
 
-    # 优惠券锁定（支付成功后变 used，失败/过期释放）
+    # 优惠券锁定（支付成功后变 used，失败/过期释放）；percent 券按折扣率计算
     if body.coupon_id:
         coupon = db.get(UserCoupon, body.coupon_id)
         if coupon and coupon.user_id == user.id and coupon.status == "unused":
             from app.models import CouponTemplate
             tpl = db.get(CouponTemplate, coupon.template_id)
             if tpl and total_cents >= tpl.min_spend_cents:
-                discount_cents = tpl.amount_cents
+                if tpl.coupon_type == "percent" and tpl.percent_off:
+                    discount_cents = int(total_cents * tpl.percent_off / 100)
+                else:
+                    discount_cents = tpl.amount_cents
                 coupon.status = "locked"
 
     pay_amount = max(total_cents - discount_cents, 0)

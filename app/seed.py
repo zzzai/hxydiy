@@ -78,6 +78,36 @@ NEW_USER_COUPON = {
     "auto_grant_new_user": True,
 }
 
+# 营销券模板（领券中心/分享有礼）
+MARKETING_COUPONS = [
+    # 每日放松券：每天可领 1 张（培养到店习惯）
+    {
+        "code": "daily-relax-500",
+        "name": "每日放松券",
+        "coupon_type": "fixed",
+        "amount_cents": 500,
+        "min_spend_cents": 4900,
+        "validity_days": 1,
+        "auto_grant_new_user": False,
+        "is_claimable": True,
+        "claim_limit": 1,
+        "daily_claimable": True,
+    },
+    # 分享有礼券：分享小程序得券（24h 限 1 次，服务端发放）
+    {
+        "code": "share-gift-300",
+        "name": "分享有礼券",
+        "coupon_type": "fixed",
+        "amount_cents": 300,
+        "min_spend_cents": 0,
+        "validity_days": 7,
+        "auto_grant_new_user": False,
+        "is_claimable": False,
+        "claim_limit": 1,
+        "daily_claimable": False,
+    },
+]
+
 # 商城商品（价格 9.9 暂定，待门店复核）
 PRODUCTS = [
     ("hxy-p-foot-ai", "艾草草本泡脚包", "门店同源草本香，适合日常泡一泡。", "10 包 / 袋", "foot", 990,
@@ -128,6 +158,9 @@ def seed(db: Session) -> None:
 
     tpl = CouponTemplate(**NEW_USER_COUPON, status="published")
     db.add(tpl)
+
+    for m in MARKETING_COUPONS:
+        db.add(CouponTemplate(**m, status="published"))
 
     for code, name, desc, spec, ptype, price, img in PRODUCTS:
         db.add(Product(
