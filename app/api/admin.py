@@ -6,6 +6,8 @@
 
 import hashlib
 import os
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -20,6 +22,23 @@ from app.models import Order, OrderEvent, Staff, User
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 PBKDF2_ITERATIONS = 120_000
+LOGIN_FAIL_LIMIT = 5          # 5 次失败
+LOGIN_LOCK_SECONDS = 600      # 锁定 10 分钟
+
+# 单实例内存限流（多实例部署时需换共享存储）
+_login_fails: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_login_lock(username: str) -> None:
+    now = time.time()
+    _login_fails[username] = [t for t in _login_fails[username]
+                              if now - t < LOGIN_LOCK_SECONDS]
+    if len(_login_fails[username]) >= LOGIN_FAIL_LIMIT:
+        raise HTTPException(status_code=429, detail="尝试次数过多，请 10 分钟后再试")
+
+
+def _record_login_fail(username: str) -> None:
+    _login_fails[username].append(time.time())
 
 
 def hash_password(password: str, salt: str | None = None) -> str:
@@ -65,8 +84,10 @@ def _record_event(db: Session, order_id: int, from_status: str, to_status: str,
 def staff_login(body: dict, db: Session = Depends(get_db)) -> dict:
     username = (body.get("username") or "").strip()
     password = body.get("password") or ""
+    _check_login_lock(username)
     staff = db.scalar(select(Staff).where(Staff.username == username))
     if not staff or staff.status != "active" or not verify_password(password, staff.password_hash):
+        _record_login_fail(username)
         raise HTTPException(status_code=401, detail="账号或密码错误")
     return {
         "token": create_staff_token(staff.id, staff.role),
