@@ -1,4 +1,4 @@
-"""管理后台 API（HXYOS 第一块）：员工登录、今日预约、订单核销。
+"""管理后台 API（HXYOS 第一块）：员工登录、今日预约、订单核销、行为看板。
 
 - 员工账号由 seed 创建（初始密码随机生成，见服务器 admin-credentials.txt）
 - 状态机：paid/confirmed -> checked_in(核销) -> completed
@@ -7,7 +7,7 @@
 import hashlib
 import os
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import Order, OrderEvent, Staff, User
+from app.models import EventLog, Order, OrderEvent, Staff, User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -200,6 +200,80 @@ def admin_orders(
         stmt = stmt.where(Order.booking_date == date)
     orders = list(db.scalars(stmt))
     return {"items": [_order_summary(o) for o in orders], "total": len(orders)}
+
+
+@router.get("/analytics")
+def admin_analytics(
+    days: int = 7,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """行为看板：转化漏斗 / 项目热度 / 近期错误 / 每日访问（按天）。"""
+    _current_staff(authorization, db)
+    from sqlalchemy import func
+
+    days = max(1, min(days, 30))
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    # 1. 转化漏斗
+    funnel = {}
+    for ev in ("page_view", "project_view", "add_cart", "create_order", "pay_click"):
+        funnel[ev] = db.scalar(select(func.count()).select_from(EventLog).where(
+            EventLog.event == ev, EventLog.created_at >= since
+        )) or 0
+
+    # 2. 项目热度（Python 聚合，量级小、简单可靠）
+    view_events = list(db.scalars(select(EventLog).where(
+        EventLog.event == "project_view", EventLog.created_at >= since
+    ).limit(3000)))
+    pid_counter: Counter = Counter(
+        (ev.data or {}).get("project_id") for ev in view_events if (ev.data or {}).get("project_id")
+    )
+    from app.models import Project
+    hot_projects = []
+    for pid, cnt in pid_counter.most_common(5):
+        proj = db.get(Project, int(pid))
+        hot_projects.append({
+            "project_id": int(pid),
+            "name": proj.name if proj else f"项目#{pid}",
+            "views": cnt,
+        })
+
+    # 3. 近期错误（近 24h，按信息聚合 Top + 最新 5 条）
+    err_since = datetime.now(timezone.utc) - timedelta(hours=24)
+    err_events = list(db.scalars(select(EventLog).where(
+        EventLog.event == "error", EventLog.created_at >= err_since
+    ).order_by(EventLog.id.desc()).limit(500)))
+    err_counter: Counter = Counter(
+        ((ev.data or {}).get("type", "unknown"), str((ev.data or {}).get("message", ""))[:60])
+        for ev in err_events
+    )
+    errors = [{"type": k[0], "message": k[1], "count": v} for k, v in err_counter.most_common(8)]
+    latest_errors = [{
+        "type": (ev.data or {}).get("type", ""),
+        "message": str((ev.data or {}).get("message", ""))[:120],
+        "path": (ev.data or {}).get("path", ""),
+        "ts": ev.created_at.isoformat() if ev.created_at else "",
+    } for ev in err_events[:5]]
+
+    # 4. 每日访问（上海时区自然日）
+    tz_expr = EventLog.created_at.op("AT TIME ZONE")("Asia/Shanghai")
+    daily = db.execute(
+        select(func.date(tz_expr), func.count())
+        .where(EventLog.event == "page_view", EventLog.created_at >= since)
+        .group_by(func.date(tz_expr))
+        .order_by(func.date(tz_expr))
+    ).all()
+    daily_views = [{"date": str(d), "count": c} for d, c in daily]
+
+    return {
+        "days": days,
+        "funnel": funnel,
+        "hot_projects": hot_projects,
+        "errors": errors,
+        "latest_errors": latest_errors,
+        "daily_views": daily_views,
+    }
 
 
 def _order_summary(o: Order) -> dict:
