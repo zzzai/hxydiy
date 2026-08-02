@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import auth, catalog, coupons, health, orders, payments
+from app.api import admin, auth, catalog, coupons, health, orders, payments
 from app.core.config import settings
 
 app = FastAPI(
@@ -15,3 +15,4 @@ app.include_router(catalog.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(payments.router, prefix="/api/v1")
 app.include_router(coupons.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")

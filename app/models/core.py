@@ -37,6 +37,21 @@ class Store(Base):
     business_hours: Mapped[str] = mapped_column(String(64), default="")
     location_lat: Mapped[float | None] = mapped_column(nullable=True)
     location_lng: Mapped[float | None] = mapped_column(nullable=True)
+
+
+class Staff(Base):
+    """门店员工（管理后台登录）。role: staff / admin"""
+
+    __tablename__ = "staff"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(128))
+    name: Mapped[str] = mapped_column(String(32), default="")
+    role: Mapped[str] = mapped_column(String(16), default="staff")
+    store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # preparing / open / closed
     status: Mapped[str] = mapped_column(String(16), default="preparing", index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
