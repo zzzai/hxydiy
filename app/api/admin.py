@@ -12,12 +12,13 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from jose import JWTError, jwt
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import EventLog, Order, OrderEvent, Staff, User
+from app.models import CouponTemplate, EventLog, Order, OrderEvent, Staff, User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -274,6 +275,104 @@ def admin_analytics(
         "latest_errors": latest_errors,
         "daily_views": daily_views,
     }
+
+
+# ============ 券管理（营销配置，限 admin 角色） ============
+
+class CouponTemplateIn(BaseModel):
+    code: str = ""
+    name: str
+    coupon_type: str = "fixed"          # fixed / percent
+    amount_cents: int = 0
+    percent_off: int | None = None
+    min_spend_cents: int = 0
+    validity_days: int = 30
+    auto_grant_new_user: bool = False
+    is_claimable: bool = False
+    claim_limit: int = 1
+    daily_claimable: bool = False
+    auto_apply: bool = False
+    status: str = "draft"               # draft / published / archived
+
+
+def _require_admin(authorization: str | None, db: Session) -> Staff:
+    staff = _current_staff(authorization, db)
+    if staff.role != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    return staff
+
+
+def _coupon_out(t: CouponTemplate) -> dict:
+    return {
+        "id": t.id,
+        "code": t.code,
+        "name": t.name,
+        "coupon_type": t.coupon_type,
+        "amount_cents": t.amount_cents,
+        "percent_off": t.percent_off,
+        "min_spend_cents": t.min_spend_cents,
+        "validity_days": t.validity_days,
+        "auto_grant_new_user": t.auto_grant_new_user,
+        "is_claimable": t.is_claimable,
+        "claim_limit": t.claim_limit,
+        "daily_claimable": t.daily_claimable,
+        "auto_apply": t.auto_apply,
+        "status": t.status,
+    }
+
+
+@router.get("/coupons")
+def admin_coupons(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """券模板列表（营销配置）。"""
+    _current_staff(authorization, db)
+    tpls = list(db.scalars(select(CouponTemplate).order_by(CouponTemplate.id)))
+    return {"items": [_coupon_out(t) for t in tpls], "total": len(tpls)}
+
+
+@router.post("/coupons")
+def admin_create_coupon(
+    body: CouponTemplateIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """新建券模板。"""
+    _require_admin(authorization, db)
+    code = (body.code or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="请填写券编码")
+    if db.scalar(select(CouponTemplate).where(CouponTemplate.code == code)):
+        raise HTTPException(status_code=400, detail="券编码已存在")
+    tpl = CouponTemplate(**body.model_dump(), code=code)
+    db.add(tpl)
+    db.commit()
+    db.refresh(tpl)
+    return {"code": 0, "data": _coupon_out(tpl)}
+
+
+@router.post("/coupons/{tpl_id}")
+def admin_update_coupon(
+    tpl_id: int,
+    body: CouponTemplateIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """更新券模板（含上下架：status 置 published/draft/archived）。"""
+    _require_admin(authorization, db)
+    tpl = db.get(CouponTemplate, tpl_id)
+    if not tpl:
+        raise HTTPException(status_code=404, detail="券不存在")
+    data = body.model_dump()
+    if body.code and body.code != tpl.code:
+        if db.scalar(select(CouponTemplate).where(
+                CouponTemplate.code == body.code, CouponTemplate.id != tpl_id)):
+            raise HTTPException(status_code=400, detail="券编码已存在")
+    for k, v in data.items():
+        setattr(tpl, k, v)
+    db.commit()
+    return {"code": 0, "data": _coupon_out(tpl)}
 
 
 def _order_summary(o: Order) -> dict:
