@@ -74,3 +74,16 @@ class AuditLog(Base):
     entity_id: Mapped[str] = mapped_column(String(64), default="")
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EventLog(Base):
+    """用户行为埋点（前端批量上报；游客 user_id 为空）。"""
+
+    __tablename__ = "event_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    event: Mapped[str] = mapped_column(String(32), index=True)
+    page: Mapped[str] = mapped_column(String(64), default="")
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

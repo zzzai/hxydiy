@@ -110,6 +110,42 @@ def today_appointments(
     return {"date": today, "items": [_order_summary(o) for o in orders], "total": len(orders)}
 
 
+@router.get("/stats")
+def admin_stats(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """经营统计：今日订单/营业额/待核销/访问量/新增用户。"""
+    _current_staff(authorization, db)
+    now = datetime.now(timezone.utc)
+    day_start = now - timedelta(hours=now.hour, minutes=now.minute,
+                                seconds=now.second, microseconds=now.microsecond)
+
+    orders_today = list(db.scalars(select(Order).where(Order.created_at >= day_start)))
+    paid_today = [o for o in orders_today if o.pay_status == "paid"]
+    valid_today = [o for o in orders_today if o.status not in ("cancelled", "expired")]
+
+    pending_checkin = len(list(db.scalars(select(Order).where(
+        Order.status.in_(["paid", "confirmed"])
+    ))))
+
+    from app.models import EventLog, User
+    page_views = len(list(db.scalars(select(EventLog).where(
+        EventLog.event == "page_view", EventLog.created_at >= day_start
+    ))))
+    new_users = len(list(db.scalars(select(User).where(User.created_at >= day_start))))
+
+    return {
+        "date": now.date().isoformat(),
+        "orders_count": len(valid_today),
+        "paid_amount_cents": sum(o.pay_amount_cents for o in paid_today),
+        "paid_count": len(paid_today),
+        "pending_checkin": pending_checkin,
+        "page_views": page_views,
+        "new_users": new_users,
+    }
+
+
 @router.post("/orders/{order_id}/check-in")
 def check_in_order(
     order_id: int,
