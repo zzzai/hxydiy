@@ -45,6 +45,32 @@ def _record_event(db: Session, order_id: int, from_status: str, to_status: str,
     ))
 
 
+INVITE_REWARD_CODE = "invite-reward-500"
+INVITE_REWARD_DAILY_LIMIT = 3
+
+
+def _grant_inviter_reward(db: Session, inviter_id: int) -> bool:
+    """邀请人得老带新券（每日限 3 张）。"""
+    from app.models import CouponTemplate
+    tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.code == INVITE_REWARD_CODE))
+    if not tpl or tpl.status != "published":
+        return False
+    now = datetime.now(timezone.utc)
+    day_start = now - timedelta(hours=now.hour, minutes=now.minute,
+                                seconds=now.second, microseconds=now.microsecond)
+    today_count = len(list(db.scalars(select(UserCoupon).where(
+        UserCoupon.user_id == inviter_id, UserCoupon.template_id == tpl.id,
+        UserCoupon.claimed_at >= day_start,
+    ))))
+    if today_count >= INVITE_REWARD_DAILY_LIMIT:
+        return False
+    db.add(UserCoupon(
+        user_id=inviter_id, template_id=tpl.id, status="unused",
+        expire_at=now + timedelta(days=tpl.validity_days),
+    ))
+    return True
+
+
 @router.post("", response_model=CreateOrderResponse)
 def create_order(
     body: OrderCreate,
@@ -116,7 +142,7 @@ def create_order(
                 "subtotal_cents": subtotal,
             })
 
-    # 优惠券锁定（支付成功后变 used，失败/过期释放）；percent 券按折扣率计算
+    # 优惠券/活动满减（支付成功后变 used，失败/过期释放）；percent 券按折扣率计算
     if body.coupon_id:
         coupon = db.get(UserCoupon, body.coupon_id)
         if coupon and coupon.user_id == user.id and coupon.status == "unused":
@@ -128,6 +154,28 @@ def create_order(
                 else:
                     discount_cents = tpl.amount_cents
                 coupon.status = "locked"
+    else:
+        # 全场满减活动：未选券时自动应用 auto_apply 模板（取满足门槛的最高面额）
+        from app.models import CouponTemplate
+        auto_tpls = list(db.scalars(select(CouponTemplate).where(
+            CouponTemplate.auto_apply.is_(True), CouponTemplate.status == "published"
+        )))
+        for tpl in sorted(auto_tpls, key=lambda t: t.amount_cents or 0, reverse=True):
+            if total_cents >= tpl.min_spend_cents:
+                if tpl.coupon_type == "percent" and tpl.percent_off:
+                    discount_cents = int(total_cents * tpl.percent_off / 100)
+                else:
+                    discount_cents = tpl.amount_cents
+                break
+
+    # 邀请裂变：被邀请人首单成功创建 → 邀请人得老带新券（每日限 3 张，防刷）
+    if user.inviter_id and body.order_type != "member":
+        from app.models import Order as OrderModel
+        first_order = not db.scalar(select(OrderModel.id).where(
+            OrderModel.user_id == user.id
+        ).limit(1))
+        if first_order:
+            _grant_inviter_reward(db, user.inviter_id)
 
     pay_amount = max(total_cents - discount_cents, 0)
 

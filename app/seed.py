@@ -106,6 +106,33 @@ MARKETING_COUPONS = [
         "claim_limit": 1,
         "daily_claimable": False,
     },
+    # 全场满减活动：满 99 减 9（结算自动立减，无需领券）
+    {
+        "code": "auto-99-9",
+        "name": "满减活动（满99减9）",
+        "coupon_type": "fixed",
+        "amount_cents": 900,
+        "min_spend_cents": 9900,
+        "validity_days": 30,
+        "auto_grant_new_user": False,
+        "is_claimable": False,
+        "claim_limit": 0,
+        "daily_claimable": False,
+        "auto_apply": True,
+    },
+    # 老带新券：邀请人被邀首单后邀请人得券
+    {
+        "code": "invite-reward-500",
+        "name": "老带新券",
+        "coupon_type": "fixed",
+        "amount_cents": 500,
+        "min_spend_cents": 4900,
+        "validity_days": 30,
+        "auto_grant_new_user": False,
+        "is_claimable": False,
+        "claim_limit": 0,
+        "daily_claimable": False,
+    },
 ]
 
 # 商城商品（价格 9.9 暂定，待门店复核）

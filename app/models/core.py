@@ -21,6 +21,7 @@ class User(Base):
     member_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     member_expire_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     balance_cents: Mapped[int] = mapped_column(Integer, default=0)  # 储值余额（分）
+    inviter_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # 邀请人（裂变）
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

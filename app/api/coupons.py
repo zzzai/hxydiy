@@ -73,6 +73,23 @@ def claimable_templates(
     return {"items": items, "total": len(items)}
 
 
+@router.get("/activity")
+def activity_promotion(db: Session = Depends(get_db)) -> dict:
+    """全场满减活动（结算页展示）：取 auto_apply 模板中最高面额。"""
+    tpls = list(db.scalars(select(CouponTemplate).where(
+        CouponTemplate.auto_apply.is_(True), CouponTemplate.status == "published"
+    )))
+    items = [{
+        "id": t.id,
+        "name": t.name,
+        "coupon_type": t.coupon_type,
+        "amount_cents": t.amount_cents,
+        "percent_off": t.percent_off,
+        "min_spend_cents": t.min_spend_cents,
+    } for t in sorted(tpls, key=lambda x: x.amount_cents or 0, reverse=True)]
+    return {"items": items, "total": len(items)}
+
+
 class ClaimRequest(BaseModel):
     template_id: int
 

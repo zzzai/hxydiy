@@ -27,6 +27,8 @@ class CouponTemplate(Base):
     is_claimable: Mapped[bool] = mapped_column(default=False)
     claim_limit: Mapped[int] = mapped_column(Integer, default=1)
     daily_claimable: Mapped[bool] = mapped_column(default=False)
+    # 全场满减活动：结算时自动立减（用户未选券时自动应用）
+    auto_apply: Mapped[bool] = mapped_column(default=False)
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft/published/archived
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
