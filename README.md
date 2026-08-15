@@ -73,6 +73,39 @@ docker compose up -d --build   # 更新代码后重新部署
 
 > 备选：不用 Docker 的手动部署（PostgreSQL + systemd + Nginx）见仓库早期版本 README；Docker 方案优先。
 
+### DIY 选单闭环发布门禁
+
+`diy.hexiaoyue.com` 是独立 H5，不创建线上支付订单。顾客提交的选单、前台确认、服务中加选和实际服务项均由 API 服务端保存。
+
+开发区完成构建后，先运行只读发布一致性检查，确认后端、顾客端 H5 与管理后台没有只发布一侧：
+
+```bash
+python scripts/check_release_consistency.py
+```
+
+该检查只读取 `/root/hxy-workspace` 和 `/root/hxy-diy-20260811` 的源码/构建产物，不启动服务、不连接数据库、不修改文件。生产版本缺少 P0 路由或 H5 调用时会以非零状态退出。
+
+发布前必须按以下顺序在**生产备份恢复库**演练，不能直接在生产库试迁移：
+
+```bash
+# 1. 先恢复生产备份到隔离数据库，并指向该隔离库。
+export DATABASE_URL='postgresql+psycopg://.../hxy_restore_rehearsal'
+
+# 2. 升级，再执行只读结构和遗留选单可读性验证。
+alembic upgrade head
+python -m scripts.verify_selection_closure_upgrade
+```
+
+验证项：
+- `selection_revisions`、`selection_change_requests`、`service_lines` 三张表存在；
+- `addons` 已包含收费、会员价、独立售卖、挂靠、图文和排序字段；
+- 原有 `selection_sessions` 可读取；
+- 使用测试账号现场走通：扫码、匿名提交、登录领券、前台确认、服务中加选审批、技师开始/完成、线下收款、离位释放、评价。
+
+**回退策略：** V2 表中存在记录时，迁移会拒绝降级，以免删除已产生的服务事实。生产回退必须停止写入并恢复已验证备份，不能执行 `alembic downgrade`。
+
+在满足以上门禁前，不得将新迁移应用到生产库；同时必须配置短信通道、第三方会员同步鉴权和真实项目/券数据。
+
 ## 微信小程序联调
 
 - 小程序 `services/http.js` 的 `CUSTOMER_API_BASE` 指向 `https://miniapp.hexiaoyue.com/api/v1/customer`

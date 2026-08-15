@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -10,6 +10,15 @@ from app.db.session import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "uq_users_phone_nonempty",
+            "phone",
+            unique=True,
+            postgresql_where=text("phone <> ''"),
+            sqlite_where=text("phone <> ''"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     openid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
@@ -38,6 +47,13 @@ class Store(Base):
     business_hours: Mapped[str] = mapped_column(String(64), default="")
     location_lat: Mapped[float | None] = mapped_column(nullable=True)
     location_lng: Mapped[float | None] = mapped_column(nullable=True)
+    # preparing / open / closed
+    status: Mapped[str] = mapped_column(String(16), default="preparing", index=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Staff(Base):
@@ -53,13 +69,6 @@ class Staff(Base):
     store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    # preparing / open / closed
-    status: Mapped[str] = mapped_column(String(16), default="preparing", index=True)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
 
 
 class AuditLog(Base):

@@ -23,34 +23,37 @@ STORE = {
 }
 
 # code, category, mark, name, duration, summary, store/group/member 价格（分）, image, label
+# 试用基线来自《荷小悦项目单-无系列.xlsx》2026-08-09 版本；名称仍可通过后台继续核定。
 PROJECTS = [
-    ("hxy-qiqing-30", "bath", "泡", "清疲暖心泡脚", 30,
-     "五行茶饮+现熬草本汤泡脚+艾灸贴/修脚（二选一）+搓盐",
-     2990, 2990, 2990, "/assets/services/service-foot-bath.jpg", "引流款"),
-    ("hxy-xiangxiang-60", "bath", "泡", "闲享轻养沐足", 60,
-     "五行茶饮+草本泡脚+局部推拿（四选一，25分钟）+足底按摩+走竹罐（35分钟）",
+    ("hxy-qiqing-30", "bath", "泡", "草本泡脚", 30,
+     "体质辩证+五行茶饮+现熬草本汤泡脚+艾灸贴/修脚（二选一）+搓盐",
+     3990, 2990, 2990, "/assets/services/service-foot-bath.jpg", "草本现煮"),
+    ("hxy-xiangxiang-60", "bath", "泡", "草本沐足", 60,
+     "现熬草本汤泡脚+局部放松（20分钟）+修脚/搓盐（二选一）+足底按摩（30分钟）",
      8900, 7900, 6900, "/assets/services/service-foot-bath.jpg", "基础款"),
-    ("hxy-xiaoqi-80", "bath", "泡", "小憩康养足道", 80,
-     "五行茶饮+草本泡脚+局部推拿（25分钟）+足底按摩+走罐（35分钟）+小腿按摩（10分钟）+热敷（10分钟）",
-     10900, 9900, 8900, "/assets/services/service-foot-bath.jpg", "主力款"),
-    ("hxy-tuina-70", "balance", "调", "云涧舒筋荷小推", 70,
+    ("hxy-xiaoqi-90", "bath", "泡", "招牌草本沐足", 90,
+     "草本泡脚+肩颈放松+足底按摩+走竹罐+腰肾/肠胃调理（二选一）+腿部按摩+草本热敷",
+     12900, 9900, 8900, "/assets/services/service-foot-bath.jpg", "招牌"),
+    ("hxy-tuina-70", "balance", "调", "荷小推", 70,
      "五行茶饮+对证推拿+热敷包+草本功效膏贴+养生小吃",
      13900, 11900, 9900, "/assets/services/service-tuina.jpg", "主力款"),
-    ("hxy-spa-90", "care", "养", "云境臻养SPA", 90,
-     "五行茶饮+高端精油SPA+活络套盒+养生小吃",
+    ("hxy-spa-90", "care", "SPA", "精油SPA", 90,
+     "五行茶饮+高端精油SPA+养生小吃",
      19900, 16900, 13900, "/assets/spa-scene.jpg", "主力款"),
-    ("hxy-taoke-60", "kit", "盒", "痛症调理套盒", 60,
-     "痛症调理：活络油20分钟+调理工具20分钟+热敷20分钟",
+    ("hxy-taoke-60", "kit", "盒", "功夫调理", 60,
+     "痛症调理：活络油20分钟+工具20分钟+热敷20分钟，10次每套",
      128000, None, 98000, "/assets/products/family-relax-card.png", "利润款"),
-    ("hxy-caier-30", "balance", "调", "采耳", 30,
+    ("hxy-caier-30", "small", "小", "采耳", 30,
      "耳部清洁+耳部按摩", 7900, 6900, 5900, "/assets/products/daily-care-pack.png", "小项"),
-    ("hxy-baguan-1", "balance", "调", "拔罐", None,
-     "拔竹罐+草本功效膏贴", 4900, 3900, 3900, "/assets/ip-paopao-running-bucket.png", "小项"),
-    ("hxy-guasha-1", "balance", "调", "刮痧", None,
-     "刮痧+草本功效膏贴", 4900, 3900, 3900, "/assets/products/home-relax-gift.png", "小项"),
-    ("hxy-jubu-30", "balance", "调", "局部加强", 30,
-     "头疗、肩颈、腰臀、腿部、腹部、足部（任选）", 6900, 4900, 4900,
-     "/assets/products/herbal-heat-pack.png", "小项"),
+    ("hxy-baguan-1", "small", "小", "拔罐", None,
+     "拔竹罐+草本功效膏贴", 5900, 4900, 3900, "/assets/ip-paopao-running-bucket.png", "小项"),
+    ("hxy-guasha-1", "small", "小", "刮痧", None,
+     "刮痧+草本功效膏贴", 5900, 4900, 3900, "/assets/products/home-relax-gift.png", "小项"),
+    ("hxy-head-30", "small", "小", "头疗", 30,
+     "头部按摩+眼罩/眼贴", 6900, 5900, 4900, "/assets/products/daily-care-pack.png", "小项"),
+    ("hxy-jubu-30", "local-strength", "加", "局部调理", 30,
+     "肩颈、腰臀、腿部、腹部、足部（任选其一）+精油/活络油（二选一）", 6900, 5900, 4900,
+     "/assets/products/herbal-heat-pack.png", "加强项"),
 ]
 
 ADDONS = [
@@ -65,7 +68,7 @@ PLANS = [
     ("annual", "年度权益卡", 9900,
      ["消费享受会员价", "会员日每周二 6.8 折", "赠送门店价值 89 元项目一次"]),
     ("stored", "储值会员", 50000, ["可退（须到店线下办理）"]),
-    ("monthly", "泡脚月卡", 69900, ["30 天内不限次泡脚"]),
+    ("monthly", "泡脚月卡", 49900, ["30 天内不限次泡脚，仅限本人"]),
 ]
 
 NEW_USER_COUPON = {

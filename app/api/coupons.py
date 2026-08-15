@@ -9,11 +9,18 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
-from app.models import CouponTemplate, UserCoupon
+from app.models import CouponTemplate, User, UserCoupon
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
 
 SHARE_COUPON_CODE = "share-gift-300"   # 分享有礼券（24h 限 1 次）
+
+
+def _aware(value):
+    """SQLite 读出 naive datetime 时归一化为 UTC，与 Postgres 行为一致。"""
+    if value and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
 
 
 def _user_id(authorization: str | None) -> int | None:
@@ -103,7 +110,9 @@ def claim_coupon(
     """领取领券中心券（服务端校验：可领 / 每日限领 / 总限领）。"""
     user_id = _user_id(authorization)
     if user_id is None:
-        raise HTTPException(status_code=401, detail="请先登录")
+        raise HTTPException(status_code=401, detail="请先完成手机号登录")
+    # 锁用户行：同一顾客的并发领券串行化，防止重复突破限领。
+    db.scalar(select(User.id).where(User.id == user_id).with_for_update())
     tpl = db.get(CouponTemplate, body.template_id)
     if not tpl or not tpl.is_claimable or tpl.status != "published":
         raise HTTPException(status_code=404, detail="券不存在或不可领取")
@@ -115,7 +124,7 @@ def claim_coupon(
         UserCoupon.user_id == user_id, UserCoupon.template_id == tpl.id
     )))
     if tpl.daily_claimable:
-        if any(c.claimed_at and c.claimed_at >= day_start for c in claimed):
+        if any(c.claimed_at and _aware(c.claimed_at) >= day_start for c in claimed):
             raise HTTPException(status_code=400, detail="今日已领取，明天再来")
     else:
         if tpl.claim_limit > 0 and len(claimed) >= tpl.claim_limit:
@@ -140,6 +149,7 @@ def claim_share_coupon(
     user_id = _user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
+    db.scalar(select(User.id).where(User.id == user_id).with_for_update())
     tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.code == SHARE_COUPON_CODE))
     if not tpl or tpl.status != "published":
         return {"code": 0, "granted": False, "reason": "分享券未配置"}

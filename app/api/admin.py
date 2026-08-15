@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import CouponTemplate, EventLog, Order, OrderEvent, Staff, User
+from app.models import CouponTemplate, EventLog, Order, OrderEvent, Staff, Store, User
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -55,7 +55,7 @@ def verify_password(password: str, stored: str) -> bool:
 
 def create_staff_token(staff_id: int, role: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=12)
-    payload = {"sub": str(staff_id), "role": role, "exp": expire}
+    payload = {"sub": str(staff_id), "role": role, "token_type": "staff", "exp": expire}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -67,10 +67,25 @@ def _current_staff(authorization: str | None, db: Session) -> Staff:
                              algorithms=[settings.jwt_algorithm])
     except JWTError:
         raise HTTPException(status_code=401, detail="登录已过期")
+    if payload.get("token_type") != "staff":
+        raise HTTPException(status_code=401, detail="令牌类型无效")
     staff = db.get(Staff, int(payload["sub"]))
     if not staff or staff.status != "active":
         raise HTTPException(status_code=401, detail="账号不可用")
     return staff
+
+
+def _staff_store_id(staff: Staff) -> int:
+    if not staff.store_id:
+        raise HTTPException(status_code=403, detail="当前账号未绑定门店")
+    return staff.store_id
+
+
+def _owned_order(db: Session, order_id: int, staff: Staff) -> Order:
+    order = db.get(Order, order_id)
+    if not order or order.store_id != _staff_store_id(staff):
+        raise HTTPException(status_code=404, detail="订单不存在")
+    return order
 
 
 def _record_event(db: Session, order_id: int, from_status: str, to_status: str,
@@ -90,9 +105,16 @@ def staff_login(body: dict, db: Session = Depends(get_db)) -> dict:
     if not staff or staff.status != "active" or not verify_password(password, staff.password_hash):
         _record_login_fail(username)
         raise HTTPException(status_code=401, detail="账号或密码错误")
+    store = db.get(Store, staff.store_id) if staff.store_id else None
     return {
         "token": create_staff_token(staff.id, staff.role),
-        "staff": {"id": staff.id, "name": staff.name, "role": staff.role},
+        "staff": {
+            "id": staff.id,
+            "name": staff.name,
+            "role": staff.role,
+            "store_id": staff.store_id,
+            "store_name": store.name if store else "",
+        },
     }
 
 
@@ -102,10 +124,12 @@ def today_appointments(
     db: Session = Depends(get_db),
 ) -> dict:
     """今日预约（已支付/已确认/已核销，按预约时间排序）。"""
-    _current_staff(authorization, db)
+    staff = _current_staff(authorization, db)
+    store_id = _staff_store_id(staff)
     today = datetime.now().date().isoformat()
     orders = list(db.scalars(select(Order).where(
         Order.booking_date == today,
+        Order.store_id == store_id,
         Order.status.in_(["paid", "confirmed", "checked_in", "in_service"]),
     ).order_by(Order.booking_time)))
     return {"date": today, "items": [_order_summary(o) for o in orders], "total": len(orders)}
@@ -117,17 +141,22 @@ def admin_stats(
     db: Session = Depends(get_db),
 ) -> dict:
     """经营统计：今日订单/营业额/待核销/访问量/新增用户。"""
-    _current_staff(authorization, db)
+    staff = _current_staff(authorization, db)
+    store_id = _staff_store_id(staff)
     now = datetime.now(timezone.utc)
     day_start = now - timedelta(hours=now.hour, minutes=now.minute,
                                 seconds=now.second, microseconds=now.microsecond)
 
-    orders_today = list(db.scalars(select(Order).where(Order.created_at >= day_start)))
+    orders_today = list(db.scalars(select(Order).where(
+        Order.created_at >= day_start,
+        Order.store_id == store_id,
+    )))
     paid_today = [o for o in orders_today if o.pay_status == "paid"]
     valid_today = [o for o in orders_today if o.status not in ("cancelled", "expired")]
 
     pending_checkin = len(list(db.scalars(select(Order).where(
-        Order.status.in_(["paid", "confirmed"])
+        Order.status.in_(["paid", "confirmed"]),
+        Order.store_id == store_id,
     ))))
 
     from app.models import EventLog, User
@@ -155,9 +184,7 @@ def check_in_order(
 ) -> dict:
     """到店核销：paid/confirmed -> checked_in。"""
     staff = _current_staff(authorization, db)
-    order = db.get(Order, order_id)
-    if not order:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    order = _owned_order(db, order_id, staff)
     if order.status not in ("paid", "confirmed"):
         raise HTTPException(status_code=400, detail=f"当前状态({order.status})不可核销")
     _record_event(db, order.id, order.status, "checked_in", "check_in", staff.name)
@@ -174,9 +201,7 @@ def complete_order(
 ) -> dict:
     """服务完成：checked_in/in_service -> completed。"""
     staff = _current_staff(authorization, db)
-    order = db.get(Order, order_id)
-    if not order:
-        raise HTTPException(status_code=404, detail="订单不存在")
+    order = _owned_order(db, order_id, staff)
     if order.status not in ("checked_in", "in_service"):
         raise HTTPException(status_code=400, detail=f"当前状态({order.status})不可完成")
     _record_event(db, order.id, order.status, "completed", "complete", staff.name)
@@ -193,8 +218,9 @@ def admin_orders(
     db: Session = Depends(get_db),
 ) -> dict:
     """订单查询（可按状态/日期过滤）。"""
-    _current_staff(authorization, db)
-    stmt = select(Order).order_by(Order.id.desc()).limit(100)
+    staff = _current_staff(authorization, db)
+    store_id = _staff_store_id(staff)
+    stmt = select(Order).where(Order.store_id == store_id).order_by(Order.id.desc()).limit(100)
     if status:
         stmt = stmt.where(Order.status == status)
     if date:
@@ -210,7 +236,7 @@ def admin_analytics(
     db: Session = Depends(get_db),
 ) -> dict:
     """行为看板：转化漏斗 / 项目热度 / 近期错误 / 每日访问（按天）。"""
-    _current_staff(authorization, db)
+    _require_admin(authorization, db)
     from sqlalchemy import func
 
     days = max(1, min(days, 30))
@@ -258,12 +284,15 @@ def admin_analytics(
     } for ev in err_events[:5]]
 
     # 4. 每日访问（上海时区自然日）
-    tz_expr = EventLog.created_at.op("AT TIME ZONE")("Asia/Shanghai")
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        day_expr = func.date(EventLog.created_at.op("AT TIME ZONE")("Asia/Shanghai"))
+    else:
+        day_expr = func.date(EventLog.created_at)
     daily = db.execute(
-        select(func.date(tz_expr), func.count())
+        select(day_expr, func.count())
         .where(EventLog.event == "page_view", EventLog.created_at >= since)
-        .group_by(func.date(tz_expr))
-        .order_by(func.date(tz_expr))
+        .group_by(day_expr)
+        .order_by(day_expr)
     ).all()
     daily_views = [{"date": str(d), "count": c} for d, c in daily]
 
@@ -293,6 +322,22 @@ class CouponTemplateIn(BaseModel):
     daily_claimable: bool = False
     auto_apply: bool = False
     status: str = "draft"               # draft / published / archived
+
+
+class CouponTemplateUpdate(BaseModel):
+    code: str | None = None
+    name: str | None = None
+    coupon_type: str | None = None
+    amount_cents: int | None = None
+    percent_off: int | None = None
+    min_spend_cents: int | None = None
+    validity_days: int | None = None
+    auto_grant_new_user: bool | None = None
+    is_claimable: bool | None = None
+    claim_limit: int | None = None
+    daily_claimable: bool | None = None
+    auto_apply: bool | None = None
+    status: str | None = None
 
 
 def _require_admin(authorization: str | None, db: Session) -> Staff:
@@ -327,7 +372,7 @@ def admin_coupons(
     db: Session = Depends(get_db),
 ) -> dict:
     """券模板列表（营销配置）。"""
-    _current_staff(authorization, db)
+    _require_admin(authorization, db)
     tpls = list(db.scalars(select(CouponTemplate).order_by(CouponTemplate.id)))
     return {"items": [_coupon_out(t) for t in tpls], "total": len(tpls)}
 
@@ -355,7 +400,7 @@ def admin_create_coupon(
 @router.post("/coupons/{tpl_id}")
 def admin_update_coupon(
     tpl_id: int,
-    body: CouponTemplateIn,
+    body: CouponTemplateUpdate,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -364,7 +409,9 @@ def admin_update_coupon(
     tpl = db.get(CouponTemplate, tpl_id)
     if not tpl:
         raise HTTPException(status_code=404, detail="券不存在")
-    data = body.model_dump()
+    data = body.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=400, detail="没有可更新的字段")
     if body.code and body.code != tpl.code:
         if db.scalar(select(CouponTemplate).where(
                 CouponTemplate.code == body.code, CouponTemplate.id != tpl_id)):
@@ -381,6 +428,8 @@ def _order_summary(o: Order) -> dict:
         "order_no": o.order_no,
         "order_type": o.order_type,
         "status": o.status,
+        "pay_status": o.pay_status,
+        "refund_status": o.refund_status,
         "pay_amount_cents": o.pay_amount_cents,
         "items": o.items,
         "booking_date": o.booking_date,

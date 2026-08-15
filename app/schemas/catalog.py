@@ -35,6 +35,9 @@ class ProjectOut(BaseModel):
     summary: str = ""
     image_url: str = ""
     tags: list = []
+    detail_modules: list = []
+    diy_options: list = []
+    display_order: int = 0
     price_label: str = ""
     prices: list[PriceOut] = []
 

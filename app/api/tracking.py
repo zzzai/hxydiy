@@ -1,9 +1,7 @@
 """用户行为埋点上报接口（前端批量 POST）。"""
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, Header
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
@@ -14,14 +12,14 @@ router = APIRouter(tags=["tracking"])
 
 
 class TrackEvent(BaseModel):
-    event: str
-    page: str = ""
-    data: dict = {}
-    ts: str | None = None
+    event: str = Field(min_length=1, max_length=32)
+    page: str = Field(default="", max_length=64)
+    data: dict = Field(default_factory=dict)
+    ts: str | None = Field(default=None, max_length=64)
 
 
 class TrackBatch(BaseModel):
-    events: list[TrackEvent]
+    events: list[TrackEvent] = Field(max_length=50)
 
 
 @router.post("/events")
@@ -37,13 +35,15 @@ def track_events(
         if payload:
             user_id = int(payload["sub"])
 
-    events = body.events[:50]
-    for ev in events:
+    for ev in body.events:
+        data = dict(ev.data or {})
+        if ev.ts:
+            data["client_ts"] = ev.ts
         db.add(EventLog(
             user_id=user_id,
-            event=ev.event[:32],
-            page=ev.page[:64],
-            data=ev.data or {},
+            event=ev.event,
+            page=ev.page,
+            data=data,
         ))
     db.commit()
-    return {"code": 0, "accepted": len(events)}
+    return {"code": 0, "accepted": len(body.events)}

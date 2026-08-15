@@ -15,6 +15,26 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 10080  # 7 天
 
+    # H5 手机验证码：短信服务接入前，local/test 返回 debug_code，production 永不返回。
+    h5_sms_debug: bool = False
+    h5_sms_code_ttl_seconds: int = 300
+    h5_sms_send_interval_seconds: int = 60
+    h5_sms_max_attempts: int = 5
+
+    # 阿里云号码认证（短信认证）：配置齐全时走 SendSmsVerifyCode/CheckSmsVerifyCode。
+    aliyun_pnvs_access_key_id: str = ""
+    aliyun_pnvs_access_key_secret: str = ""
+    aliyun_pnvs_scheme_name: str = ""
+    aliyun_pnvs_sign_name: str = "速通互联验证码"
+    aliyun_pnvs_template_code: str = "100001"
+
+    @property
+    def aliyun_pnvs_enabled(self) -> bool:
+        return bool(self.aliyun_pnvs_access_key_id and self.aliyun_pnvs_access_key_secret and self.aliyun_pnvs_scheme_name)
+
+    # 第三方会员系统向 DIY 推送手机号会员状态。留空时接口禁用，避免误接收数据。
+    third_party_membership_sync_key: str = ""
+
     # 微信小程序
     wx_appid: str = ""
     wx_appsecret: str = ""

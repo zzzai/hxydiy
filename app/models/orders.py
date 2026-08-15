@@ -16,7 +16,7 @@ from app.db.session import Base
 
 ORDER_STATUSES = {
     "draft", "pending_payment", "paid", "confirmed", "checked_in", "in_service",
-    "completed", "expired", "cancelled", "cancellation_requested",
+    "pending_checkout", "completed", "expired", "cancelled", "cancellation_requested",
     "refund_pending", "refunded", "refund_rejected", "partially_refunded",
 }
 

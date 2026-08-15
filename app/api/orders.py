@@ -146,6 +146,11 @@ def create_order(
     if body.coupon_id:
         coupon = db.get(UserCoupon, body.coupon_id)
         if coupon and coupon.user_id == user.id and coupon.status == "unused":
+            now = datetime.now(timezone.utc)
+            if coupon.expire_at and coupon.expire_at.tzinfo is None:
+                coupon.expire_at = coupon.expire_at.replace(tzinfo=timezone.utc)
+            if coupon.expire_at and coupon.expire_at < now:
+                raise HTTPException(status_code=400, detail="优惠券已过期，请重新选择")
             from app.models import CouponTemplate
             tpl = db.get(CouponTemplate, coupon.template_id)
             if tpl and total_cents >= tpl.min_spend_cents:
@@ -235,6 +240,34 @@ def list_orders(
     for o in orders:
         _lazy_expire(db, o)
     return orders
+
+
+@router.post("/{order_id}/cancel")
+def cancel_order(
+    order_id: int,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """顾客自助取消：仅未支付订单可取消，释放锁定的优惠券并记录审计事件。"""
+    user_id = _current_user_id(authorization)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    order = db.get(Order, order_id)
+    if not order or order.user_id != user_id:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if order.status == "cancelled":
+        raise HTTPException(status_code=409, detail="订单已取消")
+    if order.status != "pending_payment":
+        raise HTTPException(status_code=409, detail="当前订单状态不支持自助取消，请联系门店")
+    _record_event(db, order.id, order.status, "cancelled", "cancel", f"user:{user_id}", "顾客主动取消")
+    order.status = "cancelled"
+    if order.coupon_id:
+        uc = db.get(UserCoupon, order.coupon_id)
+        if uc and uc.status == "locked":
+            uc.status = "unused"
+            uc.locked_order_id = None
+    db.commit()
+    return {"code": 0, "status": "cancelled"}
 
 
 @router.get("/{order_id}", response_model=OrderOut)

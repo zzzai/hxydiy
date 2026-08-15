@@ -46,6 +46,8 @@ async def create_payment(
         raise HTTPException(status_code=404, detail="订单不存在")
     if order.pay_status == "paid":
         raise HTTPException(status_code=400, detail="订单已支付")
+    if order.status != "pending_payment":
+        raise HTTPException(status_code=409, detail="当前订单状态不支持支付")
 
     # 30 分钟未支付自动过期
     from datetime import datetime, timezone
@@ -89,6 +91,12 @@ async def pay_notify(request: Request, db: Session = Depends(get_db)) -> dict:
         return {"code": "SUCCESS", "message": "成功"}
 
     if trade_state == "SUCCESS" and order.pay_status != "paid":
+        if order.status == "cancelled":
+            # 已取消订单收到迟到的成功回调：不改状态，仅记录审计事件。
+            _record_event(db, order.id, order.status, order.status, "pay_callback",
+                          "wechat", f"txn={transaction_id}, ignored: order cancelled")
+            db.commit()
+            return {"code": "SUCCESS", "message": "成功"}
         _record_event(
             db, order.id, order.status, "paid", "pay_callback", "wechat",
             f"txn={transaction_id}",
@@ -96,11 +104,24 @@ async def pay_notify(request: Request, db: Session = Depends(get_db)) -> dict:
         order.status = "paid"
         order.pay_status = "paid"
         order.pay_transaction_id = transaction_id
+        # 券生命周期闭环：支付成功后锁定券转 used 并回填使用订单。
+        if order.coupon_id:
+            from app.models import UserCoupon
+            uc = db.get(UserCoupon, order.coupon_id)
+            if uc and uc.status == "locked":
+                uc.status = "used"
+                uc.used_order_id = order.id
         db.commit()
     elif trade_state in ("CLOSED", "REVOKED", "PAYERROR") and order.pay_status != "paid":
         _record_event(db, order.id, order.status, "cancelled", "pay_callback",
                       "wechat", f"trade_state={trade_state}")
         order.status = "cancelled"
+        # 释放锁定的优惠券，与下单锁定逻辑对称。
+        if order.coupon_id:
+            from app.models import UserCoupon
+            uc = db.get(UserCoupon, order.coupon_id)
+            if uc and uc.status == "locked":
+                uc.status = "unused"
         db.commit()
 
     return {"code": "SUCCESS", "message": "成功"}
