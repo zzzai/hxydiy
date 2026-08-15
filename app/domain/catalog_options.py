@@ -104,6 +104,7 @@ def copy_catalog_version_graph(
                     effective_from=price.effective_from,
                     effective_to=price.effective_to,
                 ))
+    db.flush()
 
 
 class CatalogPublishedVersionNotFoundError(CatalogDomainError):

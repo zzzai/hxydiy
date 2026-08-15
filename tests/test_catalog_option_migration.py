@@ -485,6 +485,176 @@ class CatalogOptionMigrationTests(unittest.TestCase):
             self.assertEqual(counts_after_second, counts_after_first)
             self.assertFalse(any("回退价加项" in warning and "999" in warning for warning in second.warnings))
 
+    def test_copy_on_write_prices_are_visible_to_same_migration_reconciliation(self):
+        now = datetime.now(UTC)
+        with self.SessionLocal() as db:
+            project = db.get(Project, self.project_id)
+            project.diy_options = []
+            source_group = ProjectOptionGroup(
+                catalog_version_id=project.current_published_version_id,
+                code="legacy-addons",
+                name="旧加项（待审核）",
+                selection_mode="multiple",
+                required=False,
+                min_select=0,
+                max_select=1,
+            )
+            db.add(source_group)
+            db.flush()
+            source_choice = ProjectOptionChoice(
+                option_group_id=source_group.id,
+                code="addon-charged-addon",
+                name="收费加项",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            db.add(source_choice)
+            db.flush()
+            db.add_all([
+                OptionChoicePrice(
+                    option_choice_id=source_choice.id,
+                    price_type="store",
+                    amount_cents=1100,
+                    effective_from=now - timedelta(days=20),
+                    effective_to=now - timedelta(days=15),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=source_choice.id,
+                    price_type="store",
+                    amount_cents=1300,
+                    effective_from=now - timedelta(days=10),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=source_choice.id,
+                    price_type="store",
+                    amount_cents=1700,
+                    effective_from=now + timedelta(days=10),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=source_choice.id,
+                    price_type="member",
+                    amount_cents=900,
+                    effective_from=now - timedelta(days=10),
+                ),
+            ])
+            db.commit()
+
+            first = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            db.flush()
+            draft = db.scalar(select(ProjectCatalogVersion).where(
+                ProjectCatalogVersion.project_id == self.project_id,
+                ProjectCatalogVersion.status == "draft",
+            ))
+            copied_group = db.scalar(select(ProjectOptionGroup).where(
+                ProjectOptionGroup.catalog_version_id == draft.id,
+                ProjectOptionGroup.code == "legacy-addons",
+            ))
+            copied_choice = db.scalar(select(ProjectOptionChoice).where(
+                ProjectOptionChoice.option_group_id == copied_group.id,
+                ProjectOptionChoice.code == "addon-charged-addon",
+            ))
+            rows_after_first = list(db.scalars(select(OptionChoicePrice).where(
+                OptionChoicePrice.option_choice_id == copied_choice.id
+            )))
+            check_at = datetime.now(UTC).replace(tzinfo=None)
+            current_after_first = [row for row in rows_after_first if (
+                row.effective_from.replace(tzinfo=None) <= check_at
+                and (row.effective_to is None or row.effective_to.replace(tzinfo=None) > check_at)
+            )]
+            self.assertEqual(
+                {(row.price_type, row.amount_cents) for row in current_after_first},
+                {("store", 1500), ("member", 1000)},
+            )
+            self.assertEqual(len(current_after_first), 2)
+            replaced = {(row.price_type, row.amount_cents): row for row in rows_after_first}
+            switch_time = replaced[("store", 1500)].effective_from
+            self.assertEqual(replaced[("member", 1000)].effective_from, switch_time)
+            self.assertEqual(replaced[("store", 1300)].effective_to, switch_time)
+            self.assertEqual(replaced[("member", 900)].effective_to, switch_time)
+            self.assertIsNotNone(replaced[("store", 1100)].effective_to)
+            self.assertIsNone(replaced[("store", 1700)].effective_to)
+            self.assertTrue(any("收费加项" in warning and "1300" in warning and "1500" in warning for warning in first.warnings))
+            self.assertTrue(any("收费加项" in warning and "900" in warning and "1000" in warning for warning in first.warnings))
+
+            count_after_first = len(rows_after_first)
+            second = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            db.flush()
+            count_after_second = db.scalar(select(func.count()).select_from(OptionChoicePrice).where(
+                OptionChoicePrice.option_choice_id == copied_choice.id
+            ))
+            self.assertEqual(count_after_second, count_after_first)
+            self.assertFalse(any("收费加项" in warning and "replaced" in warning for warning in second.warnings))
+
+    def test_copy_on_write_does_not_duplicate_matching_current_prices(self):
+        now = datetime.now(UTC)
+        with self.SessionLocal() as db:
+            project = db.get(Project, self.project_id)
+            project.diy_options = []
+            source_group = ProjectOptionGroup(
+                catalog_version_id=project.current_published_version_id,
+                code="legacy-addons",
+                name="旧加项（待审核）",
+                selection_mode="multiple",
+                required=False,
+                min_select=0,
+                max_select=1,
+            )
+            db.add(source_group)
+            db.flush()
+            source_choice = ProjectOptionChoice(
+                option_group_id=source_group.id,
+                code="addon-charged-addon",
+                name="收费加项",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            db.add(source_choice)
+            db.flush()
+            db.add_all([
+                OptionChoicePrice(
+                    option_choice_id=source_choice.id,
+                    price_type="store",
+                    amount_cents=1500,
+                    effective_from=now - timedelta(days=5),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=source_choice.id,
+                    price_type="member",
+                    amount_cents=1000,
+                    effective_from=now - timedelta(days=5),
+                ),
+            ])
+            db.commit()
+
+            migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            db.flush()
+            draft = db.scalar(select(ProjectCatalogVersion).where(
+                ProjectCatalogVersion.project_id == self.project_id,
+                ProjectCatalogVersion.status == "draft",
+            ))
+            copied_choice = db.scalar(
+                select(ProjectOptionChoice)
+                .join(ProjectOptionGroup)
+                .where(
+                    ProjectOptionGroup.catalog_version_id == draft.id,
+                    ProjectOptionChoice.code == "addon-charged-addon",
+                )
+            )
+            rows_after_first = list(db.scalars(select(OptionChoicePrice).where(
+                OptionChoicePrice.option_choice_id == copied_choice.id
+            )))
+            self.assertEqual(len(rows_after_first), 2)
+            self.assertEqual(
+                {(row.price_type, row.amount_cents) for row in rows_after_first},
+                {("store", 1500), ("member", 1000)},
+            )
+
+            migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            db.flush()
+            self.assertEqual(db.scalar(select(func.count()).select_from(OptionChoicePrice).where(
+                OptionChoicePrice.option_choice_id == copied_choice.id
+            )), 2)
+
     def test_only_the_requested_store_is_migrated(self):
         with self.SessionLocal() as db:
             migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
@@ -553,6 +723,70 @@ class CatalogOptionMigrationTests(unittest.TestCase):
             self.assertEqual(second.created_choices, 1)
             self.assertEqual(third.created_choices, 0)
             self.assertTrue(all(len(choice.code) <= 32 for choice in migrated))
+
+    def test_legacy_identity_uses_normalized_source_without_absorbing_real_code_collision(self):
+        with self.SessionLocal() as db:
+            project = db.get(Project, self.project_id)
+            project.diy_options = [
+                {"label": "Shoulder Relax", "price_cents": 0},
+                {"label": "Waist", "price_cents": 0},
+                {"label": "Shoulder Relax", "price_cents": 0},
+            ]
+            db.commit()
+            migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            db.flush()
+            draft = db.scalar(select(ProjectCatalogVersion).where(
+                ProjectCatalogVersion.project_id == self.project_id,
+                ProjectCatalogVersion.status == "draft",
+            ))
+            legacy_group = db.scalar(select(ProjectOptionGroup).where(
+                ProjectOptionGroup.catalog_version_id == draft.id,
+                ProjectOptionGroup.code == "legacy-diy-options",
+            ))
+            original = list(db.scalars(
+                select(ProjectOptionChoice)
+                .where(ProjectOptionChoice.option_group_id == legacy_group.id)
+                .order_by(ProjectOptionChoice.display_order, ProjectOptionChoice.id)
+            ))
+            original_ids = [choice.id for choice in original]
+            original_codes = [choice.code for choice in original]
+            collision = ProjectOptionChoice(
+                option_group_id=legacy_group.id,
+                code="legacy-neck-relax-1",
+                name="手工维护的无关选项",
+                choice_type="preference",
+                charge_mode="free",
+                display_order=99,
+            )
+            db.add(collision)
+            db.flush()
+
+            project.diy_options = [
+                {"label": "NECK RELAX", "price_cents": 0},
+                {"label": "Waist", "price_cents": 0},
+                {"label": "Ｓｈｏｕｌｄｅｒ　Ｒｅｌａｘ", "price_cents": 0},
+                {"label": "shoulder   relax", "price_cents": 0},
+            ]
+            second = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            db.flush()
+            third = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            db.flush()
+
+            rows = list(db.scalars(select(ProjectOptionChoice).where(
+                ProjectOptionChoice.option_group_id == legacy_group.id
+            )))
+            self.assertEqual(len(rows), 5)
+            self.assertEqual(second.created_choices, 1)
+            self.assertEqual(third.created_choices, 0)
+            self.assertEqual(db.get(ProjectOptionChoice, collision.id).name, "手工维护的无关选项")
+            neck = [choice for choice in rows if choice.name == "NECK RELAX"]
+            self.assertEqual(len(neck), 1)
+            self.assertNotEqual(neck[0].code, collision.code)
+            self.assertEqual([db.get(ProjectOptionChoice, choice_id).code for choice_id in original_ids], original_codes)
+            self.assertEqual(
+                [db.get(ProjectOptionChoice, choice_id).name for choice_id in original_ids],
+                ["Ｓｈｏｕｌｄｅｒ　Ｒｅｌａｘ", "Waist", "shoulder   relax"],
+            )
 
     def test_cli_writes_only_with_apply_and_rejects_conflicting_modes(self):
         with patch("scripts.migrate_catalog_options.SessionLocal", self.SessionLocal):

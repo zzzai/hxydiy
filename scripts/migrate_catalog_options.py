@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import sys
 from typing import Iterable
+import unicodedata
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -71,6 +72,10 @@ def _stable_code(prefix: str, source: str, index: int | None = None) -> str:
     return f"{prefix}-{suffix}{ordinal}"[:32]
 
 
+def _normalize_label(value: str) -> str:
+    return " ".join(unicodedata.normalize("NFKC", value).split()).casefold()
+
+
 def _legacy_specs(project: Project, warnings: list[str]) -> tuple[_ChoiceSpec, ...]:
     result: list[_ChoiceSpec] = []
     occurrences: dict[str, int] = {}
@@ -83,7 +88,7 @@ def _legacy_specs(project: Project, warnings: list[str]) -> tuple[_ChoiceSpec, .
             warnings.append(f"project {project.code}: invalid diy_options entry at index {index}; skipped")
             continue
         label = str(option["label"]).strip()
-        normalized_label = " ".join(label.split()).casefold()
+        normalized_label = _normalize_label(label)
         occurrence = occurrences.get(normalized_label, 0)
         occurrences[normalized_label] = occurrence + 1
         amount = option.get("price_cents")
@@ -201,11 +206,11 @@ def _matching_group(
 
 
 def _choice_matches(choice: ProjectOptionChoice, spec: _ChoiceSpec) -> bool:
-    return (
-        choice.name == spec.name
-        and choice.choice_type == spec.choice_type
-        and choice.charge_mode == spec.charge_mode
-    )
+    if choice.choice_type != spec.choice_type or choice.charge_mode != spec.charge_mode:
+        return False
+    if spec.source_key.startswith("legacy:"):
+        return _normalize_label(choice.name) == _normalize_label(spec.name)
+    return choice.name == spec.name
 
 
 def _matching_choice(
@@ -370,6 +375,8 @@ def _migrate_store_catalog(db: Session, store_id: int, dry_run: bool) -> Migrati
                     db.add(choice)
                     db.flush()
                     report.created_choices += 1
+                elif choice_spec.source_key.startswith("legacy:") and choice.name != choice_spec.name:
+                    choice.name = choice_spec.name
                 _reconcile_current_prices(db, choice, choice_spec, effective_at, report.warnings)
 
             group.max_select = int(db.scalar(select(func.count()).select_from(ProjectOptionChoice).where(
