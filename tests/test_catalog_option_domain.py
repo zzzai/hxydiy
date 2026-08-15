@@ -213,6 +213,30 @@ class CatalogOptionDomainTests(unittest.TestCase):
             self.assertEqual(by_code["min_select_exceeds_available"], "groups.limited.min_select")
             self.assertEqual(by_code["max_select_exceeds_available"], "groups.over-available.max_select")
 
+    def test_validate_catalog_rejects_negative_and_contradictory_selection_counts(self):
+        with self.SessionLocal() as db:
+            store = self._add_store(db)
+            project = self._add_project(db, store, "invalid-selection-counts")
+            version = self._add_version(db, project)
+            negative_min = self._add_group(db, version, "negative-min", min_select=-1)
+            self._add_choice(db, negative_min, "one")
+            negative_max = self._add_group(db, version, "negative-max", max_select=-1)
+            self._add_choice(db, negative_max, "one")
+            required_zero = self._add_group(db, version, "required-zero", required=True, max_select=0)
+            self._add_choice(db, required_zero, "one")
+            single_too_many = self._add_group(db, version, "single-too-many", max_select=2)
+            self._add_choice(db, single_too_many, "one")
+            self._add_choice(db, single_too_many, "two")
+            db.commit()
+
+            errors = validate_catalog_version(db, version.id)
+
+            by_code = {error.code: error.path for error in errors}
+            self.assertEqual(by_code["min_select_negative"], "groups.negative-min.min_select")
+            self.assertEqual(by_code["max_select_negative"], "groups.negative-max.max_select")
+            self.assertEqual(by_code["required_group_max_zero"], "groups.required-zero.max_select")
+            self.assertEqual(by_code["single_group_max_exceeds_one"], "groups.single-too-many.max_select")
+
     def test_validate_catalog_rejects_bundle_qualification_on_free_preference(self):
         with self.SessionLocal() as db:
             store = self._add_store(db)
@@ -231,6 +255,67 @@ class CatalogOptionDomainTests(unittest.TestCase):
 
             invalid = next(error for error in errors if error.code == "bundle_qualification_requires_charge")
             self.assertEqual(invalid.path, "groups.preference.choices.soft.qualifies_for_foot_bath_bundle")
+
+    def test_validate_catalog_reports_choice_type_charge_mode_contradictions_without_bundle_masking(self):
+        with self.SessionLocal() as db:
+            store = self._add_store(db)
+            project = self._add_project(db, store, "invalid-choice-contracts")
+            version = self._add_version(db, project)
+            group = self._add_group(db, version, "choices")
+            preference = self._add_choice(
+                db,
+                group,
+                "preference-priced",
+                choice_type="preference",
+                charge_mode="custom_price",
+                qualifies_for_foot_bath_bundle=True,
+            )
+            self._add_store_price(db, preference)
+            self._add_choice(
+                db,
+                group,
+                "linked-free",
+                choice_type="linked_project",
+                charge_mode="free",
+                qualifies_for_foot_bath_bundle=True,
+            )
+            linked = self._add_project(db, store, "dedicated-linked")
+            self._add_version(db, linked, status="published")
+            dedicated = self._add_choice(
+                db,
+                group,
+                "dedicated-inherit",
+                choice_type="dedicated_charge",
+                charge_mode="inherit_linked_price",
+                linked_project_id=linked.id,
+            )
+            self._add_store_price(db, dedicated)
+            db.commit()
+
+            errors = validate_catalog_version(db, version.id)
+
+            by_code = {error.code: error.path for error in errors}
+            self.assertEqual(
+                by_code["preference_must_be_free"],
+                "groups.choices.choices.preference-priced.charge_mode",
+            )
+            self.assertEqual(
+                by_code["linked_project_must_inherit_linked_price"],
+                "groups.choices.choices.linked-free.charge_mode",
+            )
+            self.assertEqual(
+                by_code["linked_project_required"],
+                "groups.choices.choices.linked-free.linked_project_id",
+            )
+            self.assertEqual(
+                by_code["dedicated_charge_must_use_custom_price"],
+                "groups.choices.choices.dedicated-inherit.charge_mode",
+            )
+            self.assertEqual(
+                by_code["dedicated_charge_cannot_link_project"],
+                "groups.choices.choices.dedicated-inherit.linked_project_id",
+            )
+            self.assertNotIn("bundle_qualification_requires_charge", by_code)
 
     def test_validate_catalog_rejects_link_depth_beyond_two_levels(self):
         with self.SessionLocal() as db:
@@ -285,7 +370,7 @@ class CatalogOptionDomainTests(unittest.TestCase):
             self.assertIn("linked_project_cross_store", codes)
             self.assertIn("linked_project_archived", codes)
 
-    def test_validate_catalog_rejects_duplicate_choice_code_and_repeated_link_without_part(self):
+    def test_validate_catalog_rejects_repeated_link_without_part(self):
         with self.SessionLocal() as db:
             store = self._add_store(db)
             root = self._add_project(db, store, "duplicate-scope-root")
@@ -301,8 +386,22 @@ class CatalogOptionDomainTests(unittest.TestCase):
             errors = validate_catalog_version(db, version.id)
 
             codes = {error.code for error in errors}
-            self.assertIn("duplicate_choice_code", codes)
             self.assertIn("duplicate_linked_project", codes)
+
+    def test_validate_catalog_allows_reusing_choice_code_in_different_groups(self):
+        with self.SessionLocal() as db:
+            store = self._add_store(db)
+            project = self._add_project(db, store, "choice-code-scope")
+            version = self._add_version(db, project)
+            first_group = self._add_group(db, version, "first")
+            second_group = self._add_group(db, version, "second")
+            self._add_choice(db, first_group, "same-code")
+            self._add_choice(db, second_group, "same-code")
+            db.commit()
+
+            errors = validate_catalog_version(db, version.id)
+
+            self.assertNotIn("duplicate_choice_code", {error.code for error in errors})
 
     def test_publish_catalog_version_supersedes_old_version_and_updates_pointer_atomically(self):
         with self.SessionLocal() as db:

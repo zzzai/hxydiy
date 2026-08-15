@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import hashlib
 import json
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -166,7 +166,6 @@ def validate_catalog_version(db: Session, version_id: int) -> list[CatalogValida
     errors: list[CatalogValidationError] = []
     now = datetime.now(UTC)
     seen_group_codes: set[str] = set()
-    seen_choice_codes: set[str] = set()
     seen_linked_projects: set[int] = set()
 
     for group in _groups(db, version.id):
@@ -179,6 +178,30 @@ def validate_catalog_version(db: Session, version_id: int) -> list[CatalogValida
         active_choices = [choice for choice in choices if choice.status == "active"]
         if group.required and not active_choices:
             errors.append(_error("required_group_empty", group_path, "必选组必须至少有一个可用选项"))
+        if group.min_select < 0:
+            errors.append(_error(
+                "min_select_negative",
+                f"{group_path}.min_select",
+                "最少选择数不得小于 0",
+            ))
+        if group.max_select < 0:
+            errors.append(_error(
+                "max_select_negative",
+                f"{group_path}.max_select",
+                "最多选择数不得小于 0",
+            ))
+        if group.required and group.max_select == 0:
+            errors.append(_error(
+                "required_group_max_zero",
+                f"{group_path}.max_select",
+                "必选组的最多选择数必须大于 0",
+            ))
+        if group.selection_mode == "single" and group.max_select > 1:
+            errors.append(_error(
+                "single_group_max_exceeds_one",
+                f"{group_path}.max_select",
+                "单选组的最多选择数不得大于 1",
+            ))
         if group.min_select > group.max_select:
             errors.append(_error(
                 "min_select_exceeds_max",
@@ -200,15 +223,34 @@ def validate_catalog_version(db: Session, version_id: int) -> list[CatalogValida
 
         for choice in choices:
             choice_path = f"{group_path}.choices.{choice.code}"
-            if choice.code in seen_choice_codes:
-                errors.append(_error(
-                    "duplicate_choice_code",
-                    f"{choice_path}.code",
-                    "同一目录版本内选项编码重复",
-                ))
-            seen_choice_codes.add(choice.code)
             if choice.status != "active":
                 continue
+
+            if choice.choice_type == "preference" and choice.charge_mode != "free":
+                errors.append(_error(
+                    "preference_must_be_free",
+                    f"{choice_path}.charge_mode",
+                    "偏好选项必须免费",
+                ))
+            if choice.choice_type == "linked_project" and choice.charge_mode != "inherit_linked_price":
+                errors.append(_error(
+                    "linked_project_must_inherit_linked_price",
+                    f"{choice_path}.charge_mode",
+                    "项目引用选项必须继承引用项目价格",
+                ))
+            if choice.choice_type == "dedicated_charge":
+                if choice.charge_mode != "custom_price":
+                    errors.append(_error(
+                        "dedicated_charge_must_use_custom_price",
+                        f"{choice_path}.charge_mode",
+                        "独立收费选项必须使用自定义价格",
+                    ))
+                if choice.linked_project_id is not None:
+                    errors.append(_error(
+                        "dedicated_charge_cannot_link_project",
+                        f"{choice_path}.linked_project_id",
+                        "独立收费选项不得指向引用项目",
+                    ))
 
             if choice.charge_mode == "custom_price" and not _has_current_price(
                 db, choice.id, "store", now
@@ -219,8 +261,10 @@ def validate_catalog_version(db: Session, version_id: int) -> list[CatalogValida
                     "收费选项必须配置当前有效的门店价",
                 ))
 
-            if choice.qualifies_for_foot_bath_bundle and (
-                choice.choice_type == "preference" or choice.charge_mode == "free"
+            if (
+                choice.qualifies_for_foot_bath_bundle
+                and choice.choice_type == "preference"
+                and choice.charge_mode == "free"
             ):
                 errors.append(_error(
                     "bundle_qualification_requires_charge",
