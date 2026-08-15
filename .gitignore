@@ -21,3 +21,6 @@ data/
 .idea/
 .vscode/
 .DS_Store
+
+# 隔离开发工作树
+.worktrees/
