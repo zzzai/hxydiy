@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import hashlib
 import json
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import or_, select, text, update
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -54,12 +54,24 @@ class CatalogConcurrencyError(CatalogDomainError):
     """目录写入的锁或条件更新未取得预期状态。"""
 
 
+CATALOG_MUTATION_ADVISORY_LOCK_ID = 1213757763
+
+
+def acquire_catalog_mutation_lock(db: Session) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": CATALOG_MUTATION_ADVISORY_LOCK_ID},
+        )
+
+
 def lock_catalog_projects(db: Session, project_ids: list[int] | tuple[int, ...] | set[int]) -> dict[int, Project]:
     """按稳定 Project ID 顺序锁定项目及其目录版本。
 
     PostgreSQL 以 ``FOR UPDATE`` 提供互斥；后续状态更新仍使用条件更新，
     因而 SQLite focused test 不会被误当作并发正确性的证明。
     """
+    acquire_catalog_mutation_lock(db)
     ids = sorted({int(project_id) for project_id in project_ids})
     if not ids:
         return {}

@@ -15,6 +15,7 @@ from app.domain.catalog_options import (
     CatalogPublicationError,
     _snapshot_hash,
     copy_catalog_version_graph,
+    lock_catalog_projects,
     publish_catalog_version,
     resolve_published_project_config,
     validate_catalog_version,
@@ -43,6 +44,32 @@ class CatalogOptionDomainTests(unittest.TestCase):
 
     def tearDown(self):
         self.engine.dispose()
+
+    def test_catalog_project_locks_acquire_shared_postgres_advisory_lock_first(self):
+        events = []
+
+        class Dialect:
+            name = "postgresql"
+
+        class Bind:
+            dialect = Dialect()
+
+        class RecordingSession:
+            def get_bind(self):
+                return Bind()
+
+            def execute(self, statement, params=None):
+                events.append(("execute", str(statement), params or {}))
+
+            def scalars(self, statement):
+                events.append(("scalars", str(statement), {}))
+                return []
+
+        self.assertEqual(lock_catalog_projects(RecordingSession(), [9, 3]), {})
+        self.assertEqual(events[0][0], "execute")
+        self.assertIn("pg_advisory_xact_lock", events[0][1])
+        self.assertEqual(events[0][2]["lock_id"], 1213757763)
+        self.assertEqual([event[0] for event in events[1:]], ["scalars", "scalars"])
 
     @staticmethod
     def _add_store(db, code="catalog-domain-store"):

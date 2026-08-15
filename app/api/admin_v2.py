@@ -777,7 +777,6 @@ def _published_catalog_referrer_ids(db: Session, target_project_id: int) -> list
             ProjectOptionChoice.linked_project_id == target_project_id,
         )
         .order_by(ProjectCatalogVersion.project_id)
-        .with_for_update()
     ))
 
 
