@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StoreOut(BaseModel):
@@ -34,12 +34,14 @@ class ProjectOut(BaseModel):
     duration_min: int | None = None
     summary: str = ""
     image_url: str = ""
-    tags: list = []
-    detail_modules: list = []
-    diy_options: list = []
+    tags: list = Field(default_factory=list)
+    detail_modules: list = Field(default_factory=list)
+    diy_options: list = Field(default_factory=list)
     display_order: int = 0
     price_label: str = ""
-    prices: list[PriceOut] = []
+    prices: list[PriceOut] = Field(default_factory=list)
+    catalog_version: int | None = None
+    option_groups: list = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

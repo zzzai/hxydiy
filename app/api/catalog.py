@@ -4,6 +4,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
+from app.domain.catalog_options import (
+    CatalogPublishedVersionNotFoundError,
+    resolve_published_project_config,
+)
 from app.models import Addon, PageContent, PriceBook, Product, Project, Store
 from app.schemas.catalog import ProjectListResponse, ProjectOut, StoreOut
 
@@ -61,14 +65,59 @@ class ProductOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _published_option_groups(db: Session, project: Project) -> tuple[int | None, list[dict]]:
+    if project.current_published_version_id is None:
+        return None, []
+    try:
+        config = resolve_published_project_config(db, project.id)
+    except CatalogPublishedVersionNotFoundError as exc:
+        raise HTTPException(status_code=409, detail="当前发布目录指针异常") from exc
+    groups = []
+    for group in config["groups"]:
+        choices = [
+            {
+                "code": choice["code"],
+                "name": choice["name"],
+                "description": choice["description"],
+                "choice_type": choice["choice_type"],
+                "linked_project_id": choice["linked_project_id"],
+                "linked_project_code": choice["linked_project_code"],
+                "charge_mode": choice["charge_mode"],
+                "independently_visible": choice["independently_visible"],
+                "coupon_eligible": choice["coupon_eligible"],
+                "annual_gift_eligible": choice["annual_gift_eligible"],
+                "qualifies_for_foot_bath_bundle": choice["qualifies_for_foot_bath_bundle"],
+                "display_order": choice["display_order"],
+                "status": choice["status"],
+                "prices": choice["prices"],
+            }
+            for choice in group["choices"]
+            if choice["status"] == "active"
+        ]
+        groups.append({
+            "code": group["code"],
+            "name": group["name"],
+            "description": group["description"],
+            "selection_mode": group["selection_mode"],
+            "required": group["required"],
+            "min_select": group["min_select"],
+            "max_select": group["max_select"],
+            "display_order": group["display_order"],
+            "choices": choices,
+        })
+    return config["version"], groups
+
+
 def _project_to_out(db: Session, p: Project) -> ProjectOut:
     prices = list(db.scalars(select(PriceBook).where(PriceBook.project_id == p.id)))
+    catalog_version, option_groups = _published_option_groups(db, p)
     return ProjectOut(
         id=p.id, code=p.code, category=p.category, category_mark=p.category_mark,
         name=p.name, duration_min=p.duration_min, summary=p.summary,
         image_url=p.image_url, tags=p.tags, detail_modules=p.detail_modules,
         diy_options=p.diy_options, display_order=p.display_order, price_label=p.price_label,
         prices=[{"price_type": x.price_type, "amount_cents": x.amount_cents} for x in prices],
+        catalog_version=catalog_version, option_groups=option_groups,
     )
 
 
