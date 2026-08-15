@@ -15,6 +15,7 @@ from app.domain.catalog_options import (
     CatalogDraftNotFoundError,
     CatalogProjectNotFoundError,
     CatalogPublicationError,
+    copy_catalog_version_graph,
     publish_catalog_version,
     validate_catalog_version,
 )
@@ -279,49 +280,6 @@ def _next_version_number(db: Session, project_id: int) -> int:
     return int(current or 0) + 1
 
 
-def _copy_prices(db: Session, source_choice_id: int, target_choice_id: int) -> None:
-    prices = list(db.scalars(
-        select(OptionChoicePrice)
-        .where(OptionChoicePrice.option_choice_id == source_choice_id)
-        .order_by(OptionChoicePrice.id)
-    ))
-    for price in prices:
-        db.add(OptionChoicePrice(
-            option_choice_id=target_choice_id,
-            price_type=price.price_type,
-            amount_cents=price.amount_cents,
-            effective_from=price.effective_from,
-            effective_to=price.effective_to,
-        ))
-
-
-def _copy_choices(db: Session, source_group_id: int, target_group_id: int) -> None:
-    choices = list(db.scalars(
-        select(ProjectOptionChoice)
-        .where(ProjectOptionChoice.option_group_id == source_group_id)
-        .order_by(ProjectOptionChoice.id)
-    ))
-    for choice in choices:
-        copied = ProjectOptionChoice(
-            option_group_id=target_group_id,
-            code=choice.code,
-            name=choice.name,
-            description=choice.description,
-            choice_type=choice.choice_type,
-            linked_project_id=choice.linked_project_id,
-            charge_mode=choice.charge_mode,
-            independently_visible=choice.independently_visible,
-            coupon_eligible=choice.coupon_eligible,
-            annual_gift_eligible=choice.annual_gift_eligible,
-            qualifies_for_foot_bath_bundle=choice.qualifies_for_foot_bath_bundle,
-            display_order=choice.display_order,
-            status=choice.status,
-        )
-        db.add(copied)
-        _flush_or_conflict(db)
-        _copy_prices(db, choice.id, copied.id)
-
-
 def _create_draft_from_published(db: Session, project: Project) -> ProjectCatalogVersion:
     draft = ProjectCatalogVersion(
         project_id=project.id,
@@ -335,26 +293,7 @@ def _create_draft_from_published(db: Session, project: Project) -> ProjectCatalo
     published = db.get(ProjectCatalogVersion, project.current_published_version_id)
     if published is None or published.project_id != project.id or published.status != "published":
         raise HTTPException(status_code=409, detail="当前发布目录指针异常")
-    groups = list(db.scalars(
-        select(ProjectOptionGroup)
-        .where(ProjectOptionGroup.catalog_version_id == published.id)
-        .order_by(ProjectOptionGroup.id)
-    ))
-    for group in groups:
-        copied = ProjectOptionGroup(
-            catalog_version_id=draft.id,
-            code=group.code,
-            name=group.name,
-            description=group.description,
-            selection_mode=group.selection_mode,
-            required=group.required,
-            min_select=group.min_select,
-            max_select=group.max_select,
-            display_order=group.display_order,
-        )
-        db.add(copied)
-        _flush_or_conflict(db)
-        _copy_choices(db, group.id, copied.id)
+    copy_catalog_version_graph(db, published.id, draft.id)
     return draft
 
 

@@ -42,6 +42,70 @@ class CatalogDraftNotFoundError(CatalogDomainError):
         self.project_id = project_id
 
 
+def copy_catalog_version_graph(
+    db: Session,
+    source_version_id: int,
+    target_version_id: int,
+) -> None:
+    """Copy every group, choice, and price row between catalog versions."""
+
+    groups = list(db.scalars(
+        select(ProjectOptionGroup)
+        .where(ProjectOptionGroup.catalog_version_id == source_version_id)
+        .order_by(ProjectOptionGroup.id)
+    ))
+    for group in groups:
+        copied_group = ProjectOptionGroup(
+            catalog_version_id=target_version_id,
+            code=group.code,
+            name=group.name,
+            description=group.description,
+            selection_mode=group.selection_mode,
+            required=group.required,
+            min_select=group.min_select,
+            max_select=group.max_select,
+            display_order=group.display_order,
+        )
+        db.add(copied_group)
+        db.flush()
+        choices = list(db.scalars(
+            select(ProjectOptionChoice)
+            .where(ProjectOptionChoice.option_group_id == group.id)
+            .order_by(ProjectOptionChoice.id)
+        ))
+        for choice in choices:
+            copied_choice = ProjectOptionChoice(
+                option_group_id=copied_group.id,
+                code=choice.code,
+                name=choice.name,
+                description=choice.description,
+                choice_type=choice.choice_type,
+                linked_project_id=choice.linked_project_id,
+                charge_mode=choice.charge_mode,
+                independently_visible=choice.independently_visible,
+                coupon_eligible=choice.coupon_eligible,
+                annual_gift_eligible=choice.annual_gift_eligible,
+                qualifies_for_foot_bath_bundle=choice.qualifies_for_foot_bath_bundle,
+                display_order=choice.display_order,
+                status=choice.status,
+            )
+            db.add(copied_choice)
+            db.flush()
+            prices = list(db.scalars(
+                select(OptionChoicePrice)
+                .where(OptionChoicePrice.option_choice_id == choice.id)
+                .order_by(OptionChoicePrice.id)
+            ))
+            for price in prices:
+                db.add(OptionChoicePrice(
+                    option_choice_id=copied_choice.id,
+                    price_type=price.price_type,
+                    amount_cents=price.amount_cents,
+                    effective_from=price.effective_from,
+                    effective_to=price.effective_to,
+                ))
+
+
 class CatalogPublishedVersionNotFoundError(CatalogDomainError):
     def __init__(self, project_id: int):
         super().__init__(f"项目没有当前已发布目录版本: {project_id}")

@@ -8,15 +8,22 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 import hashlib
 import json
+from pathlib import Path
 import re
+import sys
 from typing import Iterable
 
-from sqlalchemy import func, select
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
+from app.domain.catalog_options import copy_catalog_version_graph
 from app.models import (
     Addon,
     OptionChoicePrice,
@@ -66,6 +73,7 @@ def _stable_code(prefix: str, source: str, index: int | None = None) -> str:
 
 def _legacy_specs(project: Project, warnings: list[str]) -> tuple[_ChoiceSpec, ...]:
     result: list[_ChoiceSpec] = []
+    occurrences: dict[str, int] = {}
     options = project.diy_options if isinstance(project.diy_options, list) else []
     if project.diy_options and not isinstance(project.diy_options, list):
         warnings.append(f"project {project.code}: diy_options is not a list; skipped")
@@ -75,15 +83,18 @@ def _legacy_specs(project: Project, warnings: list[str]) -> tuple[_ChoiceSpec, .
             warnings.append(f"project {project.code}: invalid diy_options entry at index {index}; skipped")
             continue
         label = str(option["label"]).strip()
+        normalized_label = " ".join(label.split()).casefold()
+        occurrence = occurrences.get(normalized_label, 0)
+        occurrences[normalized_label] = occurrence + 1
         amount = option.get("price_cents")
         if isinstance(amount, (int, float)) and not isinstance(amount, bool) and amount != 0:
             warnings.append(
                 f"project {project.code} legacy option {label}: non-zero price_cents={amount} ignored"
             )
-        source_key = f"legacy:{index}:{label}"
+        source_key = f"legacy:{normalized_label}:{occurrence + 1}"
         result.append(_ChoiceSpec(
             source_key=source_key,
-            code=_stable_code("legacy", label, index),
+            code=_stable_code("legacy", normalized_label, occurrence),
             name=label,
             choice_type="preference",
             charge_mode="free",
@@ -217,20 +228,45 @@ def _matching_choice(
     raise RuntimeError(f"cannot allocate a stable choice code for {spec.name}")
 
 
-def _add_missing_prices(db: Session, choice: ProjectOptionChoice, spec: _ChoiceSpec) -> None:
-    existing = set(db.scalars(select(OptionChoicePrice.price_type).where(
-        OptionChoicePrice.option_choice_id == choice.id
-    )))
+def _reconcile_current_prices(
+    db: Session,
+    choice: ProjectOptionChoice,
+    spec: _ChoiceSpec,
+    effective_at: datetime,
+    warnings: list[str],
+) -> None:
     added = False
+    changed = False
     for price_type, amount_cents in spec.prices:
-        if price_type not in existing:
+        current = list(db.scalars(
+            select(OptionChoicePrice)
+            .where(
+                OptionChoicePrice.option_choice_id == choice.id,
+                OptionChoicePrice.price_type == price_type,
+                OptionChoicePrice.effective_from <= effective_at,
+                or_(OptionChoicePrice.effective_to.is_(None), OptionChoicePrice.effective_to > effective_at),
+            )
+            .order_by(OptionChoicePrice.effective_from.desc(), OptionChoicePrice.id.desc())
+        ))
+        matching = next((price for price in current if price.amount_cents == amount_cents), None)
+        conflicts = [price for price in current if price.amount_cents != amount_cents]
+        if conflicts:
+            old_amounts = sorted({price.amount_cents for price in conflicts})
+            for price in conflicts:
+                price.effective_to = effective_at
+            changed = True
+            warnings.append(
+                f"option {choice.name} {price_type} current price {old_amounts} replaced with {amount_cents}"
+            )
+        if matching is None:
             db.add(OptionChoicePrice(
                 option_choice_id=choice.id,
                 price_type=price_type,
                 amount_cents=amount_cents,
+                effective_from=effective_at,
             ))
             added = True
-    if added:
+    if added or changed:
         db.flush()
 
 
@@ -259,10 +295,19 @@ def _predict_group_changes(
 def migrate_store_catalog(db: Session, store_id: int, dry_run: bool = True) -> MigrationReport:
     """Create or complete reviewable draft catalogs for exactly one store."""
 
+    if dry_run:
+        with db.no_autoflush:
+            return _migrate_store_catalog(db, store_id=store_id, dry_run=True)
+    return _migrate_store_catalog(db, store_id=store_id, dry_run=False)
+
+
+def _migrate_store_catalog(db: Session, store_id: int, dry_run: bool) -> MigrationReport:
+
     if db.get(Store, store_id) is None:
         raise ValueError(f"store {store_id} does not exist")
 
     report = MigrationReport()
+    effective_at = datetime.now(UTC)
     addons_by_project = _collect_addons(db, store_id, report.warnings)
     projects = list(db.scalars(
         select(Project).where(Project.store_id == store_id).order_by(Project.id)
@@ -288,6 +333,11 @@ def migrate_store_catalog(db: Session, store_id: int, dry_run: bool = True) -> M
             db.add(draft)
             db.flush()
             report.created_versions += 1
+            if project.current_published_version_id is not None:
+                published = db.get(ProjectCatalogVersion, project.current_published_version_id)
+                if published is None or published.project_id != project.id or published.status != "published":
+                    raise ValueError(f"project {project.code} has an invalid current published catalog pointer")
+                copy_catalog_version_graph(db, published.id, draft.id)
 
         for group_order, spec in enumerate(specs):
             group, group_code = _matching_group(db, draft.id, spec, report.warnings)
@@ -320,7 +370,7 @@ def migrate_store_catalog(db: Session, store_id: int, dry_run: bool = True) -> M
                     db.add(choice)
                     db.flush()
                     report.created_choices += 1
-                _add_missing_prices(db, choice, choice_spec)
+                _reconcile_current_prices(db, choice, choice_spec, effective_at, report.warnings)
 
             group.max_select = int(db.scalar(select(func.count()).select_from(ProjectOptionChoice).where(
                 ProjectOptionChoice.option_group_id == group.id
