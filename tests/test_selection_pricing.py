@@ -244,6 +244,38 @@ class SelectionPricingTests(unittest.TestCase):
 
         self.assertEqual(pricing["promotion_adjustment_cents"], 0)
 
+    def test_invalid_state_foot_bath_does_not_receive_bundle_discount(self):
+        items = [
+            {
+                "project_id": self.foot_bath_id,
+                "quantity": 1,
+                "state": "cancelled",
+                "chargeable": True,
+            },
+            {
+                "project_id": self.local_id,
+                "quantity": 1,
+                "state": "pending",
+                "diy_preferences": ["肩颈"],
+                "chargeable": True,
+                "qualifies_for_foot_bath_bundle": True,
+            },
+            {
+                "project_id": self.local_id,
+                "quantity": 1,
+                "state": "completed",
+                "diy_preferences": ["腰背"],
+                "chargeable": True,
+                "qualifies_for_foot_bath_bundle": True,
+            },
+        ]
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, items)
+
+        self.assertEqual(pricing["promotion_adjustment_cents"], 0)
+        self.assertEqual(pricing["qualified_local_unit_count"], 2)
+        self.assertEqual(pricing["matched_foot_bath_count"], 0)
+
     def test_legacy_pending_service_lines_count_for_foot_bath_bundle(self):
         with self.SessionLocal() as db:
             pricing = calculate_selection_pricing(db, [

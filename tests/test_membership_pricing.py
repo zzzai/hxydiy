@@ -35,6 +35,24 @@ class ConfirmedPriceTests(unittest.TestCase):
         self.assertEqual(price.amount_cents, 3990)
         self.assertEqual(price.basis, "store")
 
+    def test_non_member_confirmed_at_must_be_timezone_aware(self):
+        with self.assertRaisesRegex(ValueError, "confirmed_at must be timezone-aware"):
+            confirmed_price_for_line(
+                prices={"store": 3990, "group": 2990, "member": 2590},
+                is_member=False,
+                confirmed_at=datetime(2026, 8, 18, 10),
+                store_timezone="Asia/Shanghai",
+            )
+
+    def test_non_member_invalid_store_timezone_is_a_stable_value_error(self):
+        with self.assertRaisesRegex(ValueError, "invalid store timezone"):
+            confirmed_price_for_line(
+                prices={"store": 3990, "group": 2990, "member": 2590},
+                is_member=False,
+                confirmed_at=datetime(2026, 8, 18, 10, tzinfo=timezone.utc),
+                store_timezone="HXY/NoSuchStore",
+            )
+
     def test_member_price_falls_back_to_group_then_store(self):
         price = confirmed_price_for_line(
             prices={"store": 3990, "group": 2990},

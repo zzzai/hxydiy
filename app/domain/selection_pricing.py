@@ -10,6 +10,7 @@ from app.domain.membership_pricing import price_book_prices
 PROMO_FOOT_BATH_CODE = "hxy-qiqing-30"
 FOOT_BATH_PROMOTION_CENTS = 2990
 PRICE_TYPES = {"store", "group", "member"}
+BUNDLE_CONFIRMED_STATES = {"pending", "confirmed", "in_service", "completed"}
 
 
 def price_type_for_member(is_member: bool) -> str:
@@ -101,7 +102,7 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
         member_subtotal += line_member
         preferences = _preferences(item)
         item_code = _first_value(item, "code") or code
-        if item_code == PROMO_FOOT_BATH_CODE:
+        if item_code == PROMO_FOOT_BATH_CODE and _has_bundle_base_eligibility(item):
             # 减免只免泡脚项目本身的基础价，泡脚上另加的小项照常收费（与顾客端预览口径一致）。
             confirmed_base = _confirmed_base_price(item)
             foot_bath_store_units.extend([confirmed_base if confirmed_base is not None else base_store] * quantity)
@@ -224,8 +225,19 @@ def _explicit_bundle_qualification(item: dict) -> bool | None:
 
 
 def _counts_for_foot_bath_bundle(item: dict, resolved_code: str | None = None) -> bool:
+    if not _has_bundle_base_eligibility(item):
+        return False
+    explicit = _explicit_bundle_qualification(item)
+    if explicit is not None:
+        return explicit
+    code = _first_value(item, "code") or resolved_code
+    preferences = _preferences(item)
+    return code == "hxy-jubu-30" and bool(preferences)
+
+
+def _has_bundle_base_eligibility(item: dict) -> bool:
     state = _first_value(item, "state")
-    if state is not None and state not in {"pending", "confirmed", "in_service", "completed"}:
+    if state is not None and state not in BUNDLE_CONFIRMED_STATES:
         return False
     if _first_value(item, "item_type") == "preference":
         return False
@@ -237,9 +249,4 @@ def _counts_for_foot_bath_bundle(item: dict, resolved_code: str | None = None) -
         or bool(_first_value(item, "annual_gift_applied"))
     ):
         return False
-    explicit = _explicit_bundle_qualification(item)
-    if explicit is not None:
-        return explicit
-    code = _first_value(item, "code") or resolved_code
-    preferences = _preferences(item)
-    return code == "hxy-jubu-30" and bool(preferences)
+    return True

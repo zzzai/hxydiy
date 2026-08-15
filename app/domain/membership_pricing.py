@@ -92,6 +92,7 @@ def confirmed_price_for_line(
     store = _price_value(prices, ("store",))
     if store is None:
         raise ValueError("store price is required")
+    local_confirmed_at = _aware(confirmed_at).astimezone(_store_zone(store_timezone))
     if not is_member:
         return ConfirmedPrice(amount_cents=store, basis="store")
 
@@ -99,7 +100,6 @@ def confirmed_price_for_line(
     if member is None:
         raise ValueError("member price is required")
 
-    local_confirmed_at = _aware(confirmed_at).astimezone(_store_zone(store_timezone))
     if local_confirmed_at.weekday() == 1:
         tuesday_amount = round(store * 0.68)
         if tuesday_amount < member:
