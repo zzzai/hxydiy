@@ -14,6 +14,14 @@ from app.models.browser import BrowserInstance
 from app.models.feedback import ServiceFeedback
 from app.models.external_identity import CustomerExternalIdentity
 from app.models.settlement import SettlementAdjustment
+from app.models.catalog_options import (
+    CHARGE_MODES,
+    CHOICE_TYPES,
+    OptionChoicePrice,
+    ProjectCatalogVersion,
+    ProjectOptionChoice,
+    ProjectOptionGroup,
+)
 
 
 __all__ = [
@@ -24,4 +32,6 @@ __all__ = [
     "StateTransition", "Technician", "Visit", "SelectionSession", "SelectionRevision", "SelectionChangeRequest", "ServiceLine", "PositionOccupancy",
     "CustomerVerificationCode", "PageContent", "BrowserInstance", "ServiceFeedback", "CustomerExternalIdentity",
     "SettlementAdjustment",
+    "CHARGE_MODES", "CHOICE_TYPES", "OptionChoicePrice", "ProjectCatalogVersion",
+    "ProjectOptionChoice", "ProjectOptionGroup",
 ]
