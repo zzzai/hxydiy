@@ -203,7 +203,7 @@ class SelectionPricingTests(unittest.TestCase):
             {
                 "project_id": self.local_id,
                 "quantity": 1,
-                "state": "pending",
+                "state": "awaiting_staff_confirmation",
                 "diy_preferences": ["肩颈"],
                 "chargeable": True,
                 "qualifies_for_foot_bath_bundle": True,
@@ -243,6 +243,110 @@ class SelectionPricingTests(unittest.TestCase):
             pricing = calculate_selection_pricing(db, items)
 
         self.assertEqual(pricing["promotion_adjustment_cents"], 0)
+
+    def test_legacy_pending_service_lines_count_for_foot_bath_bundle(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, [
+                {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+                {
+                    "project_id": self.local_id,
+                    "quantity": 1,
+                    "state": "pending",
+                    "diy_preferences": ["肩颈"],
+                    "chargeable": True,
+                    "qualifies_for_foot_bath_bundle": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "quantity": 1,
+                    "state": "completed",
+                    "diy_preferences": ["腰背"],
+                    "chargeable": True,
+                    "qualifies_for_foot_bath_bundle": True,
+                },
+            ])
+
+        self.assertEqual(pricing["promotion_adjustment_cents"], -3990)
+
+    def test_foot_bath_bundle_reads_nested_snapshots_and_confirmed_base_price(self):
+        from app.models import Addon
+        with self.SessionLocal() as db:
+            addon = Addon(
+                store_id=1,
+                code="hxy-addon-nested",
+                name="加选小项",
+                price_cents=2000,
+                chargeable=True,
+                publication_status="published",
+                parent_project_id=self.foot_bath_id,
+                can_attach_to_parent=True,
+            )
+            db.add(addon)
+            db.commit()
+            pricing = calculate_selection_pricing(db, [
+                {
+                    "project_id": self.foot_bath_id,
+                    "quantity": 1,
+                    "addon_ids": [addon.id],
+                    "snapshot": {
+                        "code": "hxy-qiqing-30",
+                        "resolved_charge": {"confirmed_base_price_cents": 2713},
+                    },
+                },
+                {
+                    "project_id": self.local_id,
+                    "quantity": 1,
+                    "snapshot": {
+                        "state": "pending",
+                        "diy_preferences": ["肩颈"],
+                        "resolved_charge": {
+                            "choice_snapshot": {
+                                "code": "hxy-jubu-30",
+                                "qualifies_for_foot_bath_bundle": True,
+                            }
+                        },
+                    },
+                },
+                {
+                    "project_id": self.local_id,
+                    "quantity": 1,
+                    "snapshot": {
+                        "state": "in_service",
+                        "choice_snapshot": {
+                            "code": "hxy-jubu-30",
+                            "qualifies_for_foot_bath_bundle": True,
+                        },
+                        "diy_preferences": ["腰背"],
+                    },
+                },
+            ])
+
+        self.assertEqual(pricing["promotion_adjustment_cents"], -2713)
+        self.assertEqual(pricing["payable_total_cents"], 3990 + 2000 + 6900 + 6900 - 2713)
+
+    def test_foot_bath_bundle_uses_confirmed_base_price_per_matched_foot_bath(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, [
+                {
+                    "project_id": self.foot_bath_id,
+                    "quantity": 1,
+                    "confirmed_base_price_cents": 2713,
+                    "chargeable": True,
+                },
+                {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+                *[
+                    {
+                        "project_id": self.local_id,
+                        "quantity": 1,
+                        "diy_preferences": [f"部位{index}"],
+                        "chargeable": True,
+                        "qualifies_for_foot_bath_bundle": True,
+                    }
+                    for index in range(4)
+                ],
+            ])
+
+        self.assertEqual(pricing["promotion_adjustment_cents"], -(2713 + 3990))
 
     def test_foot_bath_bundle_keeps_legacy_missing_state_preview_compatible(self):
         with self.SessionLocal() as db:

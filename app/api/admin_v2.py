@@ -76,6 +76,21 @@ def _require_store_user(db: Session, user_id: int, staff: Staff) -> User:
     return user
 
 
+def _locked_store_user(db: Session, user_id: int, staff: Staff) -> User:
+    user = db.scalar(
+        select(User)
+        .where(
+            User.id == user_id,
+            User.id.in_(_store_user_ids(_staff_store_id(staff))),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="顾客不存在")
+    return user
+
+
 def _audit(db: Session, actor: str, action: str, entity: str, eid: str, detail: dict = None):
     db.add(AuditLog(
         actor_type="staff", actor_id=actor, action=action,
@@ -1098,10 +1113,7 @@ def set_user_membership(user_id: int, body: dict, db: Session = Depends(get_db),
     """店长设置/取消会员身份（线下收款后开通）：body = {"is_member": true}"""
     staff = _current_staff(authorization, db)
     _require_admin(staff)
-    _require_store_user(db, user_id, staff)
-    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
-    if user is None:
-        raise HTTPException(status_code=404, detail="顾客不存在")
+    user = _locked_store_user(db, user_id, staff)
     target_member_type: str | None
     if "member_type" in body:
         if body.get("member_type") != "annual":

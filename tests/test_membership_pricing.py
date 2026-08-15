@@ -9,6 +9,7 @@ from app.db.session import Base
 from app.domain.membership_pricing import (
     PriceContext,
     confirmed_price_for_line,
+    price_book_prices,
     resolve_option_charge,
 )
 from app.models import (
@@ -85,6 +86,24 @@ class ConfirmedPriceTests(unittest.TestCase):
 
         self.assertEqual(price.amount_cents, 2713)
         self.assertEqual(price.basis, "tuesday_68")
+
+    def test_confirmed_at_must_be_timezone_aware(self):
+        with self.assertRaisesRegex(ValueError, "confirmed_at must be timezone-aware"):
+            confirmed_price_for_line(
+                prices={"store": 3990, "member": 2990},
+                is_member=True,
+                confirmed_at=datetime(2026, 8, 18, 10),
+                store_timezone="Asia/Shanghai",
+            )
+
+    def test_invalid_store_timezone_is_a_stable_value_error(self):
+        with self.assertRaisesRegex(ValueError, "invalid store timezone"):
+            confirmed_price_for_line(
+                prices={"store": 3990, "member": 2990},
+                is_member=True,
+                confirmed_at=datetime(2026, 8, 18, 10, tzinfo=timezone.utc),
+                store_timezone="HXY/NoSuchStore",
+            )
 
 
 class OptionChargeTests(unittest.TestCase):
@@ -228,11 +247,19 @@ class OptionChargeTests(unittest.TestCase):
                     store_timezone="Asia/Shanghai",
                 ),
             )
+            active_rows = db.scalars(select(OptionChoicePrice).where(
+                OptionChoicePrice.option_choice_id == self.dedicated_id,
+                OptionChoicePrice.effective_from == datetime(2026, 8, 1, tzinfo=timezone.utc),
+            )).all()
+            active_id_by_type = {row.price_type: row.id for row in active_rows}
 
         self.assertEqual(charge.amount_cents, 3200)
         self.assertEqual(charge.basis, "member")
         self.assertEqual(charge.price_source, "option_choice_price")
         self.assertEqual(charge.source_ref["option_choice_id"], self.dedicated_id)
+        self.assertEqual(charge.source_ref["option_choice_price_id_by_type"], active_id_by_type)
+        self.assertEqual(charge.source_ref["confirmed_price_source_type"], "group")
+        self.assertEqual(charge.source_ref["confirmed_option_choice_price_id"], active_id_by_type["group"])
 
     def test_resolving_option_charge_does_not_consume_annual_gift(self):
         with self.SessionLocal() as db:
@@ -250,7 +277,93 @@ class OptionChargeTests(unittest.TestCase):
             )).all()
 
         self.assertTrue(charge.choice_snapshot["annual_gift_eligible"])
+        self.assertFalse(hasattr(charge, "annual_gift_candidate"))
         self.assertEqual(len(price_rows), 3)
+
+    def test_price_book_requires_store_price_for_confirmed_pricing(self):
+        with self.SessionLocal() as db:
+            project = Project(
+                store_id=1,
+                code="hxy-no-store-price",
+                category="care",
+                name="缺门店价",
+                publication_status="published",
+            )
+            db.add(project)
+            db.flush()
+            db.add(PriceBook(project_id=project.id, price_type="group", amount_cents=2990))
+            db.commit()
+            project_id = project.id
+
+        with self.SessionLocal() as db:
+            with self.assertRaisesRegex(ValueError, "store price is required"):
+                price_book_prices(db, project_id)
+
+    def test_linked_project_uses_latest_price_book_rows_and_records_source_ids(self):
+        with self.SessionLocal() as db:
+            linked = Project(
+                store_id=1,
+                code="hxy-duplicate-price",
+                category="care",
+                name="重复价项目",
+                publication_status="published",
+            )
+            db.add(linked)
+            db.flush()
+            version = db.scalar(select(ProjectCatalogVersion))
+            group = db.scalar(select(ProjectOptionGroup).where(
+                ProjectOptionGroup.catalog_version_id == version.id
+            ))
+            choice = ProjectOptionChoice(
+                option_group_id=group.id,
+                code="duplicate-price-linked",
+                name="重复价引用",
+                choice_type="linked_project",
+                linked_project_id=linked.id,
+                charge_mode="inherit_linked_price",
+            )
+            db.add(choice)
+            db.flush()
+            older = PriceBook(
+                project_id=linked.id,
+                price_type="store",
+                amount_cents=7100,
+                version="old-store",
+                published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            )
+            newer = PriceBook(
+                project_id=linked.id,
+                price_type="store",
+                amount_cents=6600,
+                version="new-store",
+                published_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+            )
+            member = PriceBook(
+                project_id=linked.id,
+                price_type="member",
+                amount_cents=5000,
+                version="member-v1",
+                published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            )
+            db.add_all([older, newer, member])
+            db.commit()
+            choice_id = choice.id
+            newer_id = newer.id
+
+        with self.SessionLocal() as db:
+            charge = resolve_option_charge(
+                db,
+                choice_id,
+                PriceContext(
+                    is_member=False,
+                    confirmed_at=datetime(2026, 8, 19, 10, tzinfo=timezone.utc),
+                    store_timezone="Asia/Shanghai",
+                ),
+            )
+
+        self.assertEqual(charge.amount_cents, 6600)
+        self.assertEqual(charge.source_ref["price_book_id_by_type"]["store"], newer_id)
+        self.assertEqual(charge.source_ref["price_book_version_by_type"]["store"], "new-store")
 
 
 if __name__ == "__main__":

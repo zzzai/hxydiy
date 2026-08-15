@@ -46,7 +46,7 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
     legacy_local_parts: set[str] = set()
 
     for index, item in enumerate(items):
-        if item.get("item_type") == "preference" or not item.get("chargeable", True):
+        if _first_value(item, "item_type") == "preference" or not _is_chargeable(item):
             continue
         project_id = item.get("project_id")
         quantity = max(1, int(item.get("quantity") or 1))
@@ -99,16 +99,18 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
         store_subtotal += line_store
         group_subtotal += line_group
         member_subtotal += line_member
-        preferences = [str(value).strip() for value in item.get("diy_preferences", []) if str(value).strip()]
-        if code == PROMO_FOOT_BATH_CODE:
+        preferences = _preferences(item)
+        item_code = _first_value(item, "code") or code
+        if item_code == PROMO_FOOT_BATH_CODE:
             # 减免只免泡脚项目本身的基础价，泡脚上另加的小项照常收费（与顾客端预览口径一致）。
-            foot_bath_store_units.extend([base_store] * quantity)
-            foot_bath_group_units.extend([base_group] * quantity)
-            foot_bath_member_units.extend([base_member] * quantity)
+            confirmed_base = _confirmed_base_price(item)
+            foot_bath_store_units.extend([confirmed_base if confirmed_base is not None else base_store] * quantity)
+            foot_bath_group_units.extend([confirmed_base if confirmed_base is not None else base_group] * quantity)
+            foot_bath_member_units.extend([confirmed_base if confirmed_base is not None else base_member] * quantity)
         if _counts_for_foot_bath_bundle(item, code):
             if _explicit_bundle_qualification(item):
                 qualified_local_units += quantity
-            elif code == "hxy-jubu-30" and preferences:
+            elif item_code == "hxy-jubu-30" and preferences:
                 legacy_local_parts.add(preferences[0])
             if preferences:
                 local_parts.add(preferences[0])
@@ -165,28 +167,79 @@ def _snapshot(item: dict) -> dict:
     return snapshot if isinstance(snapshot, dict) else {}
 
 
-def _explicit_bundle_qualification(item: dict) -> bool | None:
-    if "qualifies_for_foot_bath_bundle" in item:
-        return bool(item.get("qualifies_for_foot_bath_bundle"))
+def _as_dict(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _resolved_charge(item: dict) -> dict:
+    return _as_dict(item.get("resolved_charge")) or _as_dict(_snapshot(item).get("resolved_charge"))
+
+
+def _choice_snapshot(item: dict) -> dict:
+    resolved = _resolved_charge(item)
+    return (
+        _as_dict(item.get("choice_snapshot"))
+        or _as_dict(_snapshot(item).get("choice_snapshot"))
+        or _as_dict(resolved.get("choice_snapshot"))
+    )
+
+
+def _known_sources(item: dict) -> list[dict]:
     snapshot = _snapshot(item)
-    if "qualifies_for_foot_bath_bundle" in snapshot:
-        return bool(snapshot.get("qualifies_for_foot_bath_bundle"))
+    resolved = _resolved_charge(item)
+    choice_snapshot = _choice_snapshot(item)
+    return [item, snapshot, resolved, choice_snapshot]
+
+
+def _first_value(item: dict, key: str):
+    for source in _known_sources(item):
+        if key in source:
+            return source.get(key)
+    return None
+
+
+def _is_chargeable(item: dict) -> bool:
+    chargeable = _first_value(item, "chargeable")
+    return True if chargeable is None else bool(chargeable)
+
+
+def _preferences(item: dict) -> list[str]:
+    values = _first_value(item, "diy_preferences") or _first_value(item, "preferences")
+    if isinstance(values, list):
+        return [str(value).strip() for value in values if str(value).strip()]
+    part = _first_value(item, "body_part") or _first_value(item, "part")
+    return [str(part).strip()] if part and str(part).strip() else []
+
+
+def _confirmed_base_price(item: dict) -> int | None:
+    value = _first_value(item, "confirmed_base_price_cents")
+    return int(value) if value is not None else None
+
+
+def _explicit_bundle_qualification(item: dict) -> bool | None:
+    value = _first_value(item, "qualifies_for_foot_bath_bundle")
+    if value is not None:
+        return bool(value)
     return None
 
 
 def _counts_for_foot_bath_bundle(item: dict, resolved_code: str | None = None) -> bool:
-    state = item.get("state", _snapshot(item).get("state"))
-    if state in {"pending", "awaiting", "awaiting_staff_confirmation", "rejected", "cancelled", "voided"}:
+    state = _first_value(item, "state")
+    if state is not None and state not in {"pending", "confirmed", "in_service", "completed"}:
         return False
-    if item.get("item_type") == "preference":
+    if _first_value(item, "item_type") == "preference":
         return False
-    if not item.get("chargeable", True):
+    if not _is_chargeable(item):
         return False
-    if item.get("price_basis") == "annual_gift" or item.get("basis") == "annual_gift" or item.get("annual_gift_applied"):
+    if (
+        _first_value(item, "price_basis") == "annual_gift"
+        or _first_value(item, "basis") == "annual_gift"
+        or bool(_first_value(item, "annual_gift_applied"))
+    ):
         return False
     explicit = _explicit_bundle_qualification(item)
     if explicit is not None:
         return explicit
-    code = item.get("code") or _snapshot(item).get("code") or resolved_code
-    preferences = [str(value).strip() for value in item.get("diy_preferences", []) if str(value).strip()]
+    code = _first_value(item, "code") or resolved_code
+    preferences = _preferences(item)
     return code == "hxy-jubu-30" and bool(preferences)

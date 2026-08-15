@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -7,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.admin import create_staff_token, hash_password
+from app.api.admin_v2 import set_user_membership
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import MembershipBenefitGrant, Order, Staff, Store, User
@@ -122,6 +124,52 @@ class AdminMembershipTests(unittest.TestCase):
         self.assertIsNotNone(grant.membership_started_at)
         self.assertTrue(user.is_member)
         self.assertEqual(user.member_type, "annual")
+
+    def test_locked_membership_query_refreshes_preloaded_user_before_issuing_grant(self):
+        with self.SessionLocal() as db:
+            customer = User(openid="annual-stale-customer", phone="13400134000")
+            db.add(customer)
+            db.flush()
+            db.add(Order(
+                order_no="HXYANNUALSTALE001", order_type="service", user_id=customer.id,
+                store_id=self.store_id, items=[], total_amount_cents=9900,
+                pay_amount_cents=9900, status="completed", pay_status="paid",
+            ))
+            db.commit()
+            customer_id = customer.id
+
+        db1 = self.SessionLocal()
+        try:
+            preloaded = db1.get(User, customer_id)
+            self.assertIsNone(preloaded.member_type)
+            with self.SessionLocal() as db2:
+                user = db2.get(User, customer_id)
+                user.is_member = True
+                user.member_type = "annual"
+                db2.add(MembershipBenefitGrant(
+                    user_id=customer_id,
+                    benefit_type="annual_project_gift",
+                    membership_started_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                    status="available",
+                ))
+                db2.commit()
+
+            set_user_membership(
+                customer_id,
+                {"member_type": "annual"},
+                db=db1,
+                authorization=self.headers["Authorization"],
+            )
+        finally:
+            db1.close()
+
+        with self.SessionLocal() as db:
+            count = db.scalar(select(func.count()).select_from(MembershipBenefitGrant).where(
+                MembershipBenefitGrant.user_id == customer_id,
+                MembershipBenefitGrant.benefit_type == "annual_project_gift",
+            ))
+
+        self.assertEqual(count, 1)
 
     def test_unknown_membership_type_is_rejected(self):
         response = self.client.patch(
