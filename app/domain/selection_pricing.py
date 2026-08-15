@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Addon, Project
-from app.domain.membership_pricing import price_book_prices
+from app.domain.membership_pricing import PriceContext, confirmed_price_for_line, price_book_prices
 
 
 PROMO_FOOT_BATH_CODE = "hxy-qiqing-30"
@@ -47,14 +47,20 @@ def _synthetic_project(db: Session, project_id: str) -> Project | None:
     return None
 
 
-def calculate_selection_pricing(db: Session, items: list[dict], price_type: str = "store") -> dict:
+def calculate_selection_pricing(
+    db: Session,
+    items: list[dict],
+    price_type: str = "store",
+    price_context: PriceContext | None = None,
+) -> dict:
     if price_type not in PRICE_TYPES:
         price_type = "store"
     lines: list[dict] = []
     store_subtotal = 0
     group_subtotal = 0
     member_subtotal = 0
-    foot_bath_units: list[tuple[int, int, int]] = []
+    confirmation_payable_subtotal = 0
+    foot_bath_units: list[tuple[int, int, int, int | None]] = []
     local_bundle_units: list[tuple[str, str | None]] = []
     seen_bundle_service_lines: set[tuple[str, str | int]] = set()
     local_parts: set[str] = set()
@@ -110,6 +116,34 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
         line_store += addon_store * quantity
         line_member += addon_member * quantity
         line_group += addon_store * quantity
+        legacy_payable_unit = (
+            base_member + addon_member
+            if price_type == "member"
+            else base_group + addon_store
+            if price_type == "group"
+            else base_store + addon_store
+        )
+        combined_prices = {
+            "store": base_store + addon_store,
+            "group": base_group + addon_store,
+            "member": base_member + addon_member,
+        }
+        confirmed = (
+            confirmed_price_for_line(
+                combined_prices,
+                price_context.is_member,
+                price_context.confirmed_at,
+                price_context.store_timezone,
+                price_context.member_expire_at,
+                price_context.member_type,
+            )
+            if price_context is not None
+            else None
+        )
+        unit_payable = confirmed.amount_cents if confirmed is not None else legacy_payable_unit
+        line_basis = confirmed.basis if confirmed is not None else price_type
+        if price_context is not None:
+            confirmation_payable_subtotal += unit_payable * quantity
         store_subtotal += line_store
         group_subtotal += line_group
         member_subtotal += line_member
@@ -122,11 +156,24 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
             and unit_key not in seen_bundle_service_lines
         ):
             # 减免只免泡脚项目本身的基础价，泡脚上另加的小项照常收费（与顾客端预览口径一致）。
-            confirmed_base = _confirmed_base_price(item)
+            legacy_confirmed_base = _confirmed_base_price(item)
+            confirmed_base = (
+                confirmed_price_for_line(
+                    {"store": base_store, "group": base_group, "member": base_member},
+                    price_context.is_member,
+                    price_context.confirmed_at,
+                    price_context.store_timezone,
+                    price_context.member_expire_at,
+                    price_context.member_type,
+                )
+                if price_context is not None
+                else None
+            )
             foot_bath_units.append((
-                confirmed_base if confirmed_base is not None else base_store,
-                confirmed_base if confirmed_base is not None else base_group,
-                confirmed_base if confirmed_base is not None else base_member,
+                legacy_confirmed_base if legacy_confirmed_base is not None else base_store,
+                legacy_confirmed_base if legacy_confirmed_base is not None else base_group,
+                legacy_confirmed_base if legacy_confirmed_base is not None else base_member,
+                confirmed_base.amount_cents if confirmed_base is not None else None,
             ))
             seen_bundle_service_lines.add(unit_key)
         if (
@@ -149,11 +196,12 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
             "unit_store_price_cents": base_store + addon_store,
             "unit_group_price_cents": base_group + addon_store,
             "unit_member_price_cents": base_member + addon_member,
-            "unit_payable_price_cents": (base_member + addon_member) if price_type == "member" else (base_group + addon_store) if price_type == "group" else (base_store + addon_store),
+            "price_basis": line_basis,
+            "unit_payable_price_cents": unit_payable,
             "store_line_total_cents": line_store,
             "group_line_total_cents": line_group,
             "member_line_total_cents": line_member,
-            "payable_line_total_cents": line_member if price_type == "member" else line_group if price_type == "group" else line_store,
+            "payable_line_total_cents": unit_payable * quantity,
             "addon_store_total_cents": addon_store * quantity,
             "addon_member_total_cents": addon_member * quantity,
         })
@@ -165,9 +213,16 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
     adjustment_store = -sum(unit[0] for unit in foot_bath_units[:matched_foot_baths])
     adjustment_group = -sum(unit[1] for unit in foot_bath_units[:matched_foot_baths])
     adjustment_member = -sum(unit[2] for unit in foot_bath_units[:matched_foot_baths])
-    payable_adjustment = {
-        "store": adjustment_store, "group": adjustment_group, "member": adjustment_member,
-    }[price_type]
+    payable_adjustment = (
+        -sum(unit[3] for unit in foot_bath_units[:matched_foot_baths] if unit[3] is not None)
+        if price_context is not None
+        else {"store": adjustment_store, "group": adjustment_group, "member": adjustment_member}[price_type]
+    )
+    payable_subtotal = (
+        confirmation_payable_subtotal
+        if price_context is not None
+        else {"store": store_subtotal, "group": group_subtotal, "member": member_subtotal}[price_type]
+    )
     return {
         "lines": lines,
         "store_subtotal_cents": store_subtotal,
@@ -180,7 +235,7 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
         "group_total_cents": max(0, group_subtotal + adjustment_group),
         "member_total_cents": max(0, member_subtotal + adjustment_member),
         "applied_price_type": price_type,
-        "payable_total_cents": max(0, {"store": store_subtotal, "group": group_subtotal, "member": member_subtotal}[price_type] + payable_adjustment),
+        "payable_total_cents": max(0, payable_subtotal + payable_adjustment),
         "distinct_local_parts": sorted(local_parts),
         "qualified_local_unit_count": qualified_local_units,
         "matched_foot_bath_count": matched_foot_baths,

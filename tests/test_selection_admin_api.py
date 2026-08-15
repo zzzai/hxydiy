@@ -1,4 +1,6 @@
 import unittest
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -8,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import PositionOccupancy, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Staff, Store, User
+from app.models import PositionOccupancy, PriceBook, Project, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, Staff, Store, User
 
 
 class SelectionAdminApiTests(unittest.TestCase):
@@ -86,6 +88,86 @@ class SelectionAdminApiTests(unittest.TestCase):
         )
         self.assertEqual(confirmed.status_code, 200)
         self.assertEqual(confirmed.json()["status"], "confirmed")
+
+    def test_front_desk_confirmation_freezes_tuesday_member_price_in_revision(self):
+        session_id = "selection-admin-tuesday-confirm"
+        revision_id = "selection-admin-tuesday-revision"
+        with self.SessionLocal() as db:
+            project = Project(
+                store_id=self.store_id,
+                code="selection-admin-tuesday-project",
+                category="care",
+                name="周二确认项目",
+                publication_status="published",
+            )
+            user = User(
+                openid="selection_admin_tuesday_member",
+                nickname="周二会员",
+                is_member=True,
+                member_type="annual",
+                member_expire_at=datetime(2027, 8, 18, tzinfo=timezone.utc),
+            )
+            db.add_all([project, user])
+            db.flush()
+            db.add_all([
+                PriceBook(project_id=project.id, price_type="store", amount_cents=10000),
+                PriceBook(project_id=project.id, price_type="group", amount_cents=9000),
+                PriceBook(project_id=project.id, price_type="member", amount_cents=8000),
+            ])
+            item = {"project_id": project.id, "quantity": 1, "name": project.name}
+            session = SelectionSession(
+                id=session_id,
+                access_token_hash="x",
+                store_id=self.store_id,
+                customer_id=user.id,
+                source="personal_qr",
+                device_label="顾客手机",
+                status="submitted",
+                items=[item],
+                diy_preferences={},
+                pricing_snapshot={"payable_total_cents": 8000},
+            )
+            revision = SelectionRevision(
+                id=revision_id,
+                selection_session_id=session_id,
+                revision_no=1,
+                state="submitted",
+                idempotency_key="selection-admin-tuesday-key",
+                snapshot={
+                    "items": [item],
+                    "pricing": {"payable_total_cents": 8000},
+                    "source_marker": "preserve-me",
+                },
+            )
+            db.add_all([session, revision])
+            db.commit()
+
+        class FrozenDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                frozen = datetime(2026, 8, 18, 2, 0, tzinfo=timezone.utc)
+                return frozen if tz is None else frozen.astimezone(tz)
+
+        with patch("app.api.admin_v2.datetime", FrozenDateTime):
+            response = self.client.post(
+                f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+                headers=self.headers,
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["pricing_snapshot"]["payable_total_cents"], 6800)
+        self.assertEqual(body["pricing_snapshot"]["lines"][0]["price_basis"], "tuesday_68")
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, session_id)
+            revision = db.get(SelectionRevision, revision_id)
+            line = db.query(ServiceLine).filter_by(selection_session_id=session_id).one()
+            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 6800)
+            self.assertEqual(revision.snapshot["pricing"]["payable_total_cents"], 6800)
+            self.assertEqual(revision.snapshot["items"], session.items)
+            self.assertEqual(revision.snapshot["source_marker"], "preserve-me")
+            self.assertEqual(line.snapshot, session.items[0])
+            self.assertEqual(revision.confirmed_at, session.confirmed_at)
 
     def test_confirmed_selection_can_be_cancelled(self):
         with self.SessionLocal() as db:

@@ -5,8 +5,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.session import Base
+from app.domain.membership_pricing import PriceContext
 from app.domain.selection_pricing import calculate_selection_pricing, price_type_for_member
-from app.models import PriceBook, Project, Store
+from app.models import Addon, PriceBook, Project, Store
 
 
 class SelectionPricingTests(unittest.TestCase):
@@ -77,6 +78,94 @@ class SelectionPricingTests(unittest.TestCase):
         self.assertEqual(pricing["lines"][1]["unit_payable_price_cents"], 4900)
         self.assertEqual(pricing["promotion_code"], "FOOT_BATH_TWO_LOCAL")
         self.assertEqual(pricing["promotion_adjustment_cents"], -2990)
+
+    def test_tuesday_confirmation_uses_68_percent_store_price_for_active_annual_member(self):
+        with self.SessionLocal() as db:
+            project = Project(
+                store_id=1,
+                code="hxy-tuesday-price",
+                category="care",
+                name="周二会员价项目",
+                publication_status="published",
+            )
+            db.add(project)
+            db.flush()
+            db.add_all([
+                PriceBook(project_id=project.id, price_type="store", amount_cents=10000),
+                PriceBook(project_id=project.id, price_type="group", amount_cents=9000),
+                PriceBook(project_id=project.id, price_type="member", amount_cents=8000),
+            ])
+            db.commit()
+
+            pricing = calculate_selection_pricing(
+                db,
+                [{"project_id": project.id, "quantity": 1, "state": "confirmed"}],
+                "member",
+                price_context=PriceContext(
+                    is_member=True,
+                    member_type="annual",
+                    member_expire_at=datetime(2027, 8, 18, tzinfo=UTC),
+                    confirmed_at=datetime(2026, 8, 18, 2, 0, tzinfo=UTC),
+                    store_timezone="Asia/Shanghai",
+                ),
+            )
+
+        self.assertEqual(pricing["lines"][0]["price_basis"], "tuesday_68")
+        self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], 6800)
+        self.assertEqual(pricing["lines"][0]["payable_line_total_cents"], 6800)
+        self.assertEqual(pricing["payable_total_cents"], 6800)
+
+    def test_tuesday_foot_bath_promotion_waives_confirmed_base_but_not_addon(self):
+        with self.SessionLocal() as db:
+            addon = Addon(
+                store_id=1,
+                code="hxy-addon-tuesday",
+                name="周二泡脚加项",
+                price_cents=2000,
+                chargeable=True,
+                publication_status="published",
+                parent_project_id=self.foot_bath_id,
+                can_attach_to_parent=True,
+            )
+            db.add(addon)
+            db.commit()
+            pricing = calculate_selection_pricing(
+                db,
+                [
+                    {
+                        "project_id": self.foot_bath_id,
+                        "quantity": 1,
+                        "state": "confirmed",
+                        "addon_ids": [addon.id],
+                    },
+                    {
+                        "project_id": self.local_id,
+                        "quantity": 1,
+                        "state": "confirmed",
+                        "diy_preferences": ["肩颈"],
+                    },
+                    {
+                        "project_id": self.local_id,
+                        "quantity": 1,
+                        "state": "confirmed",
+                        "diy_preferences": ["腿部"],
+                    },
+                ],
+                "member",
+                price_context=PriceContext(
+                    is_member=True,
+                    member_type="annual",
+                    member_expire_at=datetime(2027, 8, 18, tzinfo=UTC),
+                    confirmed_at=datetime(2026, 8, 18, 2, 0, tzinfo=UTC),
+                    store_timezone="Asia/Shanghai",
+                ),
+            )
+
+        # 泡脚+addon 周二确认价 4073；两个局部各 4692；只免泡脚基础周二确认价 2713。
+        self.assertEqual(pricing["lines"][0]["price_basis"], "tuesday_68")
+        self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], 4073)
+        self.assertEqual(pricing["promotion_adjustment_cents"], -2713)
+        self.assertEqual(pricing["payable_total_cents"], 10744)
 
     def test_foot_bath_promotion_waives_full_store_price_for_non_member(self):
         with self.SessionLocal() as db:

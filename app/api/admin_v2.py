@@ -291,6 +291,7 @@ def confirm_selection_session(session_id: str, db: Session = Depends(get_db), au
         SelectionRevision.selection_session_id == session.id,
         SelectionRevision.state == "submitted",
     ).order_by(SelectionRevision.revision_no.desc()))
+    confirmed_at = datetime.now(timezone.utc)
     confirmed_items = []
     if revision:
         for item in (revision.snapshot or {}).get("items", []):
@@ -309,19 +310,24 @@ def confirm_selection_session(session_id: str, db: Session = Depends(get_db), au
             ))
             confirmed_items.append(confirmed_item)
         revision.state = "confirmed"
-        revision.confirmed_at = datetime.now(timezone.utc)
+        revision.confirmed_at = confirmed_at
         revision.confirmed_by_staff_id = staff.id
     else:
         # 简化提交路径尚未创建 revision；仍以确认后的独立选单行计价，不能把顾客提交当作已确认服务。
         confirmed_items = [{**item, "state": "confirmed"} for item in session.items or []]
 
-    if confirmed_items:
-        # 泡脚组合优惠只取前台确认的独立服务单位；确认后立即刷新冻结报价。
-        session.items = confirmed_items
-        from app.api.selections import refresh_session_pricing
-        refresh_session_pricing(db, session)
+    # 泡脚组合优惠只取前台确认的独立服务单位；确认后立即刷新冻结报价。
+    session.items = confirmed_items
+    from app.api.selections import refresh_session_pricing
+    pricing = refresh_session_pricing(db, session, confirmed_at=confirmed_at)
+    if revision:
+        revision.snapshot = {
+            **(revision.snapshot or {}),
+            "items": confirmed_items,
+            "pricing": pricing,
+        }
     session.status = "confirmed"
-    session.confirmed_at = datetime.now(timezone.utc)
+    session.confirmed_at = confirmed_at
     _audit(db, staff.name, "confirm_selection", "selection_session", session.id)
     db.commit()
     db.refresh(session)

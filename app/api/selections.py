@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.domain.occupancy import refresh_hold
+from app.domain.membership_pricing import PriceContext
 from app.domain.selection_pricing import calculate_selection_pricing, price_type_for_member
 from app.models import Addon, CouponTemplate, PositionOccupancy, Project, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
 from app.schemas.selection import (
@@ -84,17 +85,48 @@ def _latest_service_occupancy(db: Session, session_id: str) -> PositionOccupancy
     ).order_by(PositionOccupancy.id.desc()))
 
 
-def _session_price_type(db: Session, session: SelectionSession) -> str:
+def _session_price_type(
+    db: Session,
+    session: SelectionSession,
+    confirmed_at: datetime | None = None,
+) -> str:
     user = db.get(User, session.customer_id) if session.customer_id else None
     return price_type_for_member(
         bool(user and user.is_member),
         member_expire_at=user.member_expire_at if user else None,
+        confirmed_at=confirmed_at,
         member_type=user.member_type if user else None,
     )
 
 
-def refresh_session_pricing(db: Session, session: SelectionSession) -> dict:
-    pricing = calculate_selection_pricing(db, session.items or [], _session_price_type(db, session))
+def refresh_session_pricing(
+    db: Session,
+    session: SelectionSession,
+    *,
+    confirmed_at: datetime | None = None,
+) -> dict:
+    price_context = None
+    if confirmed_at is not None:
+        if confirmed_at.tzinfo is None:
+            raise ValueError("confirmed_at must be timezone-aware")
+        confirmed_at = confirmed_at.astimezone(timezone.utc)
+        user = db.get(User, session.customer_id) if session.customer_id else None
+        member_expire_at = user.member_expire_at if user else None
+        if member_expire_at is not None and member_expire_at.tzinfo is None:
+            member_expire_at = member_expire_at.replace(tzinfo=timezone.utc)
+        price_context = PriceContext(
+            is_member=bool(user and user.is_member),
+            member_type=user.member_type if user else None,
+            member_expire_at=member_expire_at,
+            confirmed_at=confirmed_at,
+            store_timezone="Asia/Shanghai",
+        )
+    pricing = calculate_selection_pricing(
+        db,
+        session.items or [],
+        _session_price_type(db, session, confirmed_at=confirmed_at),
+        price_context=price_context,
+    )
     session.pricing_snapshot = pricing
     session.store_total_cents = pricing["store_total_cents"]
     session.member_total_cents = pricing["member_total_cents"]
