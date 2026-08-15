@@ -1,6 +1,7 @@
 import unittest
 
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -8,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import Order, Staff, Store, User
+from app.models import MembershipBenefitGrant, Order, Staff, Store, User
 
 
 class AdminMembershipTests(unittest.TestCase):
@@ -80,6 +81,56 @@ class AdminMembershipTests(unittest.TestCase):
             user = db.get(User, self.customer_id)
             self.assertFalse(user.is_member)
             self.assertIsNone(user.member_type)
+
+    def test_setting_same_annual_membership_twice_issues_one_gift(self):
+        with self.SessionLocal() as db:
+            customer = User(openid="annual-repeat-customer", phone="13500135000")
+            db.add(customer)
+            db.flush()
+            db.add(Order(
+                order_no="HXYANNUALREPEAT001", order_type="service", user_id=customer.id,
+                store_id=self.store_id, items=[], total_amount_cents=9900,
+                pay_amount_cents=9900, status="completed", pay_status="paid",
+            ))
+            db.commit()
+            customer_id = customer.id
+
+        first = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            json={"member_type": "annual"},
+            headers=self.headers,
+        )
+        second = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            json={"member_type": "annual"},
+            headers=self.headers,
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(second.status_code, 200, second.text)
+        with self.SessionLocal() as db:
+            count = db.scalar(select(func.count()).select_from(MembershipBenefitGrant).where(
+                MembershipBenefitGrant.user_id == customer_id,
+                MembershipBenefitGrant.benefit_type == "annual_project_gift",
+            ))
+            grant = db.scalar(select(MembershipBenefitGrant).where(
+                MembershipBenefitGrant.user_id == customer_id,
+            ))
+            user = db.get(User, customer_id)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(grant.status, "available")
+        self.assertIsNotNone(grant.membership_started_at)
+        self.assertTrue(user.is_member)
+        self.assertEqual(user.member_type, "annual")
+
+    def test_unknown_membership_type_is_rejected(self):
+        response = self.client.patch(
+            f"/api/v1/admin/v2/users/{self.customer_id}/membership",
+            headers=self.headers,
+            json={"member_type": "vip"},
+        )
+
+        self.assertEqual(response.status_code, 400)
 
     def test_membership_requires_admin_token(self):
         response = self.client.patch(

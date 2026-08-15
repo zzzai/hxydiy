@@ -17,6 +17,7 @@ from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, PageContent,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, PositionOccupancy,
+    MembershipBenefitGrant,
 )
 from app.domain.occupancy import audit_occupancy, release_occupancy
 from app.models.operations import Room, Technician
@@ -1098,12 +1099,33 @@ def set_user_membership(user_id: int, body: dict, db: Session = Depends(get_db),
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     _require_store_user(db, user_id, staff)
-    user = db.get(User, user_id)
-    is_member = bool(body.get("is_member"))
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+    if user is None:
+        raise HTTPException(status_code=404, detail="顾客不存在")
+    target_member_type: str | None
+    if "member_type" in body:
+        if body.get("member_type") != "annual":
+            raise HTTPException(status_code=400, detail="未知会员类型")
+        target_member_type = "annual"
+        is_member = True
+    elif "is_member" in body:
+        is_member = bool(body.get("is_member"))
+        target_member_type = "annual" if is_member else None
+    else:
+        raise HTTPException(status_code=400, detail="请提供会员状态")
+
     previous = user.is_member
+    previous_member_type = user.member_type
+    if target_member_type == "annual" and previous_member_type != "annual":
+        db.add(MembershipBenefitGrant(
+            user_id=user.id,
+            benefit_type="annual_project_gift",
+            membership_started_at=datetime.now(timezone.utc),
+            status="available",
+        ))
     user.is_member = is_member
-    # 权益卡开通：member_type=annual；取消会员时清空类型。
-    user.member_type = "annual" if is_member else None
+    # 权益卡开通：member_type=annual；取消会员时清空类型，历史权益记录保留。
+    user.member_type = target_member_type
     # 会员身份变化后，重算该顾客未完结选单的计价快照（draft/submitted）。
     from app.api.selections import refresh_session_pricing
     open_sessions = db.scalars(select(SelectionSession).where(
@@ -1113,7 +1135,7 @@ def set_user_membership(user_id: int, body: dict, db: Session = Depends(get_db),
     for session in open_sessions:
         refresh_session_pricing(db, session)
     _audit(db, staff.name, "set_membership", "user", str(user_id),
-           {"is_member": is_member, "previous": previous})
+           {"is_member": is_member, "previous": previous, "member_type": user.member_type})
     db.commit()
     return {"ok": True, "is_member": is_member, "member_type": user.member_type}
 

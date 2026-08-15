@@ -13,6 +13,7 @@ from app.models.content import PageContent
 from app.models.browser import BrowserInstance
 from app.models.feedback import ServiceFeedback
 from app.models.external_identity import CustomerExternalIdentity
+from app.models.membership import MembershipBenefitGrant
 from app.models.settlement import SettlementAdjustment
 from app.models.catalog_options import (
     CHARGE_MODES,
@@ -31,7 +32,7 @@ __all__ = [
     "CustomerTagRelation", "Room", "RoomAssignment", "ServiceAssignment", "ServiceOrder",
     "StateTransition", "Technician", "Visit", "SelectionSession", "SelectionRevision", "SelectionChangeRequest", "ServiceLine", "PositionOccupancy",
     "CustomerVerificationCode", "PageContent", "BrowserInstance", "ServiceFeedback", "CustomerExternalIdentity",
-    "SettlementAdjustment",
+    "MembershipBenefitGrant", "SettlementAdjustment",
     "CHARGE_MODES", "CHOICE_TYPES", "OptionChoicePrice", "ProjectCatalogVersion",
     "ProjectOptionChoice", "ProjectOptionGroup",
 ]

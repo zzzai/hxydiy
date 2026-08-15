@@ -140,6 +140,130 @@ class SelectionPricingTests(unittest.TestCase):
         self.assertEqual(pricing["promotion_code"], "FOOT_BATH_TWO_LOCAL")
         self.assertEqual(pricing["payable_total_cents"], 2000 + 6900 + 6900)
 
+    def test_foot_bath_bundle_matches_every_two_qualified_local_units(self):
+        cases = [
+            (0, 0),
+            (1, 0),
+            (2, -3990),
+            (3, -3990),
+            (4, -7980),
+        ]
+        for local_count, adjustment in cases:
+            with self.subTest(local_count=local_count):
+                items = [
+                    {
+                        "project_id": self.foot_bath_id,
+                        "code": "hxy-qiqing-30",
+                        "quantity": 2,
+                        "chargeable": True,
+                    },
+                ]
+                items.extend(
+                    {
+                        "project_id": self.local_id,
+                        "code": "hxy-jubu-30",
+                        "quantity": 1,
+                        "diy_preferences": [f"部位{index}"],
+                        "chargeable": True,
+                        "qualifies_for_foot_bath_bundle": True,
+                    }
+                    for index in range(local_count)
+                )
+
+                with self.SessionLocal() as db:
+                    pricing = calculate_selection_pricing(db, items)
+
+                self.assertEqual(pricing["promotion_adjustment_cents"], adjustment)
+
+    def test_foot_bath_bundle_counts_repeated_part_when_snapshot_is_explicitly_qualified(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, [
+                {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+                {
+                    "project_id": self.local_id,
+                    "quantity": 1,
+                    "diy_preferences": ["肩颈"],
+                    "chargeable": True,
+                    "qualifies_for_foot_bath_bundle": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "quantity": 1,
+                    "diy_preferences": ["肩颈"],
+                    "chargeable": True,
+                    "qualifies_for_foot_bath_bundle": True,
+                },
+            ])
+
+        self.assertEqual(pricing["promotion_adjustment_cents"], -3990)
+
+    def test_foot_bath_bundle_excludes_unconfirmed_free_and_annual_gift_lines(self):
+        items = [
+            {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+            {
+                "project_id": self.local_id,
+                "quantity": 1,
+                "state": "pending",
+                "diy_preferences": ["肩颈"],
+                "chargeable": True,
+                "qualifies_for_foot_bath_bundle": True,
+            },
+            {
+                "project_id": self.local_id,
+                "quantity": 1,
+                "item_type": "preference",
+                "diy_preferences": ["腰背"],
+                "chargeable": True,
+                "qualifies_for_foot_bath_bundle": True,
+            },
+            {
+                "project_id": self.local_id,
+                "quantity": 1,
+                "diy_preferences": ["腿部"],
+                "chargeable": False,
+                "qualifies_for_foot_bath_bundle": True,
+            },
+            {
+                "project_id": self.local_id,
+                "quantity": 1,
+                "diy_preferences": ["腹部"],
+                "chargeable": True,
+                "price_basis": "annual_gift",
+                "qualifies_for_foot_bath_bundle": True,
+            },
+            {
+                "project_id": self.local_id,
+                "quantity": 1,
+                "diy_preferences": ["足部"],
+                "chargeable": True,
+                "qualifies_for_foot_bath_bundle": True,
+            },
+        ]
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, items)
+
+        self.assertEqual(pricing["promotion_adjustment_cents"], 0)
+
+    def test_foot_bath_bundle_keeps_legacy_missing_state_preview_compatible(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, [
+                {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+                {
+                    "project_id": self.local_id,
+                    "quantity": 1,
+                    "diy_preferences": ["肩颈"],
+                    "chargeable": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "quantity": 1,
+                    "diy_preferences": ["腰背"],
+                    "chargeable": True,
+                },
+            ])
+
+        self.assertEqual(pricing["promotion_adjustment_cents"], -3990)
+
 
 if __name__ == "__main__":
     unittest.main()

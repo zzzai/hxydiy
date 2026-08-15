@@ -3,7 +3,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Addon, PriceBook, Project
+from app.models import Addon, Project
+from app.domain.membership_pricing import price_book_prices
 
 
 PROMO_FOOT_BATH_CODE = "hxy-qiqing-30"
@@ -16,15 +17,11 @@ def price_type_for_member(is_member: bool) -> str:
 
 
 def _prices(db: Session, project_id: int) -> dict[str, int]:
-    rows = list(db.scalars(select(PriceBook).where(PriceBook.project_id == project_id)))
-    by_type = {row.price_type: row.amount_cents for row in rows}
-    store = by_type.get("store", by_type.get("group", by_type.get("member", 0)))
-    return {
-        "store": store,
-        "group": by_type.get("group", store),
-        # 与顾客端 priceOf 一致：member 缺价时回退 group，再回退 store。
-        "member": by_type.get("member", by_type.get("group", store)),
-    }
+    try:
+        return price_book_prices(db, project_id)
+    except ValueError:
+        # 历史选单预览允许资料未补齐的项目以 0 元继续保存；严格缺价错误留给确认价/选项收费接口。
+        return {"store": 0, "group": 0, "member": 0}
 
 
 def _synthetic_project(db: Session, project_id: str) -> Project | None:
@@ -41,11 +38,12 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
     store_subtotal = 0
     group_subtotal = 0
     member_subtotal = 0
-    has_promo_foot_bath = False
-    foot_bath_store_cents = 0
-    foot_bath_group_cents = 0
-    foot_bath_member_cents = 0
+    foot_bath_store_units: list[int] = []
+    foot_bath_group_units: list[int] = []
+    foot_bath_member_units: list[int] = []
+    qualified_local_units = 0
     local_parts: set[str] = set()
+    legacy_local_parts: set[str] = set()
 
     for index, item in enumerate(items):
         if item.get("item_type") == "preference" or not item.get("chargeable", True):
@@ -103,13 +101,17 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
         member_subtotal += line_member
         preferences = [str(value).strip() for value in item.get("diy_preferences", []) if str(value).strip()]
         if code == PROMO_FOOT_BATH_CODE:
-            has_promo_foot_bath = True
             # 减免只免泡脚项目本身的基础价，泡脚上另加的小项照常收费（与顾客端预览口径一致）。
-            foot_bath_store_cents += base_store * quantity
-            foot_bath_group_cents += base_group * quantity
-            foot_bath_member_cents += base_member * quantity
-        if code == "hxy-jubu-30" and preferences:
-            local_parts.add(preferences[0])
+            foot_bath_store_units.extend([base_store] * quantity)
+            foot_bath_group_units.extend([base_group] * quantity)
+            foot_bath_member_units.extend([base_member] * quantity)
+        if _counts_for_foot_bath_bundle(item, code):
+            if _explicit_bundle_qualification(item):
+                qualified_local_units += quantity
+            elif code == "hxy-jubu-30" and preferences:
+                legacy_local_parts.add(preferences[0])
+            if preferences:
+                local_parts.add(preferences[0])
         lines.append({
             "line_index": index,
             "project_id": project_id,
@@ -129,11 +131,13 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
             "addon_member_total_cents": addon_member * quantity,
         })
 
-    qualified = has_promo_foot_bath and len(local_parts) >= 2
-    # 两项局部调理：泡脚费按各价格带全额减免（门店价 3990 也全免）。
-    adjustment_store = -foot_bath_store_cents if qualified else 0
-    adjustment_group = -foot_bath_group_cents if qualified else 0
-    adjustment_member = -foot_bath_member_cents if qualified else 0
+    qualified_local_units += len(legacy_local_parts)
+    matched_foot_baths = min(len(foot_bath_store_units), qualified_local_units // 2)
+    qualified = matched_foot_baths > 0
+    # 两项合格局部调理匹配一个泡脚单位；只免泡脚项目本身的基础价，不免 addon/升级。
+    adjustment_store = -sum(foot_bath_store_units[:matched_foot_baths])
+    adjustment_group = -sum(foot_bath_group_units[:matched_foot_baths])
+    adjustment_member = -sum(foot_bath_member_units[:matched_foot_baths])
     payable_adjustment = {
         "store": adjustment_store, "group": adjustment_group, "member": adjustment_member,
     }[price_type]
@@ -151,4 +155,38 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
         "applied_price_type": price_type,
         "payable_total_cents": max(0, {"store": store_subtotal, "group": group_subtotal, "member": member_subtotal}[price_type] + payable_adjustment),
         "distinct_local_parts": sorted(local_parts),
+        "qualified_local_unit_count": qualified_local_units,
+        "matched_foot_bath_count": matched_foot_baths,
     }
+
+
+def _snapshot(item: dict) -> dict:
+    snapshot = item.get("snapshot")
+    return snapshot if isinstance(snapshot, dict) else {}
+
+
+def _explicit_bundle_qualification(item: dict) -> bool | None:
+    if "qualifies_for_foot_bath_bundle" in item:
+        return bool(item.get("qualifies_for_foot_bath_bundle"))
+    snapshot = _snapshot(item)
+    if "qualifies_for_foot_bath_bundle" in snapshot:
+        return bool(snapshot.get("qualifies_for_foot_bath_bundle"))
+    return None
+
+
+def _counts_for_foot_bath_bundle(item: dict, resolved_code: str | None = None) -> bool:
+    state = item.get("state", _snapshot(item).get("state"))
+    if state in {"pending", "awaiting", "awaiting_staff_confirmation", "rejected", "cancelled", "voided"}:
+        return False
+    if item.get("item_type") == "preference":
+        return False
+    if not item.get("chargeable", True):
+        return False
+    if item.get("price_basis") == "annual_gift" or item.get("basis") == "annual_gift" or item.get("annual_gift_applied"):
+        return False
+    explicit = _explicit_bundle_qualification(item)
+    if explicit is not None:
+        return explicit
+    code = item.get("code") or _snapshot(item).get("code") or resolved_code
+    preferences = [str(value).strip() for value in item.get("diy_preferences", []) if str(value).strip()]
+    return code == "hxy-jubu-30" and bool(preferences)

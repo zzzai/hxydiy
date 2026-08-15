@@ -54,6 +54,7 @@ class AlembicContractTests(unittest.TestCase):
             "project_option_groups",
             "project_option_choices",
             "option_choice_prices",
+            "membership_benefit_grants",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():
@@ -115,6 +116,10 @@ class AlembicContractTests(unittest.TestCase):
                 "option_choice_prices": {
                     ("option_choice_id", "price_type", "effective_from"),
                 },
+                "membership_benefit_grants": {
+                    ("user_id", "benefit_type", "membership_started_at"),
+                    ("used_service_line_id",),
+                },
             }
             for table_name, expected_columns in expected_unique_columns.items():
                 actual_columns = {
@@ -130,6 +135,15 @@ class AlembicContractTests(unittest.TestCase):
             self.assertEqual(
                 status_check,
                 "status IN ('draft', 'published', 'superseded')",
+            )
+            membership_checks = {
+                constraint["name"]: constraint["sqltext"]
+                for constraint in inspector.get_check_constraints("membership_benefit_grants")
+            }
+            membership_status_check = membership_checks.get("ck_membership_benefit_status", "")
+            self.assertEqual(
+                membership_status_check,
+                "status IN ('available', 'used', 'voided')",
             )
             engine.dispose()
 
