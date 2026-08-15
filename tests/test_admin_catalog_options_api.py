@@ -174,6 +174,166 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
         cross_store = self.client.get(f"/api/v1/admin/v2/projects/{self.main_id}/option-groups", headers=self.other_headers)
         self.assertEqual(cross_store.status_code, 404)
 
+    def test_linked_project_create_patch_and_preview_reject_cross_store_without_leaking_source(self):
+        ids = self._create_valid_draft()
+        cross_store_create = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}/choices",
+            headers=self.admin_headers,
+            json={
+                "code": "cross-store",
+                "name": "跨店项目",
+                "choice_type": "linked_project",
+                "charge_mode": "inherit_linked_price",
+                "linked_project_id": self.other_project_id,
+            },
+        )
+        self.assertEqual(cross_store_create.status_code, 404)
+        self.assertNotIn("OTHER", cross_store_create.text)
+
+        cross_store_patch = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}/choices/{ids['linked_choice_id']}",
+            headers=self.admin_headers,
+            json={"linked_project_id": self.other_project_id},
+        )
+        self.assertEqual(cross_store_patch.status_code, 404)
+        self.assertNotIn("OTHER", cross_store_patch.text)
+
+        with self.SessionLocal() as db:
+            dirty = db.get(ProjectOptionChoice, ids["linked_choice_id"])
+            dirty.linked_project_id = self.other_project_id
+            db.commit()
+        preview = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/price-preview",
+            headers=self.staff_headers,
+            json={
+                "choice_ids": [ids["linked_choice_id"]],
+                "is_member": False,
+                "confirmed_at": "2026-08-04T10:00:00+08:00",
+                "store_timezone": "Asia/Shanghai",
+            },
+        )
+        self.assertEqual(preview.status_code, 404)
+        self.assertNotIn("OTHER", preview.text)
+        self.assertNotIn("source_ref", preview.text)
+
+    def test_price_preview_rejects_duplicate_and_invalid_group_selection_counts(self):
+        ids = self._create_valid_draft()
+        duplicate = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/price-preview",
+            headers=self.staff_headers,
+            json={
+                "choice_ids": [ids["custom_choice_id"], ids["custom_choice_id"]],
+                "is_member": False,
+                "confirmed_at": "2026-08-04T10:00:00+08:00",
+                "store_timezone": "Asia/Shanghai",
+            },
+        )
+        self.assertEqual(duplicate.status_code, 422)
+
+        required_missing = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/price-preview",
+            headers=self.staff_headers,
+            json={
+                "choice_ids": [],
+                "is_member": False,
+                "confirmed_at": "2026-08-04T10:00:00+08:00",
+                "store_timezone": "Asia/Shanghai",
+            },
+        )
+        self.assertEqual(required_missing.status_code, 422)
+        self.assertIn("groups.touch", required_missing.text)
+
+        single_group = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups",
+            headers=self.admin_headers,
+            json={"code": "single-room", "name": "单选房间", "selection_mode": "single", "max_select": 1},
+        )
+        self.assertEqual(single_group.status_code, 200, single_group.text)
+        first = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{single_group.json()['id']}/choices",
+            headers=self.admin_headers,
+            json={"code": "a", "name": "A", "choice_type": "preference", "charge_mode": "free"},
+        )
+        second = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{single_group.json()['id']}/choices",
+            headers=self.admin_headers,
+            json={"code": "b", "name": "B", "choice_type": "preference", "charge_mode": "free"},
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(second.status_code, 200, second.text)
+        too_many = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/price-preview",
+            headers=self.staff_headers,
+            json={
+                "choice_ids": [ids["free_choice_id"], first.json()["id"], second.json()["id"]],
+                "is_member": False,
+                "confirmed_at": "2026-08-04T10:00:00+08:00",
+                "store_timezone": "Asia/Shanghai",
+            },
+        )
+        self.assertEqual(too_many.status_code, 422)
+        self.assertIn("groups.single-room", too_many.text)
+
+    def test_strict_input_returns_422_before_database_errors(self):
+        invalid_group_payloads = [
+            {"code": "x", "name": "X", "requierd": True},
+            {"code": "x", "name": "X", "required": "false"},
+            {"code": None, "name": "X"},
+            {"code": "x", "name": None},
+        ]
+        for payload in invalid_group_payloads:
+            response = self.client.post(
+                f"/api/v1/admin/v2/projects/{self.main_id}/option-groups",
+                headers=self.admin_headers,
+                json=payload,
+            )
+            self.assertEqual(response.status_code, 422, response.text)
+
+        ids = self._create_valid_draft()
+        invalid_choice_payloads = [
+            {"code": "bad", "name": "Bad", "choice_type": "preference", "charge_mode": "free", "coupon_eligible": "false"},
+            {
+                "code": "bad-price",
+                "name": "Bad Price",
+                "choice_type": "dedicated_charge",
+                "charge_mode": "custom_price",
+                "prices": [{"price_type": "store", "amount_cents": "100", "effective_from": "2026-08-01T00:00:00+00:00"}],
+            },
+            {
+                "code": "naive-time",
+                "name": "Naive Time",
+                "choice_type": "dedicated_charge",
+                "charge_mode": "custom_price",
+                "prices": [{"price_type": "store", "amount_cents": 100, "effective_from": "2026-08-01T00:00:00"}],
+            },
+            {
+                "code": "reverse-time",
+                "name": "Reverse Time",
+                "choice_type": "dedicated_charge",
+                "charge_mode": "custom_price",
+                "prices": [{
+                    "price_type": "store",
+                    "amount_cents": 100,
+                    "effective_from": "2026-08-02T00:00:00+00:00",
+                    "effective_to": "2026-08-01T00:00:00+00:00",
+                }],
+            },
+        ]
+        for payload in invalid_choice_payloads:
+            response = self.client.post(
+                f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}/choices",
+                headers=self.admin_headers,
+                json=payload,
+            )
+            self.assertEqual(response.status_code, 422, response.text)
+
+        null_patch = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}",
+            headers=self.admin_headers,
+            json={"name": None},
+        )
+        self.assertEqual(null_patch.status_code, 422)
+
     def test_copy_on_write_edits_new_draft_and_keeps_published_snapshot_immutable(self):
         ids = self._create_valid_draft()
         publish_response = self.client.post(f"/api/v1/admin/v2/projects/{self.main_id}/publish", headers=self.admin_headers)

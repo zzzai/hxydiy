@@ -1,4 +1,5 @@
 import unittest
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -7,7 +8,15 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import PriceBook, Project, Store
+from app.models import (
+    OptionChoicePrice,
+    PriceBook,
+    Project,
+    ProjectCatalogVersion,
+    ProjectOptionChoice,
+    ProjectOptionGroup,
+    Store,
+)
 
 
 class PublishedContentApiTests(unittest.TestCase):
@@ -52,6 +61,78 @@ class PublishedContentApiTests(unittest.TestCase):
         item = response.json()["items"][0]
         self.assertEqual(item["detail_modules"][0]["title"], "服务说明")
         self.assertEqual(item["diy_options"][0]["label"], "肩颈")
+
+    def test_public_project_option_prices_include_only_current_effective_rows(self):
+        now = datetime.now(UTC)
+        with self.SessionLocal() as db:
+            store = Store(store_code="content-price-store", name="价格过滤门店", address="测试地址")
+            db.add(store)
+            db.flush()
+            project = Project(
+                store_id=store.id,
+                code="CONTENT-CATALOG-PRICES",
+                category="bath",
+                name="目录价格项目",
+                publication_status="published",
+            )
+            db.add(project)
+            db.flush()
+            db.add(PriceBook(project_id=project.id, price_type="store", amount_cents=2990))
+            version = ProjectCatalogVersion(project_id=project.id, version=1, status="published")
+            db.add(version)
+            db.flush()
+            project.current_published_version_id = version.id
+            group = ProjectOptionGroup(catalog_version_id=version.id, code="addons", name="加项")
+            db.add(group)
+            db.flush()
+            choice = ProjectOptionChoice(
+                option_group_id=group.id,
+                code="hot-pack",
+                name="热敷包",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            db.add(choice)
+            db.flush()
+            db.add_all([
+                OptionChoicePrice(
+                    option_choice_id=choice.id,
+                    price_type="store",
+                    amount_cents=900,
+                    effective_from=now - timedelta(days=10),
+                    effective_to=now - timedelta(days=5),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=choice.id,
+                    price_type="store",
+                    amount_cents=1000,
+                    effective_from=now - timedelta(days=2),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=choice.id,
+                    price_type="store",
+                    amount_cents=1200,
+                    effective_from=now - timedelta(days=1),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=choice.id,
+                    price_type="member",
+                    amount_cents=800,
+                    effective_from=now + timedelta(days=1),
+                ),
+            ])
+            db.commit()
+            project_id = project.id
+
+        response = self.client.get(f"/api/v1/projects/{project_id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        prices = response.json()["option_groups"][0]["choices"][0]["prices"]
+        self.assertEqual(prices, [{
+            "price_type": "store",
+            "amount_cents": 1200,
+            "effective_from": prices[0]["effective_from"],
+            "effective_to": None,
+        }])
 
 
 if __name__ == "__main__":

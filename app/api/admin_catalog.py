@@ -3,7 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, field_validator, model_validator
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -44,6 +44,8 @@ PriceType = Literal["store", "group", "member"]
 
 
 class _CleanTextModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     @field_validator("code", "name", check_fields=False)
     @classmethod
     def _strip_required_text(cls, value: str | None) -> str | None:
@@ -56,77 +58,122 @@ class _CleanTextModel(BaseModel):
 
 
 class OptionChoicePriceIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     price_type: PriceType
-    amount_cents: int = Field(ge=0)
+    amount_cents: StrictInt = Field(ge=0)
     effective_from: datetime = Field(default_factory=lambda: datetime.now(UTC))
     effective_to: datetime | None = None
 
+    @field_validator("effective_from", "effective_to")
+    @classmethod
+    def _datetime_must_be_aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("datetime must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def _effective_to_must_be_after_from(self):
+        if self.effective_to is not None and self.effective_to <= self.effective_from:
+            raise ValueError("effective_to must be after effective_from")
+        return self
+
 
 class OptionGroupIn(_CleanTextModel):
-    code: str = Field(min_length=1, max_length=32)
-    name: str = Field(min_length=1, max_length=64)
-    description: str = Field(default="", max_length=512)
+    code: StrictStr = Field(min_length=1, max_length=32)
+    name: StrictStr = Field(min_length=1, max_length=64)
+    description: StrictStr = Field(default="", max_length=512)
     selection_mode: SelectionMode = "single"
-    required: bool = False
-    min_select: int = Field(default=0, ge=0)
-    max_select: int = Field(default=1, ge=0)
-    display_order: int = Field(default=0, ge=0)
+    required: StrictBool = False
+    min_select: StrictInt = Field(default=0, ge=0)
+    max_select: StrictInt = Field(default=1, ge=0)
+    display_order: StrictInt = Field(default=0, ge=0)
 
 
 class OptionGroupPatch(_CleanTextModel):
-    code: str | None = Field(default=None, min_length=1, max_length=32)
-    name: str | None = Field(default=None, min_length=1, max_length=64)
-    description: str | None = Field(default=None, max_length=512)
+    code: StrictStr | None = Field(default=None, min_length=1, max_length=32)
+    name: StrictStr | None = Field(default=None, min_length=1, max_length=64)
+    description: StrictStr | None = Field(default=None, max_length=512)
     selection_mode: SelectionMode | None = None
-    required: bool | None = None
-    min_select: int | None = Field(default=None, ge=0)
-    max_select: int | None = Field(default=None, ge=0)
-    display_order: int | None = Field(default=None, ge=0)
+    required: StrictBool | None = None
+    min_select: StrictInt | None = Field(default=None, ge=0)
+    max_select: StrictInt | None = Field(default=None, ge=0)
+    display_order: StrictInt | None = Field(default=None, ge=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_null_non_nullable_fields(cls, data):
+        if isinstance(data, dict):
+            for key, value in data.items():
+                if value is None:
+                    raise ValueError(f"{key} must not be null")
+        return data
 
 
 class OptionChoiceIn(_CleanTextModel):
-    code: str = Field(min_length=1, max_length=32)
-    name: str = Field(min_length=1, max_length=64)
-    description: str = Field(default="", max_length=512)
+    code: StrictStr = Field(min_length=1, max_length=32)
+    name: StrictStr = Field(min_length=1, max_length=64)
+    description: StrictStr = Field(default="", max_length=512)
     choice_type: ChoiceType
     charge_mode: ChargeMode
-    linked_project_id: int | None = None
-    independently_visible: bool = True
-    coupon_eligible: bool = False
-    annual_gift_eligible: bool = False
-    qualifies_for_foot_bath_bundle: bool = False
+    linked_project_id: StrictInt | None = Field(default=None, gt=0)
+    independently_visible: StrictBool = True
+    coupon_eligible: StrictBool = False
+    annual_gift_eligible: StrictBool = False
+    qualifies_for_foot_bath_bundle: StrictBool = False
     status: ChoiceStatus = "active"
-    display_order: int = Field(default=0, ge=0)
+    display_order: StrictInt = Field(default=0, ge=0)
     prices: list[OptionChoicePriceIn] = Field(default_factory=list)
 
 
 class OptionChoicePatch(_CleanTextModel):
-    code: str | None = Field(default=None, min_length=1, max_length=32)
-    name: str | None = Field(default=None, min_length=1, max_length=64)
-    description: str | None = Field(default=None, max_length=512)
+    code: StrictStr | None = Field(default=None, min_length=1, max_length=32)
+    name: StrictStr | None = Field(default=None, min_length=1, max_length=64)
+    description: StrictStr | None = Field(default=None, max_length=512)
     choice_type: ChoiceType | None = None
     charge_mode: ChargeMode | None = None
-    linked_project_id: int | None = None
-    independently_visible: bool | None = None
-    coupon_eligible: bool | None = None
-    annual_gift_eligible: bool | None = None
-    qualifies_for_foot_bath_bundle: bool | None = None
+    linked_project_id: StrictInt | None = Field(default=None, gt=0)
+    independently_visible: StrictBool | None = None
+    coupon_eligible: StrictBool | None = None
+    annual_gift_eligible: StrictBool | None = None
+    qualifies_for_foot_bath_bundle: StrictBool | None = None
     status: ChoiceStatus | None = None
-    display_order: int | None = Field(default=None, ge=0)
+    display_order: StrictInt | None = Field(default=None, ge=0)
     prices: list[OptionChoicePriceIn] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_null_non_nullable_fields(cls, data):
+        if isinstance(data, dict):
+            nullable = {"linked_project_id"}
+            for key, value in data.items():
+                if key not in nullable and value is None:
+                    raise ValueError(f"{key} must not be null")
+        return data
 
 
 class PricePreviewIn(BaseModel):
-    choice_ids: list[int] = Field(default_factory=list)
-    is_member: bool = False
+    model_config = ConfigDict(extra="forbid")
+
+    choice_ids: list[StrictInt] = Field(default_factory=list)
+    is_member: StrictBool = False
     confirmed_at: datetime
-    store_timezone: str = Field(min_length=1)
+    store_timezone: StrictStr = Field(min_length=1)
 
     @field_validator("confirmed_at")
     @classmethod
     def _confirmed_at_must_be_aware(cls, value: datetime) -> datetime:
         if value.tzinfo is None:
             raise ValueError("confirmed_at must be timezone-aware")
+        return value
+
+    @field_validator("choice_ids")
+    @classmethod
+    def _choice_ids_must_be_unique_positive(cls, value: list[int]) -> list[int]:
+        if any(choice_id <= 0 for choice_id in value):
+            raise ValueError("choice_ids must be positive")
+        if len(value) != len(set(value)):
+            raise ValueError("choice_ids must be unique")
         return value
 
 
@@ -384,6 +431,82 @@ def _apply_prices(db: Session, choice_id: int, prices: list[OptionChoicePriceIn]
         ))
 
 
+def _require_linked_project_allowed_for_write(
+    db: Session,
+    project: Project,
+    linked_project_id: int | None,
+) -> None:
+    if linked_project_id is None:
+        return
+    linked = db.get(Project, linked_project_id)
+    if linked is None or linked.store_id != project.store_id:
+        raise HTTPException(status_code=404, detail="引用项目不存在")
+
+
+def _require_linked_project_allowed_for_preview(
+    db: Session,
+    project: Project,
+    choice: ProjectOptionChoice,
+) -> None:
+    if choice.choice_type != "linked_project" and choice.charge_mode != "inherit_linked_price":
+        return
+    if choice.linked_project_id is None:
+        raise HTTPException(status_code=422, detail={"code": "linked_project_required", "path": f"choices.{choice.code}.linked_project_id", "message": "项目引用选项必须指定引用项目"})
+    linked = db.get(Project, choice.linked_project_id)
+    if linked is None or linked.store_id != project.store_id:
+        raise HTTPException(status_code=404, detail="引用项目不存在")
+    if linked.publication_status != "published":
+        raise HTTPException(status_code=422, detail={"code": "linked_project_unpublished", "path": f"choices.{choice.code}.linked_project_id", "message": "引用项目必须已发布"})
+    if linked.current_published_version_id is None:
+        raise HTTPException(status_code=422, detail={"code": "linked_project_catalog_unpublished", "path": f"choices.{choice.code}.linked_project_id", "message": "引用项目必须具有当前已发布目录版本"})
+    linked_version = db.get(ProjectCatalogVersion, linked.current_published_version_id)
+    if linked_version is None or linked_version.project_id != linked.id or linked_version.status != "published":
+        raise HTTPException(status_code=422, detail={"code": "linked_project_catalog_unpublished", "path": f"choices.{choice.code}.linked_project_id", "message": "引用项目必须具有当前已发布目录版本"})
+
+
+def _selection_error(code: str, path: str, message: str) -> HTTPException:
+    return HTTPException(status_code=422, detail={"code": code, "path": path, "message": message})
+
+
+def _validate_preview_selection_counts(
+    db: Session,
+    version: ProjectCatalogVersion,
+    selected_choice_ids: list[int],
+) -> None:
+    selected = set(selected_choice_ids)
+    version_choice_ids = set(db.scalars(
+        select(ProjectOptionChoice.id)
+        .join(ProjectOptionGroup, ProjectOptionGroup.id == ProjectOptionChoice.option_group_id)
+        .where(ProjectOptionGroup.catalog_version_id == version.id)
+    ))
+    if not selected.issubset(version_choice_ids):
+        raise HTTPException(status_code=404, detail="选项不存在")
+    groups = list(db.scalars(
+        select(ProjectOptionGroup)
+        .where(ProjectOptionGroup.catalog_version_id == version.id)
+        .order_by(ProjectOptionGroup.display_order, ProjectOptionGroup.code, ProjectOptionGroup.id)
+    ))
+    for group in groups:
+        active_choice_ids = set(db.scalars(
+            select(ProjectOptionChoice.id).where(
+                ProjectOptionChoice.option_group_id == group.id,
+                ProjectOptionChoice.status == "active",
+            )
+        ))
+        count = len(selected.intersection(active_choice_ids))
+        path = f"groups.{group.code}"
+        if group.required and count == 0:
+            raise _selection_error("required_group_missing", path, "必选组至少选择一项")
+        if count == 0:
+            continue
+        if group.selection_mode == "single" and count > 1:
+            raise _selection_error("single_group_multiple_selected", path, "单选组只能选择一项")
+        if count < group.min_select:
+            raise _selection_error("min_select_not_met", path, "选择数量少于最少选择数")
+        if count > group.max_select:
+            raise _selection_error("max_select_exceeded", path, "选择数量超过最多选择数")
+
+
 def _commit_or_conflict(db: Session) -> None:
     try:
         db.commit()
@@ -488,6 +611,7 @@ def create_option_choice(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     project, version, group = _draft_group_for_project(db, project_id, group_id, staff)
+    _require_linked_project_allowed_for_write(db, project, body.linked_project_id)
     data = body.model_dump(exclude={"prices"})
     choice = ProjectOptionChoice(option_group_id=group.id, **data)
     db.add(choice)
@@ -511,6 +635,8 @@ def patch_option_choice(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     project, version, group, choice = _draft_choice_for_project(db, project_id, group_id, choice_id, staff)
+    if "linked_project_id" in body.model_fields_set:
+        _require_linked_project_allowed_for_write(db, project, body.linked_project_id)
     data = body.model_dump(exclude_unset=True, exclude={"prices"})
     prices = body.prices if "prices" in body.model_fields_set else None
     for key, value in data.items():
@@ -639,6 +765,7 @@ def preview_project_price(
     staff = _current_staff(authorization, db)
     project = _project_for_staff(db, project_id, staff)
     version = _working_version_for_preview(db, project)
+    _validate_preview_selection_counts(db, version, body.choice_ids)
     try:
         project_snapshot = price_book_snapshot(db, project.id)
         confirmed = confirmed_price_for_line(
@@ -671,6 +798,7 @@ def preview_project_price(
         choice, group = row
         if choice.status != "active":
             raise HTTPException(status_code=400, detail="不可预览停用选项")
+        _require_linked_project_allowed_for_preview(db, project, choice)
         try:
             charge = resolve_option_charge(db, choice.id, PriceContext(
                 is_member=body.is_member,

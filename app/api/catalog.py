@@ -1,14 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from datetime import UTC, datetime
+
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.domain.catalog_options import (
-    CatalogPublishedVersionNotFoundError,
-    resolve_published_project_config,
-)
-from app.models import Addon, PageContent, PriceBook, Product, Project, Store
+from app.models import Addon, OptionChoicePrice, PageContent, PriceBook, Product, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, Store
 from app.schemas.catalog import ProjectListResponse, ProjectOut, StoreOut
 
 router = APIRouter(tags=["catalog"])
@@ -68,44 +66,82 @@ class ProductOut(BaseModel):
 def _published_option_groups(db: Session, project: Project) -> tuple[int | None, list[dict]]:
     if project.current_published_version_id is None:
         return None, []
-    try:
-        config = resolve_published_project_config(db, project.id)
-    except CatalogPublishedVersionNotFoundError as exc:
-        raise HTTPException(status_code=409, detail="当前发布目录指针异常") from exc
+    version = db.get(ProjectCatalogVersion, project.current_published_version_id)
+    if version is None or version.project_id != project.id or version.status != "published":
+        raise HTTPException(status_code=409, detail="当前发布目录指针异常")
     groups = []
-    for group in config["groups"]:
-        choices = [
-            {
-                "code": choice["code"],
-                "name": choice["name"],
-                "description": choice["description"],
-                "choice_type": choice["choice_type"],
-                "linked_project_id": choice["linked_project_id"],
-                "linked_project_code": choice["linked_project_code"],
-                "charge_mode": choice["charge_mode"],
-                "independently_visible": choice["independently_visible"],
-                "coupon_eligible": choice["coupon_eligible"],
-                "annual_gift_eligible": choice["annual_gift_eligible"],
-                "qualifies_for_foot_bath_bundle": choice["qualifies_for_foot_bath_bundle"],
-                "display_order": choice["display_order"],
-                "status": choice["status"],
-                "prices": choice["prices"],
-            }
-            for choice in group["choices"]
-            if choice["status"] == "active"
-        ]
+    now = datetime.now(UTC)
+    for group in db.scalars(
+        select(ProjectOptionGroup)
+        .where(ProjectOptionGroup.catalog_version_id == version.id)
+        .order_by(ProjectOptionGroup.display_order, ProjectOptionGroup.code, ProjectOptionGroup.id)
+    ):
+        choices = []
+        for choice in db.scalars(
+            select(ProjectOptionChoice)
+            .where(
+                ProjectOptionChoice.option_group_id == group.id,
+                ProjectOptionChoice.status == "active",
+            )
+            .order_by(ProjectOptionChoice.display_order, ProjectOptionChoice.code, ProjectOptionChoice.id)
+        ):
+            linked_project = db.get(Project, choice.linked_project_id) if choice.linked_project_id else None
+            choices.append({
+                "code": choice.code,
+                "name": choice.name,
+                "description": choice.description,
+                "choice_type": choice.choice_type,
+                "linked_project_id": choice.linked_project_id,
+                "linked_project_code": linked_project.code if linked_project else None,
+                "charge_mode": choice.charge_mode,
+                "independently_visible": choice.independently_visible,
+                "coupon_eligible": choice.coupon_eligible,
+                "annual_gift_eligible": choice.annual_gift_eligible,
+                "qualifies_for_foot_bath_bundle": choice.qualifies_for_foot_bath_bundle,
+                "display_order": choice.display_order,
+                "status": choice.status,
+                "prices": _current_option_prices(db, choice.id, now),
+            })
         groups.append({
-            "code": group["code"],
-            "name": group["name"],
-            "description": group["description"],
-            "selection_mode": group["selection_mode"],
-            "required": group["required"],
-            "min_select": group["min_select"],
-            "max_select": group["max_select"],
-            "display_order": group["display_order"],
+            "code": group.code,
+            "name": group.name,
+            "description": group.description,
+            "selection_mode": group.selection_mode,
+            "required": group.required,
+            "min_select": group.min_select,
+            "max_select": group.max_select,
+            "display_order": group.display_order,
             "choices": choices,
         })
-    return config["version"], groups
+    return version.version, groups
+
+
+def _current_option_prices(db: Session, choice_id: int, now: datetime) -> list[dict]:
+    rows = list(db.scalars(
+        select(OptionChoicePrice)
+        .where(
+            OptionChoicePrice.option_choice_id == choice_id,
+            OptionChoicePrice.effective_from <= now,
+            or_(OptionChoicePrice.effective_to.is_(None), OptionChoicePrice.effective_to > now),
+        )
+        .order_by(
+            OptionChoicePrice.price_type,
+            OptionChoicePrice.effective_from.desc(),
+            OptionChoicePrice.id.desc(),
+        )
+    ))
+    by_type: dict[str, OptionChoicePrice] = {}
+    for row in rows:
+        by_type.setdefault(row.price_type, row)
+    return [
+        {
+            "price_type": row.price_type,
+            "amount_cents": row.amount_cents,
+            "effective_from": row.effective_from.isoformat() if row.effective_from else None,
+            "effective_to": row.effective_to.isoformat() if row.effective_to else None,
+        }
+        for row in by_type.values()
+    ]
 
 
 def _project_to_out(db: Session, p: Project) -> ProjectOut:
