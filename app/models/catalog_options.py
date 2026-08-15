@@ -16,6 +16,10 @@ class ProjectCatalogVersion(Base):
     __tablename__ = "project_catalog_versions"
     __table_args__ = (
         UniqueConstraint("project_id", "version", name="uq_project_catalog_version"),
+        CheckConstraint(
+            "status IN ('draft', 'published', 'superseded')",
+            name="ck_project_catalog_version_status",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -114,6 +114,15 @@ class AlembicContractTests(unittest.TestCase):
                     for constraint in inspector.get_unique_constraints(table_name)
                 }
                 self.assertTrue(expected_columns.issubset(actual_columns), table_name)
+            catalog_version_checks = {
+                constraint["name"]: constraint["sqltext"]
+                for constraint in inspector.get_check_constraints("project_catalog_versions")
+            }
+            status_check = catalog_version_checks.get("ck_project_catalog_version_status", "")
+            self.assertEqual(
+                status_check,
+                "status IN ('draft', 'published', 'superseded')",
+            )
             engine.dispose()
 
 

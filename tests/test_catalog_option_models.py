@@ -135,6 +135,19 @@ class CatalogOptionModelTests(unittest.TestCase):
             with self.assertRaises(IntegrityError):
                 db.commit()
 
+    def test_catalog_version_rejects_invalid_status(self):
+        with self.SessionLocal() as db:
+            version = make_catalog_version(db, project_code="invalid-version-status")
+            db.commit()
+            db.add(ProjectCatalogVersion(
+                project_id=version.project_id,
+                version=2,
+                status="retired",
+            ))
+
+            with self.assertRaises(IntegrityError):
+                db.commit()
+
     def test_option_group_code_is_unique_within_catalog_version(self):
         with self.SessionLocal() as db:
             version = make_catalog_version(db, project_code="group-unique")

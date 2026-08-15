@@ -23,6 +23,10 @@ def upgrade() -> None:
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("published_by", sa.Integer(), sa.ForeignKey("staff.id"), nullable=True),
         sa.UniqueConstraint("project_id", "version", name="uq_project_catalog_version"),
+        sa.CheckConstraint(
+            "status IN ('draft', 'published', 'superseded')",
+            name="ck_project_catalog_version_status",
+        ),
     )
     op.create_index(
         "ix_project_catalog_versions_project_id",
