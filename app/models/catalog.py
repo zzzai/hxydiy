@@ -30,6 +30,9 @@ class Project(Base):
     # draft / candidate / published / archived —— 只有 published 可被顾客端看到
     publication_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     content_version: Mapped[str] = mapped_column(String(32), default="")
+    current_published_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("project_catalog_versions.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

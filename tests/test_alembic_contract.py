@@ -56,9 +56,17 @@ class AlembicContractTests(unittest.TestCase):
             "option_choice_prices",
         }
         previous_metadata = MetaData()
-        for table in Base.metadata.sorted_tables:
+        for table in Base.metadata.tables.values():
             if table.name not in new_tables:
-                table.to_metadata(previous_metadata)
+                copied = table.to_metadata(previous_metadata)
+                if copied.name == "projects":
+                    current_catalog_column = copied.c.current_published_version_id
+                    for foreign_key in list(current_catalog_column.foreign_keys):
+                        current_catalog_column.foreign_keys.discard(foreign_key)
+                        copied.foreign_keys.discard(foreign_key)
+                        copied.foreign_key_constraints.discard(foreign_key.constraint)
+                        copied.constraints.discard(foreign_key.constraint)
+                    copied._columns.remove(current_catalog_column)
 
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "catalog-options.db"
