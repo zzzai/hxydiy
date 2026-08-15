@@ -19,6 +19,7 @@ CAPABILITIES = {
     "workspace_backend": (
         ("hxy-server/app/api/selections.py", ("/revisions",)),
         ("hxy-server/app/api/admin_v2.py", ("selection-change-requests",)),
+        ("hxy-server/scripts/migrate_catalog_options.py", ("migrate_store_catalog", "--apply")),
     ),
     "workspace_customer_web": (
         ("diy-web/src/api.ts", ("/revisions",)),
@@ -35,6 +36,7 @@ CAPABILITIES = {
     "production_api": (
         ("hxy-server/app/api/selections.py", ("/revisions",)),
         ("hxy-server/app/api/admin_v2.py", ("selection-change-requests",)),
+        ("hxy-server/scripts/migrate_catalog_options.py", ("migrate_store_catalog", "--apply")),
     ),
 }
 
