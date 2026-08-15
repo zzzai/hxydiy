@@ -435,12 +435,27 @@ def _require_linked_project_allowed_for_write(
     db: Session,
     project: Project,
     linked_project_id: int | None,
+    *,
+    choice_type: str | None = None,
+    charge_mode: str | None = None,
 ) -> None:
+    requires_linked_project = choice_type == "linked_project" or charge_mode == "inherit_linked_price"
     if linked_project_id is None:
+        if requires_linked_project:
+            raise HTTPException(status_code=422, detail={"code": "linked_project_required", "path": "linked_project_id", "message": "项目引用选项必须指定引用项目"})
         return
     linked = db.get(Project, linked_project_id)
     if linked is None or linked.store_id != project.store_id:
         raise HTTPException(status_code=404, detail="引用项目不存在")
+    if not requires_linked_project:
+        return
+    if linked.publication_status != "published":
+        raise HTTPException(status_code=422, detail={"code": "linked_project_unpublished", "path": "linked_project_id", "message": "引用项目必须已发布"})
+    if linked.current_published_version_id is None:
+        raise HTTPException(status_code=422, detail={"code": "linked_project_catalog_unpublished", "path": "linked_project_id", "message": "引用项目必须具有当前已发布目录版本"})
+    linked_version = db.get(ProjectCatalogVersion, linked.current_published_version_id)
+    if linked_version is None or linked_version.project_id != linked.id or linked_version.status != "published":
+        raise HTTPException(status_code=422, detail={"code": "linked_project_catalog_unpublished", "path": "linked_project_id", "message": "引用项目必须具有当前已发布目录版本"})
 
 
 def _require_linked_project_allowed_for_preview(
@@ -611,7 +626,13 @@ def create_option_choice(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     project, version, group = _draft_group_for_project(db, project_id, group_id, staff)
-    _require_linked_project_allowed_for_write(db, project, body.linked_project_id)
+    _require_linked_project_allowed_for_write(
+        db,
+        project,
+        body.linked_project_id,
+        choice_type=body.choice_type,
+        charge_mode=body.charge_mode,
+    )
     data = body.model_dump(exclude={"prices"})
     choice = ProjectOptionChoice(option_group_id=group.id, **data)
     db.add(choice)
@@ -635,10 +656,18 @@ def patch_option_choice(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     project, version, group, choice = _draft_choice_for_project(db, project_id, group_id, choice_id, staff)
-    if "linked_project_id" in body.model_fields_set:
-        _require_linked_project_allowed_for_write(db, project, body.linked_project_id)
     data = body.model_dump(exclude_unset=True, exclude={"prices"})
     prices = body.prices if "prices" in body.model_fields_set else None
+    final_choice_type = data.get("choice_type", choice.choice_type)
+    final_charge_mode = data.get("charge_mode", choice.charge_mode)
+    final_linked_project_id = data.get("linked_project_id", choice.linked_project_id)
+    _require_linked_project_allowed_for_write(
+        db,
+        project,
+        final_linked_project_id,
+        choice_type=final_choice_type,
+        charge_mode=final_charge_mode,
+    )
     for key, value in data.items():
         setattr(choice, key, value)
     if prices is not None:

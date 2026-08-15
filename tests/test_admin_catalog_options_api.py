@@ -202,6 +202,14 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
             dirty = db.get(ProjectOptionChoice, ids["linked_choice_id"])
             dirty.linked_project_id = self.other_project_id
             db.commit()
+        unrelated_patch = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}/choices/{ids['linked_choice_id']}",
+            headers=self.admin_headers,
+            json={"name": "只改名称也应拒绝"},
+        )
+        self.assertEqual(unrelated_patch.status_code, 404)
+        self.assertNotIn("OTHER", unrelated_patch.text)
+
         preview = self.client.post(
             f"/api/v1/admin/v2/projects/{self.main_id}/price-preview",
             headers=self.staff_headers,
