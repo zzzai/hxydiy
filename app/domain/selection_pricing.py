@@ -89,7 +89,11 @@ def calculate_selection_pricing(
             if project is None and isinstance(project_id, str):
                 project = _synthetic_project(db, project_id)
             if project:
-                prices = _prices(db, project.id)
+                prices = (
+                    price_book_prices(db, project.id)
+                    if price_context is not None
+                    else _prices(db, project.id)
+                )
                 code = project.code
             else:
                 prices, code = {"store": 0, "group": 0, "member": 0}, str(project_id)

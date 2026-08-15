@@ -408,7 +408,7 @@ def counter_checkout_selection(
     authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
-    """兼容旧营业流：确认 DIY 选单并转成服务单，服务完成前不收款。"""
+    """把前台已确认并冻结价格的 DIY 选单转成服务单，服务完成前不收款。"""
     staff = _current_staff(authorization, db)
     store_id = _store_id(staff)
     replay, request_hash = _replay_or_conflict(db, store_id, "counter_checkout_selection", body)
@@ -425,9 +425,9 @@ def counter_checkout_selection(
         "选单不存在",
     )
     selection_from_status = session.status
-    if session.status not in {"submitted", "confirmed"}:
+    if session.status != "confirmed":
         raise HTTPException(status_code=409, detail={
-            "code": "OPERATION_STATE_CONFLICT", "message": "只有已提交选单可以前台接待",
+            "code": "OPERATION_STATE_CONFLICT", "message": "选单须先由前台确认价格和服务项",
         })
     if session.fulfillment_order_id:
         raise HTTPException(status_code=409, detail={
@@ -443,9 +443,17 @@ def counter_checkout_selection(
         SelectionRevision.selection_session_id == session.id,
         SelectionRevision.state == "confirmed",
     ).order_by(SelectionRevision.revision_no.desc()))
-    snapshot = (latest_revision.snapshot or {}) if latest_revision else (session.pricing_snapshot or {})
-    pricing_snapshot = snapshot.get("pricing") or snapshot
-    payable_total = int(pricing_snapshot.get("payable_total_cents", session.store_total_cents) or 0)
+    snapshot = (latest_revision.snapshot or {}) if latest_revision else {}
+    pricing_snapshot = snapshot.get("pricing")
+    if (
+        latest_revision is None
+        or not isinstance(pricing_snapshot, dict)
+        or "payable_total_cents" not in pricing_snapshot
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "CONFIRMED_PRICING_REQUIRED", "message": "选单缺少前台确认的冻结价格",
+        })
+    payable_total = int(pricing_snapshot["payable_total_cents"] or 0)
     if payable_total < 0 or body.received_amount_cents < payable_total:
         raise HTTPException(status_code=409, detail={
             "code": "PAYMENT_NOT_CONFIRMED", "message": "实收金额低于本次选单参考金额",
@@ -460,12 +468,13 @@ def counter_checkout_selection(
 
     from app.api.orders import gen_order_no
 
-    priced_items = list(pricing_snapshot.get("lines") or session.items or [])
+    priced_items = list(pricing_snapshot.get("lines") or snapshot.get("items") or [])
     confirmed_lines = list(db.scalars(select(ServiceLine).where(
         ServiceLine.selection_session_id == session.id,
+        ServiceLine.selection_revision_id == latest_revision.id,
         ServiceLine.state != "cancelled",
     )))
-    if latest_revision and not confirmed_lines:
+    if not confirmed_lines:
         raise HTTPException(status_code=409, detail={
             "code": "SERVICE_LINES_NOT_CONFIRMED", "message": "实际服务项尚未由前台确认",
         })

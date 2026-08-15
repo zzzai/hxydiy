@@ -1,4 +1,6 @@
 import unittest
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -669,6 +671,145 @@ class SelectionClosureV2Tests(unittest.TestCase):
             self.assertEqual(session.pricing_snapshot, revision.snapshot["pricing"])
             self.assertEqual(session.store_total_cents, revision.snapshot["pricing"]["store_total_cents"])
             self.assertEqual(session.member_total_cents, revision.snapshot["pricing"]["member_total_cents"])
+
+    def test_approval_refreezes_tuesday_price_and_aligns_confirmed_items(self):
+        session_id, _token = self.create_session()
+        baseline_line_id = "addition-tuesday-baseline-line"
+        revision_id = "addition-tuesday-revision"
+        change_id = "addition-tuesday-change"
+        with self.SessionLocal() as db:
+            project = Project(
+                store_id=self.store_id,
+                code="CLOSURE-V2-TUESDAY-ADDITION",
+                category="care",
+                name="周二服务中加选",
+                publication_status="published",
+            )
+            user = User(
+                openid="closure_v2_tuesday_addition_member",
+                is_member=True,
+                member_type="annual",
+                member_expire_at=datetime(2027, 8, 18, tzinfo=timezone.utc),
+            )
+            db.add_all([project, user])
+            db.flush()
+            db.add_all([
+                PriceBook(project_id=project.id, price_type="store", amount_cents=10000),
+                PriceBook(project_id=project.id, price_type="group", amount_cents=9000),
+                PriceBook(project_id=project.id, price_type="member", amount_cents=8000),
+            ])
+            baseline_item = {
+                "project_id": project.id,
+                "name": project.name,
+                "quantity": 1,
+                "item_type": "service",
+                "chargeable": True,
+                "diy_preferences": ["肩颈"],
+                "service_line_id": baseline_line_id,
+                "state": "confirmed",
+            }
+            requested_baseline = {
+                key: value for key, value in baseline_item.items()
+                if key not in {"service_line_id", "state"}
+            }
+            added_item = {
+                "project_id": project.id,
+                "name": project.name,
+                "quantity": 1,
+                "item_type": "service",
+                "chargeable": True,
+                "diy_preferences": ["腿部"],
+            }
+            session = db.get(SelectionSession, session_id)
+            session.customer_id = user.id
+            session.status = "confirmed"
+            session.items = [baseline_item]
+            session.pricing_snapshot = {"payable_total_cents": 6800}
+            baseline_revision = SelectionRevision(
+                id=f"baseline-{session_id}",
+                selection_session_id=session_id,
+                revision_no=1,
+                state="confirmed",
+                idempotency_key=f"baseline-{session_id}",
+                snapshot={"items": [baseline_item], "pricing": {"payable_total_cents": 6800}},
+            )
+            addition_revision = SelectionRevision(
+                id=revision_id,
+                selection_session_id=session_id,
+                revision_no=2,
+                state="awaiting_staff_confirmation",
+                idempotency_key="addition-tuesday-request",
+                snapshot={
+                    "items": [requested_baseline, added_item],
+                    "added_items": [added_item],
+                    "pricing": {"payable_total_cents": 16000},
+                    "source_marker": "preserve-addition",
+                },
+            )
+            db.add_all([
+                baseline_revision,
+                addition_revision,
+                ServiceLine(
+                    id=baseline_line_id,
+                    selection_session_id=session_id,
+                    selection_revision_id=baseline_revision.id,
+                    snapshot=baseline_item,
+                    state="in_service",
+                ),
+                SelectionChangeRequest(
+                    id=change_id,
+                    selection_session_id=session_id,
+                    selection_revision_id=revision_id,
+                    state="awaiting_staff_confirmation",
+                ),
+                PositionOccupancy(
+                    store_id=self.store_id,
+                    room_id=12,
+                    selection_session_id=session_id,
+                    active_session_id=session_id,
+                    status="in_service",
+                    source="personal_qr",
+                ),
+            ])
+            db.commit()
+
+        class FrozenDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                frozen = datetime(2026, 8, 18, 2, 0, tzinfo=timezone.utc)
+                return frozen if tz is None else frozen.astimezone(tz)
+
+        with patch("app.api.admin_v2.datetime", FrozenDateTime):
+            approved = self.client.post(
+                f"/api/v1/admin/v2/selection-change-requests/{change_id}/approve",
+                headers={"Authorization": f"Bearer {create_staff_token(self.staff_id, 'admin')}"},
+            )
+
+        self.assertEqual(approved.status_code, 200, approved.text)
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, session_id)
+            revision = db.get(SelectionRevision, revision_id)
+            change = db.get(SelectionChangeRequest, change_id)
+            lines = db.query(ServiceLine).filter_by(selection_session_id=session_id).all()
+            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 13600)
+            self.assertEqual(
+                [line["price_basis"] for line in session.pricing_snapshot["lines"]],
+                ["tuesday_68", "tuesday_68"],
+            )
+            self.assertEqual(revision.snapshot["pricing"], session.pricing_snapshot)
+            self.assertEqual(revision.snapshot["items"], session.items)
+            self.assertEqual(revision.snapshot["source_marker"], "preserve-addition")
+            self.assertEqual(len(lines), 2)
+            self.assertTrue(all(item["state"] == "confirmed" for item in session.items))
+            self.assertEqual(
+                {item["service_line_id"] for item in session.items},
+                {line.id for line in lines},
+            )
+            self.assertEqual(
+                {line.id: line.snapshot for line in lines},
+                {item["service_line_id"]: item for item in session.items},
+            )
+            self.assertEqual(revision.confirmed_at, change.resolved_at)
 
     def test_position_service_actions_update_confirmed_service_lines(self):
         session_id, token = self.create_session()

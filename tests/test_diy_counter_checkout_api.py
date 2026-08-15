@@ -104,7 +104,40 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.engine.dispose()
 
-    def test_counter_checkout_confirms_service_flow_without_collecting_payment(self):
+    def confirm_session_for_counter_checkout(self):
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, self.session_id)
+            service_line_id = "diy-counter-default-confirmed-line"
+            revision_id = "diy-counter-default-confirmed-revision"
+            confirmed_item = {
+                **session.items[0],
+                "service_line_id": service_line_id,
+                "state": "confirmed",
+            }
+            session.status = "confirmed"
+            session.items = [confirmed_item]
+            revision = SelectionRevision(
+                id=revision_id,
+                selection_session_id=self.session_id,
+                revision_no=1,
+                state="confirmed",
+                idempotency_key=revision_id,
+                snapshot={"items": [confirmed_item], "pricing": session.pricing_snapshot},
+            )
+            db.add_all([
+                revision,
+                ServiceLine(
+                    id=service_line_id,
+                    selection_session_id=self.session_id,
+                    selection_revision_id=revision_id,
+                    snapshot=confirmed_item,
+                    state="pending",
+                ),
+            ])
+            db.commit()
+
+    def test_counter_checkout_transfers_confirmed_service_flow_without_collecting_payment(self):
+        self.confirm_session_for_counter_checkout()
         payload = {
             "idempotency_key": "diy-counter-checkout-1",
             "payment_method": "wechat_scan",
@@ -152,6 +185,123 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
             self.assertEqual(service_order.total_amount_cents, 2990)
             self.assertEqual(session.fulfillment_order_id, order.id)
             self.assertEqual(occupancy.status, "waiting_service")
+
+    def test_counter_checkout_rejects_submitted_preview_without_confirmation(self):
+        response = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "reject-submitted-preview",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "OPERATION_STATE_CONFLICT")
+
+    def test_counter_checkout_rejects_confirmed_session_without_confirmed_revision(self):
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, self.session_id)
+            session.status = "confirmed"
+            db.commit()
+
+        response = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "reject-missing-confirmed-revision",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "CONFIRMED_PRICING_REQUIRED")
+
+    def test_counter_checkout_rejects_latest_revision_without_its_service_lines(self):
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, self.session_id)
+            session.status = "confirmed"
+            older = SelectionRevision(
+                id="counter-older-confirmed-revision",
+                selection_session_id=self.session_id,
+                revision_no=1,
+                state="confirmed",
+                idempotency_key="counter-older-confirmed-revision",
+                snapshot={"pricing": session.pricing_snapshot, "items": session.items},
+            )
+            latest = SelectionRevision(
+                id="counter-latest-confirmed-revision",
+                selection_session_id=self.session_id,
+                revision_no=2,
+                state="confirmed",
+                idempotency_key="counter-latest-confirmed-revision",
+                snapshot={"pricing": session.pricing_snapshot, "items": session.items},
+            )
+            db.add_all([older, latest])
+            db.flush()
+            db.add(ServiceLine(
+                id="counter-stale-service-line",
+                selection_session_id=self.session_id,
+                selection_revision_id=older.id,
+                snapshot=session.items[0],
+                state="pending",
+            ))
+            db.commit()
+
+        response = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "reject-stale-service-lines",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "SERVICE_LINES_NOT_CONFIRMED")
+
+    def test_counter_checkout_rejects_confirmed_revision_without_pricing(self):
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, self.session_id)
+            session.status = "confirmed"
+            revision = SelectionRevision(
+                id="counter-confirmed-without-pricing",
+                selection_session_id=self.session_id,
+                revision_no=1,
+                state="confirmed",
+                idempotency_key="counter-confirmed-without-pricing",
+                snapshot={"items": session.items},
+            )
+            db.add(revision)
+            db.flush()
+            db.add(ServiceLine(
+                id="counter-line-without-pricing",
+                selection_session_id=self.session_id,
+                selection_revision_id=revision.id,
+                snapshot=session.items[0],
+                state="pending",
+            ))
+            db.commit()
+
+        response = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "reject-confirmed-without-pricing",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "CONFIRMED_PRICING_REQUIRED")
 
     def test_completed_diy_service_can_settle_without_technician_assignment(self):
         with self.SessionLocal() as db:
@@ -404,6 +554,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
 
     def test_counter_checkout_uses_confirmed_revision_member_price_snapshot(self):
         with self.SessionLocal() as db:
+            db.get(SelectionSession, self.session_id).status = "confirmed"
             revision = SelectionRevision(
                 id="diy-counter-revision-member",
                 selection_session_id=self.session_id,
@@ -457,6 +608,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
 
     def test_service_actions_keep_linked_position_in_sync(self):
         with self.SessionLocal() as db:
+            db.get(SelectionSession, self.session_id).status = "confirmed"
             revision = SelectionRevision(
                 id="diy-counter-service-line-revision",
                 selection_session_id=self.session_id,
@@ -530,6 +682,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
             self.assertIsNotNone(line.completed_at)
 
     def test_diy_counter_assignment_must_use_the_currently_occupied_service_position(self):
+        self.confirm_session_for_counter_checkout()
         checkout = self.client.post(
             f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
             headers=self.headers,
@@ -556,6 +709,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
             self.assertEqual(room.status, "available")
 
     def test_diy_counter_position_cannot_move_after_front_desk_checkout(self):
+        self.confirm_session_for_counter_checkout()
         checkout = self.client.post(
             f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
             headers=self.headers,
@@ -584,6 +738,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         self.assertEqual(moved.json()["detail"]["code"], "DIY_POSITION_LOCKED")
 
     def test_diy_counter_position_actions_require_the_service_order_flow(self):
+        self.confirm_session_for_counter_checkout()
         checkout = self.client.post(
             f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
             headers=self.headers,
@@ -615,6 +770,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
             self.assertEqual(service_order.status, "draft")
 
     def test_diy_counter_departure_requires_the_service_order_to_be_settled(self):
+        self.confirm_session_for_counter_checkout()
         checkout = self.client.post(
             f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
             headers=self.headers,
@@ -641,6 +797,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
             self.assertEqual(service_order.status, "draft")
 
     def test_diy_counter_position_cannot_use_legacy_cleaning_completion(self):
+        self.confirm_session_for_counter_checkout()
         checkout = self.client.post(
             f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
             headers=self.headers,
@@ -685,6 +842,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         self.assertEqual(cleaned.json()["detail"]["code"], "DIY_POSITION_OCCUPIED")
 
     def test_live_position_map_keeps_active_diy_state_when_legacy_flow_reserves_its_room(self):
+        self.confirm_session_for_counter_checkout()
         checkout = self.client.post(
             f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
             headers=self.headers,
@@ -716,6 +874,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
 
     def test_diy_counter_service_settlement_departure_cleaning_and_feedback_close_together(self):
         with self.SessionLocal() as db:
+            db.get(SelectionSession, self.session_id).status = "confirmed"
             revision = SelectionRevision(
                 id="diy-counter-closure-revision",
                 selection_session_id=self.session_id,

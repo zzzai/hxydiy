@@ -169,6 +169,105 @@ class SelectionAdminApiTests(unittest.TestCase):
             self.assertEqual(line.snapshot, session.items[0])
             self.assertEqual(revision.confirmed_at, session.confirmed_at)
 
+    def test_front_desk_confirmation_rejects_project_without_price_book(self):
+        session_id = "selection-admin-missing-price"
+        revision_id = "selection-admin-missing-price-revision"
+        with self.SessionLocal() as db:
+            project = Project(
+                store_id=self.store_id,
+                code="selection-admin-missing-price-project",
+                category="care",
+                name="缺少价格项目",
+                publication_status="published",
+            )
+            db.add(project)
+            db.flush()
+            item = {"project_id": project.id, "quantity": 1, "name": project.name}
+            db.add_all([
+                SelectionSession(
+                    id=session_id,
+                    access_token_hash="x",
+                    store_id=self.store_id,
+                    source="personal_qr",
+                    status="submitted",
+                    items=[item],
+                    diy_preferences={},
+                ),
+                SelectionRevision(
+                    id=revision_id,
+                    selection_session_id=session_id,
+                    revision_no=1,
+                    state="submitted",
+                    idempotency_key="selection-admin-missing-price-key",
+                    snapshot={"items": [item], "pricing": {"payable_total_cents": 0}},
+                ),
+            ])
+            db.commit()
+
+        response = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+            headers=self.headers,
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(SelectionSession, session_id).status, "submitted")
+            self.assertEqual(db.get(SelectionRevision, revision_id).state, "submitted")
+            self.assertEqual(
+                db.query(ServiceLine).filter_by(selection_session_id=session_id).count(),
+                0,
+            )
+
+    def test_front_desk_confirmation_accepts_explicit_zero_price_book(self):
+        session_id = "selection-admin-explicit-zero-price"
+        revision_id = "selection-admin-explicit-zero-revision"
+        with self.SessionLocal() as db:
+            project = Project(
+                store_id=self.store_id,
+                code="selection-admin-explicit-zero-project",
+                category="care",
+                name="显式零元项目",
+                publication_status="published",
+            )
+            db.add(project)
+            db.flush()
+            db.add(PriceBook(project_id=project.id, price_type="store", amount_cents=0))
+            item = {"project_id": project.id, "quantity": 1, "name": project.name}
+            db.add_all([
+                SelectionSession(
+                    id=session_id,
+                    access_token_hash="x",
+                    store_id=self.store_id,
+                    source="personal_qr",
+                    status="submitted",
+                    items=[item],
+                    diy_preferences={},
+                ),
+                SelectionRevision(
+                    id=revision_id,
+                    selection_session_id=session_id,
+                    revision_no=1,
+                    state="submitted",
+                    idempotency_key="selection-admin-explicit-zero-key",
+                    snapshot={"items": [item], "pricing": {"payable_total_cents": 0}},
+                ),
+            ])
+            db.commit()
+
+        response = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+            headers=self.headers,
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["pricing_snapshot"]["payable_total_cents"], 0)
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(SelectionRevision, revision_id).state, "confirmed")
+            self.assertEqual(
+                db.query(ServiceLine).filter_by(selection_session_id=session_id).count(),
+                1,
+            )
+
     def test_confirmed_selection_can_be_cancelled(self):
         with self.SessionLocal() as db:
             db.add(SelectionSession(

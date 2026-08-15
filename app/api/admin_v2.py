@@ -319,7 +319,13 @@ def confirm_selection_session(session_id: str, db: Session = Depends(get_db), au
     # 泡脚组合优惠只取前台确认的独立服务单位；确认后立即刷新冻结报价。
     session.items = confirmed_items
     from app.api.selections import refresh_session_pricing
-    pricing = refresh_session_pricing(db, session, confirmed_at=confirmed_at)
+    try:
+        pricing = refresh_session_pricing(db, session, confirmed_at=confirmed_at)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "CONFIRMATION_PRICING_INVALID",
+            "message": str(exc),
+        }) from exc
     if revision:
         revision.snapshot = {
             **(revision.snapshot or {}),
@@ -385,31 +391,51 @@ def approve_selection_change_request(
     ).order_by(PositionOccupancy.id.desc()))
     if not occupancy or occupancy.status != "in_service":
         raise HTTPException(status_code=409, detail="服务已结束，当前加选不能确认")
+    approved_at = datetime.now(timezone.utc)
+    snapshot = revision.snapshot or {}
     lines = []
-    for item in (revision.snapshot or {}).get("added_items", []):
+    confirmed_added_items = []
+    for item in snapshot.get("added_items", []):
+        service_line_id = str(uuid.uuid4())
+        confirmed_item = {
+            **item,
+            "service_line_id": service_line_id,
+            "state": "confirmed",
+        }
         line = ServiceLine(
-            id=str(uuid.uuid4()),
+            id=service_line_id,
             selection_session_id=session.id,
             selection_revision_id=revision.id,
-            snapshot=item,
+            snapshot=confirmed_item,
             state="pending",
         )
         db.add(line)
         lines.append(line)
-    snapshot = revision.snapshot or {}
-    pricing = snapshot.get("pricing") or {}
-    session.items = snapshot.get("items", session.items or [])
+        confirmed_added_items.append(confirmed_item)
+    confirmed_items = [*(session.items or []), *confirmed_added_items]
+    session.items = confirmed_items
     session.diy_preferences = snapshot.get("diy_preferences", session.diy_preferences or {})
-    session.pricing_snapshot = pricing
-    session.store_total_cents = int(pricing.get("store_total_cents", session.store_total_cents) or 0)
-    session.member_total_cents = int(pricing.get("member_total_cents", session.member_total_cents) or 0)
+    from app.api.selections import refresh_session_pricing
+    try:
+        pricing = refresh_session_pricing(db, session, confirmed_at=approved_at)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "CONFIRMATION_PRICING_INVALID",
+            "message": str(exc),
+        }) from exc
+    revision.snapshot = {
+        **snapshot,
+        "items": confirmed_items,
+        "added_items": confirmed_added_items,
+        "pricing": pricing,
+    }
     session.status = "confirmed"
-    session.confirmed_at = session.confirmed_at or datetime.now(timezone.utc)
+    session.confirmed_at = session.confirmed_at or approved_at
     change.state = "approved"
-    change.resolved_at = datetime.now(timezone.utc)
+    change.resolved_at = approved_at
     change.resolved_by_staff_id = staff.id
     revision.state = "confirmed"
-    revision.confirmed_at = datetime.now(timezone.utc)
+    revision.confirmed_at = approved_at
     revision.confirmed_by_staff_id = staff.id
     _audit(db, staff.name, "approve_selection_change", "selection_change_request", change.id, {
         "selection_session_id": session.id,
