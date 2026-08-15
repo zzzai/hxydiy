@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool, StaticPool
 
 from app.db.session import Base
+from app.domain.catalog_options import _snapshot_hash
 from app.models import (
     Addon,
     OptionChoicePrice,
@@ -75,6 +76,7 @@ class CatalogOptionMigrationTests(unittest.TestCase):
             db.add(published)
             db.flush()
             project.current_published_version_id = published.id
+            published.snapshot_hash = _snapshot_hash(db, published.id)
 
             db.add_all([
                 Addon(
@@ -245,6 +247,8 @@ class CatalogOptionMigrationTests(unittest.TestCase):
                 effective_to=effective_to,
             )
             db.add(source_price)
+            db.flush()
+            db.get(ProjectCatalogVersion, published_id).snapshot_hash = _snapshot_hash(db, published_id)
             db.commit()
             source_ids = (source_group.id, source_choice.id, source_price.id)
 
@@ -440,6 +444,7 @@ class CatalogOptionMigrationTests(unittest.TestCase):
                     effective_from=now - timedelta(days=2),
                 ),
             ])
+            db.flush()
             db.commit()
 
             first = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
@@ -537,6 +542,11 @@ class CatalogOptionMigrationTests(unittest.TestCase):
                     effective_from=now - timedelta(days=10),
                 ),
             ])
+            db.flush()
+            db.get(ProjectCatalogVersion, project.current_published_version_id).snapshot_hash = _snapshot_hash(
+                db,
+                project.current_published_version_id,
+            )
             db.commit()
 
             first = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
@@ -624,6 +634,11 @@ class CatalogOptionMigrationTests(unittest.TestCase):
                     effective_from=now - timedelta(days=5),
                 ),
             ])
+            db.flush()
+            db.get(ProjectCatalogVersion, project.current_published_version_id).snapshot_hash = _snapshot_hash(
+                db,
+                project.current_published_version_id,
+            )
             db.commit()
 
             migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
@@ -851,6 +866,244 @@ class CatalogOptionMigrationTests(unittest.TestCase):
             with Session() as db:
                 self.assertEqual(self._count(db, ProjectCatalogVersion), 1)
             engine.dispose()
+
+    def test_apply_refuses_nonlocal_target_without_writing_and_redacts_target(self):
+        script = Path(__file__).resolve().parents[1] / "scripts" / "migrate_catalog_options.py"
+        with TemporaryDirectory() as directory:
+            database_path = Path(directory) / "production-target.db"
+            database_url = f"sqlite:///{database_path.as_posix()}"
+            engine = create_engine(database_url, poolclass=NullPool)
+            Base.metadata.create_all(engine)
+            Session = sessionmaker(bind=engine, expire_on_commit=False)
+            with Session() as db:
+                store = Store(store_code="blocked-apply", name="阻止写入门店", address="测试地址")
+                db.add(store)
+                db.flush()
+                db.add(Project(
+                    store_id=store.id,
+                    code="blocked-apply-project",
+                    category="test",
+                    name="阻止写入项目",
+                    diy_options=[{"label": "舒缓", "price_cents": 0}],
+                ))
+                db.commit()
+                store_id = store.id
+            result = subprocess.run(
+                [sys.executable, "-B", str(script), "--store-id", str(store_id), "--apply"],
+                cwd=script.parents[1],
+                env={**os.environ, "DATABASE_URL": database_url, "ENVIRONMENT": "production"},
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("environment=production", result.stderr)
+            self.assertIn("target=sqlite", result.stderr)
+            self.assertNotIn(str(database_path), result.stderr)
+            with Session() as db:
+                self.assertEqual(self._count(db, ProjectCatalogVersion), 0)
+            engine.dispose()
+
+    def test_dry_run_and_apply_share_collision_price_replacement_plan(self):
+        with self.SessionLocal() as db:
+            project = db.get(Project, self.project_id)
+            draft = ProjectCatalogVersion(project_id=project.id, version=2, status="draft")
+            db.add(draft)
+            db.flush()
+            # 同编码不同名称迫使迁移器走稳定的替代 group code。
+            db.add(ProjectOptionGroup(
+                catalog_version_id=draft.id,
+                code="legacy-diy-options",
+                name="人工冲突组",
+                selection_mode="multiple",
+                max_select=1,
+            ))
+            addon_group = ProjectOptionGroup(
+                catalog_version_id=draft.id,
+                code="legacy-addons",
+                name="旧加项（待审核）",
+                selection_mode="multiple",
+                max_select=1,
+            )
+            db.add(addon_group)
+            db.flush()
+            charged = ProjectOptionChoice(
+                option_group_id=addon_group.id,
+                code="addon-charged-addon",
+                name="收费加项",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            db.add(charged)
+            db.flush()
+            db.add(OptionChoicePrice(
+                option_choice_id=charged.id,
+                price_type="store",
+                amount_cents=999,
+                effective_from=datetime(2020, 1, 1, tzinfo=UTC),
+            ))
+            db.commit()
+
+            dry = migrate_store_catalog(db, store_id=self.store_id, dry_run=True)
+            applied = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+
+        self.assertEqual(
+            (dry.created_versions, dry.created_groups, dry.created_choices),
+            (applied.created_versions, applied.created_groups, applied.created_choices),
+        )
+        self.assertEqual(len(dry.warnings), len(applied.warnings))
+        self.assertTrue(any("group code legacy-diy-options conflicted" in warning for warning in dry.warnings))
+        self.assertTrue(any("收费加项" in warning and "replaced" in warning for warning in dry.warnings))
+
+    def test_dry_run_predicts_copy_on_write_contents_without_persisting_them(self):
+        with self.SessionLocal() as db:
+            project = db.get(Project, self.project_id)
+            published = db.get(ProjectCatalogVersion, project.current_published_version_id)
+            source_group = ProjectOptionGroup(
+                catalog_version_id=published.id,
+                code="source-group",
+                name="发布源组",
+                selection_mode="multiple",
+                max_select=1,
+            )
+            db.add(source_group)
+            db.flush()
+            db.add(ProjectOptionChoice(
+                option_group_id=source_group.id,
+                code="source-choice",
+                name="发布源选项",
+                choice_type="preference",
+                charge_mode="free",
+            ))
+            db.flush()
+            published.snapshot_hash = _snapshot_hash(db, published.id)
+            db.commit()
+
+            dry = migrate_store_catalog(db, store_id=self.store_id, dry_run=True)
+            self.assertEqual(self._count(db, ProjectCatalogVersion), 1)
+            applied = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            draft = db.scalar(select(ProjectCatalogVersion).where(
+                ProjectCatalogVersion.project_id == project.id,
+                ProjectCatalogVersion.status == "draft",
+            ))
+            copied = db.scalar(select(ProjectOptionChoice)
+                .join(ProjectOptionGroup)
+                .where(
+                    ProjectOptionGroup.catalog_version_id == draft.id,
+                    ProjectOptionChoice.code == "source-choice",
+                ))
+
+        self.assertEqual(
+            (dry.created_versions, dry.created_groups, dry.created_choices),
+            (applied.created_versions, applied.created_groups, applied.created_choices),
+        )
+        self.assertIsNotNone(copied)
+
+    def test_dry_run_predicts_copy_on_write_collision_and_price_replacement_warnings(self):
+        with self.SessionLocal() as db:
+            project = db.get(Project, self.project_id)
+            published = db.get(ProjectCatalogVersion, project.current_published_version_id)
+            db.add(ProjectOptionGroup(
+                catalog_version_id=published.id,
+                code="legacy-diy-options",
+                name="人工冲突组",
+                selection_mode="multiple",
+                max_select=1,
+            ))
+            addon_group = ProjectOptionGroup(
+                catalog_version_id=published.id,
+                code="legacy-addons",
+                name="旧加项（待审核）",
+                selection_mode="multiple",
+                max_select=1,
+            )
+            db.add(addon_group)
+            db.flush()
+            charged = ProjectOptionChoice(
+                option_group_id=addon_group.id,
+                code="addon-charged-addon",
+                name="收费加项",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            db.add(charged)
+            db.flush()
+            db.add(OptionChoicePrice(
+                option_choice_id=charged.id,
+                price_type="store",
+                amount_cents=999,
+                effective_from=datetime(2020, 1, 1, tzinfo=UTC),
+            ))
+            db.flush()
+            published.snapshot_hash = _snapshot_hash(db, published.id)
+            db.commit()
+
+            dry = migrate_store_catalog(db, store_id=self.store_id, dry_run=True)
+            applied = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+
+        self.assertEqual(
+            (dry.created_versions, dry.created_groups, dry.created_choices),
+            (applied.created_versions, applied.created_groups, applied.created_choices),
+        )
+        self.assertEqual(len(dry.warnings), len(applied.warnings))
+        self.assertTrue(any("group code legacy-diy-options conflicted" in warning for warning in dry.warnings))
+        self.assertTrue(any("收费加项" in warning and "replaced" in warning for warning in dry.warnings))
+
+    def test_dry_run_audits_malformed_legacy_and_unsafe_addon_prices(self):
+        with self.SessionLocal() as db:
+            project = db.get(Project, self.project_id)
+            project.diy_options = [{"label": "错误金额", "price_cents": "not-a-number"}]
+            unsafe = Addon(
+                store_id=self.store_id,
+                code="unsafe-negative-addon",
+                name="负价加项",
+                parent_project_id=project.id,
+                chargeable=True,
+                store_price_cents=-1,
+                price_cents=-1,
+                publication_status="published",
+            )
+            db.add(unsafe)
+            db.commit()
+
+            report = migrate_store_catalog(db, store_id=self.store_id, dry_run=True)
+
+        self.assertTrue(any("错误金额" in warning and "malformed" in warning for warning in report.warnings))
+        self.assertTrue(any("unsafe-negative-addon" in warning and "unsafe" in warning for warning in report.warnings))
+
+    def test_migration_audits_and_skips_addon_with_enabled_missing_member_price(self):
+        with self.SessionLocal() as db:
+            db.add(Addon(
+                store_id=self.store_id,
+                code="enabled-missing-member-price",
+                name="缺会员价加项",
+                parent_project_id=self.project_id,
+                chargeable=True,
+                store_price_cents=1500,
+                member_price_enabled=True,
+                member_price_cents=None,
+                price_cents=1500,
+                publication_status="published",
+            ))
+            db.commit()
+
+            dry = migrate_store_catalog(db, store_id=self.store_id, dry_run=True)
+            applied = migrate_store_catalog(db, store_id=self.store_id, dry_run=False)
+            draft = db.scalar(select(ProjectCatalogVersion).where(
+                ProjectCatalogVersion.project_id == self.project_id,
+                ProjectCatalogVersion.status == "draft",
+            ))
+            choice = db.scalar(
+                select(ProjectOptionChoice)
+                .join(ProjectOptionGroup)
+                .where(
+                    ProjectOptionGroup.catalog_version_id == draft.id,
+                    ProjectOptionChoice.code == "addon-enabled-missing-member-price",
+                )
+            )
+
+        self.assertTrue(any("enabled-missing-member-price" in warning and "member" in warning for warning in dry.warnings))
+        self.assertEqual(len(dry.warnings), len(applied.warnings))
+        self.assertIsNone(choice)
 
 
 if __name__ == "__main__":

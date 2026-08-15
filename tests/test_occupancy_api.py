@@ -444,7 +444,13 @@ class OccupancyApiTests(unittest.TestCase):
             json=payload,
         )
         self.assertEqual(submitted.status_code, 200, submitted.text)
-        data = submitted.json()
+        self.assertEqual(submitted.json()["pricing_snapshot"]["promotion_adjustment_cents"], 0)
+        confirmed = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{second['session']['id']}/confirm",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(confirmed.status_code, 200, confirmed.text)
+        data = confirmed.json()
         self.assertEqual(data["pricing_snapshot"]["promotion_adjustment_cents"], -3990)
         self.assertEqual(data["store_total_cents"], 13800)
         self.assertEqual(data["member_total_cents"], 9800)

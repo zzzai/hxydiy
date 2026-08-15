@@ -29,6 +29,8 @@ class User(Base):
     is_member: Mapped[bool] = mapped_column(default=False)
     member_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     member_expire_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 当前年度权益周期的稳定幂等键；取消后保留，防止同周期重开重复发放权益。
+    annual_membership_cycle_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     balance_cents: Mapped[int] = mapped_column(Integer, default=0)  # 储值余额（分）
     inviter_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # 邀请人（裂变）
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -13,11 +13,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.add_column(
+            sa.Column("annual_membership_cycle_id", sa.String(length=64), nullable=True)
+        )
+    op.create_index(
+        "ix_users_annual_membership_cycle_id",
+        "users",
+        ["annual_membership_cycle_id"],
+    )
+
     op.create_table(
         "membership_benefit_grants",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("benefit_type", sa.String(length=32), nullable=False, server_default="annual_project_gift"),
+        sa.Column("membership_cycle_id", sa.String(length=64), nullable=False),
         sa.Column("membership_started_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("status", sa.String(length=16), nullable=False, server_default="available"),
         sa.Column("used_service_line_id", sa.String(length=36), sa.ForeignKey("service_lines.id"), nullable=True),
@@ -25,8 +36,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint(
             "user_id",
-            "benefit_type",
-            "membership_started_at",
+            "membership_cycle_id",
             name="uq_membership_benefit_cycle",
         ),
         sa.UniqueConstraint("used_service_line_id", name="uq_membership_benefit_used_service_line"),
@@ -46,3 +56,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("membership_benefit_grants")
+    op.drop_index("ix_users_annual_membership_cycle_id", table_name="users")
+    with op.batch_alter_table("users") as batch_op:
+        batch_op.drop_column("annual_membership_cycle_id")

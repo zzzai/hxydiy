@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -16,6 +16,21 @@ class ProjectCatalogVersion(Base):
     __tablename__ = "project_catalog_versions"
     __table_args__ = (
         UniqueConstraint("project_id", "version", name="uq_project_catalog_version"),
+        UniqueConstraint("project_id", "id", name="uq_project_catalog_version_project_id_id"),
+        Index(
+            "uq_project_catalog_one_draft",
+            "project_id",
+            unique=True,
+            sqlite_where=text("status = 'draft'"),
+            postgresql_where=text("status = 'draft'"),
+        ),
+        Index(
+            "uq_project_catalog_one_published",
+            "project_id",
+            unique=True,
+            sqlite_where=text("status = 'published'"),
+            postgresql_where=text("status = 'published'"),
+        ),
         CheckConstraint(
             "status IN ('draft', 'published', 'superseded')",
             name="ck_project_catalog_version_status",
@@ -78,6 +93,10 @@ class ProjectOptionChoice(Base):
     linked_project_id: Mapped[int | None] = mapped_column(
         ForeignKey("projects.id"), nullable=True, index=True
     )
+    # 仅在父目录发布时由服务端写入；null 表示当时引用的是无目录叶子项目。
+    pinned_linked_catalog_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("project_catalog_versions.id"), nullable=True, index=True
+    )
     charge_mode: Mapped[str] = mapped_column(String(24))
     independently_visible: Mapped[bool] = mapped_column(Boolean, default=True)
     coupon_eligible: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -99,6 +118,11 @@ class OptionChoicePrice(Base):
         CheckConstraint(
             "price_type IN ('store', 'group', 'member')",
             name="ck_option_choice_price_type",
+        ),
+        CheckConstraint("amount_cents >= 0", name="ck_option_choice_price_non_negative"),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_to > effective_from",
+            name="ck_option_choice_price_valid_interval",
         ),
     )
 

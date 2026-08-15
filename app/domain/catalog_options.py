@@ -7,11 +7,12 @@ from datetime import UTC, datetime
 import hashlib
 import json
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import (
     OptionChoicePrice,
+    PriceBook,
     Project,
     ProjectCatalogVersion,
     ProjectOptionChoice,
@@ -42,12 +43,56 @@ class CatalogDraftNotFoundError(CatalogDomainError):
         self.project_id = project_id
 
 
+class CatalogPublishedGraphDriftError(CatalogDomainError):
+    def __init__(self, project_id: int, version_id: int):
+        super().__init__(f"已发布目录快照校验失败: project={project_id}, version={version_id}")
+        self.project_id = project_id
+        self.version_id = version_id
+
+
+class CatalogConcurrencyError(CatalogDomainError):
+    """目录写入的锁或条件更新未取得预期状态。"""
+
+
+def lock_catalog_projects(db: Session, project_ids: list[int] | tuple[int, ...] | set[int]) -> dict[int, Project]:
+    """按稳定 Project ID 顺序锁定项目及其目录版本。
+
+    PostgreSQL 以 ``FOR UPDATE`` 提供互斥；后续状态更新仍使用条件更新，
+    因而 SQLite focused test 不会被误当作并发正确性的证明。
+    """
+    ids = sorted({int(project_id) for project_id in project_ids})
+    if not ids:
+        return {}
+    projects = list(db.scalars(
+        select(Project)
+        .where(Project.id.in_(ids))
+        .order_by(Project.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ))
+    # 与 Project 锁使用同一顺序，避免跨项目引用的倒序死锁。
+    list(db.scalars(
+        select(ProjectCatalogVersion)
+        .where(ProjectCatalogVersion.project_id.in_(ids))
+        .order_by(ProjectCatalogVersion.project_id, ProjectCatalogVersion.version, ProjectCatalogVersion.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ))
+    return {project.id: project for project in projects}
+
+
 def copy_catalog_version_graph(
     db: Session,
     source_version_id: int,
     target_version_id: int,
 ) -> None:
     """Copy every group, choice, and price row between catalog versions."""
+
+    source = db.get(ProjectCatalogVersion, source_version_id)
+    if source is None:
+        raise CatalogDomainError(f"目录版本不存在: {source_version_id}")
+    if source.status == "published":
+        verify_published_catalog_hash(db, source)
 
     groups = list(db.scalars(
         select(ProjectOptionGroup)
@@ -81,6 +126,7 @@ def copy_catalog_version_graph(
                 description=choice.description,
                 choice_type=choice.choice_type,
                 linked_project_id=choice.linked_project_id,
+                pinned_linked_catalog_version_id=choice.pinned_linked_catalog_version_id,
                 charge_mode=choice.charge_mode,
                 independently_visible=choice.independently_visible,
                 coupon_eligible=choice.coupon_eligible,
@@ -148,6 +194,16 @@ def _published_version(db: Session, project: Project) -> ProjectCatalogVersion |
     return version
 
 
+def verify_published_catalog_hash(db: Session, version: ProjectCatalogVersion) -> None:
+    """已冻结目录必须仍等于发布时哈希，漂移时拒绝继续读取或复制。"""
+    if version.status not in {"published", "superseded"}:
+        raise CatalogPublishedGraphDriftError(version.project_id, version.id)
+    expected = version.snapshot_hash
+    actual = _snapshot_hash(db, version.id)
+    if not expected or expected != actual:
+        raise CatalogPublishedGraphDriftError(version.project_id, version.id)
+
+
 def _has_current_price(db: Session, choice_id: int, price_type: str, now: datetime) -> bool:
     return db.scalar(
         select(OptionChoicePrice.id)
@@ -159,6 +215,94 @@ def _has_current_price(db: Session, choice_id: int, price_type: str, now: dateti
         )
         .limit(1)
     ) is not None
+
+
+def _has_project_store_price(db: Session, project_id: int) -> bool:
+    return db.scalar(
+        select(PriceBook.id)
+        .where(
+            PriceBook.project_id == project_id,
+            PriceBook.price_type == "store",
+            PriceBook.amount_cents >= 0,
+        )
+        .limit(1)
+    ) is not None
+
+
+def _choice_prices(db: Session, choice_id: int) -> list[OptionChoicePrice]:
+    return list(db.scalars(
+        select(OptionChoicePrice)
+        .where(OptionChoicePrice.option_choice_id == choice_id)
+        .order_by(OptionChoicePrice.price_type, OptionChoicePrice.effective_from, OptionChoicePrice.id)
+    ))
+
+
+def choice_contract_errors(
+    choice: ProjectOptionChoice,
+    *,
+    has_local_prices: bool,
+    path: str,
+) -> list[CatalogValidationError]:
+    """三种选项联合语义的唯一规则来源。"""
+    errors: list[CatalogValidationError] = []
+    if choice.choice_type == "preference":
+        if choice.charge_mode != "free":
+            errors.append(_error("preference_must_be_free", f"{path}.charge_mode", "偏好选项必须免费"))
+        if choice.linked_project_id is not None:
+            errors.append(_error("preference_cannot_link_project", f"{path}.linked_project_id", "免费偏好不得指向正式项目"))
+        if has_local_prices:
+            errors.append(_error("free_choice_cannot_have_prices", f"{path}.prices", "免费偏好不得配置本地价格"))
+        return errors
+
+    if choice.choice_type == "linked_project":
+        if choice.charge_mode != "inherit_linked_price":
+            errors.append(_error("linked_project_must_inherit_linked_price", f"{path}.charge_mode", "项目引用选项必须继承引用项目价格"))
+        if choice.linked_project_id is None:
+            errors.append(_error("linked_project_required", f"{path}.linked_project_id", "项目引用选项必须指定引用项目"))
+        if has_local_prices:
+            errors.append(_error("linked_choice_cannot_have_prices", f"{path}.prices", "项目引用选项不得配置本地价格"))
+        return errors
+
+    if choice.choice_type == "dedicated_charge":
+        if choice.charge_mode != "custom_price":
+            errors.append(_error("dedicated_charge_must_use_custom_price", f"{path}.charge_mode", "独立收费选项必须使用自定义价格"))
+        if choice.linked_project_id is not None:
+            errors.append(_error("dedicated_charge_cannot_link_project", f"{path}.linked_project_id", "独立收费选项不得指向引用项目"))
+        if not has_local_prices:
+            errors.append(_error("custom_price_required", f"{path}.prices", "独立收费选项必须配置本地价格"))
+        return errors
+
+    return [_error("unknown_choice_type", f"{path}.choice_type", "未知选项类型")]
+
+
+def _price_interval_errors(
+    prices: list[OptionChoicePrice],
+    path: str,
+) -> list[CatalogValidationError]:
+    def utc_value(value: datetime) -> datetime:
+        # SQLite 不保留 DateTime(timezone=True) 的 tzinfo；比较时按 UTC 还原。
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+    errors: list[CatalogValidationError] = []
+    by_type: dict[str, list[OptionChoicePrice]] = {}
+    for price in prices:
+        price_path = f"{path}.prices.{price.price_type}"
+        if price.amount_cents < 0:
+            errors.append(_error("negative_option_price", price_path, "选项价格不得为负数"))
+        if price.effective_to is not None and utc_value(price.effective_to) <= utc_value(price.effective_from):
+            errors.append(_error("invalid_option_price_interval", price_path, "价格结束时间必须晚于开始时间"))
+        by_type.setdefault(price.price_type, []).append(price)
+    for price_type, rows in by_type.items():
+        ordered = sorted(rows, key=lambda row: (utc_value(row.effective_from), row.id))
+        for previous, current in zip(ordered, ordered[1:]):
+            if previous.effective_to is None or utc_value(previous.effective_to) > utc_value(current.effective_from):
+                errors.append(_error(
+                    "overlapping_option_price_intervals",
+                    f"{path}.prices.{price_type}",
+                    "同一价格类型的生效区间不得重叠",
+                ))
+                break
+    return errors
 
 
 def _linked_choices(db: Session, version_id: int) -> list[tuple[ProjectOptionGroup, ProjectOptionChoice]]:
@@ -290,32 +434,13 @@ def validate_catalog_version(db: Session, version_id: int) -> list[CatalogValida
             choice_path = f"{group_path}.choices.{choice.code}"
             if choice.status != "active":
                 continue
-
-            if choice.choice_type == "preference" and choice.charge_mode != "free":
-                errors.append(_error(
-                    "preference_must_be_free",
-                    f"{choice_path}.charge_mode",
-                    "偏好选项必须免费",
-                ))
-            if choice.choice_type == "linked_project" and choice.charge_mode != "inherit_linked_price":
-                errors.append(_error(
-                    "linked_project_must_inherit_linked_price",
-                    f"{choice_path}.charge_mode",
-                    "项目引用选项必须继承引用项目价格",
-                ))
-            if choice.choice_type == "dedicated_charge":
-                if choice.charge_mode != "custom_price":
-                    errors.append(_error(
-                        "dedicated_charge_must_use_custom_price",
-                        f"{choice_path}.charge_mode",
-                        "独立收费选项必须使用自定义价格",
-                    ))
-                if choice.linked_project_id is not None:
-                    errors.append(_error(
-                        "dedicated_charge_cannot_link_project",
-                        f"{choice_path}.linked_project_id",
-                        "独立收费选项不得指向引用项目",
-                    ))
+            prices = _choice_prices(db, choice.id)
+            errors.extend(choice_contract_errors(
+                choice,
+                has_local_prices=bool(prices),
+                path=choice_path,
+            ))
+            errors.extend(_price_interval_errors(prices, choice_path))
 
             if choice.charge_mode == "custom_price" and not _has_current_price(
                 db, choice.id, "store", now
@@ -379,11 +504,17 @@ def validate_catalog_version(db: Session, version_id: int) -> list[CatalogValida
                     f"{choice_path}.linked_project_id",
                     "引用项目必须已发布且可用",
                 ))
-            if _published_version(db, linked) is None:
+            if linked.current_published_version_id is not None and _published_version(db, linked) is None:
                 errors.append(_error(
                     "linked_project_catalog_unpublished",
                     f"{choice_path}.linked_project_id",
                     "引用项目必须具有当前已发布目录版本",
+                ))
+            if not _has_project_store_price(db, linked.id):
+                errors.append(_error(
+                    "linked_project_store_price_required",
+                    f"{choice_path}.linked_project_id",
+                    "引用项目必须配置当前有效的门店价",
                 ))
 
     errors.extend(_validate_link_graph(
@@ -408,16 +539,25 @@ def _price_config(price: OptionChoicePrice) -> dict:
 
 
 def _choice_config(db: Session, choice: ProjectOptionChoice) -> dict:
-    prices = list(db.scalars(
-        select(OptionChoicePrice)
-        .where(OptionChoicePrice.option_choice_id == choice.id)
-        .order_by(
-            OptionChoicePrice.price_type,
-            OptionChoicePrice.effective_from,
-            OptionChoicePrice.id,
-        )
-    ))
+    prices = _choice_prices(db, choice.id)
     linked_project = db.get(Project, choice.linked_project_id) if choice.linked_project_id else None
+    linked_catalog_version_id: int | None = None
+    if choice.choice_type == "linked_project":
+        pinned = choice.pinned_linked_catalog_version_id
+        if pinned is not None:
+            linked_version = db.get(ProjectCatalogVersion, pinned)
+            if (
+                linked_project is None
+                or linked_version is None
+                or linked_version.project_id != linked_project.id
+                or linked_version.status not in {"published", "superseded"}
+            ):
+                raise CatalogPublishedGraphDriftError(
+                    linked_project.id if linked_project else -1,
+                    pinned,
+                )
+            verify_published_catalog_hash(db, linked_version)
+            linked_catalog_version_id = linked_version.id
     return {
         "code": choice.code,
         "name": choice.name,
@@ -425,6 +565,8 @@ def _choice_config(db: Session, choice: ProjectOptionChoice) -> dict:
         "choice_type": choice.choice_type,
         "linked_project_id": choice.linked_project_id,
         "linked_project_code": linked_project.code if linked_project else None,
+        "pinned_linked_catalog_version_id": choice.pinned_linked_catalog_version_id,
+        "linked_catalog_version_id": linked_catalog_version_id,
         "charge_mode": choice.charge_mode,
         "independently_visible": choice.independently_visible,
         "coupon_eligible": choice.coupon_eligible,
@@ -473,12 +615,29 @@ def publish_catalog_version(
     staff_id: int,
 ) -> ProjectCatalogVersion:
     """校验并发布最新草稿；提交或回滚由调用方统一控制。"""
-    project = db.scalar(
-        select(Project).where(Project.id == project_id).with_for_update()
-    )
+    projects = lock_catalog_projects(db, [project_id])
+    project = projects.get(project_id)
     if project is None:
         raise CatalogProjectNotFoundError(project_id)
 
+    draft = db.scalar(
+        select(ProjectCatalogVersion)
+        .where(
+            ProjectCatalogVersion.project_id == project_id,
+            ProjectCatalogVersion.status == "draft",
+        )
+        .order_by(ProjectCatalogVersion.version.desc(), ProjectCatalogVersion.id.desc())
+        .limit(1)
+    )
+    if draft is None:
+        raise CatalogDraftNotFoundError(project_id)
+
+    linked_ids = [choice.linked_project_id for _, choice in _linked_choices(db, draft.id) if choice.linked_project_id is not None]
+    projects = lock_catalog_projects(db, [project_id, *linked_ids])
+    project = projects.get(project_id)
+    if project is None:
+        raise CatalogProjectNotFoundError(project_id)
+    # 取得所有锁之后重新读取草稿，避免使用锁前的状态。
     draft = db.scalar(
         select(ProjectCatalogVersion)
         .where(
@@ -502,15 +661,68 @@ def publish_catalog_version(
             ProjectCatalogVersion.id != draft.id,
         )
     ))
-    published_at = datetime.now(UTC)
-    draft.snapshot_hash = _snapshot_hash(db, draft.id)
-    for old_version in old_published:
-        old_version.status = "superseded"
-    draft.status = "published"
-    draft.published_at = published_at
-    draft.published_by = staff_id
-    project.current_published_version_id = draft.id
+    highest_published_version = max((version.version for version in old_published), default=0)
+    if draft.version <= highest_published_version:
+        raise CatalogPublicationError([_error(
+            "catalog_version_not_monotonic",
+            "version",
+            "待发布目录版本必须高于当前已发布版本",
+        )])
+
+    for _, choice in _linked_choices(db, draft.id):
+        if choice.linked_project_id is None:
+            continue
+        linked = projects.get(choice.linked_project_id)
+        if linked is None:
+            continue
+        # null 是发布时确认的无目录叶子，而不是稍后追随当前目录的占位符。
+        linked_version = _published_version(db, linked)
+        choice.pinned_linked_catalog_version_id = linked_version.id if linked_version else None
     db.flush()
+    published_at = datetime.now(UTC)
+    snapshot_hash = _snapshot_hash(db, draft.id)
+    expected_pointer = project.current_published_version_id
+    if old_published:
+        db.execute(
+            update(ProjectCatalogVersion)
+            .where(
+                ProjectCatalogVersion.project_id == project_id,
+                ProjectCatalogVersion.status == "published",
+                ProjectCatalogVersion.id != draft.id,
+            )
+            .values(status="superseded")
+            .execution_options(synchronize_session="fetch")
+        )
+    published_result = db.execute(
+        update(ProjectCatalogVersion)
+        .where(
+            ProjectCatalogVersion.id == draft.id,
+            ProjectCatalogVersion.status == "draft",
+            ProjectCatalogVersion.version > highest_published_version,
+        )
+        .values(
+            status="published",
+            snapshot_hash=snapshot_hash,
+            published_at=published_at,
+            published_by=staff_id,
+        )
+        .execution_options(synchronize_session="fetch")
+    )
+    if published_result.rowcount != 1:
+        raise CatalogConcurrencyError("目录草稿状态已变化，请刷新后重试")
+    pointer_stmt = update(Project).where(Project.id == project_id)
+    if expected_pointer is None:
+        pointer_stmt = pointer_stmt.where(Project.current_published_version_id.is_(None))
+    else:
+        pointer_stmt = pointer_stmt.where(Project.current_published_version_id == expected_pointer)
+    pointer_result = db.execute(
+        pointer_stmt.values(current_published_version_id=draft.id)
+        .execution_options(synchronize_session="fetch")
+    )
+    if pointer_result.rowcount != 1:
+        raise CatalogConcurrencyError("当前发布目录已变化，请刷新后重试")
+    db.flush()
+    db.refresh(draft)
     return draft
 
 
@@ -522,6 +734,7 @@ def resolve_published_project_config(db: Session, project_id: int) -> dict:
     version = _published_version(db, project)
     if version is None:
         raise CatalogPublishedVersionNotFoundError(project_id)
+    verify_published_catalog_hash(db, version)
     return {
         "project_id": project.id,
         "project_code": project.code,

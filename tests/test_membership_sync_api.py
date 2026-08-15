@@ -80,7 +80,7 @@ class MembershipSyncApiTests(unittest.TestCase):
             self.assertTrue(login.json()["user"]["is_member"])
             self.assertEqual(login.json()["user"]["member_type"], "annual")
 
-    def test_phone_login_reprices_the_bound_draft_selection_using_synced_membership(self):
+    def test_phone_login_keeps_a_bound_draft_at_store_price_for_an_annual_member_without_expiry(self):
         created = self.client.post("/api/v1/selection-sessions", json={"store_id": self.store_id})
         self.assertEqual(created.status_code, 200)
         session_id = created.json()["session"]["id"]
@@ -111,8 +111,8 @@ class MembershipSyncApiTests(unittest.TestCase):
 
         with self.SessionLocal() as db:
             session = db.get(SelectionSession, session_id)
-            self.assertEqual(session.pricing_snapshot["applied_price_type"], "member")
-            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 9800)
+            self.assertEqual(session.pricing_snapshot["applied_price_type"], "store")
+            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 17790)
             user = db.scalar(select(User).where(User.phone == "13700137000"))
             self.assertTrue(user.is_member)
 

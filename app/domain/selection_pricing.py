@@ -1,5 +1,8 @@
 """选单报价快照。DIY 仅提供门店结算参考，不创建支付订单。"""
 
+from datetime import UTC, datetime
+import unicodedata
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,12 +11,24 @@ from app.domain.membership_pricing import price_book_prices
 
 
 PROMO_FOOT_BATH_CODE = "hxy-qiqing-30"
-FOOT_BATH_PROMOTION_CENTS = 2990
 PRICE_TYPES = {"store", "group", "member"}
-BUNDLE_CONFIRMED_STATES = {"pending", "confirmed", "in_service", "completed"}
+BUNDLE_CONFIRMED_STATES = {"confirmed"}
 
 
-def price_type_for_member(is_member: bool) -> str:
+def price_type_for_member(
+    is_member: bool,
+    member_expire_at: datetime | None = None,
+    confirmed_at: datetime | None = None,
+    member_type: str | None = None,
+) -> str:
+    if is_member and member_type == "annual" and member_expire_at is None:
+        return "store"
+    if is_member and member_expire_at is not None:
+        current = confirmed_at or datetime.now(UTC)
+        expires = member_expire_at.replace(tzinfo=UTC) if member_expire_at.tzinfo is None else member_expire_at.astimezone(UTC)
+        current = current.replace(tzinfo=UTC) if current.tzinfo is None else current.astimezone(UTC)
+        if expires <= current:
+            return "store"
     return "member" if is_member else "store"
 
 
@@ -39,12 +54,10 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
     store_subtotal = 0
     group_subtotal = 0
     member_subtotal = 0
-    foot_bath_store_units: list[int] = []
-    foot_bath_group_units: list[int] = []
-    foot_bath_member_units: list[int] = []
-    qualified_local_units = 0
+    foot_bath_units: list[tuple[int, int, int]] = []
+    local_bundle_units: list[tuple[str, str | None]] = []
+    seen_bundle_service_lines: set[tuple[str, str | int]] = set()
     local_parts: set[str] = set()
-    legacy_local_parts: set[str] = set()
 
     for index, item in enumerate(items):
         if _first_value(item, "item_type") == "preference" or not _is_chargeable(item):
@@ -102,19 +115,30 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
         member_subtotal += line_member
         preferences = _preferences(item)
         item_code = _first_value(item, "code") or code
-        if item_code == PROMO_FOOT_BATH_CODE and _has_bundle_base_eligibility(item):
+        unit_key = _bundle_unit_key(item, index)
+        if (
+            item_code == PROMO_FOOT_BATH_CODE
+            and _has_bundle_base_eligibility(item)
+            and unit_key not in seen_bundle_service_lines
+        ):
             # 减免只免泡脚项目本身的基础价，泡脚上另加的小项照常收费（与顾客端预览口径一致）。
             confirmed_base = _confirmed_base_price(item)
-            foot_bath_store_units.extend([confirmed_base if confirmed_base is not None else base_store] * quantity)
-            foot_bath_group_units.extend([confirmed_base if confirmed_base is not None else base_group] * quantity)
-            foot_bath_member_units.extend([confirmed_base if confirmed_base is not None else base_member] * quantity)
-        if _counts_for_foot_bath_bundle(item, code):
-            if _explicit_bundle_qualification(item):
-                qualified_local_units += quantity
-            elif item_code == "hxy-jubu-30" and preferences:
-                legacy_local_parts.add(preferences[0])
-            if preferences:
-                local_parts.add(preferences[0])
+            foot_bath_units.append((
+                confirmed_base if confirmed_base is not None else base_store,
+                confirmed_base if confirmed_base is not None else base_group,
+                confirmed_base if confirmed_base is not None else base_member,
+            ))
+            seen_bundle_service_lines.add(unit_key)
+        if (
+            _counts_for_foot_bath_bundle(item, code)
+            and unit_key not in seen_bundle_service_lines
+        ):
+            part = _normalized_bundle_part(preferences)
+            project_key = str(project.id) if project is not None else str(item_code)
+            local_bundle_units.append((project_key, part))
+            seen_bundle_service_lines.add(unit_key)
+            if part:
+                local_parts.add(part)
         lines.append({
             "line_index": index,
             "project_id": project_id,
@@ -134,13 +158,13 @@ def calculate_selection_pricing(db: Session, items: list[dict], price_type: str 
             "addon_member_total_cents": addon_member * quantity,
         })
 
-    qualified_local_units += len(legacy_local_parts)
-    matched_foot_baths = min(len(foot_bath_store_units), qualified_local_units // 2)
+    qualified_local_units = _qualified_local_bundle_unit_count(local_bundle_units)
+    matched_foot_baths = min(len(foot_bath_units), qualified_local_units // 2)
     qualified = matched_foot_baths > 0
     # 两项合格局部调理匹配一个泡脚单位；只免泡脚项目本身的基础价，不免 addon/升级。
-    adjustment_store = -sum(foot_bath_store_units[:matched_foot_baths])
-    adjustment_group = -sum(foot_bath_group_units[:matched_foot_baths])
-    adjustment_member = -sum(foot_bath_member_units[:matched_foot_baths])
+    adjustment_store = -sum(unit[0] for unit in foot_bath_units[:matched_foot_baths])
+    adjustment_group = -sum(unit[1] for unit in foot_bath_units[:matched_foot_baths])
+    adjustment_member = -sum(unit[2] for unit in foot_bath_units[:matched_foot_baths])
     payable_adjustment = {
         "store": adjustment_store, "group": adjustment_group, "member": adjustment_member,
     }[price_type]
@@ -212,6 +236,35 @@ def _preferences(item: dict) -> list[str]:
     return [str(part).strip()] if part and str(part).strip() else []
 
 
+def _bundle_unit_key(item: dict, index: int) -> tuple[str, str | int]:
+    service_line_id = _first_value(item, "service_line_id")
+    if service_line_id is not None and str(service_line_id).strip():
+        return ("service_line", str(service_line_id).strip())
+    # 兼容旧输入：每一行至多是一个独立单位，quantity 永不扩展组合资格。
+    return ("input_row", index)
+
+
+def _normalized_bundle_part(preferences: list[str]) -> str | None:
+    if not preferences:
+        return None
+    value = unicodedata.normalize("NFKC", preferences[0])
+    normalized = "".join(value.split()).casefold()
+    return normalized or None
+
+
+def _qualified_local_bundle_unit_count(units: list[tuple[str, str | None]]) -> int:
+    """同一局部项目的重复行只有不同且非空部位才能扩展为多个服务单位。"""
+    by_project: dict[str, list[str | None]] = {}
+    for project_key, part in units:
+        by_project.setdefault(project_key, []).append(part)
+    count = 0
+    for parts in by_project.values():
+        non_empty = {part for part in parts if part}
+        # 一个局部项目可以作为一个单位；重复同项目则仅由不同的非空规范化部位扩展。
+        count += max(1, len(non_empty))
+    return count
+
+
 def _confirmed_base_price(item: dict) -> int | None:
     value = _first_value(item, "confirmed_base_price_cents")
     return int(value) if value is not None else None
@@ -237,7 +290,7 @@ def _counts_for_foot_bath_bundle(item: dict, resolved_code: str | None = None) -
 
 def _has_bundle_base_eligibility(item: dict) -> bool:
     state = _first_value(item, "state")
-    if state is not None and state not in BUNDLE_CONFIRMED_STATES:
+    if state not in BUNDLE_CONFIRMED_STATES:
         return False
     if _first_value(item, "item_type") == "preference":
         return False

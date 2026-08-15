@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base, get_db
+from app.domain.catalog_options import _snapshot_hash
 from app.main import app
 from app.models import (
     OptionChoicePrice,
@@ -121,6 +122,8 @@ class PublishedContentApiTests(unittest.TestCase):
                     effective_from=now + timedelta(days=1),
                 ),
             ])
+            db.flush()
+            version.snapshot_hash = _snapshot_hash(db, version.id)
             db.commit()
             project_id = project.id
 

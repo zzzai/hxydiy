@@ -6,6 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.catalog_options import CatalogDomainError, verify_published_catalog_hash
 from app.models import Addon, OptionChoicePrice, PageContent, PriceBook, Product, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, Store
 from app.schemas.catalog import ProjectListResponse, ProjectOut, StoreOut
 
@@ -69,8 +70,30 @@ def _published_option_groups(db: Session, project: Project) -> tuple[int | None,
     version = db.get(ProjectCatalogVersion, project.current_published_version_id)
     if version is None or version.project_id != project.id or version.status != "published":
         raise HTTPException(status_code=409, detail="当前发布目录指针异常")
+    try:
+        verify_published_catalog_hash(db, version)
+    except CatalogDomainError as exc:
+        raise HTTPException(status_code=409, detail="当前发布目录快照校验失败") from exc
+    return version.version, _catalog_option_groups(db, version, datetime.now(UTC), visited=frozenset())
+
+
+def _catalog_option_groups(
+    db: Session,
+    version: ProjectCatalogVersion,
+    now: datetime,
+    *,
+    visited: frozenset[int],
+) -> list[dict]:
+    """返回冻结版本的树；linked choice 内嵌它发布时绑定的目标版本。"""
+    if version.id in visited:
+        raise HTTPException(status_code=409, detail="引用项目目录快照存在循环")
+    try:
+        verify_published_catalog_hash(db, version)
+    except CatalogDomainError as exc:
+        raise HTTPException(status_code=409, detail="引用项目目录快照校验失败") from exc
+
     groups = []
-    now = datetime.now(UTC)
+    next_visited = visited | {version.id}
     for group in db.scalars(
         select(ProjectOptionGroup)
         .where(ProjectOptionGroup.catalog_version_id == version.id)
@@ -86,6 +109,39 @@ def _published_option_groups(db: Session, project: Project) -> tuple[int | None,
             .order_by(ProjectOptionChoice.display_order, ProjectOptionChoice.code, ProjectOptionChoice.id)
         ):
             linked_project = db.get(Project, choice.linked_project_id) if choice.linked_project_id else None
+            linked_catalog_version_id = choice.pinned_linked_catalog_version_id
+            linked_catalog_snapshot = None
+            if linked_catalog_version_id is not None:
+                linked_version = db.get(ProjectCatalogVersion, linked_catalog_version_id)
+                if (
+                    linked_project is None
+                    or linked_version is None
+                    or linked_version.project_id != linked_project.id
+                    or linked_version.status not in {"published", "superseded"}
+                ):
+                    raise HTTPException(status_code=409, detail="引用项目目录快照异常")
+                linked_catalog_snapshot = {
+                    "id": linked_version.id,
+                    "version": linked_version.version,
+                    "snapshot_hash": linked_version.snapshot_hash,
+                    "option_groups": _catalog_option_groups(
+                        db,
+                        linked_version,
+                        now,
+                        visited=next_visited,
+                    ),
+                }
+            if choice.choice_type == "preference":
+                choice_prices: list[dict] = []
+                price_source = "free"
+            elif choice.choice_type == "linked_project":
+                if linked_project is None:
+                    raise HTTPException(status_code=409, detail="引用项目不存在")
+                choice_prices = _current_project_prices(db, linked_project.id)
+                price_source = "linked_project"
+            else:
+                choice_prices = _current_option_prices(db, choice.id, now)
+                price_source = "option_choice_price"
             choices.append({
                 "code": choice.code,
                 "name": choice.name,
@@ -93,6 +149,8 @@ def _published_option_groups(db: Session, project: Project) -> tuple[int | None,
                 "choice_type": choice.choice_type,
                 "linked_project_id": choice.linked_project_id,
                 "linked_project_code": linked_project.code if linked_project else None,
+                "linked_catalog_version_id": linked_catalog_version_id,
+                "linked_catalog_snapshot": linked_catalog_snapshot,
                 "charge_mode": choice.charge_mode,
                 "independently_visible": choice.independently_visible,
                 "coupon_eligible": choice.coupon_eligible,
@@ -100,7 +158,8 @@ def _published_option_groups(db: Session, project: Project) -> tuple[int | None,
                 "qualifies_for_foot_bath_bundle": choice.qualifies_for_foot_bath_bundle,
                 "display_order": choice.display_order,
                 "status": choice.status,
-                "prices": _current_option_prices(db, choice.id, now),
+                "price_source": price_source,
+                "prices": choice_prices,
             })
         groups.append({
             "code": group.code,
@@ -113,7 +172,7 @@ def _published_option_groups(db: Session, project: Project) -> tuple[int | None,
             "display_order": group.display_order,
             "choices": choices,
         })
-    return version.version, groups
+    return groups
 
 
 def _current_option_prices(db: Session, choice_id: int, now: datetime) -> list[dict]:
@@ -144,15 +203,29 @@ def _current_option_prices(db: Session, choice_id: int, now: datetime) -> list[d
     ]
 
 
+def _current_project_prices(db: Session, project_id: int) -> list[dict]:
+    rows = list(db.scalars(
+        select(PriceBook)
+        .where(PriceBook.project_id == project_id)
+        .order_by(PriceBook.price_type, PriceBook.published_at.desc(), PriceBook.id.desc())
+    ))
+    by_type: dict[str, PriceBook] = {}
+    for row in rows:
+        by_type.setdefault(row.price_type, row)
+    return [
+        {"price_type": row.price_type, "amount_cents": row.amount_cents}
+        for row in by_type.values()
+    ]
+
+
 def _project_to_out(db: Session, p: Project) -> ProjectOut:
-    prices = list(db.scalars(select(PriceBook).where(PriceBook.project_id == p.id)))
     catalog_version, option_groups = _published_option_groups(db, p)
     return ProjectOut(
         id=p.id, code=p.code, category=p.category, category_mark=p.category_mark,
         name=p.name, duration_min=p.duration_min, summary=p.summary,
         image_url=p.image_url, tags=p.tags, detail_modules=p.detail_modules,
         diy_options=p.diy_options, display_order=p.display_order, price_label=p.price_label,
-        prices=[{"price_type": x.price_type, "amount_cents": x.amount_cents} for x in prices],
+        prices=_current_project_prices(db, p.id),
         catalog_version=catalog_version, option_groups=option_groups,
     )
 

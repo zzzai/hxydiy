@@ -11,6 +11,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models import OptionChoicePrice, PriceBook, Project, ProjectOptionChoice
+from app.domain.catalog_options import choice_contract_errors
 
 
 PriceBasis = Literal["store", "member", "tuesday_68", "annual_gift"]
@@ -27,6 +28,8 @@ class PriceContext:
     is_member: bool
     confirmed_at: datetime
     store_timezone: str
+    member_expire_at: datetime | None = None
+    member_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,24 @@ def _aware(value: datetime) -> datetime:
     return value
 
 
+def _membership_is_active(
+    is_member: bool,
+    member_expire_at: datetime | None,
+    confirmed_at: datetime,
+    member_type: str | None = None,
+) -> bool:
+    if not is_member:
+        return False
+    if member_type == "annual" and member_expire_at is None:
+        # 旧年度会员缺少到期日时不能被当作永久会员；保留记录供后台补正，
+        # 但确认价必须按门店价结算。
+        return False
+    if member_expire_at is None:
+        # 兼容尚未补齐到期日的历史非年度会员；新年度卡由 API 强制带到期日。
+        return True
+    return _aware(member_expire_at).astimezone(ZoneInfo("UTC")) > _aware(confirmed_at).astimezone(ZoneInfo("UTC"))
+
+
 def _store_zone(store_timezone: str) -> ZoneInfo:
     try:
         return ZoneInfo(store_timezone)
@@ -87,13 +108,15 @@ def confirmed_price_for_line(
     is_member: bool,
     confirmed_at: datetime,
     store_timezone: str,
+    member_expire_at: datetime | None = None,
+    member_type: str | None = None,
 ) -> ConfirmedPrice:
     """按门店时区和会员身份计算实际确认单价。"""
     store = _price_value(prices, ("store",))
     if store is None:
         raise ValueError("store price is required")
     local_confirmed_at = _aware(confirmed_at).astimezone(_store_zone(store_timezone))
-    if not is_member:
+    if not _membership_is_active(is_member, member_expire_at, confirmed_at, member_type):
         return ConfirmedPrice(amount_cents=store, basis="store")
 
     member = _price_value(prices, ("member", "group", "store"))
@@ -220,8 +243,21 @@ def resolve_option_charge(
     if choice is None or choice.status != "active":
         raise ValueError(f"option choice {choice_id} is not active")
 
+    has_local_prices = db.scalar(
+        select(OptionChoicePrice.id)
+        .where(OptionChoicePrice.option_choice_id == choice.id)
+        .limit(1)
+    ) is not None
+    contract_errors = choice_contract_errors(
+        choice,
+        has_local_prices=has_local_prices,
+        path=f"choices.{choice.code}",
+    )
+    if contract_errors:
+        raise ValueError(f"invalid option choice contract: {contract_errors[0].code}")
+
     snapshot = _choice_snapshot(choice)
-    if choice.choice_type == "preference" or choice.charge_mode == "free":
+    if choice.choice_type == "preference":
         return ResolvedCharge(
             amount_cents=0,
             basis="free",
@@ -231,7 +267,7 @@ def resolve_option_charge(
             chargeable=False,
         )
 
-    if choice.choice_type == "linked_project" or choice.charge_mode == "inherit_linked_price":
+    if choice.choice_type == "linked_project":
         if choice.linked_project_id is None:
             raise ValueError(f"linked option choice {choice_id} has no linked project")
         linked = db.get(Project, choice.linked_project_id)
@@ -243,6 +279,8 @@ def resolve_option_charge(
             price_context.is_member,
             price_context.confirmed_at,
             price_context.store_timezone,
+            price_context.member_expire_at,
+            price_context.member_type,
         )
         confirmed_source_type = price_snapshot.source_type_by_price_key[_source_key_for_basis(confirmed.basis)]
         return ResolvedCharge(
@@ -264,13 +302,15 @@ def resolve_option_charge(
             chargeable=True,
         )
 
-    if choice.choice_type == "dedicated_charge" or choice.charge_mode == "custom_price":
+    if choice.choice_type == "dedicated_charge":
         price_snapshot = _current_option_prices(db, choice.id, price_context.confirmed_at)
         confirmed = confirmed_price_for_line(
             price_snapshot.prices,
             price_context.is_member,
             price_context.confirmed_at,
             price_context.store_timezone,
+            price_context.member_expire_at,
+            price_context.member_type,
         )
         confirmed_source_type = price_snapshot.source_type_by_price_key[_source_key_for_basis(confirmed.basis)]
         return ResolvedCharge(

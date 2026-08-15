@@ -24,7 +24,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.domain.catalog_options import copy_catalog_version_graph
+from app.core.config import settings
+from app.domain.catalog_options import (
+    copy_catalog_version_graph,
+    lock_catalog_projects,
+    verify_published_catalog_hash,
+)
 from app.models import (
     Addon,
     OptionChoicePrice,
@@ -92,10 +97,16 @@ def _legacy_specs(project: Project, warnings: list[str]) -> tuple[_ChoiceSpec, .
         occurrence = occurrences.get(normalized_label, 0)
         occurrences[normalized_label] = occurrence + 1
         amount = option.get("price_cents")
-        if isinstance(amount, (int, float)) and not isinstance(amount, bool) and amount != 0:
-            warnings.append(
-                f"project {project.code} legacy option {label}: non-zero price_cents={amount} ignored"
-            )
+        if amount not in (None, ""):
+            if isinstance(amount, (int, float)) and not isinstance(amount, bool):
+                if amount != 0:
+                    warnings.append(
+                        f"project {project.code} legacy option {label}: non-zero price_cents={amount} ignored"
+                    )
+            else:
+                warnings.append(
+                    f"project {project.code} legacy option {label}: malformed price_cents={amount!r} ignored"
+                )
         source_key = f"legacy:{normalized_label}:{occurrence + 1}"
         result.append(_ChoiceSpec(
             source_key=source_key,
@@ -107,7 +118,17 @@ def _legacy_specs(project: Project, warnings: list[str]) -> tuple[_ChoiceSpec, .
     return tuple(result)
 
 
-def _addon_spec(addon: Addon) -> _ChoiceSpec:
+def _safe_addon_amount(addon: Addon, field_name: str, value, warnings: list[str]) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        warnings.append(f"addon {addon.code}: unsafe {field_name}={value!r}; skipped")
+        return None
+    if value < 0:
+        warnings.append(f"addon {addon.code}: unsafe {field_name}={value}; skipped")
+        return None
+    return int(value)
+
+
+def _addon_spec(addon: Addon, warnings: list[str]) -> _ChoiceSpec | None:
     if not addon.chargeable:
         return _ChoiceSpec(
             source_key=f"addon:{addon.code}",
@@ -119,9 +140,25 @@ def _addon_spec(addon: Addon) -> _ChoiceSpec:
     store_amount = addon.store_price_cents
     if store_amount is None:
         store_amount = addon.price_cents
-    prices: list[tuple[str, int]] = [("store", int(store_amount))]
-    if addon.member_price_enabled and addon.member_price_cents is not None:
-        prices.append(("member", int(addon.member_price_cents)))
+    normalized_store = _safe_addon_amount(addon, "store_price_cents", store_amount, warnings)
+    if normalized_store is None:
+        return None
+    prices: list[tuple[str, int]] = [("store", normalized_store)]
+    if addon.member_price_enabled:
+        if addon.member_price_cents is None:
+            warnings.append(
+                f"addon {addon.code}: member_price_enabled but member_price_cents is missing; skipped"
+            )
+            return None
+        normalized_member = _safe_addon_amount(
+            addon,
+            "member_price_cents",
+            addon.member_price_cents,
+            warnings,
+        )
+        if normalized_member is None:
+            return None
+        prices.append(("member", normalized_member))
     return _ChoiceSpec(
         source_key=f"addon:{addon.code}",
         code=_stable_code("addon", addon.code),
@@ -160,7 +197,10 @@ def _group_specs(project: Project, addons: Iterable[Addon], warnings: list[str])
     legacy = _legacy_specs(project, warnings)
     if legacy:
         specs.append(_GroupSpec(code="legacy-diy-options", name="旧 DIY 选项（待审核）", choices=legacy))
-    addon_choices = tuple(_addon_spec(addon) for addon in addons)
+    addon_choices = tuple(
+        spec for addon in addons
+        if (spec := _addon_spec(addon, warnings)) is not None
+    )
     if addon_choices:
         specs.append(_GroupSpec(code="legacy-addons", name="旧加项（待审核）", choices=addon_choices))
     return tuple(specs)
@@ -279,22 +319,52 @@ def _predict_group_changes(
     db: Session,
     draft: ProjectCatalogVersion | None,
     specs: tuple[_GroupSpec, ...],
+    effective_at: datetime,
+    warnings: list[str],
 ) -> tuple[int, int]:
     if draft is None:
         return len(specs), sum(len(group.choices) for group in specs)
     groups_created = 0
     choices_created = 0
     for spec in specs:
-        group, _ = _matching_group(db, draft.id, spec, [])
+        group, _ = _matching_group(db, draft.id, spec, warnings)
         if group is None:
             groups_created += 1
             choices_created += len(spec.choices)
             continue
         for choice_spec in spec.choices:
-            choice, _ = _matching_choice(db, group.id, choice_spec, [])
+            choice, _ = _matching_choice(db, group.id, choice_spec, warnings)
             if choice is None:
                 choices_created += 1
+                continue
+            _predict_price_reconciliation(db, choice, choice_spec, effective_at, warnings)
     return groups_created, choices_created
+
+
+def _predict_price_reconciliation(
+    db: Session,
+    choice: ProjectOptionChoice,
+    spec: _ChoiceSpec,
+    effective_at: datetime,
+    warnings: list[str],
+) -> None:
+    for price_type, amount_cents in spec.prices:
+        current = list(db.scalars(
+            select(OptionChoicePrice)
+            .where(
+                OptionChoicePrice.option_choice_id == choice.id,
+                OptionChoicePrice.price_type == price_type,
+                OptionChoicePrice.effective_from <= effective_at,
+                or_(OptionChoicePrice.effective_to.is_(None), OptionChoicePrice.effective_to > effective_at),
+            )
+            .order_by(OptionChoicePrice.effective_from.desc(), OptionChoicePrice.id.desc())
+        ))
+        conflicts = [price for price in current if price.amount_cents != amount_cents]
+        if conflicts:
+            old_amounts = sorted({price.amount_cents for price in conflicts})
+            warnings.append(
+                f"option {choice.name} {price_type} current price {old_amounts} replaced with {amount_cents}"
+            )
 
 
 def migrate_store_catalog(db: Session, store_id: int, dry_run: bool = True) -> MigrationReport:
@@ -318,12 +388,43 @@ def _migrate_store_catalog(db: Session, store_id: int, dry_run: bool) -> Migrati
         select(Project).where(Project.store_id == store_id).order_by(Project.id)
     ))
     for project in projects:
+        if not dry_run:
+            # The migration is allowed to persist its caller's pending legacy
+            # edits, unlike a dry run.  Persist them before the locking helper
+            # refreshes the Project identity so the reviewed draft is built
+            # from the same state that will be committed.
+            db.flush()
+            locked_projects = lock_catalog_projects(db, [project.id])
+            project = locked_projects.get(project.id)
+            if project is None:
+                raise ValueError("project disappeared while acquiring catalog lock")
         specs = _group_specs(project, addons_by_project.get(project.id, ()), report.warnings)
         if not specs:
             continue
         draft = _latest_draft(db, project.id)
         if dry_run:
-            groups_created, choices_created = _predict_group_changes(db, draft, specs)
+            # Apply creates a draft by copying the published graph before it
+            # reconciles legacy specs.  Predict against that source graph so
+            # COW collisions and current-price replacements are visible in
+            # the same review report without persisting a draft.
+            prediction_version = draft
+            if prediction_version is None and project.current_published_version_id is not None:
+                published = db.get(ProjectCatalogVersion, project.current_published_version_id)
+                if (
+                    published is None
+                    or published.project_id != project.id
+                    or published.status != "published"
+                ):
+                    raise ValueError(f"project {project.code} has an invalid current published catalog pointer")
+                verify_published_catalog_hash(db, published)
+                prediction_version = published
+            groups_created, choices_created = _predict_group_changes(
+                db,
+                prediction_version,
+                specs,
+                effective_at,
+                report.warnings,
+            )
             report.created_versions += int(draft is None)
             report.created_groups += groups_created
             report.created_choices += choices_created
@@ -393,6 +494,14 @@ def main(argv: list[str] | None = None) -> None:
     modes.add_argument("--dry-run", action="store_true", help="preview without writing (default)")
     modes.add_argument("--apply", action="store_true", help="write and commit the migration")
     args = parser.parse_args(argv)
+
+    if args.apply:
+        environment = settings.environment.strip().lower()
+        if environment not in {"local", "test"}:
+            scheme = settings.database_url.split(":", 1)[0] or "unknown"
+            parser.error(
+                f"--apply is refused: environment={environment or 'unknown'} target={scheme}://<redacted>"
+            )
 
     with SessionLocal() as db:
         report = migrate_store_catalog(db, store_id=args.store_id, dry_run=not args.apply)

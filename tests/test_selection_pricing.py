@@ -1,10 +1,11 @@
 import unittest
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.session import Base
-from app.domain.selection_pricing import calculate_selection_pricing
+from app.domain.selection_pricing import calculate_selection_pricing, price_type_for_member
 from app.models import PriceBook, Project, Store
 
 
@@ -48,12 +49,22 @@ class SelectionPricingTests(unittest.TestCase):
     def tearDown(self):
         self.engine.dispose()
 
+    def test_legacy_annual_member_without_expiry_uses_store_price_type(self):
+        self.assertEqual(
+            price_type_for_member(
+                True,
+                confirmed_at=datetime(2027, 8, 1, tzinfo=UTC),
+                member_type="annual",
+            ),
+            "store",
+        )
+
     def test_member_pricing_uses_member_total_and_preserves_all_price_bands(self):
         with self.SessionLocal() as db:
             pricing = calculate_selection_pricing(db, [
-                {"project_id": self.foot_bath_id, "quantity": 1},
-                {"project_id": self.local_id, "quantity": 1, "diy_preferences": ["肩颈"]},
-                {"project_id": self.local_id, "quantity": 1, "diy_preferences": ["腰臀"]},
+                {"project_id": self.foot_bath_id, "quantity": 1, "state": "confirmed"},
+                {"project_id": self.local_id, "quantity": 1, "state": "confirmed", "diy_preferences": ["肩颈"]},
+                {"project_id": self.local_id, "quantity": 1, "state": "confirmed", "diy_preferences": ["腰臀"]},
             ], price_type="member")
 
         # 两项局部调理：泡脚费按各价格带全额减免。
@@ -70,9 +81,9 @@ class SelectionPricingTests(unittest.TestCase):
     def test_foot_bath_promotion_waives_full_store_price_for_non_member(self):
         with self.SessionLocal() as db:
             pricing = calculate_selection_pricing(db, [
-                {"project_id": self.foot_bath_id, "quantity": 1},
-                {"project_id": self.local_id, "quantity": 1, "diy_preferences": ["肩颈"]},
-                {"project_id": self.local_id, "quantity": 1, "diy_preferences": ["足部"]},
+                {"project_id": self.foot_bath_id, "quantity": 1, "state": "confirmed"},
+                {"project_id": self.local_id, "quantity": 1, "state": "confirmed", "diy_preferences": ["肩颈"]},
+                {"project_id": self.local_id, "quantity": 1, "state": "confirmed", "diy_preferences": ["足部"]},
             ])
 
         self.assertEqual(pricing["applied_price_type"], "store")
@@ -132,9 +143,9 @@ class SelectionPricingTests(unittest.TestCase):
             db.commit()
             # 泡脚(3990) + 加选小项(2000) + 两个局部(6900×2)：减免只免泡脚基础价 3990。
             pricing = calculate_selection_pricing(db, [
-                {"project_id": self.foot_bath_id, "quantity": 1, "addon_ids": [addon.id]},
-                {"project_id": self.local_id, "quantity": 1, "diy_preferences": ["肩颈"]},
-                {"project_id": self.local_id, "quantity": 1, "diy_preferences": ["腿部"]},
+                {"project_id": self.foot_bath_id, "quantity": 1, "state": "confirmed", "addon_ids": [addon.id]},
+                {"project_id": self.local_id, "quantity": 1, "state": "confirmed", "diy_preferences": ["肩颈"]},
+                {"project_id": self.local_id, "quantity": 1, "state": "confirmed", "diy_preferences": ["腿部"]},
             ])
 
         self.assertEqual(pricing["promotion_code"], "FOOT_BATH_TWO_LOCAL")
@@ -154,15 +165,18 @@ class SelectionPricingTests(unittest.TestCase):
                     {
                         "project_id": self.foot_bath_id,
                         "code": "hxy-qiqing-30",
-                        "quantity": 2,
+                        "service_line_id": f"foot-{unit}",
+                        "state": "confirmed",
                         "chargeable": True,
-                    },
+                    }
+                    for unit in range(2)
                 ]
                 items.extend(
                     {
                         "project_id": self.local_id,
                         "code": "hxy-jubu-30",
                         "quantity": 1,
+                        "state": "confirmed",
                         "diy_preferences": [f"部位{index}"],
                         "chargeable": True,
                         "qualifies_for_foot_bath_bundle": True,
@@ -175,13 +189,14 @@ class SelectionPricingTests(unittest.TestCase):
 
                 self.assertEqual(pricing["promotion_adjustment_cents"], adjustment)
 
-    def test_foot_bath_bundle_counts_repeated_part_when_snapshot_is_explicitly_qualified(self):
+    def test_foot_bath_bundle_does_not_count_repeated_same_part_even_when_explicitly_qualified(self):
         with self.SessionLocal() as db:
             pricing = calculate_selection_pricing(db, [
-                {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+                {"project_id": self.foot_bath_id, "quantity": 1, "state": "confirmed", "chargeable": True},
                 {
                     "project_id": self.local_id,
                     "quantity": 1,
+                    "state": "confirmed",
                     "diy_preferences": ["肩颈"],
                     "chargeable": True,
                     "qualifies_for_foot_bath_bundle": True,
@@ -189,17 +204,18 @@ class SelectionPricingTests(unittest.TestCase):
                 {
                     "project_id": self.local_id,
                     "quantity": 1,
+                    "state": "confirmed",
                     "diy_preferences": ["肩颈"],
                     "chargeable": True,
                     "qualifies_for_foot_bath_bundle": True,
                 },
             ])
 
-        self.assertEqual(pricing["promotion_adjustment_cents"], -3990)
+        self.assertEqual(pricing["promotion_adjustment_cents"], 0)
 
     def test_foot_bath_bundle_excludes_unconfirmed_free_and_annual_gift_lines(self):
         items = [
-            {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+            {"project_id": self.foot_bath_id, "quantity": 1, "state": "confirmed", "chargeable": True},
             {
                 "project_id": self.local_id,
                 "quantity": 1,
@@ -273,13 +289,13 @@ class SelectionPricingTests(unittest.TestCase):
             pricing = calculate_selection_pricing(db, items)
 
         self.assertEqual(pricing["promotion_adjustment_cents"], 0)
-        self.assertEqual(pricing["qualified_local_unit_count"], 2)
+        self.assertEqual(pricing["qualified_local_unit_count"], 0)
         self.assertEqual(pricing["matched_foot_bath_count"], 0)
 
-    def test_legacy_pending_service_lines_count_for_foot_bath_bundle(self):
+    def test_pending_or_completed_service_lines_do_not_count_for_foot_bath_bundle(self):
         with self.SessionLocal() as db:
             pricing = calculate_selection_pricing(db, [
-                {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+                {"project_id": self.foot_bath_id, "quantity": 1, "state": "confirmed", "chargeable": True},
                 {
                     "project_id": self.local_id,
                     "quantity": 1,
@@ -298,7 +314,7 @@ class SelectionPricingTests(unittest.TestCase):
                 },
             ])
 
-        self.assertEqual(pricing["promotion_adjustment_cents"], -3990)
+        self.assertEqual(pricing["promotion_adjustment_cents"], 0)
 
     def test_foot_bath_bundle_reads_nested_snapshots_and_confirmed_base_price(self):
         from app.models import Addon
@@ -319,6 +335,7 @@ class SelectionPricingTests(unittest.TestCase):
                 {
                     "project_id": self.foot_bath_id,
                     "quantity": 1,
+                    "state": "confirmed",
                     "addon_ids": [addon.id],
                     "snapshot": {
                         "code": "hxy-qiqing-30",
@@ -329,7 +346,7 @@ class SelectionPricingTests(unittest.TestCase):
                     "project_id": self.local_id,
                     "quantity": 1,
                     "snapshot": {
-                        "state": "pending",
+                        "state": "confirmed",
                         "diy_preferences": ["肩颈"],
                         "resolved_charge": {
                             "choice_snapshot": {
@@ -343,7 +360,7 @@ class SelectionPricingTests(unittest.TestCase):
                     "project_id": self.local_id,
                     "quantity": 1,
                     "snapshot": {
-                        "state": "in_service",
+                        "state": "confirmed",
                         "choice_snapshot": {
                             "code": "hxy-jubu-30",
                             "qualifies_for_foot_bath_bundle": True,
@@ -362,14 +379,16 @@ class SelectionPricingTests(unittest.TestCase):
                 {
                     "project_id": self.foot_bath_id,
                     "quantity": 1,
+                    "state": "confirmed",
                     "confirmed_base_price_cents": 2713,
                     "chargeable": True,
                 },
-                {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
+                {"project_id": self.foot_bath_id, "quantity": 1, "state": "confirmed", "chargeable": True},
                 *[
                     {
                         "project_id": self.local_id,
                         "quantity": 1,
+                        "state": "confirmed",
                         "diy_preferences": [f"部位{index}"],
                         "chargeable": True,
                         "qualifies_for_foot_bath_bundle": True,
@@ -380,7 +399,7 @@ class SelectionPricingTests(unittest.TestCase):
 
         self.assertEqual(pricing["promotion_adjustment_cents"], -(2713 + 3990))
 
-    def test_foot_bath_bundle_keeps_legacy_missing_state_preview_compatible(self):
+    def test_foot_bath_bundle_requires_confirmed_state_for_legacy_preview_rows(self):
         with self.SessionLocal() as db:
             pricing = calculate_selection_pricing(db, [
                 {"project_id": self.foot_bath_id, "quantity": 1, "chargeable": True},
@@ -398,7 +417,107 @@ class SelectionPricingTests(unittest.TestCase):
                 },
             ])
 
+        self.assertEqual(pricing["promotion_adjustment_cents"], 0)
+
+    def test_foot_bath_bundle_uses_one_unit_per_service_line_not_quantity_or_duplicate_id(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, [
+                {
+                    "project_id": self.foot_bath_id,
+                    "code": "hxy-qiqing-30",
+                    "quantity": 2,
+                    "service_line_id": "foot-1",
+                    "state": "confirmed",
+                    "chargeable": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "code": "hxy-jubu-30",
+                    "quantity": 3,
+                    "service_line_id": "local-shoulder",
+                    "state": "confirmed",
+                    "qualifies_for_foot_bath_bundle": True,
+                    "body_part": "肩颈",
+                    "chargeable": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "code": "hxy-jubu-30",
+                    "quantity": 1,
+                    "service_line_id": "local-waist",
+                    "state": "confirmed",
+                    "qualifies_for_foot_bath_bundle": True,
+                    "body_part": "腰背",
+                    "chargeable": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "code": "hxy-jubu-30",
+                    "quantity": 1,
+                    "service_line_id": "local-waist",
+                    "state": "confirmed",
+                    "qualifies_for_foot_bath_bundle": True,
+                    "body_part": "腿部",
+                    "chargeable": True,
+                },
+            ])
+
+        self.assertEqual(pricing["qualified_local_unit_count"], 2)
+        self.assertEqual(pricing["matched_foot_bath_count"], 1)
         self.assertEqual(pricing["promotion_adjustment_cents"], -3990)
+
+    def test_same_local_project_requires_distinct_normalized_non_empty_parts(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, [
+                {
+                    "project_id": self.foot_bath_id,
+                    "code": "hxy-qiqing-30",
+                    "service_line_id": "foot-1",
+                    "state": "confirmed",
+                    "chargeable": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "code": "hxy-jubu-30",
+                    "service_line_id": "local-a",
+                    "state": "confirmed",
+                    "qualifies_for_foot_bath_bundle": True,
+                    "body_part": " 肩颈 ",
+                    "chargeable": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "code": "hxy-jubu-30",
+                    "service_line_id": "local-b",
+                    "state": "confirmed",
+                    "qualifies_for_foot_bath_bundle": True,
+                    "body_part": "肩颈",
+                    "chargeable": True,
+                },
+                {
+                    "project_id": self.local_id,
+                    "code": "hxy-jubu-30",
+                    "service_line_id": "local-c",
+                    "state": "confirmed",
+                    "qualifies_for_foot_bath_bundle": True,
+                    "body_part": "腰背",
+                    "chargeable": True,
+                },
+            ])
+
+        self.assertEqual(pricing["qualified_local_unit_count"], 2)
+        self.assertEqual(pricing["matched_foot_bath_count"], 1)
+
+    def test_pending_or_state_less_lines_do_not_count_as_confirmed_bundle_units(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(db, [
+                {"project_id": self.foot_bath_id, "code": "hxy-qiqing-30", "state": "pending", "chargeable": True},
+                {"project_id": self.local_id, "code": "hxy-jubu-30", "state": "confirmed", "qualifies_for_foot_bath_bundle": True, "body_part": "肩颈", "chargeable": True},
+                {"project_id": self.local_id, "code": "hxy-jubu-30", "state": "confirmed", "qualifies_for_foot_bath_bundle": True, "body_part": "腰背", "chargeable": True},
+            ])
+
+        self.assertEqual(pricing["matched_foot_bath_count"], 0)
+        self.assertEqual(pricing["promotion_adjustment_cents"], 0)
 
 
 if __name__ == "__main__":

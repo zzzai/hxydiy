@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.admin import create_staff_token, hash_password
-from app.api.admin_v2 import set_user_membership
+from app.api.admin_v2 import MembershipUpdateIn, set_user_membership
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import MembershipBenefitGrant, Order, Staff, Store, User
@@ -65,7 +65,7 @@ class AdminMembershipTests(unittest.TestCase):
     def test_set_member_true_and_false(self):
         response = self.client.patch(
             f"/api/v1/admin/v2/users/{self.customer_id}/membership",
-            headers=self.headers, json={"is_member": True},
+            headers=self.headers, json=self._annual_payload("base-customer-cycle"),
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertTrue(response.json()["is_member"])
@@ -99,12 +99,12 @@ class AdminMembershipTests(unittest.TestCase):
 
         first = self.client.patch(
             f"/api/v1/admin/v2/users/{customer_id}/membership",
-            json={"member_type": "annual"},
+            json=self._annual_payload("annual-repeat-cycle"),
             headers=self.headers,
         )
         second = self.client.patch(
             f"/api/v1/admin/v2/users/{customer_id}/membership",
-            json={"member_type": "annual"},
+            json=self._annual_payload("annual-repeat-cycle"),
             headers=self.headers,
         )
         self.assertEqual(first.status_code, 200, first.text)
@@ -146,9 +146,12 @@ class AdminMembershipTests(unittest.TestCase):
                 user = db2.get(User, customer_id)
                 user.is_member = True
                 user.member_type = "annual"
+                user.member_expire_at = datetime(2027, 8, 1, tzinfo=timezone.utc)
+                user.annual_membership_cycle_id = "stale-cycle"
                 db2.add(MembershipBenefitGrant(
                     user_id=customer_id,
                     benefit_type="annual_project_gift",
+                    membership_cycle_id="stale-cycle",
                     membership_started_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
                     status="available",
                 ))
@@ -156,7 +159,7 @@ class AdminMembershipTests(unittest.TestCase):
 
             set_user_membership(
                 customer_id,
-                {"member_type": "annual"},
+                MembershipUpdateIn(**self._annual_payload("stale-cycle")),
                 db=db1,
                 authorization=self.headers["Authorization"],
             )
@@ -178,12 +181,12 @@ class AdminMembershipTests(unittest.TestCase):
             json={"member_type": "vip"},
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
 
     def test_membership_requires_admin_token(self):
         response = self.client.patch(
             f"/api/v1/admin/v2/users/{self.customer_id}/membership",
-            json={"is_member": True},
+            json=self._annual_payload("unauthenticated-cycle"),
         )
         self.assertEqual(response.status_code, 401)
 
@@ -203,7 +206,7 @@ class AdminMembershipTests(unittest.TestCase):
 
         response = self.client.patch(
             f"/api/v1/admin/v2/users/{customer_id}/membership",
-            headers=self.headers, json={"is_member": True},
+            headers=self.headers, json=self._annual_payload("diy-only-cycle"),
         )
         self.assertEqual(response.status_code, 200, response.text)
         with self.SessionLocal() as db:
@@ -240,12 +243,106 @@ class AdminMembershipTests(unittest.TestCase):
 
         response = self.client.patch(
             f"/api/v1/admin/v2/users/{customer_id}/membership",
-            headers=self.headers, json={"is_member": True},
+            headers=self.headers, json=self._annual_payload("refresh-cycle"),
         )
         self.assertEqual(response.status_code, 200, response.text)
         with self.SessionLocal() as db:
             session = db.get(SelectionSession, session_id)
             self.assertGreater(session.member_total_cents, 0)
+
+    def test_annual_cycle_is_strict_idempotent_and_uses_expiry(self):
+        with self.SessionLocal() as db:
+            customer = User(openid="annual-cycle-customer", phone="13300135000")
+            db.add(customer)
+            db.flush()
+            db.add(Order(
+                order_no="HXYANNUALCYCLE001", order_type="service", user_id=customer.id,
+                store_id=self.store_id, items=[], total_amount_cents=9900,
+                pay_amount_cents=9900, status="completed", pay_status="paid",
+            ))
+            db.commit()
+            customer_id = customer.id
+
+        malformed = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            headers=self.headers,
+            json={"member_type": "annual", "cycle_id": "cycle-a", "member_started_at": "2026-08-01T00:00:00", "member_expire_at": "2027-08-01T00:00:00+00:00"},
+        )
+        self.assertEqual(malformed.status_code, 422, malformed.text)
+        conflicting = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            headers=self.headers,
+            json={"member_type": "annual", "is_member": False, "cycle_id": "cycle-a", "member_started_at": "2026-08-01T00:00:00+00:00", "member_expire_at": "2027-08-01T00:00:00+00:00"},
+        )
+        self.assertEqual(conflicting.status_code, 422, conflicting.text)
+
+        cycle_a = {
+            "member_type": "annual",
+            "cycle_id": "cycle-a",
+            "member_started_at": "2026-08-01T00:00:00+00:00",
+            "member_expire_at": "2027-08-01T00:00:00+00:00",
+        }
+        first = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            headers=self.headers,
+            json=cycle_a,
+        )
+        retry = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            headers=self.headers,
+            json=cycle_a,
+        )
+        changed_start_for_same_cycle = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            headers=self.headers,
+            json={
+                **cycle_a,
+                "member_started_at": "2026-08-02T00:00:00+00:00",
+            },
+        )
+        cancel = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            headers=self.headers,
+            json={"is_member": False},
+        )
+        reopen = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            headers=self.headers,
+            json=cycle_a,
+        )
+        cycle_b = self.client.patch(
+            f"/api/v1/admin/v2/users/{customer_id}/membership",
+            headers=self.headers,
+            json={
+                "member_type": "annual",
+                "cycle_id": "cycle-b",
+                "member_started_at": "2027-08-01T00:00:00+00:00",
+                "member_expire_at": "2028-08-01T00:00:00+00:00",
+            },
+        )
+        for response in (first, retry, cancel, reopen, cycle_b):
+            self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(changed_start_for_same_cycle.status_code, 409, changed_start_for_same_cycle.text)
+
+        with self.SessionLocal() as db:
+            grants = list(db.scalars(select(MembershipBenefitGrant).where(
+                MembershipBenefitGrant.user_id == customer_id,
+            ).order_by(MembershipBenefitGrant.membership_started_at)))
+            user = db.get(User, customer_id)
+
+        self.assertEqual(len(grants), 2)
+        self.assertEqual([grant.membership_cycle_id for grant in grants], ["cycle-a", "cycle-b"])
+        self.assertEqual(user.annual_membership_cycle_id, "cycle-b")
+        self.assertEqual(user.member_expire_at.replace(tzinfo=timezone.utc), datetime(2028, 8, 1, tzinfo=timezone.utc))
+
+    @staticmethod
+    def _annual_payload(cycle_id: str) -> dict:
+        return {
+            "member_type": "annual",
+            "cycle_id": cycle_id,
+            "member_started_at": "2026-08-01T00:00:00+00:00",
+            "member_expire_at": "2027-08-01T00:00:00+00:00",
+        }
 
 
 if __name__ == "__main__":

@@ -3,12 +3,14 @@
 权限：admin 可读写，staff 只读。所有写操作记录 AuditLog。
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel
-from sqlalchemy import select, func as sa_func, and_
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, field_validator, model_validator
+from sqlalchemy import delete, select, func as sa_func, and_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff
@@ -18,7 +20,9 @@ from app.models import (
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, PageContent,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, PositionOccupancy,
     MembershipBenefitGrant,
+    ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup,
 )
+from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.occupancy import audit_occupancy, release_occupancy
 from app.models.operations import Room, Technician
 from app.models.room_assign import RoomAssignment
@@ -287,18 +291,35 @@ def confirm_selection_session(session_id: str, db: Session = Depends(get_db), au
         SelectionRevision.selection_session_id == session.id,
         SelectionRevision.state == "submitted",
     ).order_by(SelectionRevision.revision_no.desc()))
+    confirmed_items = []
     if revision:
-        for index, item in enumerate((revision.snapshot or {}).get("items", [])):
+        for item in (revision.snapshot or {}).get("items", []):
+            service_line_id = str(uuid.uuid4())
+            confirmed_item = {
+                **item,
+                "service_line_id": service_line_id,
+                "state": "confirmed",
+            }
             db.add(ServiceLine(
-                id=str(uuid.uuid4()),
+                id=service_line_id,
                 selection_session_id=session.id,
                 selection_revision_id=revision.id,
-                snapshot=item,
+                snapshot=confirmed_item,
                 state="pending",
             ))
+            confirmed_items.append(confirmed_item)
         revision.state = "confirmed"
         revision.confirmed_at = datetime.now(timezone.utc)
         revision.confirmed_by_staff_id = staff.id
+    else:
+        # 简化提交路径尚未创建 revision；仍以确认后的独立选单行计价，不能把顾客提交当作已确认服务。
+        confirmed_items = [{**item, "state": "confirmed"} for item in session.items or []]
+
+    if confirmed_items:
+        # 泡脚组合优惠只取前台确认的独立服务单位；确认后立即刷新冻结报价。
+        session.items = confirmed_items
+        from app.api.selections import refresh_session_pricing
+        refresh_session_pricing(db, session)
     session.status = "confirmed"
     session.confirmed_at = datetime.now(timezone.utc)
     _audit(db, staff.name, "confirm_selection", "selection_session", session.id)
@@ -647,11 +668,13 @@ def list_projects_admin(
     result = []
     for p in projects:
         prices = db.execute(
-            select(PriceBook).where(PriceBook.project_id == p.id)
+            select(PriceBook)
+            .where(PriceBook.project_id == p.id)
+            .order_by(PriceBook.price_type, PriceBook.published_at.desc(), PriceBook.id.desc())
         ).scalars().all()
         price_map = {}
         for pb in prices:
-            price_map[pb.price_type] = pb.amount_cents
+            price_map.setdefault(pb.price_type, pb.amount_cents)
         result.append({
             "id": p.id, "store_id": p.store_id, "code": p.code,
             "category": p.category, "category_mark": p.category_mark,
@@ -666,62 +689,262 @@ def list_projects_admin(
     return result
 
 
-class ProjectIn(BaseModel):
-    store_id: int
-    code: str
-    category: str = "bath"
-    category_mark: str = ""
-    name: str
-    duration_min: int | None = None
-    summary: str = ""
-    image_url: str = ""
-    tags: list = []
-    detail_modules: list = []
-    diy_options: list = []
-    display_order: int = 0
-    price_label: str = ""
-    publication_status: str = "draft"
-    prices: dict = {}  # {"store": 8900, "member": 6900, "group": 2990}
+ProjectPriceType = Literal["store", "group", "member"]
+ProjectPublicationStatus = Literal["draft", "candidate", "published", "inactive", "archived"]
+
+
+class _StrictProjectModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("code", "name", "category", check_fields=False)
+    @classmethod
+    def _required_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("prices", check_fields=False)
+    @classmethod
+    def _prices_are_non_negative(cls, value: dict[ProjectPriceType, int] | None):
+        if value is not None and any(amount < 0 for amount in value.values()):
+            raise ValueError("price amounts must be non-negative")
+        return value
+
+
+class ProjectCreate(_StrictProjectModel):
+    store_id: StrictInt
+    code: StrictStr = Field(min_length=1, max_length=32)
+    category: StrictStr = Field(default="bath", min_length=1, max_length=32)
+    category_mark: StrictStr = Field(default="", max_length=8)
+    name: StrictStr = Field(min_length=1, max_length=64)
+    duration_min: StrictInt | None = Field(default=None, ge=0)
+    summary: StrictStr = Field(default="", max_length=512)
+    image_url: StrictStr = Field(default="", max_length=512)
+    tags: list = Field(default_factory=list)
+    detail_modules: list = Field(default_factory=list)
+    display_order: StrictInt = Field(default=0, ge=0)
+    price_label: StrictStr = Field(default="", max_length=32)
+    publication_status: ProjectPublicationStatus = "draft"
+    prices: dict[ProjectPriceType, StrictInt] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _published_project_requires_store_price(self):
+        if self.publication_status == "published" and "store" not in self.prices:
+            raise ValueError("published project requires a store price")
+        return self
+
+
+class ProjectPatch(_StrictProjectModel):
+    code: StrictStr | None = Field(default=None, min_length=1, max_length=32)
+    category: StrictStr | None = Field(default=None, min_length=1, max_length=32)
+    category_mark: StrictStr | None = Field(default=None, max_length=8)
+    name: StrictStr | None = Field(default=None, min_length=1, max_length=64)
+    duration_min: StrictInt | None = Field(default=None, ge=0)
+    summary: StrictStr | None = Field(default=None, max_length=512)
+    image_url: StrictStr | None = Field(default=None, max_length=512)
+    tags: list | None = None
+    detail_modules: list | None = None
+    display_order: StrictInt | None = Field(default=None, ge=0)
+    price_label: StrictStr | None = Field(default=None, max_length=32)
+    publication_status: ProjectPublicationStatus | None = None
+    prices: dict[ProjectPriceType, StrictInt] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_explicit_nulls(cls, value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if item is None:
+                    raise ValueError(f"{key} must not be null")
+        return value
+
+
+class ProjectDuplicateIn(_StrictProjectModel):
+    code: StrictStr = Field(min_length=1, max_length=32)
+    name: StrictStr = Field(min_length=1, max_length=64)
+
+
+def _published_catalog_referrer_ids(db: Session, target_project_id: int) -> list[int]:
+    return list(db.scalars(
+        select(ProjectCatalogVersion.project_id)
+        .join(ProjectOptionGroup, ProjectOptionGroup.catalog_version_id == ProjectCatalogVersion.id)
+        .join(ProjectOptionChoice, ProjectOptionChoice.option_group_id == ProjectOptionGroup.id)
+        .where(
+            ProjectCatalogVersion.status == "published",
+            ProjectOptionChoice.linked_project_id == target_project_id,
+        )
+        .order_by(ProjectCatalogVersion.project_id)
+        .with_for_update()
+    ))
+
+
+def _locked_project_for_update(db: Session, project_id: int, staff: Staff) -> tuple[Project, list[int]]:
+    # 首次只读取引用方 ID；随后以全局升序一次拿到相关 Project 锁，再重新读取反向引用。
+    preliminary = _published_catalog_referrer_ids(db, project_id)
+    projects = lock_catalog_projects(db, [project_id, *preliminary])
+    project = projects.get(project_id)
+    if project is None or project.store_id != _staff_store_id(staff):
+        raise HTTPException(status_code=404, detail="项目不存在")
+    referrers = _published_catalog_referrer_ids(db, project_id)
+    return project, referrers
+
+
+def _append_project_prices(db: Session, project_id: int, prices: dict[ProjectPriceType, int], publisher: str) -> None:
+    for price_type, amount_cents in prices.items():
+        db.add(PriceBook(
+            project_id=project_id,
+            price_type=price_type,
+            amount_cents=amount_cents,
+            publisher=publisher,
+        ))
+
+
+def _has_project_store_price(
+    db: Session,
+    project_id: int,
+    pending_prices: dict[ProjectPriceType, int] | None = None,
+) -> bool:
+    if pending_prices is not None and "store" in pending_prices:
+        return True
+    return db.scalar(
+        select(PriceBook.id)
+        .where(
+            PriceBook.project_id == project_id,
+            PriceBook.price_type == "store",
+            PriceBook.amount_cents >= 0,
+        )
+        .limit(1)
+    ) is not None
+
+
+def _commit_project_or_conflict(db: Session) -> None:
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="项目编码或价格数据冲突") from exc
 
 
 @router.post("/projects")
-def create_project(body: ProjectIn, db: Session = Depends(get_db),
+def create_project(body: ProjectCreate, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
-    s = _current_staff(authorization, db)
-    _require_admin(s)
-    _scoped_store_id(s, body.store_id)
-    prices_data = body.prices
-    proj_data = {k: v for k, v in body.model_dump().items() if k != "prices"}
-    p = Project(**proj_data)
-    db.add(p)
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    _scoped_store_id(staff, body.store_id)
+    data = body.model_dump(exclude={"prices"})
+    project = Project(**data)
+    db.add(project)
     db.flush()
-    for ptype, cents in prices_data.items():
-        db.add(PriceBook(project_id=p.id, price_type=ptype, amount_cents=cents, publisher=s.name))
-    _audit(db, s.name, "create_project", "project", body.code)
-    db.commit()
-    return {"id": p.id, "code": p.code}
+    _append_project_prices(db, project.id, body.prices, staff.name)
+    _audit(db, staff.name, "create_project", "project", project.code)
+    _commit_project_or_conflict(db)
+    return {"id": project.id, "code": project.code}
+
+
+def _update_project_strict(project_id: int, body: ProjectPatch, db: Session, staff: Staff) -> dict:
+    project, referrers = _locked_project_for_update(db, project_id, staff)
+    data = body.model_dump(exclude_unset=True, exclude={"prices"})
+    if "code" in data and data["code"] != project.code and referrers:
+        raise HTTPException(status_code=409, detail="已发布目录引用的项目编码不可直接修改")
+    if data.get("publication_status") in {"inactive", "archived"} and referrers:
+        raise HTTPException(status_code=409, detail="仍被已发布目录引用的项目不可停用或归档")
+    if data.get("publication_status") == "published" and not _has_project_store_price(
+        db,
+        project.id,
+        body.prices if "prices" in body.model_fields_set else None,
+    ):
+        raise HTTPException(status_code=422, detail="正式项目必须配置非负门店价")
+    for key, value in data.items():
+        setattr(project, key, value)
+    if "prices" in body.model_fields_set:
+        _append_project_prices(db, project.id, body.prices or {}, staff.name)
+    _audit(db, staff.name, "update_project", "project", str(project.id))
+    _commit_project_or_conflict(db)
+    return {"ok": True, "id": project.id, "code": project.code, "publication_status": project.publication_status}
+
+
+@router.patch("/projects/{proj_id}")
+def patch_project(proj_id: int, body: ProjectPatch, db: Session = Depends(get_db),
+                  authorization: str | None = Header(None)):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    return _update_project_strict(proj_id, body, db, staff)
 
 
 @router.post("/projects/{proj_id}")
-def update_project(proj_id: int, body: dict, db: Session = Depends(get_db),
+def update_project(proj_id: int, body: ProjectPatch, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
-    s = _current_staff(authorization, db)
-    _require_admin(s)
-    p = _require_owned(db.get(Project, proj_id), s, "项目不存在")
-    prices_data = body.pop("prices", None)
-    for k, v in body.items():
-        if hasattr(p, k) and k not in {"id", "store_id"}:
-            setattr(p, k, v)
-    if prices_data:
-        # delete old prices, insert new
-        old = db.execute(select(PriceBook).where(PriceBook.project_id == proj_id)).scalars().all()
-        for o in old:
-            db.delete(o)
-        for ptype, cents in prices_data.items():
-            db.add(PriceBook(project_id=proj_id, price_type=ptype, amount_cents=cents, publisher=s.name))
-    _audit(db, s.name, "update_project", "project", str(proj_id))
-    db.commit()
-    return {"ok": True}
+    """保留旧 POST 路径，但使用与 PATCH 完全相同的严格契约。"""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    return _update_project_strict(proj_id, body, db, staff)
+
+
+@router.post("/projects/{proj_id}/duplicate")
+def duplicate_project(proj_id: int, body: ProjectDuplicateIn, db: Session = Depends(get_db),
+                      authorization: str | None = Header(None)):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    source, _ = _locked_project_for_update(db, proj_id, staff)
+    duplicate = Project(
+        store_id=source.store_id,
+        code=body.code,
+        category=source.category,
+        category_mark=source.category_mark,
+        name=body.name,
+        duration_min=source.duration_min,
+        summary=source.summary,
+        image_url=source.image_url,
+        tags=list(source.tags or []),
+        detail_modules=list(source.detail_modules or []),
+        diy_options=[],
+        display_order=source.display_order,
+        price_label=source.price_label,
+        publication_status="draft",
+    )
+    db.add(duplicate)
+    db.flush()
+    latest_prices: dict[str, PriceBook] = {}
+    for price in db.scalars(
+        select(PriceBook)
+        .where(PriceBook.project_id == source.id)
+        .order_by(PriceBook.price_type, PriceBook.published_at.desc(), PriceBook.id.desc())
+    ):
+        latest_prices.setdefault(price.price_type, price)
+    _append_project_prices(
+        db,
+        duplicate.id,
+        {price_type: int(price.amount_cents) for price_type, price in latest_prices.items()},
+        staff.name,
+    )
+    draft = ProjectCatalogVersion(project_id=duplicate.id, version=1, status="draft")
+    db.add(draft)
+    db.flush()
+    if source.current_published_version_id is not None:
+        try:
+            copy_catalog_version_graph(db, source.current_published_version_id, draft.id)
+        except CatalogDomainError as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="源项目已发布目录快照校验失败") from exc
+    _audit(db, staff.name, "duplicate_project", "project", str(source.id), {"duplicate_project_id": duplicate.id})
+    _commit_project_or_conflict(db)
+    return {"id": duplicate.id, "code": duplicate.code, "catalog_version_id": draft.id}
+
+
+@router.post("/projects/{proj_id}/archive")
+def archive_project(proj_id: int, db: Session = Depends(get_db),
+                    authorization: str | None = Header(None)):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    return _update_project_strict(
+        proj_id,
+        ProjectPatch(publication_status="archived"),
+        db,
+        staff,
+    )
 
 
 # ──────────────────────────────────────────────────────
@@ -1107,37 +1330,145 @@ def list_users(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
+class MembershipUpdateIn(BaseModel):
+    """线下年度权益卡的严格周期输入。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    member_type: Literal["annual"] | None = None
+    is_member: StrictBool | None = None
+    cycle_id: StrictStr | None = Field(default=None, min_length=1, max_length=64)
+    member_started_at: datetime | None = None
+    member_expire_at: datetime | None = None
+
+    @field_validator("cycle_id")
+    @classmethod
+    def _cycle_id_not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("cycle_id must not be blank")
+        return value
+
+    @field_validator("member_started_at", "member_expire_at")
+    @classmethod
+    def _membership_time_is_aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("membership timestamps must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_transition(self):
+        annual = self.member_type == "annual" or self.is_member is True
+        cancelled = self.is_member is False
+        if annual and cancelled:
+            raise ValueError("annual membership cannot conflict with is_member=false")
+        if not annual and not cancelled:
+            raise ValueError("must provide annual enrollment or is_member=false")
+        if cancelled:
+            if any(value is not None for value in (self.member_type, self.cycle_id, self.member_started_at, self.member_expire_at)):
+                raise ValueError("cancellation cannot include annual cycle fields")
+            return self
+        if not all((self.cycle_id, self.member_started_at, self.member_expire_at)):
+            raise ValueError("annual membership requires cycle_id, member_started_at and member_expire_at")
+        if self.member_expire_at <= self.member_started_at:
+            raise ValueError("member_expire_at must be after member_started_at")
+        return self
+
+
+def _utc_time(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _same_instant(left: datetime | None, right: datetime | None) -> bool:
+    if left is None or right is None:
+        return left is right
+    return _utc_time(left) == _utc_time(right)
+
+
+def _grant_for_cycle(db: Session, user_id: int, cycle_id: str) -> MembershipBenefitGrant | None:
+    return db.scalar(
+        select(MembershipBenefitGrant)
+        .where(
+            MembershipBenefitGrant.user_id == user_id,
+            MembershipBenefitGrant.membership_cycle_id == cycle_id,
+        )
+        .with_for_update()
+    )
+
+
+def _ensure_annual_cycle_grant(
+    db: Session,
+    user: User,
+    cycle_id: str,
+    started_at: datetime,
+) -> MembershipBenefitGrant:
+    grant = _grant_for_cycle(db, user.id, cycle_id)
+    if grant is not None:
+        return grant
+    try:
+        with db.begin_nested():
+            grant = MembershipBenefitGrant(
+                user_id=user.id,
+                benefit_type="annual_project_gift",
+                membership_cycle_id=cycle_id,
+                membership_started_at=started_at,
+                status="available",
+            )
+            db.add(grant)
+            db.flush()
+    except IntegrityError:
+        grant = _grant_for_cycle(db, user.id, cycle_id)
+        if grant is None:
+            raise
+    return grant
+
+
 @router.patch("/users/{user_id}/membership")
-def set_user_membership(user_id: int, body: dict, db: Session = Depends(get_db),
+def set_user_membership(user_id: int, body: MembershipUpdateIn, db: Session = Depends(get_db),
                         authorization: str | None = Header(None)):
-    """店长设置/取消会员身份（线下收款后开通）：body = {"is_member": true}"""
+    """仅接受带稳定周期和 aware 有效期的年度权益卡开通，或显式取消。"""
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     user = _locked_store_user(db, user_id, staff)
-    target_member_type: str | None
-    if "member_type" in body:
-        if body.get("member_type") != "annual":
-            raise HTTPException(status_code=400, detail="未知会员类型")
-        target_member_type = "annual"
-        is_member = True
-    elif "is_member" in body:
-        is_member = bool(body.get("is_member"))
-        target_member_type = "annual" if is_member else None
-    else:
-        raise HTTPException(status_code=400, detail="请提供会员状态")
-
     previous = user.is_member
     previous_member_type = user.member_type
-    if target_member_type == "annual" and previous_member_type != "annual":
-        db.add(MembershipBenefitGrant(
-            user_id=user.id,
-            benefit_type="annual_project_gift",
-            membership_started_at=datetime.now(timezone.utc),
-            status="available",
-        ))
-    user.is_member = is_member
-    # 权益卡开通：member_type=annual；取消会员时清空类型，历史权益记录保留。
-    user.member_type = target_member_type
+    grant: MembershipBenefitGrant | None = None
+
+    if body.is_member is False:
+        user.is_member = False
+        user.member_type = None
+        # 保留 cycle/expiry 作为审计与同周期重开幂等依据，不能由取消制造新权益。
+    else:
+        assert body.cycle_id is not None
+        assert body.member_started_at is not None
+        assert body.member_expire_at is not None
+        same_cycle = user.annual_membership_cycle_id == body.cycle_id
+        if same_cycle:
+            grant = _grant_for_cycle(db, user.id, body.cycle_id)
+            if (
+                grant is None
+                or not _same_instant(grant.membership_started_at, body.member_started_at)
+                or not _same_instant(user.member_expire_at, body.member_expire_at)
+                or user.member_type not in {None, "annual"}
+            ):
+                raise HTTPException(status_code=409, detail="同一会员周期不能变更起止时间或会员类型")
+        elif user.annual_membership_cycle_id is not None and user.member_expire_at is not None:
+            if _utc_time(body.member_started_at) < _utc_time(user.member_expire_at):
+                raise HTTPException(status_code=409, detail="续办周期开始时间不得早于上一周期到期时间")
+        if grant is None:
+            grant = _ensure_annual_cycle_grant(
+                db,
+                user,
+                body.cycle_id,
+                body.member_started_at,
+            )
+        user.is_member = True
+        user.member_type = "annual"
+        user.member_expire_at = body.member_expire_at
+        user.annual_membership_cycle_id = body.cycle_id
+
     # 会员身份变化后，重算该顾客未完结选单的计价快照（draft/submitted）。
     from app.api.selections import refresh_session_pricing
     open_sessions = db.scalars(select(SelectionSession).where(
@@ -1146,10 +1477,24 @@ def set_user_membership(user_id: int, body: dict, db: Session = Depends(get_db),
     ))
     for session in open_sessions:
         refresh_session_pricing(db, session)
-    _audit(db, staff.name, "set_membership", "user", str(user_id),
-           {"is_member": is_member, "previous": previous, "member_type": user.member_type})
+    _audit(db, staff.name, "set_membership", "user", str(user_id), {
+        "is_member": user.is_member,
+        "previous": previous,
+        "previous_member_type": previous_member_type,
+        "member_type": user.member_type,
+        "membership_cycle_id": user.annual_membership_cycle_id,
+        "member_expire_at": user.member_expire_at.isoformat() if user.member_expire_at else None,
+        "grant_id": grant.id if grant else None,
+    })
     db.commit()
-    return {"ok": True, "is_member": is_member, "member_type": user.member_type}
+    return {
+        "ok": True,
+        "is_member": user.is_member,
+        "member_type": user.member_type,
+        "membership_cycle_id": user.annual_membership_cycle_id,
+        "member_expire_at": user.member_expire_at.isoformat() if user.member_expire_at else None,
+        "grant_id": grant.id if grant else None,
+    }
 
 
 @router.post("/users/{user_id}/tags")

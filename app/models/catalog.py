@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -10,8 +10,15 @@ from app.db.session import Base
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["id", "current_published_version_id"],
+            ["project_catalog_versions.project_id", "project_catalog_versions.id"],
+            name="fk_projects_current_published_version_id",
+        ),
+    )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement="ignore_fk")
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     category: Mapped[str] = mapped_column(String(32), index=True)  # bath/balance/care/kit/tea...
@@ -30,9 +37,7 @@ class Project(Base):
     # draft / candidate / published / archived —— 只有 published 可被顾客端看到
     publication_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     content_version: Mapped[str] = mapped_column(String(32), default="")
-    current_published_version_id: Mapped[int | None] = mapped_column(
-        ForeignKey("project_catalog_versions.id"), nullable=True
-    )
+    current_published_version_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -44,6 +49,9 @@ class PriceBook(Base):
     价格只从本表读，不信任前端。"""
 
     __tablename__ = "price_book"
+    __table_args__ = (
+        CheckConstraint("amount_cents >= 0", name="ck_price_book_amount_non_negative"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)

@@ -383,6 +383,39 @@ class OptionChargeTests(unittest.TestCase):
         self.assertEqual(charge.source_ref["price_book_id_by_type"]["store"], newer_id)
         self.assertEqual(charge.source_ref["price_book_version_by_type"]["store"], "new-store")
 
+    def test_membership_price_requires_active_expiry_at_confirmation_time(self):
+        prices = {"store": 3990, "member": 2990}
+        confirmed_at = datetime(2026, 8, 18, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+        active = confirmed_price_for_line(
+            prices,
+            is_member=True,
+            confirmed_at=confirmed_at,
+            store_timezone="Asia/Shanghai",
+            member_expire_at=datetime(2026, 8, 19, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+        expired = confirmed_price_for_line(
+            prices,
+            is_member=True,
+            confirmed_at=confirmed_at,
+            store_timezone="Asia/Shanghai",
+            member_expire_at=datetime(2026, 8, 18, 9, tzinfo=ZoneInfo("Asia/Shanghai")),
+        )
+
+        self.assertEqual(active.basis, "tuesday_68")
+        self.assertEqual(expired.basis, "store")
+
+    def test_legacy_annual_member_without_expiry_is_not_priced_as_active(self):
+        price = confirmed_price_for_line(
+            {"store": 3990, "member": 2990},
+            is_member=True,
+            confirmed_at=datetime(2026, 8, 18, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
+            store_timezone="Asia/Shanghai",
+            member_type="annual",
+        )
+
+        self.assertEqual(price.basis, "store")
+
 
 if __name__ == "__main__":
     unittest.main()

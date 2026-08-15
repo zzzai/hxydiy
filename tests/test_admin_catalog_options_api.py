@@ -1,5 +1,6 @@
 import unittest
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -8,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
+from app.domain.catalog_options import _snapshot_hash, lock_catalog_projects
 from app.main import app
 from app.models import (
     AuditLog,
@@ -56,6 +58,7 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
             db.add(linked_version)
             db.flush()
             self.linked.current_published_version_id = linked_version.id
+            linked_version.snapshot_hash = _snapshot_hash(db, linked_version.id)
             db.commit()
             self.store_id = self.store.id
             self.main_id = self.main.id
@@ -408,6 +411,45 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
                 None,
             )
 
+    def test_existing_draft_writes_use_the_shared_catalog_lock_protocol(self):
+        ids = self._create_valid_draft()
+        with patch(
+            "app.api.admin_catalog.lock_catalog_projects",
+            wraps=lock_catalog_projects,
+        ) as acquire_lock:
+            extra_choice = self.client.post(
+                f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}/choices",
+                headers=self.admin_headers,
+                json={
+                    "code": "locked-extra",
+                    "name": "锁定追加",
+                    "choice_type": "preference",
+                    "charge_mode": "free",
+                },
+            )
+            group_patch = self.client.patch(
+                f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}",
+                headers=self.admin_headers,
+                json={"name": "锁定更新组"},
+            )
+            choice_patch = self.client.patch(
+                f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}/choices/{ids['custom_choice_id']}",
+                headers=self.admin_headers,
+                json={"name": "锁定更新选项"},
+            )
+            choice_delete = self.client.delete(
+                f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}/choices/{extra_choice.json()['id']}",
+                headers=self.admin_headers,
+            )
+            group_delete = self.client.delete(
+                f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}",
+                headers=self.admin_headers,
+            )
+
+        for response in (extra_choice, group_patch, choice_patch, choice_delete, group_delete):
+            self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(acquire_lock.call_count, 5)
+
     def test_published_and_superseded_children_cannot_be_patched_or_deleted(self):
         ids = self._create_valid_draft()
         first_publish = self.client.post(f"/api/v1/admin/v2/projects/{self.main_id}/publish", headers=self.admin_headers)
@@ -530,6 +572,249 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
         items_by_code = {item["code"]: item for item in listing.json()["items"]}
         self.assertEqual(items_by_code["MAIN"]["catalog_version"], published.json()["version"])
         self.assertEqual(items_by_code["LEGACY"]["catalog_version"], None)
+
+    def test_customer_catalog_uses_authoritative_price_bands_and_price_source(self):
+        ids = self._create_valid_draft()
+        with self.SessionLocal() as db:
+            linked = db.get(Project, self.linked_id)
+            db.add(PriceBook(
+                project_id=linked.id,
+                price_type="store",
+                amount_cents=3300,
+                publisher="new-price",
+            ))
+            db.commit()
+
+        published = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/publish",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(published.status_code, 200, published.text)
+        response = self.client.get(f"/api/v1/projects/{self.main_id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        choice_by_code = {
+            choice["code"]: choice
+            for choice in body["option_groups"][0]["choices"]
+        }
+        self.assertEqual(choice_by_code["soft"]["price_source"], "free")
+        self.assertEqual(choice_by_code["soft"]["prices"], [])
+        self.assertEqual(choice_by_code["neck"]["price_source"], "linked_project")
+        self.assertEqual(
+            {price["price_type"]: price["amount_cents"] for price in choice_by_code["neck"]["prices"]}["store"],
+            3300,
+        )
+        self.assertEqual(choice_by_code["hot-pack"]["price_source"], "option_choice_price")
+        self.assertEqual(
+            {price["price_type"] for price in choice_by_code["hot-pack"]["prices"]},
+            {"store", "member"},
+        )
+        self.assertEqual(
+            len([price for price in body["prices"] if price["price_type"] == "store"]),
+            1,
+        )
+
+    def _publish_parent_with_pinned_linked_catalog(self):
+        with self.SessionLocal() as db:
+            linked = db.get(Project, self.linked_id)
+            linked_version = db.get(ProjectCatalogVersion, linked.current_published_version_id)
+            group = ProjectOptionGroup(
+                catalog_version_id=linked_version.id,
+                code="linked-v1",
+                name="引用项目第一版",
+                selection_mode="single",
+                max_select=1,
+            )
+            db.add(group)
+            db.flush()
+            choice = ProjectOptionChoice(
+                option_group_id=group.id,
+                code="linked-v1-choice",
+                name="第一版偏好",
+                choice_type="preference",
+                charge_mode="free",
+            )
+            db.add(choice)
+            db.flush()
+            linked_version.snapshot_hash = _snapshot_hash(db, linked_version.id)
+            db.commit()
+            linked_version_id = linked_version.id
+            linked_choice_id = choice.id
+
+        self._create_valid_draft()
+        published = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/publish",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(published.status_code, 200, published.text)
+        return linked_version_id, linked_choice_id
+
+    def test_customer_parent_returns_the_pinned_linked_catalog_snapshot(self):
+        pinned_version_id, _ = self._publish_parent_with_pinned_linked_catalog()
+        with self.SessionLocal() as db:
+            linked = db.get(Project, self.linked_id)
+            old = db.get(ProjectCatalogVersion, pinned_version_id)
+            old.status = "superseded"
+            db.flush()
+            current = ProjectCatalogVersion(project_id=linked.id, version=2, status="published")
+            db.add(current)
+            db.flush()
+            linked.current_published_version_id = current.id
+            group = ProjectOptionGroup(
+                catalog_version_id=current.id,
+                code="linked-v2",
+                name="引用项目第二版",
+                selection_mode="single",
+                max_select=1,
+            )
+            db.add(group)
+            db.flush()
+            db.add(ProjectOptionChoice(
+                option_group_id=group.id,
+                code="linked-v2-choice",
+                name="第二版偏好",
+                choice_type="preference",
+                charge_mode="free",
+            ))
+            db.flush()
+            current.snapshot_hash = _snapshot_hash(db, current.id)
+            db.commit()
+
+        response = self.client.get(f"/api/v1/projects/{self.main_id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        linked_choice = next(
+            choice
+            for choice in response.json()["option_groups"][0]["choices"]
+            if choice["code"] == "neck"
+        )
+        self.assertEqual(linked_choice["linked_catalog_version_id"], pinned_version_id)
+        snapshot = linked_choice["linked_catalog_snapshot"]
+        self.assertEqual(snapshot["id"], pinned_version_id)
+        self.assertEqual([group["code"] for group in snapshot["option_groups"]], ["linked-v1"])
+
+    def test_customer_parent_rejects_drift_in_its_pinned_linked_catalog(self):
+        _, linked_choice_id = self._publish_parent_with_pinned_linked_catalog()
+        with self.SessionLocal() as db:
+            db.get(ProjectOptionChoice, linked_choice_id).name = "被篡改的引用偏好"
+            db.commit()
+
+        response = self.client.get(f"/api/v1/projects/{self.main_id}")
+        self.assertEqual(response.status_code, 409, response.text)
+
+    def test_customer_catalog_and_copy_on_write_reject_published_hash_drift(self):
+        ids = self._create_valid_draft()
+        published = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/publish",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(published.status_code, 200, published.text)
+        with self.SessionLocal() as db:
+            choice = db.get(ProjectOptionChoice, ids["free_choice_id"])
+            choice.name = "被直接篡改"
+            db.commit()
+
+        customer_read = self.client.get(f"/api/v1/projects/{self.main_id}")
+        self.assertEqual(customer_read.status_code, 409)
+        copy_on_write = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups",
+            headers=self.admin_headers,
+            json={"code": "after-drift", "name": "篡改后草稿"},
+        )
+        self.assertEqual(copy_on_write.status_code, 409)
+
+    def test_project_crud_is_strict_and_protects_published_link_references(self):
+        ids = self._create_valid_draft()
+        published = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/publish",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(published.status_code, 200, published.text)
+
+        for payload in (
+            {"unexpected": True},
+            {"diy_options": []},
+            {"current_published_version_id": 999999},
+            {"prices": {"store": "100"}},
+        ):
+            response = self.client.patch(
+                f"/api/v1/admin/v2/projects/{self.linked_id}",
+                headers=self.admin_headers,
+                json=payload,
+            )
+            self.assertEqual(response.status_code, 422, response.text)
+
+        code_change = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.linked_id}",
+            headers=self.admin_headers,
+            json={"code": "LINKED-RENAMED"},
+        )
+        self.assertEqual(code_change.status_code, 409, code_change.text)
+        archive = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.linked_id}",
+            headers=self.admin_headers,
+            json={"publication_status": "archived"},
+        )
+        self.assertEqual(archive.status_code, 409, archive.text)
+
+        create = self.client.post(
+            "/api/v1/admin/v2/projects",
+            headers=self.admin_headers,
+            json={
+                "store_id": self.store_id,
+                "code": "STRICT-CREATE",
+                "category": "catalog-test",
+                "name": "严格项目",
+                "prices": {"store": 1000, "member": 800},
+                "diy_options": [],
+            },
+        )
+        self.assertEqual(create.status_code, 422, create.text)
+
+    def test_project_create_rejects_a_published_project_without_store_price(self):
+        response = self.client.post(
+            "/api/v1/admin/v2/projects",
+            headers=self.admin_headers,
+            json={
+                "store_id": self.store_id,
+                "code": "UNPRICED-PUBLISHED",
+                "category": "catalog-test",
+                "name": "无价正式项目",
+                "publication_status": "published",
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_linked_choice_rejects_a_published_leaf_without_store_price(self):
+        with self.SessionLocal() as db:
+            unpriced = Project(
+                store_id=self.store_id,
+                code="UNPRICED-LEAF",
+                category="catalog-test",
+                name="无价叶子项目",
+                publication_status="published",
+            )
+            db.add(unpriced)
+            db.commit()
+            unpriced_id = unpriced.id
+
+        group = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups",
+            headers=self.admin_headers,
+            json={"code": "unpriced-link", "name": "无价引用"},
+        )
+        self.assertEqual(group.status_code, 200, group.text)
+        response = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{group.json()['id']}/choices",
+            headers=self.admin_headers,
+            json={
+                "code": "unpriced-leaf",
+                "name": "无价叶子",
+                "choice_type": "linked_project",
+                "charge_mode": "inherit_linked_price",
+                "linked_project_id": unpriced_id,
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
 
     def test_archived_project_publish_is_rejected(self):
         response = self.client.post(f"/api/v1/admin/v2/projects/{self.archived_id}/publish", headers=self.admin_headers)

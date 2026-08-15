@@ -86,7 +86,11 @@ def _latest_service_occupancy(db: Session, session_id: str) -> PositionOccupancy
 
 def _session_price_type(db: Session, session: SelectionSession) -> str:
     user = db.get(User, session.customer_id) if session.customer_id else None
-    return price_type_for_member(bool(user and user.is_member))
+    return price_type_for_member(
+        bool(user and user.is_member),
+        member_expire_at=user.member_expire_at if user else None,
+        member_type=user.member_type if user else None,
+    )
 
 
 def refresh_session_pricing(db: Session, session: SelectionSession) -> dict:
@@ -284,7 +288,15 @@ def quote_selection_session(
     session = _get_session(db, session_id, x_selection_token)
     normalized = _validate_items(db, session.store_id, body.items)
     customer = db.get(User, session.customer_id) if session.customer_id else None
-    pricing = calculate_selection_pricing(db, normalized, price_type_for_member(bool(customer and customer.is_member)))
+    pricing = calculate_selection_pricing(
+        db,
+        normalized,
+        price_type_for_member(
+            bool(customer and customer.is_member),
+            member_expire_at=customer.member_expire_at if customer else None,
+            member_type=customer.member_type if customer else None,
+        ),
+    )
     return {"items": normalized, "pricing": pricing, "saving_hint": _saving_hint(db, session.store_id, pricing, customer)}
 
 

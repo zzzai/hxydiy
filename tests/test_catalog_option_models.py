@@ -1,7 +1,7 @@
 import unittest
 from datetime import UTC, datetime
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -11,9 +11,11 @@ from app.models import (
     CHARGE_MODES,
     CHOICE_TYPES,
     OptionChoicePrice,
+    Project,
     ProjectCatalogVersion,
     ProjectOptionChoice,
     ProjectOptionGroup,
+    Store,
 )
 from catalog_option_fixtures import make_catalog_version, make_option_group, make_two_linked_projects
 
@@ -145,6 +147,96 @@ class CatalogOptionModelTests(unittest.TestCase):
                 status="retired",
             ))
 
+            with self.assertRaises(IntegrityError):
+                db.commit()
+
+    def test_catalog_version_allows_only_one_active_draft_and_published_version_per_project(self):
+        with self.SessionLocal() as db:
+            draft = make_catalog_version(db, project_code="one-active-draft")
+            db.commit()
+            db.add(ProjectCatalogVersion(
+                project_id=draft.project_id,
+                version=2,
+                status="draft",
+            ))
+
+            with self.assertRaises(IntegrityError):
+                db.commit()
+
+    def test_current_published_pointer_must_belong_to_its_project(self):
+        with self.SessionLocal() as db:
+            db.execute(text("PRAGMA foreign_keys = ON"))
+            store = Store(store_code="pointer-store", name="指针门店", address="测试地址")
+            db.add(store)
+            db.flush()
+            first = Project(
+                store_id=store.id,
+                code="pointer-first",
+                category="test",
+                name="项目一",
+            )
+            second = Project(
+                store_id=store.id,
+                code="pointer-second",
+                category="test",
+                name="项目二",
+            )
+            db.add_all([first, second])
+            db.flush()
+            first_version = ProjectCatalogVersion(project_id=first.id, version=1, status="published")
+            second_version = ProjectCatalogVersion(project_id=second.id, version=1, status="published")
+            db.add_all([first_version, second_version])
+            db.flush()
+            first.current_published_version_id = second_version.id
+
+            with self.assertRaises(IntegrityError):
+                db.commit()
+
+        with self.SessionLocal() as db:
+            first = make_catalog_version(db, project_code="one-active-published")
+            first.status = "published"
+            db.commit()
+            db.add(ProjectCatalogVersion(
+                project_id=first.project_id,
+                version=2,
+                status="published",
+            ))
+
+            with self.assertRaises(IntegrityError):
+                db.commit()
+
+    def test_option_choice_price_rejects_negative_amount_and_invalid_interval(self):
+        effective_from = datetime(2026, 8, 15, tzinfo=UTC)
+        with self.SessionLocal() as db:
+            version = make_catalog_version(db, project_code="price-checks")
+            group = make_option_group(db, version.id, code="upgrade")
+            choice = ProjectOptionChoice(
+                option_group_id=group.id,
+                code="hot-pack",
+                name="热敷包",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            db.add(choice)
+            db.flush()
+            db.add(OptionChoicePrice(
+                option_choice_id=choice.id,
+                price_type="store",
+                amount_cents=-1,
+                effective_from=effective_from,
+            ))
+
+            with self.assertRaises(IntegrityError):
+                db.commit()
+            db.rollback()
+
+            db.add(OptionChoicePrice(
+                option_choice_id=choice.id,
+                price_type="store",
+                amount_cents=100,
+                effective_from=effective_from,
+                effective_to=effective_from,
+            ))
             with self.assertRaises(IntegrityError):
                 db.commit()
 

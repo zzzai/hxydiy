@@ -62,12 +62,21 @@ class AlembicContractTests(unittest.TestCase):
                 copied = table.to_metadata(previous_metadata)
                 if copied.name == "projects":
                     current_catalog_column = copied.c.current_published_version_id
-                    for foreign_key in list(current_catalog_column.foreign_keys):
-                        current_catalog_column.foreign_keys.discard(foreign_key)
-                        copied.foreign_keys.discard(foreign_key)
-                        copied.foreign_key_constraints.discard(foreign_key.constraint)
-                        copied.constraints.discard(foreign_key.constraint)
+                    for constraint in list(copied.foreign_key_constraints):
+                        if constraint.name != "fk_projects_current_published_version_id":
+                            continue
+                        for foreign_key in constraint.elements:
+                            foreign_key.parent.foreign_keys.discard(foreign_key)
+                            copied.foreign_keys.discard(foreign_key)
+                        copied.foreign_key_constraints.discard(constraint)
+                        copied.constraints.discard(constraint)
                     copied._columns.remove(current_catalog_column)
+                if copied.name == "users":
+                    annual_cycle_column = copied.c.annual_membership_cycle_id
+                    for index in list(copied.indexes):
+                        if annual_cycle_column.name in index.columns:
+                            copied.indexes.discard(index)
+                    copied._columns.remove(annual_cycle_column)
 
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "catalog-options.db"
@@ -103,21 +112,45 @@ class AlembicContractTests(unittest.TestCase):
             self.assertTrue(new_tables.issubset(set(inspector.get_table_names())))
             project_columns = {column["name"] for column in inspector.get_columns("projects")}
             self.assertIn("current_published_version_id", project_columns)
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            self.assertIn("annual_membership_cycle_id", user_columns)
+            user_indexes = {index["name"] for index in inspector.get_indexes("users")}
+            self.assertIn("ix_users_annual_membership_cycle_id", user_indexes)
+            membership_grant_columns = {
+                column["name"]
+                for column in inspector.get_columns("membership_benefit_grants")
+            }
+            self.assertIn("membership_cycle_id", membership_grant_columns)
+            option_choice_columns = {
+                column["name"]
+                for column in inspector.get_columns("project_option_choices")
+            }
+            self.assertIn("pinned_linked_catalog_version_id", option_choice_columns)
             project_foreign_keys = inspector.get_foreign_keys("projects")
             self.assertTrue(any(
-                foreign_key["constrained_columns"] == ["current_published_version_id"]
+                foreign_key["constrained_columns"] == ["id", "current_published_version_id"]
                 and foreign_key["referred_table"] == "project_catalog_versions"
+                and foreign_key["referred_columns"] == ["project_id", "id"]
                 for foreign_key in project_foreign_keys
             ))
+            option_choice_foreign_keys = inspector.get_foreign_keys("project_option_choices")
+            self.assertTrue(any(
+                foreign_key["constrained_columns"] == ["pinned_linked_catalog_version_id"]
+                and foreign_key["referred_table"] == "project_catalog_versions"
+                for foreign_key in option_choice_foreign_keys
+            ))
             expected_unique_columns = {
-                "project_catalog_versions": {("project_id", "version")},
+                "project_catalog_versions": {
+                    ("project_id", "version"),
+                    ("project_id", "id"),
+                },
                 "project_option_groups": {("catalog_version_id", "code")},
                 "project_option_choices": {("option_group_id", "code")},
                 "option_choice_prices": {
                     ("option_choice_id", "price_type", "effective_from"),
                 },
                 "membership_benefit_grants": {
-                    ("user_id", "benefit_type", "membership_started_at"),
+                    ("user_id", "membership_cycle_id"),
                     ("used_service_line_id",),
                 },
             }
@@ -144,6 +177,26 @@ class AlembicContractTests(unittest.TestCase):
             self.assertEqual(
                 membership_status_check,
                 "status IN ('available', 'used', 'voided')",
+            )
+            option_price_checks = {
+                constraint["name"]: constraint["sqltext"]
+                for constraint in inspector.get_check_constraints("option_choice_prices")
+            }
+            self.assertEqual(
+                option_price_checks.get("ck_option_choice_price_non_negative", ""),
+                "amount_cents >= 0",
+            )
+            self.assertEqual(
+                option_price_checks.get("ck_option_choice_price_valid_interval", ""),
+                "effective_to IS NULL OR effective_to > effective_from",
+            )
+            price_book_checks = {
+                constraint["name"]: constraint["sqltext"]
+                for constraint in inspector.get_check_constraints("price_book")
+            }
+            self.assertEqual(
+                price_book_checks.get("ck_price_book_amount_non_negative", ""),
+                "amount_cents >= 0",
             )
             engine.dispose()
 

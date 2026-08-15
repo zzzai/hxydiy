@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -10,7 +11,7 @@ from app.api import admin_v2
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import CouponTemplate, Order, Product, Project, Staff, Store, User
+from app.models import CouponTemplate, Order, PriceBook, Product, Project, Staff, Store, User
 from app.models.operations import Room, Technician
 from app.models.room_assign import RoomAssignment
 from app.models.orders import ORDER_STATUSES
@@ -269,6 +270,51 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertEqual([item["code"] for item in technicians.json()["items"]], ["T-01"])
         self.assertEqual([item["code"] for item in projects.json()], ["P-OWN"])
         self.assertEqual([item["code"] for item in products.json()], ["G-OWN"])
+
+    def test_project_list_uses_the_latest_price_for_each_price_type(self):
+        project = SimpleNamespace(
+            id=1, store_id=1, code="P-OWN", category="bath", category_mark="",
+            name="本店项目", duration_min=None, summary="", image_url="", tags=[],
+            detail_modules=[], diy_options=[], display_order=0, price_label="",
+            publication_status="published",
+        )
+        latest_price = SimpleNamespace(price_type="store", amount_cents=7_900)
+        stale_price = SimpleNamespace(price_type="store", amount_cents=6_900)
+
+        class _ScalarResult:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def all(self):
+                return self.rows
+
+        class _Result:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def scalars(self):
+                return _ScalarResult(self.rows)
+
+        class _Db:
+            def __init__(self):
+                self.statements = []
+                self.rows = iter(([project], [latest_price, stale_price]))
+
+            def execute(self, statement):
+                self.statements.append(statement)
+                return _Result(next(self.rows))
+
+        db = _Db()
+        staff = SimpleNamespace(store_id=1)
+        with patch.object(admin_v2, "_current_staff", return_value=staff):
+            result = admin_v2.list_projects_admin(store_id=None, db=db, authorization=None)
+
+        self.assertEqual(result[0]["prices"]["store"], 7_900)
+        compiled = str(db.statements[1].compile())
+        self.assertIn(
+            "ORDER BY price_book.price_type, price_book.published_at DESC, price_book.id DESC",
+            compiled,
+        )
 
     def test_store_staff_only_lists_users_with_an_own_store_order(self):
         response = self.client.get("/api/v1/admin/v2/users")

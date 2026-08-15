@@ -12,10 +12,14 @@ from app.api.admin import _current_staff
 from app.api.admin_v2 import _audit, _require_admin, _staff_store_id
 from app.db.session import get_db
 from app.domain.catalog_options import (
+    CatalogConcurrencyError,
+    CatalogDomainError,
     CatalogDraftNotFoundError,
     CatalogProjectNotFoundError,
     CatalogPublicationError,
+    choice_contract_errors,
     copy_catalog_version_graph,
+    lock_catalog_projects,
     publish_catalog_version,
     validate_catalog_version,
 )
@@ -212,6 +216,7 @@ def _choice_out(db: Session, choice: ProjectOptionChoice) -> dict:
         "description": choice.description,
         "choice_type": choice.choice_type,
         "linked_project_id": choice.linked_project_id,
+        "pinned_linked_catalog_version_id": choice.pinned_linked_catalog_version_id,
         "charge_mode": choice.charge_mode,
         "independently_visible": choice.independently_visible,
         "coupon_eligible": choice.coupon_eligible,
@@ -245,10 +250,10 @@ def _group_out(db: Session, group: ProjectOptionGroup) -> dict:
 
 
 def _project_for_staff(db: Session, project_id: int, staff: Staff, *, lock: bool = False) -> Project:
-    stmt = select(Project).where(Project.id == project_id)
     if lock:
-        stmt = stmt.with_for_update()
-    project = db.scalar(stmt)
+        project = lock_catalog_projects(db, [project_id]).get(project_id)
+    else:
+        project = db.scalar(select(Project).where(Project.id == project_id))
     if project is None or project.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail="项目不存在")
     return project
@@ -293,7 +298,10 @@ def _create_draft_from_published(db: Session, project: Project) -> ProjectCatalo
     published = db.get(ProjectCatalogVersion, project.current_published_version_id)
     if published is None or published.project_id != project.id or published.status != "published":
         raise HTTPException(status_code=409, detail="当前发布目录指针异常")
-    copy_catalog_version_graph(db, published.id, draft.id)
+    try:
+        copy_catalog_version_graph(db, published.id, draft.id)
+    except CatalogDomainError as exc:
+        raise HTTPException(status_code=409, detail="已发布目录快照校验失败，不能创建草稿") from exc
     return draft
 
 
@@ -320,6 +328,20 @@ def _group_for_project(db: Session, project_id: int, group_id: int, staff: Staff
 
 def _draft_group_for_project(db: Session, project_id: int, group_id: int, staff: Staff) -> tuple[Project, ProjectCatalogVersion, ProjectOptionGroup]:
     project, version, group = _group_for_project(db, project_id, group_id, staff)
+    # PATCH/DELETE/create-choice all use this path.  Take the same Project /
+    # version lock as publish and COW, then refresh the child graph under that
+    # lock so a request which started before a publication cannot mutate it.
+    project = _project_for_staff(db, project.id, staff, lock=True)
+    group = db.scalar(
+        select(ProjectOptionGroup)
+        .where(ProjectOptionGroup.id == group_id)
+        .execution_options(populate_existing=True)
+    )
+    if group is None:
+        raise HTTPException(status_code=404, detail="选项组不存在")
+    version = db.get(ProjectCatalogVersion, group.catalog_version_id)
+    if version is None or version.project_id != project.id:
+        raise HTTPException(status_code=404, detail="选项组不存在")
     if version.status != "draft":
         raise HTTPException(status_code=409, detail="已发布或已废弃目录不可修改")
     latest_draft = _latest_version(db, project.id, "draft")
@@ -349,12 +371,14 @@ def _draft_choice_for_project(
     choice_id: int,
     staff: Staff,
 ) -> tuple[Project, ProjectCatalogVersion, ProjectOptionGroup, ProjectOptionChoice]:
-    project, version, group, choice = _choice_for_project(db, project_id, group_id, choice_id, staff)
-    if version.status != "draft":
-        raise HTTPException(status_code=409, detail="已发布或已废弃目录不可修改")
-    latest_draft = _latest_version(db, project.id, "draft")
-    if latest_draft is None or latest_draft.id != version.id:
-        raise HTTPException(status_code=409, detail="只能修改最新目录草稿")
+    project, version, group = _draft_group_for_project(db, project_id, group_id, staff)
+    choice = db.scalar(
+        select(ProjectOptionChoice)
+        .where(ProjectOptionChoice.id == choice_id)
+        .execution_options(populate_existing=True)
+    )
+    if choice is None or choice.option_group_id != group.id:
+        raise HTTPException(status_code=404, detail="选项不存在")
     return project, version, group, choice
 
 
@@ -368,6 +392,35 @@ def _apply_prices(db: Session, choice_id: int, prices: list[OptionChoicePriceIn]
             effective_from=price.effective_from,
             effective_to=price.effective_to,
         ))
+
+
+def _require_choice_contract(
+    *,
+    choice_type: str,
+    charge_mode: str,
+    linked_project_id: int | None,
+    has_local_prices: bool,
+) -> None:
+    # API 写入在落库前使用与发布/解析相同的三种联合语义。
+    probe = ProjectOptionChoice(
+        option_group_id=0,
+        code="input",
+        name="input",
+        choice_type=choice_type,
+        charge_mode=charge_mode,
+        linked_project_id=linked_project_id,
+    )
+    errors = choice_contract_errors(
+        probe,
+        has_local_prices=has_local_prices,
+        path="choice",
+    )
+    if errors:
+        first = errors[0]
+        raise HTTPException(
+            status_code=422,
+            detail={"code": first.code, "path": first.path, "message": first.message},
+        )
 
 
 def _require_linked_project_allowed_for_write(
@@ -390,11 +443,18 @@ def _require_linked_project_allowed_for_write(
         return
     if linked.publication_status != "published":
         raise HTTPException(status_code=422, detail={"code": "linked_project_unpublished", "path": "linked_project_id", "message": "引用项目必须已发布"})
-    if linked.current_published_version_id is None:
+    if linked.current_published_version_id is not None:
+        linked_version = db.get(ProjectCatalogVersion, linked.current_published_version_id)
+    else:
+        linked_version = None
+    if linked.current_published_version_id is not None and (
+        linked_version is None or linked_version.project_id != linked.id or linked_version.status != "published"
+    ):
         raise HTTPException(status_code=422, detail={"code": "linked_project_catalog_unpublished", "path": "linked_project_id", "message": "引用项目必须具有当前已发布目录版本"})
-    linked_version = db.get(ProjectCatalogVersion, linked.current_published_version_id)
-    if linked_version is None or linked_version.project_id != linked.id or linked_version.status != "published":
-        raise HTTPException(status_code=422, detail={"code": "linked_project_catalog_unpublished", "path": "linked_project_id", "message": "引用项目必须具有当前已发布目录版本"})
+    try:
+        price_book_snapshot(db, linked.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"code": "linked_project_store_price_required", "path": "linked_project_id", "message": "引用项目必须配置当前有效的门店价"}) from exc
 
 
 def _require_linked_project_allowed_for_preview(
@@ -411,11 +471,18 @@ def _require_linked_project_allowed_for_preview(
         raise HTTPException(status_code=404, detail="引用项目不存在")
     if linked.publication_status != "published":
         raise HTTPException(status_code=422, detail={"code": "linked_project_unpublished", "path": f"choices.{choice.code}.linked_project_id", "message": "引用项目必须已发布"})
-    if linked.current_published_version_id is None:
+    if linked.current_published_version_id is not None:
+        linked_version = db.get(ProjectCatalogVersion, linked.current_published_version_id)
+    else:
+        linked_version = None
+    if linked.current_published_version_id is not None and (
+        linked_version is None or linked_version.project_id != linked.id or linked_version.status != "published"
+    ):
         raise HTTPException(status_code=422, detail={"code": "linked_project_catalog_unpublished", "path": f"choices.{choice.code}.linked_project_id", "message": "引用项目必须具有当前已发布目录版本"})
-    linked_version = db.get(ProjectCatalogVersion, linked.current_published_version_id)
-    if linked_version is None or linked_version.project_id != linked.id or linked_version.status != "published":
-        raise HTTPException(status_code=422, detail={"code": "linked_project_catalog_unpublished", "path": f"choices.{choice.code}.linked_project_id", "message": "引用项目必须具有当前已发布目录版本"})
+    try:
+        price_book_snapshot(db, linked.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"code": "linked_project_store_price_required", "path": f"choices.{choice.code}.linked_project_id", "message": "引用项目必须配置当前有效的门店价"}) from exc
 
 
 def _selection_error(code: str, path: str, message: str) -> HTTPException:
@@ -565,6 +632,12 @@ def create_option_choice(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     project, version, group = _draft_group_for_project(db, project_id, group_id, staff)
+    _require_choice_contract(
+        choice_type=body.choice_type,
+        charge_mode=body.charge_mode,
+        linked_project_id=body.linked_project_id,
+        has_local_prices=bool(body.prices),
+    )
     _require_linked_project_allowed_for_write(
         db,
         project,
@@ -600,6 +673,21 @@ def patch_option_choice(
     final_choice_type = data.get("choice_type", choice.choice_type)
     final_charge_mode = data.get("charge_mode", choice.charge_mode)
     final_linked_project_id = data.get("linked_project_id", choice.linked_project_id)
+    final_has_local_prices = (
+        bool(prices)
+        if prices is not None
+        else db.scalar(
+            select(OptionChoicePrice.id)
+            .where(OptionChoicePrice.option_choice_id == choice.id)
+            .limit(1)
+        ) is not None
+    )
+    _require_choice_contract(
+        choice_type=final_choice_type,
+        charge_mode=final_charge_mode,
+        linked_project_id=final_linked_project_id,
+        has_local_prices=final_has_local_prices,
+    )
     _require_linked_project_allowed_for_write(
         db,
         project,
@@ -673,6 +761,9 @@ def publish_project_catalog(
         )
     except CatalogPublicationError as exc:
         return JSONResponse(status_code=409, content={"errors": [_validation_error_out(error) for error in exc.errors]})
+    except (CatalogConcurrencyError, CatalogDomainError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     project.publication_status = "published"
     _audit(db, staff.name, "publish_catalog_version", "project", str(project.id), {"catalog_version_id": published.id, "version": published.version})
     _commit_or_conflict(db)

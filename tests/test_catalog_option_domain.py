@@ -8,10 +8,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base
 from app.domain.catalog_options import (
+    CatalogDomainError,
     CatalogDraftNotFoundError,
     CatalogPublishedVersionNotFoundError,
     CatalogProjectNotFoundError,
     CatalogPublicationError,
+    _snapshot_hash,
+    copy_catalog_version_graph,
     publish_catalog_version,
     resolve_published_project_config,
     validate_catalog_version,
@@ -22,6 +25,7 @@ from app.models import (
     ProjectCatalogVersion,
     ProjectOptionChoice,
     ProjectOptionGroup,
+    PriceBook,
     Staff,
     Store,
 )
@@ -365,7 +369,8 @@ class CatalogOptionDomainTests(unittest.TestCase):
             errors = validate_catalog_version(db, version.id)
 
             codes = {error.code for error in errors}
-            self.assertIn("linked_project_catalog_unpublished", codes)
+            # 已发布但没有选项目录的正式项目是稳定的 linked leaf，可以被引用。
+            self.assertNotIn("linked_project_catalog_unpublished", codes)
             self.assertIn("linked_project_unpublished", codes)
             self.assertIn("linked_project_cross_store", codes)
             self.assertIn("linked_project_archived", codes)
@@ -425,6 +430,151 @@ class CatalogOptionDomainTests(unittest.TestCase):
             self.assertEqual(old.status, "superseded")
             self.assertEqual(project.current_published_version_id, draft.id)
 
+    def test_publish_rejects_older_draft_than_current_published_version(self):
+        with self.SessionLocal() as db:
+            store = self._add_store(db)
+            project = self._add_project(db, store, "publish-monotonic")
+            current = self._add_version(db, project, version=3, status="published")
+            stale = self._add_version(db, project, version=2, status="draft")
+            group = self._add_group(db, stale, "preference")
+            self._add_choice(db, group, "soft")
+            staff = Staff(username="monotonic-publisher", password_hash="hash", name="发布人", store_id=store.id)
+            db.add(staff)
+            db.commit()
+
+            with self.assertRaises(CatalogPublicationError) as raised:
+                publish_catalog_version(db, project.id, staff.id)
+
+            self.assertIn("catalog_version_not_monotonic", {error.code for error in raised.exception.errors})
+            self.assertEqual(current.status, "published")
+            self.assertEqual(stale.status, "draft")
+            self.assertEqual(project.current_published_version_id, current.id)
+
+    def test_published_hash_drift_fails_closed_for_read_and_copy_on_write(self):
+        with self.SessionLocal() as db:
+            store = self._add_store(db)
+            project = self._add_project(db, store, "hash-drift")
+            draft = self._add_version(db, project, version=1)
+            group = self._add_group(db, draft, "preference")
+            choice = self._add_choice(db, group, "soft")
+            staff = Staff(username="hash-publisher", password_hash="hash", name="发布人", store_id=store.id)
+            db.add(staff)
+            db.commit()
+            published = publish_catalog_version(db, project.id, staff.id)
+            db.commit()
+
+            choice.name = "被篡改的偏好"
+            db.commit()
+
+            with self.assertRaises(CatalogDomainError):
+                resolve_published_project_config(db, project.id)
+
+            target = self._add_version(db, project, version=2)
+            with self.assertRaises(CatalogDomainError):
+                copy_catalog_version_graph(db, published.id, target.id)
+
+    def test_linked_published_leaf_is_pinned_even_if_target_later_publishes_catalog(self):
+        with self.SessionLocal() as db:
+            store = self._add_store(db)
+            parent = self._add_project(db, store, "pinned-parent")
+            leaf = self._add_project(db, store, "pinned-leaf")
+            db.add(PriceBook(project_id=leaf.id, price_type="store", amount_cents=1_000))
+            parent_draft = self._add_version(db, parent, version=1)
+            group = self._add_group(db, parent_draft, "link")
+            self._add_choice(
+                db,
+                group,
+                "leaf",
+                choice_type="linked_project",
+                linked_project_id=leaf.id,
+                charge_mode="inherit_linked_price",
+            )
+            staff = Staff(username="leaf-publisher", password_hash="hash", name="发布人", store_id=store.id)
+            db.add(staff)
+            db.commit()
+
+            self.assertNotIn(
+                "linked_project_catalog_unpublished",
+                {error.code for error in validate_catalog_version(db, parent_draft.id)},
+            )
+            publish_catalog_version(db, parent.id, staff.id)
+            db.commit()
+
+            leaf_draft = self._add_version(db, leaf, version=1)
+            leaf_group = self._add_group(db, leaf_draft, "leaf-preference")
+            self._add_choice(db, leaf_group, "warm")
+            publish_catalog_version(db, leaf.id, staff.id)
+            db.commit()
+
+            config = resolve_published_project_config(db, parent.id)
+            linked = config["groups"][0]["choices"][0]
+            self.assertIsNone(linked["pinned_linked_catalog_version_id"])
+            self.assertIsNone(linked["linked_catalog_version_id"])
+
+    def test_strict_choice_contract_rejects_mixed_rows_in_validation_and_resolver(self):
+        from app.domain.membership_pricing import PriceContext, resolve_option_charge
+
+        with self.SessionLocal() as db:
+            store = self._add_store(db)
+            project = self._add_project(db, store, "strict-choice-root")
+            linked = self._add_project(db, store, "strict-choice-target")
+            version = self._add_version(db, project)
+            group = self._add_group(db, version, "mixed")
+            preference = self._add_choice(
+                db,
+                group,
+                "bad-preference",
+                choice_type="preference",
+                linked_project_id=linked.id,
+                charge_mode="free",
+            )
+            self._add_store_price(db, preference)
+            db.commit()
+
+            codes = {error.code for error in validate_catalog_version(db, version.id)}
+            self.assertIn("preference_cannot_link_project", codes)
+            self.assertIn("free_choice_cannot_have_prices", codes)
+            with self.assertRaises(ValueError):
+                resolve_option_charge(db, preference.id, PriceContext(
+                    is_member=False,
+                    confirmed_at=datetime(2026, 8, 15, tzinfo=UTC),
+                    store_timezone="Asia/Shanghai",
+                ))
+
+    def test_publication_rejects_overlapping_option_price_intervals(self):
+        with self.SessionLocal() as db:
+            store = self._add_store(db)
+            project = self._add_project(db, store, "overlapping-option-price")
+            version = self._add_version(db, project)
+            group = self._add_group(db, version, "upgrade")
+            choice = self._add_choice(
+                db,
+                group,
+                "hot-pack",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            start = datetime(2026, 8, 1, tzinfo=UTC)
+            db.add_all([
+                OptionChoicePrice(
+                    option_choice_id=choice.id,
+                    price_type="store",
+                    amount_cents=1000,
+                    effective_from=start,
+                    effective_to=start + timedelta(days=10),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=choice.id,
+                    price_type="store",
+                    amount_cents=1200,
+                    effective_from=start + timedelta(days=5),
+                ),
+            ])
+            db.commit()
+
+            codes = {error.code for error in validate_catalog_version(db, version.id)}
+            self.assertIn("overlapping_option_price_intervals", codes)
+
     def test_publish_validation_failure_does_not_change_old_publication_or_pointer(self):
         with self.SessionLocal() as db:
             store = self._add_store(db)
@@ -478,7 +628,7 @@ class CatalogOptionDomainTests(unittest.TestCase):
         with self.SessionLocal() as db:
             store = self._add_store(db)
             project = self._add_project(db, store, "latest-draft")
-            older = self._add_version(db, project, version=1)
+            older = self._add_version(db, project, version=1, status="superseded")
             latest = self._add_version(db, project, version=2)
             staff = Staff(username="latest-publisher", password_hash="hash", store_id=store.id)
             db.add(staff)
@@ -487,7 +637,7 @@ class CatalogOptionDomainTests(unittest.TestCase):
             published = publish_catalog_version(db, project.id, staff.id)
 
             self.assertEqual(published.id, latest.id)
-            self.assertEqual(older.status, "draft")
+            self.assertEqual(older.status, "superseded")
             no_draft_project = self._add_project(db, store, "no-draft")
             self._add_version(db, no_draft_project, status="published")
             db.flush()
@@ -536,6 +686,7 @@ class CatalogOptionDomainTests(unittest.TestCase):
             draft = self._add_version(db, project, version=2)
             draft_group = self._add_group(db, draft, "draft-only")
             self._add_choice(db, draft_group, "hidden")
+            published.snapshot_hash = _snapshot_hash(db, published.id)
             db.commit()
 
             config = resolve_published_project_config(db, project.id)
