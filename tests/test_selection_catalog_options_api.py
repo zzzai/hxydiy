@@ -1,9 +1,12 @@
 from datetime import UTC, datetime
+from dataclasses import dataclass
 import inspect
 
 import pytest
+from sqlalchemy import select
 
 from app.db.session import get_db
+from app.api.admin import create_staff_token, hash_password
 from app.domain.catalog_options import _snapshot_hash
 from app.main import app
 from app.models import (
@@ -13,8 +16,11 @@ from app.models import (
     ProjectCatalogVersion,
     ProjectOptionChoice,
     ProjectOptionGroup,
+    PositionOccupancy,
     Store,
+    Staff,
 )
+from app.models.operations import Room, Technician
 from catalog_selection_fixtures import CatalogSelectionScenario, scenario
 
 
@@ -23,10 +29,211 @@ def _session_local():
     return inspect.getclosurevars(override).nonlocals["session_local"]
 
 
+@dataclass
+class ConfirmedFlowResult:
+    session_id: str
+    pricing: dict
+    settlement: dict
+    feedback: dict
+
+
+def _frontdesk_setup(scenario: CatalogSelectionScenario) -> dict[str, str]:
+    cached = getattr(scenario, "frontdesk_headers", None)
+    if cached is not None:
+        return cached
+    with _session_local()() as db:
+        staff = Staff(
+            username=f"catalog-flow-admin-{scenario.store_id}",
+            name="目录验收前台",
+            role="admin",
+            status="active",
+            password_hash=hash_password("pass"),
+            store_id=scenario.store_id,
+        )
+        db.add(staff)
+        db.commit()
+        db.refresh(staff)
+    headers = {"Authorization": f"Bearer {create_staff_token(staff.id, 'admin')}"}
+    scenario.frontdesk_headers = headers
+    scenario.frontdesk_staff_id = staff.id
+    return headers
+
+
+def run_confirmed_catalog_selection(
+    scenario: CatalogSelectionScenario,
+    project_id: int,
+    local_parts: list[str],
+) -> ConfirmedFlowResult:
+    """只通过公开目录、真实 revision 和前台 API 完成一条可结算验收流。"""
+    frontdesk_headers = _frontdesk_setup(scenario)
+    catalog = scenario.client.get(f"/api/v1/projects?store_id={scenario.store_id}")
+    assert catalog.status_code == 200, catalog.text
+    project = next(item for item in catalog.json()["items"] if item["id"] == project_id)
+    catalog_version_id = project["catalog_version_id"]
+    assert catalog_version_id
+
+    choice_ids = []
+    preferred_codes = {"small": "guasha", "local": "local-strength"}
+    for group in project["option_groups"]:
+        active = [choice for choice in group["choices"] if choice["status"] == "active"]
+        preferred = preferred_codes.get(group["code"])
+        choice = next((item for item in active if item["code"] == preferred), None)
+        if choice is not None:
+            choice_ids.append(choice["id"])
+
+    created = scenario.client.post(
+        "/api/v1/selection-sessions",
+        json={"store_id": scenario.store_id, "source": "personal_qr", "device_label": "Task 8 验收"},
+    )
+    assert created.status_code == 200, created.text
+    session_id = created.json()["session"]["id"]
+    selection_token = created.json()["access_token"]
+
+    with _session_local()() as db:
+        room = Room(
+            store_id=scenario.store_id,
+            code=f"CATALOG-FLOW-{session_id[-8:]}",
+            name="目录验收服务位",
+            room_type="sofa",
+            customer_label="目录验收服务位",
+            status="available",
+        )
+        technician = Technician(
+            store_id=scenario.store_id,
+            code=f"CATALOG-FLOW-TECH-{session_id[-8:]}",
+            name="目录验收技师",
+            status="available",
+        )
+        db.add_all([room, technician])
+        db.flush()
+        db.add(PositionOccupancy(
+            store_id=scenario.store_id,
+            room_id=room.id,
+            active_room_id=room.id,
+            selection_session_id=session_id,
+            active_session_id=session_id,
+            status="waiting_service",
+            source="personal_qr",
+        ))
+        db.commit()
+        room_id = room.id
+        technician_id = technician.id
+
+    items = [{
+        "project_id": project_id,
+        "catalog_version_id": catalog_version_id,
+        "option_choice_ids": choice_ids,
+    }]
+    items.extend({"project_id": scenario.local_project_id, "diy_preferences": [part]} for part in local_parts)
+    revision = scenario.client.post(
+        f"/api/v1/selection-sessions/{session_id}/revisions",
+        headers={"X-Selection-Token": selection_token, "Idempotency-Key": f"task8-revision-{session_id}"},
+        json={"items": items},
+    )
+    assert revision.status_code == 200, revision.text
+
+    confirmed = scenario.client.post(
+        f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+        headers=frontdesk_headers,
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    pricing = confirmed.json()["pricing_snapshot"]
+
+    checkout = scenario.client.post(
+        f"/api/v1/operations/selection-sessions/{session_id}/counter-checkout",
+        headers=frontdesk_headers,
+        json={
+            "idempotency_key": f"task8-checkout-{session_id}",
+            "payment_method": "cash",
+            "received_amount_cents": pricing["payable_total_cents"],
+            "payment_reference": "",
+        },
+    )
+    assert checkout.status_code == 200, checkout.text
+    checkout_data = checkout.json()
+    assigned = scenario.client.post(
+        f"/api/v1/operations/visits/{checkout_data['visit_id']}/assign",
+        headers=frontdesk_headers,
+        json={
+            "idempotency_key": f"task8-assign-{session_id}",
+            "technician_id": technician_id,
+            "room_id": room_id,
+            "project_ids": [project_id, scenario.referenced_small_project_id, scenario.local_project_id],
+        },
+    )
+    assert assigned.status_code == 200, assigned.text
+    for action in ("ready", "start", "finish"):
+        response = scenario.client.post(
+            f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/{action}",
+            headers=frontdesk_headers,
+            json={"idempotency_key": f"task8-{action}-{session_id}"},
+        )
+        assert response.status_code == 200, response.text
+    settled = scenario.client.post(
+        f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/settle",
+        headers=frontdesk_headers,
+        json={
+            "idempotency_key": f"task8-settle-{session_id}",
+            "payment_method": "cash",
+            "received_amount_cents": pricing["payable_total_cents"],
+            "payment_reference": f"TASK8-{session_id}",
+        },
+    )
+    assert settled.status_code == 200, settled.text
+    settlement = settled.json()
+
+    feedback = scenario.client.post(
+        f"/api/v1/selection-sessions/{session_id}/feedback",
+        headers={"X-Selection-Token": selection_token},
+        json={"rating": 5, "tags": ["技术专业", "环境安心", "技师细致"], "note": "Task 8 验收"},
+    )
+    assert feedback.status_code == 200, feedback.text
+    feedback_data = feedback.json()
+
+    with _session_local()() as db:
+        occupancy = db.scalar(select(PositionOccupancy).where(
+            PositionOccupancy.selection_session_id == session_id,
+        ))
+        assert occupancy is not None
+        occupancy_id = occupancy.id
+    departed = scenario.client.post(
+        f"/api/v1/admin/occupancies/{occupancy_id}/confirm-departure",
+        headers=frontdesk_headers,
+        json={"reason": "Task 8 验收离位"},
+    )
+    assert departed.status_code == 200, departed.text
+    cleaned = scenario.client.post(
+        f"/api/v1/admin/occupancies/{occupancy_id}/finish-cleaning",
+        headers=frontdesk_headers,
+        json={"reason": "Task 8 验收清洁"},
+    )
+    assert cleaned.status_code == 200, cleaned.text
+    return ConfirmedFlowResult(session_id, pricing, settlement, feedback_data)
+
+
 @pytest.fixture
 def expanded_scenario(scenario: CatalogSelectionScenario) -> CatalogSelectionScenario:
     with _session_local()() as db:
         qiqing_group = db.get(ProjectOptionGroup, scenario.qiqing_small_group_id)
+        qiqing_local_group = ProjectOptionGroup(
+            catalog_version_id=scenario.qiqing_version_id,
+            code="local",
+            name="局部加强",
+            selection_mode="multiple",
+            max_select=2,
+        )
+        db.add(qiqing_local_group)
+        db.flush()
+        qiqing_local_choice = ProjectOptionChoice(
+            option_group_id=qiqing_local_group.id,
+            code="local-strength",
+            name="局部加强",
+            choice_type="linked_project",
+            linked_project_id=scenario.local_project_id,
+            charge_mode="inherit_linked_price",
+            qualifies_for_foot_bath_bundle=True,
+        )
+        db.add(qiqing_local_choice)
 
         dedicated = ProjectOptionChoice(
             option_group_id=qiqing_group.id,
@@ -137,6 +344,25 @@ def expanded_scenario(scenario: CatalogSelectionScenario) -> CatalogSelectionSce
             charge_mode="inherit_linked_price",
         )
         db.add(xiaoqi_cupping)
+        xiaoqi_local_group = ProjectOptionGroup(
+            catalog_version_id=xiaoqi_version.id,
+            code="local",
+            name="局部加强",
+            selection_mode="multiple",
+            max_select=2,
+        )
+        db.add(xiaoqi_local_group)
+        db.flush()
+        xiaoqi_local_choice = ProjectOptionChoice(
+            option_group_id=xiaoqi_local_group.id,
+            code="local-strength",
+            name="局部加强",
+            choice_type="linked_project",
+            linked_project_id=scenario.local_project_id,
+            charge_mode="inherit_linked_price",
+            qualifies_for_foot_bath_bundle=True,
+        )
+        db.add(xiaoqi_local_choice)
 
         xiangxiang_version = ProjectCatalogVersion(
             project_id=scenario.xiangxiang_id,
@@ -179,9 +405,11 @@ def expanded_scenario(scenario: CatalogSelectionScenario) -> CatalogSelectionSce
         scenario.unpublished_choice_id = unpublished_choice.id
         scenario.xiaoqi_version_id = xiaoqi_version.id
         scenario.xiaoqi_cupping_choice_id = xiaoqi_cupping.id
+        scenario.xiaoqi_local_choice_id = xiaoqi_local_choice.id
         scenario.cupping_project_id = scenario.referenced_small_project_id
         scenario.xiangxiang_version_id = xiangxiang_version.id
         scenario.xiangxiang_local_choice_id = local_choice.id
+        scenario.qiqing_local_choice_id = qiqing_local_choice.id
     return scenario
 
 
@@ -499,3 +727,22 @@ def test_same_local_body_part_is_kept_once_across_explicit_entries(expanded_scen
     assert len(local_items) == 1
     assert local_items[0]["quantity"] == 2
     assert local_items[0]["diy_preferences"] == ["肩颈"]
+
+
+def test_three_footbath_catalog_flow_keeps_promotion_exclusive(expanded_scenario: CatalogSelectionScenario):
+    qiqing = run_confirmed_catalog_selection(expanded_scenario, expanded_scenario.qiqing_id, ["肩颈", "腰臀"])
+    xiangxiang = run_confirmed_catalog_selection(expanded_scenario, expanded_scenario.xiangxiang_id, ["肩颈", "腰臀"])
+    xiaoqi = run_confirmed_catalog_selection(expanded_scenario, expanded_scenario.xiaoqi_id, ["肩颈", "腰臀"])
+
+    assert qiqing.pricing["promotion_adjustment_cents"] < 0
+    assert xiangxiang.pricing["promotion_adjustment_cents"] == 0
+    assert xiaoqi.pricing["promotion_adjustment_cents"] == 0
+    assert qiqing.settlement["service_order_status"] == "completed"
+    assert xiangxiang.settlement["service_order_status"] == "completed"
+    assert xiaoqi.settlement["service_order_status"] == "completed"
+    assert qiqing.settlement["order_status"] == "completed"
+    assert xiangxiang.settlement["order_status"] == "completed"
+    assert xiaoqi.settlement["order_status"] == "completed"
+    assert qiqing.settlement["payable_total_cents"] == qiqing.pricing["payable_total_cents"]
+    assert xiangxiang.settlement["payable_total_cents"] == xiangxiang.pricing["payable_total_cents"]
+    assert xiaoqi.settlement["payable_total_cents"] == xiaoqi.pricing["payable_total_cents"]

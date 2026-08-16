@@ -745,6 +745,26 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
             self.assertEqual(service_order.total_amount_cents, 8000)
             self.assertEqual(service_order.status, "completed")
 
+        service_status = self.client.get(
+            f"/api/v1/selection-sessions/{self.session_id}/service-status",
+            headers={"X-Selection-Token": "diy-counter-token"},
+        )
+        self.assertEqual(service_status.status_code, 200, service_status.text)
+        self.assertTrue(service_status.json()["can_evaluate"])
+        self.assertFalse(service_status.json()["evaluated"])
+        feedback = self.client.post(
+            f"/api/v1/selection-sessions/{self.session_id}/feedback",
+            headers={"X-Selection-Token": "diy-counter-token"},
+            json={"rating": 5, "tags": ["技术专业", "环境安心", "技师细致"], "note": "追加项目也已纳入最终账单"},
+        )
+        self.assertEqual(feedback.status_code, 200, feedback.text)
+        self.assertEqual(feedback.json()["tags"], ["技术专业", "环境安心", "技师细致"])
+        evaluated_status = self.client.get(
+            f"/api/v1/selection-sessions/{self.session_id}/service-status",
+            headers={"X-Selection-Token": "diy-counter-token"},
+        )
+        self.assertTrue(evaluated_status.json()["evaluated"])
+
     def test_service_completion_before_addition_approval_keeps_authoritative_snapshot_and_bill_unchanged(self):
         self.confirm_session_for_counter_checkout()
         checkout = self.client.post(
