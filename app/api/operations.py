@@ -14,6 +14,7 @@ from app.domain.business_closure import (
     BusinessClosureState,
     apply_action,
 )
+from app.domain.automatic_coupon import mark_automatic_coupon_used, select_automatic_coupon
 from app.models import Order, OrderEvent, PositionOccupancy, Project, SelectionRevision, SelectionSession, ServiceLine, SettlementAdjustment, User
 from app.models.operations import Room, Technician
 from app.models.service import ServiceAssignment, ServiceOrder, StateTransition, Visit
@@ -807,11 +808,19 @@ def settle_completed_selection(
         })
 
     payable_total = int(pricing.get("payable_total_cents", session.store_total_cents) or 0)
-    if body.service_adjustment_cents > payable_total:
+    automatic_coupon = select_automatic_coupon(
+        db,
+        customer_id=session.customer_id,
+        pricing=pricing,
+        now=datetime.now(timezone.utc),
+        lock=True,
+    )
+    payable_after_coupon = automatic_coupon.payable_after_coupon_cents
+    if body.service_adjustment_cents > payable_after_coupon:
         raise HTTPException(status_code=409, detail={
             "code": "SERVICE_ADJUSTMENT_EXCEEDED", "message": "服务减免不能超过原应收金额",
         })
-    final_payable_total = payable_total - body.service_adjustment_cents
+    final_payable_total = payable_after_coupon - body.service_adjustment_cents
     if body.received_amount_cents < final_payable_total:
         raise HTTPException(status_code=409, detail={
             "code": "PAYMENT_NOT_CONFIRMED", "message": "实收金额低于本次应收金额",
@@ -819,17 +828,24 @@ def settle_completed_selection(
 
     from app.api.orders import gen_order_no
 
+    settlement_items = [
+        {**line.snapshot, "settlement_state": line.state}
+        for line in service_lines
+    ]
+    if automatic_coupon.coupon_id is not None:
+        settlement_items.append(automatic_coupon.audit_item())
     order = Order(
         order_no=gen_order_no(),
         order_type="service",
         user_id=session.customer_id,
         store_id=store_id,
-        items=[{**line.snapshot, "settlement_state": line.state} for line in service_lines],
+        items=settlement_items,
+        coupon_id=automatic_coupon.coupon_id,
         total_amount_cents=payable_total,
         discount_cents=max(
             0,
-            int(pricing.get("store_total_cents", payable_total) or payable_total) - payable_total,
-        ) + body.service_adjustment_cents,
+            int(pricing.get("store_total_cents", payable_total) or payable_total) - final_payable_total,
+        ),
         pay_amount_cents=final_payable_total,
         status="completed",
         pay_status="paid",
@@ -837,6 +853,7 @@ def settle_completed_selection(
     )
     db.add(order)
     db.flush()
+    mark_automatic_coupon_used(db, automatic_coupon, order_id=order.id)
     if abnormal_service:
         for line in unfinished_lines:
             line.state = "cancelled"
@@ -846,7 +863,7 @@ def settle_completed_selection(
             selection_session_id=session.id,
             adjustment_type="service_waiver",
             amount_cents=body.service_adjustment_cents,
-            original_amount_cents=payable_total,
+            original_amount_cents=payable_after_coupon,
             final_amount_cents=final_payable_total,
             reason_code=body.adjustment_reason_code.strip(),
             reason=body.reason.strip(),
@@ -865,6 +882,8 @@ def settle_completed_selection(
         "order_status": order.status,
         "payment_status": order.pay_status,
         "original_payable_total_cents": payable_total,
+        "payable_after_coupon_cents": payable_after_coupon,
+        "automatic_coupon": automatic_coupon.as_dict(),
         "service_adjustment_cents": body.service_adjustment_cents,
         "payable_total_cents": final_payable_total,
         "received_amount_cents": body.received_amount_cents,
@@ -1233,6 +1252,12 @@ def settle(
     service_order, visit, order, assignment, technician, room, selection_authority = _closure_for_service(
         db, service_order_id, store_id
     )
+    settlement_pricing = {
+        "store_total_cents": order.total_amount_cents,
+        "member_total_cents": order.pay_amount_cents,
+        "payable_total_cents": order.pay_amount_cents,
+    }
+    coupon_customer_id = None
     if selection_authority:
         if selection_authority["session"].status != "confirmed":
             raise HTTPException(status_code=409, detail={
@@ -1251,13 +1276,34 @@ def settle(
         )
         _require_exact_service_line_snapshot(latest_revision.snapshot or {}, service_lines)
         _require_frozen_billing_snapshot(order, service_order, latest_revision.snapshot or {})
-    if order.pay_status != "paid" and body.received_amount_cents < order.pay_amount_cents:
+        settlement_pricing = latest_revision.snapshot["pricing"]
+        coupon_customer_id = selection_authority["session"].customer_id
+    now = datetime.now(timezone.utc)
+    automatic_coupon = select_automatic_coupon(
+        db,
+        customer_id=coupon_customer_id if order.pay_status != "paid" else None,
+        pricing=settlement_pricing,
+        now=now,
+        lock=True,
+    )
+    final_payable_total = automatic_coupon.payable_after_coupon_cents
+    if order.pay_status != "paid" and body.received_amount_cents < final_payable_total:
         raise HTTPException(status_code=409, detail={
             "code": "PAYMENT_NOT_CONFIRMED", "message": "实收金额或支付状态尚未确认",
         })
     before = _state(order, visit, service_order, technician, room)
     after = _apply(before, "settle")
-    now = datetime.now(timezone.utc)
+    if automatic_coupon.coupon_id is not None:
+        order.items = [*list(order.items or []), automatic_coupon.audit_item()]
+        order.coupon_id = automatic_coupon.coupon_id
+        order.pay_amount_cents = final_payable_total
+        order.discount_cents = max(
+            0,
+            int(settlement_pricing.get("store_total_cents", final_payable_total) or 0)
+            - final_payable_total,
+        )
+        service_order.total_amount_cents = final_payable_total
+        mark_automatic_coupon_used(db, automatic_coupon, order_id=order.id)
     order.status = after.order
     order.pay_status = "paid"
     if body.payment_reference:
@@ -1278,6 +1324,8 @@ def settle(
         "room_status": room.status,
         "payment_method": body.payment_method,
         "received_amount_cents": body.received_amount_cents,
+        "payable_total_cents": final_payable_total,
+        "automatic_coupon": automatic_coupon.as_dict(),
     }
     _record_transition(
         db, store_id=store_id, staff=staff, entity_type="service_order",

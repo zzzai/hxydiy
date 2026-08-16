@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, Order, PositionOccupancy, PriceBook, Project, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, Staff, Store, User
+from app.models import AuditLog, CouponTemplate, Order, PositionOccupancy, PriceBook, Project, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, Staff, Store, User, UserCoupon
 import app.models as models
 from app.models.operations import Room
 from app.models.operations import Technician
@@ -135,6 +135,393 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 ),
             ])
             db.commit()
+
+    def grant_coupon(
+        self,
+        code,
+        *,
+        coupon_type="fixed",
+        amount_cents=0,
+        percent_off=None,
+        min_spend_cents=0,
+        status="unused",
+        expire_at=None,
+        user_id=None,
+    ):
+        with self.SessionLocal() as db:
+            template = CouponTemplate(
+                code=code,
+                name=f"{code}优惠券",
+                coupon_type=coupon_type,
+                amount_cents=amount_cents,
+                percent_off=percent_off,
+                min_spend_cents=min_spend_cents,
+                status="published",
+            )
+            db.add(template)
+            db.flush()
+            coupon = UserCoupon(
+                user_id=user_id or self.customer_id,
+                template_id=template.id,
+                status=status,
+                expire_at=expire_at,
+            )
+            db.add(coupon)
+            db.commit()
+            return coupon.id
+
+    def prepare_completed_direct_selection(self, pricing):
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, self.session_id)
+            session.status = "confirmed"
+            session.pricing_snapshot = pricing
+            confirmed_item = {
+                **session.items[0],
+                "service_line_id": "automatic-coupon-direct-line",
+                "state": "confirmed",
+            }
+            session.items = [confirmed_item]
+            revision = SelectionRevision(
+                id="automatic-coupon-direct-revision",
+                selection_session_id=self.session_id,
+                revision_no=1,
+                state="confirmed",
+                idempotency_key="automatic-coupon-direct-revision",
+                snapshot={"items": [confirmed_item], "pricing": pricing},
+            )
+            db.add_all([
+                revision,
+                ServiceLine(
+                    id="automatic-coupon-direct-line",
+                    selection_session_id=self.session_id,
+                    selection_revision_id=revision.id,
+                    snapshot=confirmed_item,
+                    state="completed",
+                ),
+            ])
+            occupancy = db.scalar(select(PositionOccupancy).where(
+                PositionOccupancy.selection_session_id == self.session_id,
+            ))
+            occupancy.status = "post_service_present"
+            occupancy.actual_service_end_at = datetime.now(timezone.utc)
+            db.commit()
+
+    def checkout_and_finish_service(self, prefix):
+        self.confirm_session_for_counter_checkout()
+        checkout = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": f"{prefix}-checkout",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+        self.assertEqual(checkout.status_code, 200, checkout.text)
+        checkout_data = checkout.json()
+        assigned = self.client.post(
+            f"/api/v1/operations/visits/{checkout_data['visit_id']}/assign",
+            headers=self.headers,
+            json={
+                "idempotency_key": f"{prefix}-assign",
+                "technician_id": self.technician_id,
+                "room_id": self.room_id,
+                "project_ids": [self.project_id],
+            },
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.text)
+        for action in ("ready", "start", "finish"):
+            response = self.client.post(
+                f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/{action}",
+                headers=self.headers,
+                json={"idempotency_key": f"{prefix}-{action}"},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+        return checkout_data
+
+    def test_quote_previews_best_coupon_with_deterministic_tie_break_without_consuming_it(self):
+        with self.SessionLocal() as db:
+            db.get(User, self.customer_id).is_member = False
+            other_customer = User(openid="automatic-coupon-other-customer")
+            db.add_all([
+                other_customer,
+                PriceBook(project_id=self.project_id, price_type="store", amount_cents=3990),
+                PriceBook(project_id=self.project_id, price_type="member", amount_cents=2990),
+            ])
+            db.commit()
+            other_customer_id = other_customer.id
+
+        earliest_expiry = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        selected_coupon_id = self.grant_coupon(
+            "QUOTE-BEST-EARLIEST-FIRST",
+            amount_cents=5000,
+            expire_at=earliest_expiry,
+        )
+        same_expiry_later_id = self.grant_coupon(
+            "QUOTE-BEST-EARLIEST-SECOND",
+            amount_cents=5000,
+            expire_at=earliest_expiry,
+        )
+        percent_coupon_id = self.grant_coupon(
+            "QUOTE-BEST-PERCENT",
+            coupon_type="percent",
+            percent_off=30,
+            expire_at=datetime(2031, 1, 1, tzinfo=timezone.utc),
+        )
+        expired_coupon_id = self.grant_coupon(
+            "QUOTE-EXPIRED",
+            amount_cents=5000,
+            expire_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        )
+        locked_coupon_id = self.grant_coupon(
+            "QUOTE-LOCKED",
+            amount_cents=5000,
+            status="locked",
+            expire_at=datetime(2029, 1, 1, tzinfo=timezone.utc),
+        )
+        threshold_coupon_id = self.grant_coupon(
+            "QUOTE-THRESHOLD",
+            amount_cents=5000,
+            min_spend_cents=4000,
+            expire_at=datetime(2029, 1, 1, tzinfo=timezone.utc),
+        )
+        other_customer_coupon_id = self.grant_coupon(
+            "QUOTE-OTHER-CUSTOMER",
+            amount_cents=5000,
+            expire_at=datetime(2029, 1, 1, tzinfo=timezone.utc),
+            user_id=other_customer_id,
+        )
+
+        response = self.client.post(
+            f"/api/v1/selection-sessions/{self.session_id}/quote",
+            headers={"X-Selection-Token": "diy-counter-token"},
+            json={"items": [{"project_id": self.project_id}]},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        preview = response.json().get("automatic_coupon")
+        self.assertIsNotNone(preview)
+        self.assertEqual(preview["coupon_id"], selected_coupon_id)
+        self.assertEqual(preview["coupon_name"], "QUOTE-BEST-EARLIEST-FIRST优惠券")
+        self.assertEqual(preview["discount_cents"], 1000)
+        self.assertEqual(preview["payable_after_coupon_cents"], 2990)
+        self.assertEqual(preview["member_floor_cents"], 2990)
+        self.assertEqual(preview["expire_at"], earliest_expiry.isoformat())
+        with self.SessionLocal() as db:
+            for coupon_id in (
+                selected_coupon_id,
+                same_expiry_later_id,
+                percent_coupon_id,
+                expired_coupon_id,
+                locked_coupon_id,
+                threshold_coupon_id,
+                other_customer_coupon_id,
+            ):
+                expected_status = "locked" if coupon_id == locked_coupon_id else "unused"
+                self.assertEqual(db.get(UserCoupon, coupon_id).status, expected_status)
+
+    def test_quote_keeps_coupon_unused_when_current_payable_is_at_member_floor(self):
+        with self.SessionLocal() as db:
+            db.add_all([
+                PriceBook(project_id=self.project_id, price_type="store", amount_cents=3990),
+                PriceBook(project_id=self.project_id, price_type="member", amount_cents=2990),
+            ])
+            db.commit()
+        coupon_id = self.grant_coupon("QUOTE-AT-FLOOR", amount_cents=500)
+
+        response = self.client.post(
+            f"/api/v1/selection-sessions/{self.session_id}/quote",
+            headers={"X-Selection-Token": "diy-counter-token"},
+            json={"items": [{"project_id": self.project_id}]},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json().get("automatic_coupon"), {
+            "coupon_id": None,
+            "coupon_name": None,
+            "template_id": None,
+            "coupon_type": None,
+            "raw_discount_cents": 0,
+            "discount_cents": 0,
+            "payable_after_coupon_cents": 2990,
+            "member_floor_cents": 2990,
+            "expire_at": None,
+        })
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(UserCoupon, coupon_id).status, "unused")
+
+    def test_direct_settlement_uses_best_small_fixed_coupon_once_and_audits_order(self):
+        pricing = {
+            "store_total_cents": 3990,
+            "member_total_cents": 2990,
+            "payable_total_cents": 3990,
+            "lines": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1}],
+        }
+        self.prepare_completed_direct_selection(pricing)
+        selected_coupon_id = self.grant_coupon("DIRECT-FIXED-500", amount_cents=500)
+        second_coupon_id = self.grant_coupon("DIRECT-FIXED-300", amount_cents=300)
+        payload = {
+            "idempotency_key": "automatic-coupon-direct-settle",
+            "payment_method": "cash",
+            "received_amount_cents": 3490,
+            "payment_reference": "AUTOMATIC-COUPON-DIRECT-CASH",
+        }
+
+        response = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/settle",
+            headers=self.headers,
+            json=payload,
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertEqual(result["payable_total_cents"], 3490)
+        self.assertEqual(result["automatic_coupon"]["coupon_id"], selected_coupon_id)
+        self.assertEqual(result["automatic_coupon"]["discount_cents"], 500)
+        replay = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/settle",
+            headers=self.headers,
+            json=payload,
+        )
+        self.assertEqual(replay.status_code, 200, replay.text)
+        self.assertEqual(replay.json(), result)
+        with self.SessionLocal() as db:
+            order = db.get(Order, result["order_id"])
+            selected_coupon = db.get(UserCoupon, selected_coupon_id)
+            self.assertEqual(order.total_amount_cents, 3990)
+            self.assertEqual(order.pay_amount_cents, 3490)
+            self.assertEqual(order.discount_cents, 500)
+            self.assertEqual(order.coupon_id, selected_coupon_id)
+            self.assertEqual(order.items[-1]["item_kind"], "automatic_coupon")
+            self.assertEqual(order.items[-1]["discount_cents"], 500)
+            self.assertEqual(selected_coupon.status, "used")
+            self.assertEqual(selected_coupon.used_order_id, order.id)
+            self.assertEqual(db.get(UserCoupon, second_coupon_id).status, "unused")
+
+    def test_direct_settlement_caps_large_fixed_coupon_at_floor_and_rejects_short_payment(self):
+        pricing = {
+            "store_total_cents": 3990,
+            "member_total_cents": 2990,
+            "payable_total_cents": 3990,
+            "lines": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1}],
+        }
+        self.prepare_completed_direct_selection(pricing)
+        coupon_id = self.grant_coupon("DIRECT-FIXED-LARGE", amount_cents=5000)
+
+        insufficient = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/settle",
+            headers=self.headers,
+            json={
+                "idempotency_key": "automatic-coupon-direct-short",
+                "payment_method": "cash",
+                "received_amount_cents": 2989,
+            },
+        )
+        self.assertEqual(insufficient.status_code, 409, insufficient.text)
+        self.assertEqual(insufficient.json()["detail"]["code"], "PAYMENT_NOT_CONFIRMED")
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(UserCoupon, coupon_id).status, "unused")
+            self.assertIsNone(db.get(SelectionSession, self.session_id).fulfillment_order_id)
+
+        settled = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/settle",
+            headers=self.headers,
+            json={
+                "idempotency_key": "automatic-coupon-direct-floor",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+            },
+        )
+        self.assertEqual(settled.status_code, 200, settled.text)
+        self.assertEqual(settled.json()["automatic_coupon"]["raw_discount_cents"], 5000)
+        self.assertEqual(settled.json()["automatic_coupon"]["discount_cents"], 1000)
+        self.assertEqual(settled.json()["payable_total_cents"], 2990)
+
+    def test_service_settlement_reprices_percent_coupon_from_latest_confirmed_revision(self):
+        checkout = self.checkout_and_finish_service("automatic-coupon-service")
+        latest_pricing = {
+            "store_total_cents": 9000,
+            "member_total_cents": 6000,
+            "payable_total_cents": 8000,
+            "lines": [{
+                "project_id": self.project_id,
+                "name": "草本泡脚与服务中加选",
+                "quantity": 2,
+                "payable_line_total_cents": 8000,
+            }],
+        }
+        with self.SessionLocal() as db:
+            revision = db.scalar(select(SelectionRevision).where(
+                SelectionRevision.selection_session_id == self.session_id,
+                SelectionRevision.state == "confirmed",
+            ).order_by(SelectionRevision.revision_no.desc()))
+            revision.snapshot = {**revision.snapshot, "pricing": latest_pricing}
+            order = db.get(Order, checkout["order_id"])
+            service_order = db.get(ServiceOrder, checkout["service_order_id"])
+            order.items = latest_pricing["lines"]
+            order.total_amount_cents = 8000
+            order.pay_amount_cents = 8000
+            order.discount_cents = 1000
+            service_order.items = latest_pricing["lines"]
+            service_order.total_amount_cents = 8000
+            db.commit()
+        percent_coupon_id = self.grant_coupon(
+            "SERVICE-PERCENT-25",
+            coupon_type="percent",
+            percent_off=25,
+            min_spend_cents=7000,
+        )
+        fixed_coupon_id = self.grant_coupon(
+            "SERVICE-FIXED-1500",
+            amount_cents=1500,
+            min_spend_cents=7000,
+        )
+
+        insufficient = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout['service_order_id']}/settle",
+            headers=self.headers,
+            json={
+                "idempotency_key": "automatic-coupon-service-short",
+                "payment_method": "cash",
+                "received_amount_cents": 5999,
+            },
+        )
+        self.assertEqual(insufficient.status_code, 409, insufficient.text)
+        self.assertEqual(insufficient.json()["detail"]["code"], "PAYMENT_NOT_CONFIRMED")
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(UserCoupon, percent_coupon_id).status, "unused")
+            self.assertEqual(db.get(Order, checkout["order_id"]).pay_amount_cents, 8000)
+
+        settled = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout['service_order_id']}/settle",
+            headers=self.headers,
+            json={
+                "idempotency_key": "automatic-coupon-service-final",
+                "payment_method": "cash",
+                "received_amount_cents": 6000,
+                "payment_reference": "AUTOMATIC-COUPON-SERVICE-CASH",
+            },
+        )
+        self.assertEqual(settled.status_code, 200, settled.text)
+        result = settled.json()
+        self.assertEqual(result["payable_total_cents"], 6000)
+        self.assertEqual(result["automatic_coupon"]["coupon_id"], percent_coupon_id)
+        self.assertEqual(result["automatic_coupon"]["raw_discount_cents"], 2000)
+        self.assertEqual(result["automatic_coupon"]["discount_cents"], 2000)
+        with self.SessionLocal() as db:
+            order = db.get(Order, checkout["order_id"])
+            service_order = db.get(ServiceOrder, checkout["service_order_id"])
+            percent_coupon = db.get(UserCoupon, percent_coupon_id)
+            self.assertEqual(order.total_amount_cents, 8000)
+            self.assertEqual(order.pay_amount_cents, 6000)
+            self.assertEqual(order.discount_cents, 3000)
+            self.assertEqual(order.coupon_id, percent_coupon_id)
+            self.assertEqual(order.items[-1]["item_kind"], "automatic_coupon")
+            self.assertEqual(service_order.total_amount_cents, 6000)
+            self.assertEqual(percent_coupon.status, "used")
+            self.assertEqual(percent_coupon.used_order_id, order.id)
+            self.assertEqual(db.get(UserCoupon, fixed_coupon_id).status, "unused")
 
     def test_counter_checkout_transfers_confirmed_service_flow_without_collecting_payment(self):
         self.confirm_session_for_counter_checkout()

@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.automatic_coupon import select_automatic_coupon
 from app.domain.occupancy import refresh_hold
 from app.domain.membership_pricing import PriceContext
 from app.domain.selection_pricing import calculate_selection_pricing, price_type_for_member
@@ -407,7 +408,18 @@ def quote_selection_session(
             member_type=customer.member_type if customer else None,
         ),
     )
-    return {"items": normalized, "pricing": pricing, "saving_hint": _saving_hint(db, session.store_id, pricing, customer)}
+    automatic_coupon = select_automatic_coupon(
+        db,
+        customer_id=session.customer_id,
+        pricing=pricing,
+        now=datetime.now(timezone.utc),
+    )
+    return {
+        "items": normalized,
+        "pricing": pricing,
+        "automatic_coupon": automatic_coupon.as_dict(),
+        "saving_hint": _saving_hint(db, session.store_id, pricing, customer),
+    }
 
 
 @router.post("/{session_id}/revisions")
