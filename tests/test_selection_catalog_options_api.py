@@ -47,12 +47,26 @@ def expanded_scenario(scenario: CatalogSelectionScenario) -> CatalogSelectionSce
         )
         db.add_all([dedicated, inactive])
         db.flush()
-        db.add(OptionChoicePrice(
-            option_choice_id=dedicated.id,
-            price_type="store",
-            amount_cents=600,
-            effective_from=datetime(2026, 1, 1, tzinfo=UTC),
-        ))
+        db.add_all([
+            OptionChoicePrice(
+                option_choice_id=dedicated.id,
+                price_type="store",
+                amount_cents=600,
+                effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+            ),
+            OptionChoicePrice(
+                option_choice_id=dedicated.id,
+                price_type="group",
+                amount_cents=500,
+                effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+            ),
+            OptionChoicePrice(
+                option_choice_id=dedicated.id,
+                price_type="member",
+                amount_cents=400,
+                effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+            ),
+        ])
 
         other_store = Store(store_code="catalog-selection-other", name="其他门店", address="测试地址")
         db.add(other_store)
@@ -329,6 +343,7 @@ def test_selection_keeps_dedicated_charge_choice_id_on_expanded_line(expanded_sc
         "project_id": expanded_scenario.qiqing_id,
         "catalog_version_id": expanded_scenario.qiqing_version_id,
         "option_choice_ids": [expanded_scenario.dedicated_choice_id],
+        "chargeable": False,
     }])
 
     assert response.status_code == 200, response.text
@@ -337,6 +352,19 @@ def test_selection_keeps_dedicated_charge_choice_id_on_expanded_line(expanded_sc
     assert dedicated["project_id"] is None
     assert dedicated["option_choice_id"] == expanded_scenario.dedicated_choice_id
     assert dedicated["name"] == "草本升级"
+    pricing_line = next(
+        line for line in response.json()["snapshot"]["pricing"]["lines"]
+        if line.get("option_choice_id") == expanded_scenario.dedicated_choice_id
+    )
+    assert pricing_line["unit_store_price_cents"] == 600
+    assert pricing_line["unit_group_price_cents"] == 500
+    assert pricing_line["unit_member_price_cents"] == 400
+    assert pricing_line["resolved_charge"]["source_project_id"] == expanded_scenario.qiqing_id
+    assert (
+        pricing_line["resolved_charge"]["source_catalog_version_id"]
+        == expanded_scenario.qiqing_version_id
+    )
+    assert response.json()["snapshot"]["pricing"]["store_subtotal_cents"] == 1600
 
 
 def test_selection_expands_linked_project_once_across_two_parent_entries(expanded_scenario: CatalogSelectionScenario):
@@ -356,6 +384,12 @@ def test_selection_expands_linked_project_once_across_two_parent_entries(expande
     assert response.status_code == 200, response.text
     items = _items(response)
     assert sum(item["project_id"] == expanded_scenario.cupping_project_id for item in items) == 1
+    pricing = response.json()["snapshot"]["pricing"]
+    assert sum(
+        line["project_id"] == expanded_scenario.cupping_project_id
+        for line in pricing["lines"]
+    ) == 1
+    assert pricing["store_subtotal_cents"] == 3000
 
 
 def test_explicit_linked_project_quantity_wins_without_adding_catalog_unit(expanded_scenario: CatalogSelectionScenario):

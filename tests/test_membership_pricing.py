@@ -314,6 +314,27 @@ class OptionChargeTests(unittest.TestCase):
         self.assertEqual(charge.source_ref["option_choice_price_id_by_type"], active_id_by_type)
         self.assertEqual(charge.source_ref["confirmed_price_source_type"], "group")
         self.assertEqual(charge.source_ref["confirmed_option_choice_price_id"], active_id_by_type["group"])
+        self.assertEqual(charge.prices, {
+            "store": 3600,
+            "group": 3200,
+            "member": 3200,
+        })
+        self.assertEqual(charge.confirmed_price.amount_cents, 3200)
+
+    def test_dedicated_charge_ordinary_coupon_price_never_drops_below_member_price(self):
+        with self.SessionLocal() as db:
+            charge = resolve_option_charge(
+                db,
+                self.dedicated_id,
+                PriceContext(
+                    is_member=False,
+                    confirmed_at=datetime(2026, 8, 19, 10, tzinfo=timezone.utc),
+                    store_timezone="Asia/Shanghai",
+                ),
+            )
+
+        self.assertEqual(charge.ordinary_coupon_payable_cents(1000), 3200)
+        self.assertEqual(charge.ordinary_coupon_payable_cents(300), 3300)
 
     def test_resolving_option_charge_does_not_consume_annual_gift(self):
         with self.SessionLocal() as db:

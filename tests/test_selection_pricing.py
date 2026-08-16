@@ -7,7 +7,16 @@ from sqlalchemy.orm import sessionmaker
 from app.db.session import Base
 from app.domain.membership_pricing import PriceContext
 from app.domain.selection_pricing import calculate_selection_pricing, price_type_for_member
-from app.models import Addon, PriceBook, Project, Store
+from app.models import (
+    Addon,
+    OptionChoicePrice,
+    PriceBook,
+    Project,
+    ProjectCatalogVersion,
+    ProjectOptionChoice,
+    ProjectOptionGroup,
+    Store,
+)
 
 
 class SelectionPricingTests(unittest.TestCase):
@@ -33,19 +42,88 @@ class SelectionPricingTests(unittest.TestCase):
                 name="局部调理",
                 publication_status="published",
             )
-            db.add_all([foot_bath, local])
+            standard = Project(
+                store_id=store.id,
+                code="hxy-xiangxiang-60",
+                category="bath",
+                name="草本沐足",
+                publication_status="published",
+            )
+            signature = Project(
+                store_id=store.id,
+                code="hxy-xiaoqi-90",
+                category="bath",
+                name="招牌草本沐足",
+                publication_status="published",
+            )
+            db.add_all([foot_bath, local, standard, signature])
             db.flush()
             for project, prices in (
                 (foot_bath, {"store": 3990, "group": 2990, "member": 2990}),
                 (local, {"store": 6900, "group": 5900, "member": 4900}),
+                (standard, {"store": 7990, "group": 6990, "member": 5990}),
+                (signature, {"store": 9990, "group": 8990, "member": 7990}),
             ):
                 db.add_all([
                     PriceBook(project_id=project.id, price_type=price_type, amount_cents=amount)
                     for price_type, amount in prices.items()
                 ])
+            version = ProjectCatalogVersion(project_id=foot_bath.id, version=1, status="published")
+            db.add(version)
+            db.flush()
+            group = ProjectOptionGroup(
+                catalog_version_id=version.id,
+                code="upgrade",
+                name="升级选项",
+                selection_mode="multiple",
+                max_select=2,
+            )
+            db.add(group)
+            db.flush()
+            preference = ProjectOptionChoice(
+                option_group_id=group.id,
+                code="free-preference",
+                name="免费偏好",
+                choice_type="preference",
+                charge_mode="free",
+            )
+            dedicated = ProjectOptionChoice(
+                option_group_id=group.id,
+                code="dedicated-upgrade",
+                name="专属升级",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+                coupon_eligible=True,
+            )
+            db.add_all([preference, dedicated])
+            db.flush()
+            db.add_all([
+                OptionChoicePrice(
+                    option_choice_id=dedicated.id,
+                    price_type="store",
+                    amount_cents=3000,
+                    effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=dedicated.id,
+                    price_type="group",
+                    amount_cents=2700,
+                    effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+                ),
+                OptionChoicePrice(
+                    option_choice_id=dedicated.id,
+                    price_type="member",
+                    amount_cents=2400,
+                    effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+                ),
+            ])
             db.commit()
             self.foot_bath_id = foot_bath.id
             self.local_id = local.id
+            self.standard_id = standard.id
+            self.signature_id = signature.id
+            self.preference_id = preference.id
+            self.dedicated_id = dedicated.id
 
     def tearDown(self):
         self.engine.dispose()
@@ -78,6 +156,116 @@ class SelectionPricingTests(unittest.TestCase):
         self.assertEqual(pricing["lines"][1]["unit_payable_price_cents"], 4900)
         self.assertEqual(pricing["promotion_code"], "FOOT_BATH_TWO_LOCAL")
         self.assertEqual(pricing["promotion_adjustment_cents"], -2990)
+
+    def test_two_local_choices_only_waive_entry_foot_bath(self):
+        def price(project_id: int) -> dict:
+            with self.SessionLocal() as db:
+                return calculate_selection_pricing(db, [
+                    {"project_id": project_id, "state": "confirmed"},
+                    {
+                        "project_id": self.local_id,
+                        "state": "confirmed",
+                        "body_part": "肩颈",
+                        "qualifies_for_foot_bath_bundle": True,
+                    },
+                    {
+                        "project_id": self.local_id,
+                        "state": "confirmed",
+                        "body_part": "腰臀",
+                        "qualifies_for_foot_bath_bundle": True,
+                    },
+                ], "store")
+
+        entry = price(self.foot_bath_id)
+        standard = price(self.standard_id)
+        signature = price(self.signature_id)
+
+        self.assertEqual(entry["promotion_adjustment_cents"], -3990)
+        self.assertEqual(standard["promotion_adjustment_cents"], 0)
+        self.assertEqual(signature["promotion_adjustment_cents"], 0)
+
+    def test_dedicated_choice_uses_database_price_bands_and_freezes_member_confirmation(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(
+                db,
+                [{
+                    "project_id": None,
+                    "option_choice_id": self.dedicated_id,
+                    "item_kind": "dedicated_option",
+                    "chargeable": True,
+                    "unit_store_price_cents": 1,
+                    "unit_member_price_cents": 1,
+                }],
+                "member",
+                price_context=PriceContext(
+                    is_member=True,
+                    member_type="annual",
+                    member_expire_at=datetime(2027, 8, 19, tzinfo=UTC),
+                    confirmed_at=datetime(2026, 8, 19, 2, tzinfo=UTC),
+                    store_timezone="Asia/Shanghai",
+                    store_id=1,
+                ),
+            )
+
+        line = pricing["lines"][0]
+        self.assertEqual(line["unit_store_price_cents"], 3000)
+        self.assertEqual(line["unit_group_price_cents"], 2700)
+        self.assertEqual(line["unit_member_price_cents"], 2400)
+        self.assertEqual(line["unit_payable_price_cents"], 2400)
+        self.assertEqual(line["price_basis"], "member")
+        self.assertEqual(line["resolved_charge"]["amount_cents"], 2400)
+        self.assertEqual(line["resolved_charge"]["source_ref"]["option_choice_id"], self.dedicated_id)
+
+    def test_dedicated_choice_tuesday_price_is_only_for_active_annual_member(self):
+        contexts = [
+            ("annual", 2040, "tuesday_68"),
+            ("stored", 2400, "member"),
+        ]
+        for member_type, expected_amount, expected_basis in contexts:
+            with self.subTest(member_type=member_type), self.SessionLocal() as db:
+                pricing = calculate_selection_pricing(
+                    db,
+                    [{
+                        "project_id": None,
+                        "option_choice_id": self.dedicated_id,
+                        "item_kind": "dedicated_option",
+                        "chargeable": True,
+                    }],
+                    "member",
+                    price_context=PriceContext(
+                        is_member=True,
+                        member_type=member_type,
+                        member_expire_at=datetime(2027, 8, 18, tzinfo=UTC),
+                        confirmed_at=datetime(2026, 8, 18, 2, tzinfo=UTC),
+                        store_timezone="Asia/Shanghai",
+                        store_id=1,
+                    ),
+                )
+
+                self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], expected_amount)
+                self.assertEqual(pricing["lines"][0]["price_basis"], expected_basis)
+
+    def test_preference_option_choice_never_creates_a_charge_line(self):
+        with self.SessionLocal() as db:
+            pricing = calculate_selection_pricing(
+                db,
+                [{
+                    "project_id": None,
+                    "option_choice_id": self.preference_id,
+                    "item_kind": "dedicated_option",
+                    "chargeable": True,
+                }],
+                "store",
+                price_context=PriceContext(
+                    is_member=False,
+                    confirmed_at=datetime(2026, 8, 19, 2, tzinfo=UTC),
+                    store_timezone="Asia/Shanghai",
+                    store_id=1,
+                ),
+            )
+
+        self.assertEqual(pricing["lines"], [])
+        self.assertEqual(pricing["payable_total_cents"], 0)
 
     def test_tuesday_confirmation_uses_68_percent_store_price_for_active_annual_member(self):
         with self.SessionLocal() as db:

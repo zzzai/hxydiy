@@ -7,7 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Addon, Project
-from app.domain.membership_pricing import PriceContext, confirmed_price_for_line, price_book_prices
+from app.domain.membership_pricing import (
+    PriceContext,
+    confirmed_price_for_line,
+    price_book_prices,
+    resolve_option_charge,
+)
 
 
 PROMO_FOOT_BATH_CODE = "hxy-qiqing-30"
@@ -70,6 +75,17 @@ def calculate_selection_pricing(
             continue
         project_id = item.get("project_id")
         quantity = max(1, int(item.get("quantity") or 1))
+        option_choice_id = item.get("option_choice_id")
+        option_charge = None
+        if option_choice_id is not None:
+            charge_context = price_context or PriceContext(
+                is_member=price_type == "member",
+                confirmed_at=datetime.now(UTC),
+                store_timezone="Asia/Shanghai",
+            )
+            option_charge = resolve_option_charge(db, int(option_choice_id), charge_context)
+            if not option_charge.chargeable:
+                continue
         is_standalone_addon = item.get("item_kind") == "standalone_addon"
         standalone_addon = db.get(Addon, item.get("addon_id")) if is_standalone_addon else None
         if price_context is not None and is_standalone_addon and (
@@ -85,7 +101,13 @@ def calculate_selection_pricing(
             raise ValueError(
                 f"confirmation standalone addon {item.get('addon_id')} is unavailable"
             )
-        if standalone_addon:
+        if option_charge is not None:
+            base_store = option_charge.prices["store"]
+            base_group = option_charge.prices.get("group", base_store)
+            base_member = option_charge.prices.get("member", base_group)
+            code = option_charge.choice_snapshot["code"]
+            project = None
+        elif standalone_addon:
             base_store = int(
                 standalone_addon.store_price_cents
                 if standalone_addon.store_price_cents is not None else standalone_addon.price_cents
@@ -184,18 +206,20 @@ def calculate_selection_pricing(
             "group": base_group + addon_store,
             "member": base_member + addon_member,
         }
-        confirmed = (
-            confirmed_price_for_line(
-                combined_prices,
-                price_context.is_member,
-                price_context.confirmed_at,
-                price_context.store_timezone,
-                price_context.member_expire_at,
-                price_context.member_type,
+        confirmed = None
+        if price_context is not None:
+            confirmed = (
+                option_charge.confirmed_price
+                if option_charge is not None
+                else confirmed_price_for_line(
+                    combined_prices,
+                    price_context.is_member,
+                    price_context.confirmed_at,
+                    price_context.store_timezone,
+                    price_context.member_expire_at,
+                    price_context.member_type,
+                )
             )
-            if price_context is not None
-            else None
-        )
         unit_payable = confirmed.amount_cents if confirmed is not None else legacy_payable_unit
         line_basis = confirmed.basis if confirmed is not None else price_type
         if price_context is not None:
@@ -247,7 +271,16 @@ def calculate_selection_pricing(
             "project_id": project_id,
             "addon_id": item.get("addon_id"),
             "item_kind": item.get("item_kind", "project"),
-            "name": item.get("name", project.name if project else standalone_addon.name if standalone_addon else "局部加强"),
+            "name": item.get(
+                "name",
+                option_charge.choice_snapshot["name"]
+                if option_charge is not None
+                else project.name
+                if project
+                else standalone_addon.name
+                if standalone_addon
+                else "局部加强",
+            ),
             "quantity": quantity,
             "unit_store_price_cents": base_store + addon_store,
             "unit_group_price_cents": base_group + addon_store,
@@ -261,6 +294,26 @@ def calculate_selection_pricing(
             "addon_store_total_cents": addon_store * quantity,
             "addon_member_total_cents": addon_member * quantity,
         }
+        if option_charge is not None:
+            pricing_line["option_choice_id"] = int(option_choice_id)
+            pricing_line["resolved_charge"] = {
+                "amount_cents": option_charge.amount_cents,
+                "basis": option_charge.basis,
+                "price_source": option_charge.price_source,
+                "source_ref": option_charge.source_ref,
+                "choice_snapshot": option_charge.choice_snapshot,
+                "prices": option_charge.prices,
+                "source_project_id": item.get("source_project_id"),
+                "source_catalog_version_id": item.get("source_catalog_version_id"),
+                "confirmed_price": (
+                    {
+                        "amount_cents": option_charge.confirmed_price.amount_cents,
+                        "basis": option_charge.confirmed_price.basis,
+                    }
+                    if price_context is not None and option_charge.confirmed_price is not None
+                    else None
+                ),
+            }
         service_line_id = _first_value(item, "service_line_id")
         if service_line_id is not None and str(service_line_id).strip():
             pricing_line["service_line_id"] = str(service_line_id).strip()

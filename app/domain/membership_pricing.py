@@ -41,6 +41,16 @@ class ResolvedCharge:
     source_ref: dict
     choice_snapshot: dict
     chargeable: bool
+    prices: dict[str, int]
+    confirmed_price: ConfirmedPrice | None
+
+    def ordinary_coupon_payable_cents(self, discount_cents: int) -> int:
+        """普通券从门店价抵扣，但券后价不得低于会员价。"""
+        if not self.chargeable:
+            return 0
+        store = int(self.prices.get("store", self.amount_cents))
+        member = int(self.prices.get("member", store))
+        return max(member, store - max(0, int(discount_cents)))
 
 
 @dataclass(frozen=True)
@@ -266,6 +276,8 @@ def resolve_option_charge(
             source_ref={"option_choice_id": choice.id},
             choice_snapshot=snapshot,
             chargeable=False,
+            prices={"store": 0, "group": 0, "member": 0},
+            confirmed_price=None,
         )
 
     if choice.choice_type == "linked_project":
@@ -301,6 +313,8 @@ def resolve_option_charge(
             },
             choice_snapshot=snapshot,
             chargeable=True,
+            prices=price_snapshot.prices,
+            confirmed_price=confirmed,
         )
 
     if choice.choice_type == "dedicated_charge":
@@ -331,6 +345,8 @@ def resolve_option_charge(
             },
             choice_snapshot=snapshot,
             chargeable=True,
+            prices=price_snapshot.prices,
+            confirmed_price=confirmed,
         )
 
     raise ValueError(f"unsupported option charge mode for choice {choice_id}")
