@@ -41,6 +41,7 @@ class ProjectOut(BaseModel):
     price_label: str = ""
     prices: list[PriceOut] = Field(default_factory=list)
     catalog_version: int | None = None
+    catalog_version_id: int | None = None
     option_groups: list = Field(default_factory=list)
 
     model_config = {"from_attributes": True}

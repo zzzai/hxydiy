@@ -207,6 +207,11 @@ def test_public_catalog_returns_stable_group_and_choice_ids(scenario: CatalogSel
 
     assert response.status_code == 200
     project = next(item for item in response.json()["items"] if item["id"] == scenario.qiqing_id)
+    no_catalog_project = next(item for item in response.json()["items"] if item["id"] == scenario.xiangxiang_id)
+    assert project["catalog_version"] == 1
+    assert project["catalog_version_id"] == scenario.qiqing_version_id
+    assert no_catalog_project["catalog_version"] is None
+    assert no_catalog_project["catalog_version_id"] is None
     assert project["option_groups"][0]["id"] == scenario.qiqing_small_group_id
     assert project["option_groups"][0]["choices"][0]["id"] == scenario.qiqing_cupping_choice_id
 

@@ -64,9 +64,9 @@ class ProductOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-def _published_option_groups(db: Session, project: Project) -> tuple[int | None, list[dict]]:
+def _published_option_groups(db: Session, project: Project) -> tuple[int | None, int | None, list[dict]]:
     if project.current_published_version_id is None:
-        return None, []
+        return None, None, []
     version = db.get(ProjectCatalogVersion, project.current_published_version_id)
     if version is None or version.project_id != project.id or version.status != "published":
         raise HTTPException(status_code=409, detail="当前发布目录指针异常")
@@ -74,7 +74,7 @@ def _published_option_groups(db: Session, project: Project) -> tuple[int | None,
         verify_published_catalog_hash(db, version)
     except CatalogDomainError as exc:
         raise HTTPException(status_code=409, detail="当前发布目录快照校验失败") from exc
-    return version.version, _catalog_option_groups(db, version, datetime.now(UTC), visited=frozenset())
+    return version.version, version.id, _catalog_option_groups(db, version, datetime.now(UTC), visited=frozenset())
 
 
 def _catalog_option_groups(
@@ -221,14 +221,14 @@ def _current_project_prices(db: Session, project_id: int) -> list[dict]:
 
 
 def _project_to_out(db: Session, p: Project) -> ProjectOut:
-    catalog_version, option_groups = _published_option_groups(db, p)
+    catalog_version, catalog_version_id, option_groups = _published_option_groups(db, p)
     return ProjectOut(
         id=p.id, code=p.code, category=p.category, category_mark=p.category_mark,
         name=p.name, duration_min=p.duration_min, summary=p.summary,
         image_url=p.image_url, tags=p.tags, detail_modules=p.detail_modules,
         diy_options=p.diy_options, display_order=p.display_order, price_label=p.price_label,
         prices=_current_project_prices(db, p.id),
-        catalog_version=catalog_version, option_groups=option_groups,
+        catalog_version=catalog_version, catalog_version_id=catalog_version_id, option_groups=option_groups,
     )
 
 
