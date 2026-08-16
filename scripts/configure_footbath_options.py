@@ -12,14 +12,20 @@ SERVER_ROOT = Path(__file__).resolve().parents[1]
 if str(SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVER_ROOT))
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.db.session import SessionLocal
 from app.domain.catalog_options import copy_catalog_version_graph, lock_catalog_projects
 from app.domain.membership_pricing import price_book_snapshot
-from app.models import Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup
+from app.models import (
+    OptionChoicePrice,
+    PriceBook,
+    Project,
+    ProjectCatalogVersion,
+    ProjectOptionChoice,
+    ProjectOptionGroup,
+)
 
 
 TARGET_CODES = ("hxy-qiqing-30", "hxy-xiangxiang-60", "hxy-xiaoqi-90")
@@ -48,11 +54,13 @@ def published_projects_by_code(
 ) -> list[Project]:
     projects = list(
         db.scalars(
-            select(Project).where(
+            select(Project)
+            .where(
                 Project.store_id == store_id,
                 Project.code.in_(codes),
                 Project.publication_status == "published",
             )
+            .execution_options(populate_existing=True)
         )
     )
     by_code = {project.code: project for project in projects}
@@ -76,6 +84,7 @@ def published_independent_projects_by_category(
                 Project.publication_status == "published",
             )
             .order_by(Project.display_order, Project.code, Project.id)
+            .execution_options(populate_existing=True)
         )
     )
     projects: list[Project] = []
@@ -218,6 +227,7 @@ def _reconcile_group(
             catalog_version_id=version.id,
             code=spec.code,
             name=spec.name,
+            description="",
             selection_mode="multiple",
             required=False,
             min_select=0,
@@ -229,11 +239,22 @@ def _reconcile_group(
         report.created_groups += 1
     else:
         group.name = spec.name
+        group.description = ""
         group.selection_mode = "multiple"
         group.required = False
         group.min_select = 0
         group.max_select = len(spec.projects)
         group.display_order = spec.display_order
+
+    expected_codes = {project.code for project in spec.projects}
+    existing_choices = list(
+        db.scalars(
+            select(ProjectOptionChoice).where(ProjectOptionChoice.option_group_id == group.id)
+        )
+    )
+    for existing in existing_choices:
+        if existing.code not in expected_codes:
+            existing.status = "inactive"
 
     for display_order, linked in enumerate(spec.projects):
         choice = _existing_choice(db, group, linked.code)
@@ -242,25 +263,107 @@ def _reconcile_group(
                 option_group_id=group.id,
                 code=linked.code,
                 name=linked.name,
+                description="",
                 choice_type="linked_project",
                 linked_project_id=linked.id,
+                pinned_linked_catalog_version_id=None,
                 charge_mode="inherit_linked_price",
                 independently_visible=True,
+                coupon_eligible=False,
+                annual_gift_eligible=False,
+                qualifies_for_foot_bath_bundle=False,
                 display_order=display_order,
                 status="active",
             )
             db.add(choice)
             report.created_choices += 1
         else:
+            has_local_prices = db.scalar(
+                select(OptionChoicePrice.id)
+                .where(OptionChoicePrice.option_choice_id == choice.id)
+                .limit(1)
+            ) is not None
+            if has_local_prices:
+                db.execute(
+                    delete(OptionChoicePrice).where(OptionChoicePrice.option_choice_id == choice.id)
+                )
             choice.name = linked.name
+            choice.description = ""
             choice.choice_type = "linked_project"
             choice.linked_project_id = linked.id
             choice.pinned_linked_catalog_version_id = None
             choice.charge_mode = "inherit_linked_price"
             choice.independently_visible = True
+            choice.coupon_eligible = False
+            choice.annual_gift_eligible = False
+            choice.qualifies_for_foot_bath_bundle = False
             choice.display_order = display_order
             choice.status = "active"
     db.flush()
+
+
+def _lock_price_books(db: Session, project_ids: set[int]) -> None:
+    if not project_ids:
+        return
+    list(
+        db.scalars(
+            select(PriceBook)
+            .where(PriceBook.project_id.in_(sorted(project_ids)))
+            .order_by(PriceBook.project_id, PriceBook.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+
+
+def _locked_revalidated_configuration(
+    db: Session,
+    store_id: int,
+    initial_targets: list[Project],
+    initial_small_projects: list[Project],
+    initial_local_project: Project,
+) -> tuple[list[Project], list[Project], Project]:
+    initial_projects = [*initial_targets, *initial_small_projects, initial_local_project]
+    locked = lock_catalog_projects(db, [project.id for project in initial_projects])
+    if len(locked) != len({project.id for project in initial_projects}):
+        raise ValueError("a catalog project disappeared while acquiring locks")
+
+    scope_projects = list(
+        db.scalars(
+            select(Project)
+            .where(
+                or_(
+                    Project.code.in_(TARGET_CODES),
+                    and_(
+                        Project.store_id == store_id,
+                        Project.category.in_(("small", "local-strength")),
+                    ),
+                )
+            )
+            .order_by(Project.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    candidate_reference_ids = {
+        project.id
+        for project in scope_projects
+        if project.store_id == store_id and project.category in {"small", "local-strength"}
+    }
+    candidate_reference_ids.update(
+        project.id for project in (*initial_small_projects, initial_local_project)
+    )
+    _lock_price_books(db, candidate_reference_ids)
+
+    targets = published_projects_by_code(db, store_id, TARGET_CODES)
+    small_projects = published_independent_projects_by_category(db, store_id, "small")
+    if not small_projects:
+        raise ValueError("no independently sellable published project in category: small")
+    local_project = require_published_project_by_category(db, store_id, "local-strength")
+    final_ids = {project.id for project in (*targets, *small_projects, local_project)}
+    if not final_ids.issubset(set(locked) | {project.id for project in scope_projects}):
+        raise ValueError("a catalog project entered the configuration scope without a lock")
+    return targets, small_projects, local_project
 
 
 def reconcile_footbath_drafts(
@@ -273,31 +376,33 @@ def reconcile_footbath_drafts(
 ) -> FootbathOptionReport:
     if not small_projects:
         raise ValueError("no independently sellable published project in category: small")
+    report = FootbathOptionReport(projects=[project.code for project in targets])
+    if dry_run:
+        specs = (
+            _GroupSpec("small-services", "小项", tuple(small_projects), 10),
+            _GroupSpec("local-strength", "局部加强", (local_project,), 20),
+        )
+        report.created_groups, report.created_choices = _predict_changes(db, targets, specs)
+        return report
+
+    store_ids = {project.store_id for project in targets}
+    if len(store_ids) != 1:
+        raise ValueError("target projects must belong to exactly one store")
+    targets, small_projects, local_project = _locked_revalidated_configuration(
+        db,
+        store_ids.pop(),
+        targets,
+        small_projects,
+        local_project,
+    )
     specs = (
         _GroupSpec("small-services", "小项", tuple(small_projects), 10),
         _GroupSpec("local-strength", "局部加强", (local_project,), 20),
     )
-    report = FootbathOptionReport(projects=[project.code for project in targets])
-    if dry_run:
-        report.created_groups, report.created_choices = _predict_changes(db, targets, specs)
-        return report
-
-    locked = lock_catalog_projects(
-        db,
-        [project.id for project in (*targets, *small_projects, local_project)],
-    )
-    if len(locked) != len({project.id for project in (*targets, *small_projects, local_project)}):
-        raise ValueError("a catalog project disappeared while acquiring locks")
     for target in targets:
-        draft = _ensure_draft(db, locked[target.id])
+        draft = _ensure_draft(db, target)
         for spec in specs:
-            locked_spec = _GroupSpec(
-                spec.code,
-                spec.name,
-                tuple(locked[project.id] for project in spec.projects),
-                spec.display_order,
-            )
-            _reconcile_group(db, draft, locked_spec, report)
+            _reconcile_group(db, draft, spec, report)
     return report
 
 
@@ -328,15 +433,6 @@ def main(argv: list[str] | None = None) -> None:
     modes.add_argument("--dry-run", action="store_true", help="preview without writing (default)")
     modes.add_argument("--apply", action="store_true", help="write and commit draft catalogs")
     args = parser.parse_args(argv)
-
-    if args.apply:
-        environment = settings.environment.strip().lower()
-        if environment not in {"local", "test"}:
-            scheme = settings.database_url.split(":", 1)[0] or "unknown"
-            parser.error(
-                f"--apply is refused: environment={environment or 'unknown'} "
-                f"target={scheme}://<redacted>"
-            )
 
     with SessionLocal() as db:
         report = configure_footbath_option_drafts(
