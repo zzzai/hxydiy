@@ -71,11 +71,14 @@ def calculate_selection_pricing(
     local_parts: set[str] = set()
 
     for index, item in enumerate(items):
-        if _first_value(item, "item_type") == "preference" or not _is_chargeable(item):
+        option_choice_id = item.get("option_choice_id")
+        if option_choice_id is None and (
+            _first_value(item, "item_type") == "preference"
+            or not _is_chargeable(item)
+        ):
             continue
         project_id = item.get("project_id")
         quantity = max(1, int(item.get("quantity") or 1))
-        option_choice_id = item.get("option_choice_id")
         option_charge = None
         if option_choice_id is not None:
             charge_context = price_context or PriceContext(
@@ -228,7 +231,15 @@ def calculate_selection_pricing(
         group_subtotal += line_group
         member_subtotal += line_member
         preferences = _preferences(item)
-        item_code = _first_value(item, "code") or code
+        item_code = (
+            project.code
+            if project is not None
+            else option_charge.choice_snapshot["code"]
+            if option_charge is not None
+            else standalone_addon.code
+            if standalone_addon is not None
+            else _first_value(item, "code") or code
+        )
         unit_key = _bundle_unit_key(item, index)
         if (
             item_code == PROMO_FOOT_BATH_CODE

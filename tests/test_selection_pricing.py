@@ -184,6 +184,32 @@ class SelectionPricingTests(unittest.TestCase):
         self.assertEqual(standard["promotion_adjustment_cents"], 0)
         self.assertEqual(signature["promotion_adjustment_cents"], 0)
 
+    def test_non_entry_projects_cannot_spoof_entry_promotion_code(self):
+        for project_id in (self.standard_id, self.signature_id):
+            with self.subTest(project_id=project_id), self.SessionLocal() as db:
+                pricing = calculate_selection_pricing(db, [
+                    {
+                        "project_id": project_id,
+                        "code": "hxy-qiqing-30",
+                        "state": "confirmed",
+                    },
+                    {
+                        "project_id": self.local_id,
+                        "state": "confirmed",
+                        "body_part": "肩颈",
+                        "qualifies_for_foot_bath_bundle": True,
+                    },
+                    {
+                        "project_id": self.local_id,
+                        "state": "confirmed",
+                        "body_part": "腰臀",
+                        "qualifies_for_foot_bath_bundle": True,
+                    },
+                ], "store")
+
+                self.assertEqual(pricing["promotion_adjustment_cents"], 0)
+                self.assertEqual(pricing["matched_foot_bath_count"], 0)
+
     def test_dedicated_choice_uses_database_price_bands_and_freezes_member_confirmation(self):
         with self.SessionLocal() as db:
             pricing = calculate_selection_pricing(
@@ -244,6 +270,36 @@ class SelectionPricingTests(unittest.TestCase):
 
                 self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], expected_amount)
                 self.assertEqual(pricing["lines"][0]["price_basis"], expected_basis)
+
+    def test_dedicated_choice_ignores_client_free_flags_before_database_resolution(self):
+        variants = [
+            {"chargeable": False},
+            {"item_type": "preference"},
+        ]
+        for client_fields in variants:
+            with self.subTest(client_fields=client_fields), self.SessionLocal() as db:
+                pricing = calculate_selection_pricing(
+                    db,
+                    [{
+                        "project_id": None,
+                        "option_choice_id": self.dedicated_id,
+                        "item_kind": "dedicated_option",
+                        **client_fields,
+                    }],
+                    "member",
+                    price_context=PriceContext(
+                        is_member=True,
+                        member_type="stored",
+                        member_expire_at=datetime(2027, 8, 19, tzinfo=UTC),
+                        confirmed_at=datetime(2026, 8, 19, 2, tzinfo=UTC),
+                        store_timezone="Asia/Shanghai",
+                        store_id=1,
+                    ),
+                )
+
+                self.assertEqual(len(pricing["lines"]), 1)
+                self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], 2400)
+                self.assertEqual(pricing["payable_total_cents"], 2400)
 
     def test_preference_option_choice_never_creates_a_charge_line(self):
         with self.SessionLocal() as db:
