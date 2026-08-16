@@ -373,6 +373,173 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
             self.assertIn("touch", draft_codes)
             self.assertIn("room", draft_codes)
 
+    def test_copy_from_prefers_source_latest_draft_and_keeps_source_isolated(self):
+        with self.SessionLocal() as db:
+            source = db.get(Project, self.linked_id)
+            published = db.get(ProjectCatalogVersion, source.current_published_version_id)
+            published_group = ProjectOptionGroup(
+                catalog_version_id=published.id,
+                code="published-source",
+                name="来源已发布组",
+                selection_mode="multiple",
+                max_select=1,
+            )
+            db.add(published_group)
+            db.flush()
+            published_choice = ProjectOptionChoice(
+                option_group_id=published_group.id,
+                code="published-choice",
+                name="已发布选择",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            db.add(published_choice)
+            db.flush()
+            db.add(OptionChoicePrice(
+                option_choice_id=published_choice.id,
+                price_type="store",
+                amount_cents=321,
+                effective_from=datetime(2026, 8, 1, tzinfo=UTC),
+            ))
+            db.flush()
+            published.snapshot_hash = _snapshot_hash(db, published.id)
+
+            source_draft = ProjectCatalogVersion(project_id=source.id, version=2, status="draft")
+            db.add(source_draft)
+            db.flush()
+            draft_group = ProjectOptionGroup(
+                catalog_version_id=source_draft.id,
+                code="draft-source",
+                name="来源最新草稿组",
+                selection_mode="multiple",
+                max_select=1,
+            )
+            db.add(draft_group)
+            db.flush()
+            db.add(ProjectOptionChoice(
+                option_group_id=draft_group.id,
+                code="draft-choice",
+                name="草稿选择",
+                choice_type="preference",
+                charge_mode="free",
+            ))
+            db.commit()
+            source_version_ids = list(
+                db.scalars(
+                    select(ProjectCatalogVersion.id)
+                    .where(ProjectCatalogVersion.project_id == source.id)
+                    .order_by(ProjectCatalogVersion.id)
+                )
+            )
+
+        response = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/copy-from/{self.linked_id}",
+            headers=self.admin_headers,
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["project_id"], self.main_id)
+        self.assertEqual(response.json()["source_project_id"], self.linked_id)
+        self.assertEqual(response.json()["source_catalog_version"]["id"], source_draft.id)
+        self.assertEqual(response.json()["catalog_version"]["status"], "draft")
+        with self.SessionLocal() as db:
+            target_draft = db.get(ProjectCatalogVersion, response.json()["catalog_version"]["id"])
+            self.assertEqual(target_draft.project_id, self.main_id)
+            target_groups = list(
+                db.scalars(
+                    select(ProjectOptionGroup).where(
+                        ProjectOptionGroup.catalog_version_id == target_draft.id
+                    )
+                )
+            )
+            self.assertEqual([group.code for group in target_groups], ["draft-source"])
+            self.assertEqual(
+                list(
+                    db.scalars(
+                        select(ProjectCatalogVersion.id)
+                        .where(ProjectCatalogVersion.project_id == self.linked_id)
+                        .order_by(ProjectCatalogVersion.id)
+                    )
+                ),
+                source_version_ids,
+            )
+            self.assertEqual(
+                list(
+                    db.scalars(
+                        select(ProjectOptionGroup.code)
+                        .where(ProjectOptionGroup.catalog_version_id == source_draft.id)
+                    )
+                ),
+                ["draft-source"],
+            )
+
+    def test_copy_from_uses_published_source_with_prices_and_rejects_existing_target_draft(self):
+        with self.SessionLocal() as db:
+            source = db.get(Project, self.linked_id)
+            published = db.get(ProjectCatalogVersion, source.current_published_version_id)
+            group = ProjectOptionGroup(
+                catalog_version_id=published.id,
+                code="published-only",
+                name="仅发布来源",
+                selection_mode="multiple",
+                max_select=1,
+            )
+            db.add(group)
+            db.flush()
+            choice = ProjectOptionChoice(
+                option_group_id=group.id,
+                code="paid",
+                name="收费选择",
+                choice_type="dedicated_charge",
+                charge_mode="custom_price",
+            )
+            db.add(choice)
+            db.flush()
+            db.add(OptionChoicePrice(
+                option_choice_id=choice.id,
+                price_type="store",
+                amount_cents=654,
+                effective_from=datetime(2026, 8, 1, tzinfo=UTC),
+            ))
+            db.flush()
+            published.snapshot_hash = _snapshot_hash(db, published.id)
+            db.commit()
+
+        copied = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/copy-from/{self.linked_id}",
+            headers=self.admin_headers,
+        )
+
+        self.assertEqual(copied.status_code, 200, copied.text)
+        self.assertEqual(copied.json()["source_catalog_version"]["id"], published.id)
+        with self.SessionLocal() as db:
+            target_group = db.scalar(
+                select(ProjectOptionGroup).where(
+                    ProjectOptionGroup.catalog_version_id == copied.json()["catalog_version"]["id"]
+                )
+            )
+            target_choice = db.scalar(
+                select(ProjectOptionChoice).where(ProjectOptionChoice.option_group_id == target_group.id)
+            )
+            target_price = db.scalar(
+                select(OptionChoicePrice).where(OptionChoicePrice.option_choice_id == target_choice.id)
+            )
+            self.assertNotEqual(target_group.id, group.id)
+            self.assertNotEqual(target_choice.id, choice.id)
+            self.assertEqual(target_price.amount_cents, 654)
+
+        duplicate = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/copy-from/{self.linked_id}",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(duplicate.status_code, 409, duplicate.text)
+
+        cross_store = self.client.post(
+            f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/copy-from/{self.other_project_id}",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(cross_store.status_code, 404, cross_store.text)
+
     def test_draft_group_choice_and_prices_can_be_updated_and_physically_deleted(self):
         ids = self._create_valid_draft()
         choice_patch = self.client.patch(

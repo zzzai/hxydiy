@@ -6,6 +6,16 @@ from scripts.check_release_consistency import check_release_consistency
 
 
 class ReleaseConsistencyTests(unittest.TestCase):
+    def test_backend_release_context_contains_footbath_configurator(self):
+        server_root = Path(__file__).resolve().parents[1]
+        configurator = server_root / "scripts" / "configure_footbath_options.py"
+        dockerfile = (server_root / "Dockerfile").read_text(encoding="utf-8")
+        dockerignore = (server_root / ".dockerignore").read_text(encoding="utf-8").splitlines()
+
+        self.assertTrue(configurator.is_file())
+        self.assertIn("COPY . .", dockerfile)
+        self.assertNotIn("scripts", {line.strip().rstrip("/") for line in dockerignore})
+
     def test_reports_catalog_migration_capability_missing_from_release(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

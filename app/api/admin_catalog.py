@@ -544,6 +544,72 @@ def _flush_or_conflict(db: Session) -> None:
         raise HTTPException(status_code=409, detail="目录编码或价格生效时间重复") from exc
 
 
+@router.post("/projects/{project_id}/option-groups/copy-from/{source_project_id}")
+def copy_project_option_groups(
+    project_id: int,
+    source_project_id: int,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    if project_id == source_project_id:
+        raise HTTPException(status_code=409, detail="来源项目与目标项目不能相同")
+    target = _project_for_staff(db, project_id, staff)
+    source = _project_for_staff(db, source_project_id, staff)
+    locked = lock_catalog_projects(db, [target.id, source.id])
+    target = locked.get(target.id)
+    source = locked.get(source.id)
+    if target is None or source is None:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    if target.publication_status == "archived":
+        raise HTTPException(status_code=409, detail="归档项目不可编辑目录")
+    if _latest_version(db, target.id, "draft") is not None:
+        raise HTTPException(status_code=409, detail="目标项目已有目录草稿")
+
+    source_version = _latest_version(db, source.id, "draft")
+    if source_version is None and source.current_published_version_id is not None:
+        candidate = db.get(ProjectCatalogVersion, source.current_published_version_id)
+        if candidate is None or candidate.project_id != source.id or candidate.status != "published":
+            raise HTTPException(status_code=409, detail="来源项目当前发布目录指针异常")
+        source_version = candidate
+    if source_version is None:
+        raise HTTPException(status_code=409, detail="来源项目没有可复制的目录版本")
+
+    draft = ProjectCatalogVersion(
+        project_id=target.id,
+        version=_next_version_number(db, target.id),
+        status="draft",
+    )
+    db.add(draft)
+    _flush_or_conflict(db)
+    try:
+        copy_catalog_version_graph(db, source_version.id, draft.id)
+    except CatalogDomainError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _audit(
+        db,
+        staff.name,
+        "copy_project_option_groups",
+        "project_catalog_version",
+        str(draft.id),
+        {
+            "project_id": target.id,
+            "source_project_id": source.id,
+            "source_catalog_version_id": source_version.id,
+        },
+    )
+    _commit_or_conflict(db)
+    db.refresh(draft)
+    return {
+        "project_id": target.id,
+        "source_project_id": source.id,
+        "source_catalog_version": _version_meta(source_version),
+        "catalog_version": _version_meta(draft),
+    }
+
+
 @router.get("/projects/{project_id}/option-groups")
 def list_option_groups(
     project_id: int,
