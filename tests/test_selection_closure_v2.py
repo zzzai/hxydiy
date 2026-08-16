@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -508,6 +508,11 @@ class SelectionClosureV2Tests(unittest.TestCase):
             json={"items": [{"project_id": self.project_id, "diy_preferences": ["肩颈"]}]},
         )
         self.assertEqual(first.status_code, 200, first.text)
+        confirmed = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+            headers={"Authorization": f"Bearer {create_staff_token(self.staff_id, 'admin')}"},
+        )
+        self.assertEqual(confirmed.status_code, 200, confirmed.text)
         with self.SessionLocal() as db:
             occupancy = db.query(PositionOccupancy).filter_by(selection_session_id=session_id).one()
             occupancy.status = "in_service"
@@ -528,6 +533,117 @@ class SelectionClosureV2Tests(unittest.TestCase):
         self.assertEqual(response.json()["state"], "approved")
         self.assertEqual(len(response.json()["service_lines"]), 1)
         self.assertEqual(response.json()["service_lines"][0]["snapshot"]["diy_preferences"], ["腿部"])
+
+    def test_service_time_additions_must_be_approved_in_revision_order_and_retry_is_idempotent(self):
+        session_id, token = self.create_session()
+        baseline_line_id = f"ordered-baseline-{session_id}"
+        baseline_item = {
+            "project_id": self.project_id,
+            "name": "草本泡脚",
+            "code": "CLOSURE-V2-FOOT",
+            "quantity": 1,
+            "item_type": "service",
+            "chargeable": True,
+            "diy_preferences": ["肩颈"],
+            "service_line_id": baseline_line_id,
+            "state": "confirmed",
+        }
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, session_id)
+            session.status = "confirmed"
+            session.items = [baseline_item]
+            baseline_revision = SelectionRevision(
+                id=f"ordered-revision-1-{session_id}",
+                selection_session_id=session_id,
+                revision_no=1,
+                state="confirmed",
+                idempotency_key=f"ordered-revision-1-{session_id}",
+                snapshot={"items": [baseline_item], "pricing": {"payable_total_cents": 3990}},
+            )
+            db.add_all([
+                baseline_revision,
+                ServiceLine(
+                    id=baseline_line_id,
+                    selection_session_id=session_id,
+                    selection_revision_id=baseline_revision.id,
+                    snapshot=baseline_item,
+                    state="in_service",
+                ),
+                PositionOccupancy(
+                    store_id=self.store_id,
+                    room_id=14,
+                    selection_session_id=session_id,
+                    active_session_id=session_id,
+                    status="in_service",
+                    source="personal_qr",
+                ),
+            ])
+            db.commit()
+
+        revision_two = self.client.post(
+            f"/api/v1/selection-sessions/{session_id}/revisions",
+            headers={"X-Selection-Token": token, "Idempotency-Key": f"ordered-revision-2-{session_id}"},
+            json={"items": [
+                {"project_id": self.project_id, "diy_preferences": ["肩颈"]},
+                {"project_id": self.project_id, "diy_preferences": ["腿部"]},
+            ]},
+        )
+        revision_three = self.client.post(
+            f"/api/v1/selection-sessions/{session_id}/revisions",
+            headers={"X-Selection-Token": token, "Idempotency-Key": f"ordered-revision-3-{session_id}"},
+            json={"items": [
+                {"project_id": self.project_id, "diy_preferences": ["肩颈"]},
+                {"project_id": self.project_id, "diy_preferences": ["腿部"]},
+                {"project_id": self.project_id, "diy_preferences": ["腰背"]},
+            ]},
+        )
+        self.assertEqual(revision_two.status_code, 200, revision_two.text)
+        self.assertEqual(revision_three.status_code, 200, revision_three.text)
+        with self.SessionLocal() as db:
+            changes = {
+                change.selection_revision_id: change.id
+                for change in db.query(SelectionChangeRequest).filter_by(
+                    selection_session_id=session_id,
+                ).all()
+            }
+        headers = {"Authorization": f"Bearer {create_staff_token(self.staff_id, 'admin')}"}
+
+        out_of_order = self.client.post(
+            f"/api/v1/admin/v2/selection-change-requests/{changes[revision_three.json()['id']]}/approve",
+            headers=headers,
+        )
+        self.assertEqual(out_of_order.status_code, 409, out_of_order.text)
+        self.assertEqual(out_of_order.json()["detail"]["code"], "SELECTION_REVISION_OUT_OF_ORDER")
+
+        approved_two = self.client.post(
+            f"/api/v1/admin/v2/selection-change-requests/{changes[revision_two.json()['id']]}/approve",
+            headers=headers,
+        )
+        self.assertEqual(approved_two.status_code, 200, approved_two.text)
+        approved_two_retry = self.client.post(
+            f"/api/v1/admin/v2/selection-change-requests/{changes[revision_two.json()['id']]}/approve",
+            headers=headers,
+        )
+        self.assertEqual(approved_two_retry.status_code, 200, approved_two_retry.text)
+        self.assertEqual(approved_two_retry.json()["service_lines"], approved_two.json()["service_lines"])
+
+        approved_three = self.client.post(
+            f"/api/v1/admin/v2/selection-change-requests/{changes[revision_three.json()['id']]}/approve",
+            headers=headers,
+        )
+        self.assertEqual(approved_three.status_code, 200, approved_three.text)
+        with self.SessionLocal() as db:
+            latest = db.get(SelectionRevision, revision_three.json()["id"])
+            snapshot_line_ids = {
+                item["service_line_id"] for item in latest.snapshot["items"]
+            }
+            active_line_ids = set(db.scalars(select(ServiceLine.id).where(
+                ServiceLine.selection_session_id == session_id,
+                ServiceLine.state != "cancelled",
+            )))
+            self.assertEqual(latest.state, "confirmed")
+            self.assertEqual(snapshot_line_ids, active_line_ids)
+            self.assertEqual(len(active_line_ids), 3)
 
     def test_pending_or_rejected_service_time_addition_does_not_change_confirmed_selection(self):
         session_id, token = self.create_session()

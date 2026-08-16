@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import PositionOccupancy, PriceBook, Project, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, Staff, Store, User
+from app.models import Addon, PositionOccupancy, PriceBook, Project, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, Staff, Store, User
 
 
 class SelectionAdminApiTests(unittest.TestCase):
@@ -68,6 +68,31 @@ class SelectionAdminApiTests(unittest.TestCase):
         cls.client.close()
         app.dependency_overrides.clear()
         cls.engine.dispose()
+
+    def _submitted_selection_with_item(self, suffix: str, item: dict) -> str:
+        session_id = f"selection-admin-strict-{suffix}"
+        with self.SessionLocal() as db:
+            db.add_all([
+                SelectionSession(
+                    id=session_id,
+                    access_token_hash="x",
+                    store_id=self.store_id,
+                    source="personal_qr",
+                    status="submitted",
+                    items=[item],
+                    diy_preferences={},
+                ),
+                SelectionRevision(
+                    id=f"{session_id}-revision",
+                    selection_session_id=session_id,
+                    revision_no=1,
+                    state="submitted",
+                    idempotency_key=f"{session_id}-key",
+                    snapshot={"items": [item], "pricing": {"payable_total_cents": 0}},
+                ),
+            ])
+            db.commit()
+        return session_id
 
     def test_staff_can_list_and_confirm_selection(self):
         listed = self.client.get("/api/v1/admin/v2/selection-sessions", headers=self.headers)
@@ -267,6 +292,210 @@ class SelectionAdminApiTests(unittest.TestCase):
                 db.query(ServiceLine).filter_by(selection_session_id=session_id).count(),
                 1,
             )
+
+    def test_confirmation_rejects_every_unavailable_authoritative_charge(self):
+        with self.SessionLocal() as db:
+            base = Project(
+                store_id=self.store_id,
+                code="selection-admin-strict-base",
+                category="care",
+                name="严格确认主项目",
+                publication_status="published",
+            )
+            other_parent = Project(
+                store_id=self.store_id,
+                code="selection-admin-strict-other-parent",
+                category="care",
+                name="其他主项目",
+                publication_status="published",
+            )
+            draft_project = Project(
+                store_id=self.store_id,
+                code="selection-admin-strict-draft-project",
+                category="care",
+                name="未发布项目",
+                publication_status="draft",
+            )
+            other_store = Store(
+                store_code="selection-admin-strict-other-store",
+                name="严格确认其他门店",
+                address="其他地址",
+            )
+            db.add_all([base, other_parent, draft_project, other_store])
+            db.flush()
+            cross_store_project = Project(
+                store_id=other_store.id,
+                code="selection-admin-strict-cross-store-project",
+                category="care",
+                name="其他门店项目",
+                publication_status="published",
+            )
+            db.add(cross_store_project)
+            db.flush()
+            for project in (base, other_parent, draft_project, cross_store_project):
+                db.add(PriceBook(project_id=project.id, price_type="store", amount_cents=10000))
+            draft_standalone = Addon(
+                store_id=self.store_id,
+                code="selection-admin-strict-draft-standalone",
+                name="未发布独立加项",
+                independently_sellable=True,
+                chargeable=True,
+                price_cents=1200,
+                publication_status="draft",
+            )
+            draft_attached = Addon(
+                store_id=self.store_id,
+                code="selection-admin-strict-draft-attached",
+                name="未发布附加项",
+                parent_project_id=base.id,
+                can_attach_to_parent=True,
+                chargeable=True,
+                price_cents=1200,
+                publication_status="draft",
+            )
+            wrong_parent = Addon(
+                store_id=self.store_id,
+                code="selection-admin-strict-wrong-parent",
+                name="不适用附加项",
+                parent_project_id=other_parent.id,
+                can_attach_to_parent=True,
+                chargeable=True,
+                price_cents=1200,
+                publication_status="published",
+            )
+            cannot_attach = Addon(
+                store_id=self.store_id,
+                code="selection-admin-strict-cannot-attach",
+                name="禁止随主项附加",
+                parent_project_id=base.id,
+                can_attach_to_parent=False,
+                chargeable=True,
+                price_cents=1200,
+                publication_status="published",
+            )
+            db.add_all([draft_standalone, draft_attached, wrong_parent, cannot_attach])
+            db.commit()
+            ids = {
+                "base": base.id,
+                "draft_project": draft_project.id,
+                "cross_store_project": cross_store_project.id,
+                "draft_standalone": draft_standalone.id,
+                "draft_attached": draft_attached.id,
+                "wrong_parent": wrong_parent.id,
+                "cannot_attach": cannot_attach.id,
+            }
+
+        missing_project_id = 987654321
+        missing_standalone_id = 987654322
+        missing_attached_id = 987654323
+        cases = [
+            (
+                "missing-project",
+                {"project_id": missing_project_id, "quantity": 1, "chargeable": True},
+                f"confirmation project {missing_project_id} is unavailable",
+            ),
+            (
+                "draft-project",
+                {"project_id": ids["draft_project"], "quantity": 1, "chargeable": True},
+                f"confirmation project {ids['draft_project']} is unavailable",
+            ),
+            (
+                "cross-store-project",
+                {"project_id": ids["cross_store_project"], "quantity": 1, "chargeable": True},
+                f"confirmation project {ids['cross_store_project']} is unavailable",
+            ),
+            (
+                "missing-synthetic-project",
+                {"project_id": "local-strength", "quantity": 1, "chargeable": True},
+                "confirmation synthetic project local-strength is unavailable",
+            ),
+            (
+                "missing-standalone-addon",
+                {"project_id": None, "addon_id": missing_standalone_id, "item_kind": "standalone_addon", "quantity": 1, "chargeable": True},
+                f"confirmation standalone addon {missing_standalone_id} is unavailable",
+            ),
+            (
+                "draft-standalone-addon",
+                {"project_id": None, "addon_id": ids["draft_standalone"], "item_kind": "standalone_addon", "quantity": 1, "chargeable": True},
+                f"confirmation standalone addon {ids['draft_standalone']} is unavailable",
+            ),
+            (
+                "missing-attached-addon",
+                {"project_id": ids["base"], "addon_ids": [missing_attached_id], "quantity": 1, "chargeable": True},
+                f"confirmation attached addon {missing_attached_id} is unavailable",
+            ),
+            (
+                "draft-attached-addon",
+                {"project_id": ids["base"], "addon_ids": [ids["draft_attached"]], "quantity": 1, "chargeable": True},
+                f"confirmation attached addon {ids['draft_attached']} is unavailable",
+            ),
+            (
+                "wrong-parent-addon",
+                {"project_id": ids["base"], "addon_ids": [ids["wrong_parent"]], "quantity": 1, "chargeable": True},
+                f"confirmation attached addon {ids['wrong_parent']} is not applicable to project {ids['base']}",
+            ),
+            (
+                "cannot-attach-addon",
+                {"project_id": ids["base"], "addon_ids": [ids["cannot_attach"]], "quantity": 1, "chargeable": True},
+                f"confirmation attached addon {ids['cannot_attach']} is not applicable to project {ids['base']}",
+            ),
+        ]
+
+        for suffix, item, expected_message in cases:
+            with self.subTest(case=suffix):
+                session_id = self._submitted_selection_with_item(suffix, item)
+                response = self.client.post(
+                    f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+                    headers=self.headers,
+                )
+
+                self.assertEqual(response.status_code, 409, response.text)
+                self.assertEqual(response.json()["detail"], {
+                    "code": "CONFIRMATION_PRICING_INVALID",
+                    "message": expected_message,
+                })
+                with self.SessionLocal() as db:
+                    self.assertEqual(db.get(SelectionSession, session_id).status, "submitted")
+                    self.assertEqual(
+                        db.query(ServiceLine).filter_by(selection_session_id=session_id).count(),
+                        0,
+                    )
+
+    def test_confirmation_accepts_existing_explicit_zero_standalone_addon(self):
+        with self.SessionLocal() as db:
+            addon = Addon(
+                store_id=self.store_id,
+                code="selection-admin-strict-zero-standalone",
+                name="显式零元独立加项",
+                independently_sellable=True,
+                chargeable=True,
+                store_price_cents=0,
+                member_price_cents=0,
+                member_price_enabled=True,
+                price_cents=0,
+                publication_status="published",
+            )
+            db.add(addon)
+            db.commit()
+            addon_id = addon.id
+        session_id = self._submitted_selection_with_item(
+            "zero-standalone-addon",
+            {
+                "project_id": None,
+                "addon_id": addon_id,
+                "item_kind": "standalone_addon",
+                "quantity": 1,
+                "chargeable": True,
+            },
+        )
+
+        response = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+            headers=self.headers,
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["pricing_snapshot"]["payable_total_cents"], 0)
 
     def test_confirmed_selection_can_be_cancelled(self):
         with self.SessionLocal() as db:

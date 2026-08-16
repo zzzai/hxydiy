@@ -73,6 +73,117 @@ def _owned(entity, store_id: int, detail: str):
     return entity
 
 
+def _latest_confirmed_revision_for_update(
+    db: Session,
+    selection_session_id: str,
+) -> SelectionRevision | None:
+    return db.scalar(
+        select(SelectionRevision)
+        .where(
+            SelectionRevision.selection_session_id == selection_session_id,
+            SelectionRevision.state == "confirmed",
+        )
+        .order_by(SelectionRevision.revision_no.desc(), SelectionRevision.id.asc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+def _selection_occupancy_for_update(
+    db: Session,
+    selection_session_id: str,
+) -> PositionOccupancy | None:
+    return db.scalar(
+        select(PositionOccupancy)
+        .where(PositionOccupancy.selection_session_id == selection_session_id)
+        .order_by(PositionOccupancy.id.desc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+def _active_service_lines_for_update(
+    db: Session,
+    selection_session_id: str,
+) -> list[ServiceLine]:
+    return list(db.scalars(
+        select(ServiceLine)
+        .where(
+            ServiceLine.selection_session_id == selection_session_id,
+            ServiceLine.state != "cancelled",
+        )
+        .order_by(ServiceLine.id.asc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ))
+
+
+def _require_exact_service_line_snapshot(snapshot: dict, lines: list[ServiceLine]) -> None:
+    items = snapshot.get("items") if isinstance(snapshot, dict) else None
+    if not isinstance(items, list):
+        raise HTTPException(status_code=409, detail={
+            "code": "SERVICE_LINE_SNAPSHOT_MISMATCH",
+            "message": "确认快照缺少完整服务项",
+        })
+    expected_ids = [
+        str(item.get("service_line_id") or "").strip()
+        for item in items
+        if isinstance(item, dict)
+    ]
+    actual_ids = [str(line.id) for line in lines]
+    if not expected_ids or not actual_ids:
+        raise HTTPException(status_code=409, detail={
+            "code": "SERVICE_LINES_NOT_CONFIRMED",
+            "message": "实际服务项尚未由前台确认",
+        })
+    if (
+        len(expected_ids) != len(items)
+        or any(not line_id for line_id in expected_ids)
+        or len(set(expected_ids)) != len(expected_ids)
+        or set(expected_ids) != set(actual_ids)
+        or len(actual_ids) != len(set(actual_ids))
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "SERVICE_LINE_SNAPSHOT_MISMATCH",
+            "message": "实际服务项与最新确认快照不一致",
+        })
+
+
+def _require_frozen_billing_snapshot(
+    order: Order,
+    service_order: ServiceOrder,
+    snapshot: dict,
+) -> None:
+    pricing = snapshot.get("pricing") if isinstance(snapshot, dict) else None
+    if not isinstance(pricing, dict) or "payable_total_cents" not in pricing:
+        raise HTTPException(status_code=409, detail={
+            "code": "CONFIRMED_PRICING_REQUIRED",
+            "message": "选单缺少前台确认的冻结价格",
+        })
+    pricing_lines = pricing.get("lines")
+    if not isinstance(pricing_lines, list) or not all(isinstance(line, dict) for line in pricing_lines):
+        raise HTTPException(status_code=409, detail={
+            "code": "FROZEN_BILLING_SNAPSHOT_MISMATCH",
+            "message": "服务账单缺少完整冻结项目",
+        })
+    frozen_items = [dict(line) for line in pricing_lines]
+    payable_total = int(pricing["payable_total_cents"])
+    store_total = int(pricing.get("store_total_cents", payable_total))
+    expected_discount = max(0, store_total - payable_total)
+    if (
+        order.items != frozen_items
+        or int(order.total_amount_cents) != payable_total
+        or int(order.pay_amount_cents) != payable_total
+        or int(order.discount_cents) != expected_discount
+        or service_order.items != frozen_items
+        or int(service_order.total_amount_cents) != payable_total
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "FROZEN_BILLING_SNAPSHOT_MISMATCH",
+            "message": "服务账单与最新确认冻结快照不一致",
+        })
+
+
 def _hash_request(action: str, body: BaseModel) -> str:
     raw = json.dumps(
         {"action": action, "body": body.model_dump()},
@@ -160,13 +271,100 @@ def _apply(state: BusinessClosureState, action: str) -> BusinessClosureState:
 
 
 def _closure_for_service(db: Session, service_order_id: int, store_id: int):
-    service_order = _owned(
-        db.scalar(select(ServiceOrder).where(ServiceOrder.id == service_order_id).with_for_update()),
-        store_id,
-        "服务单不存在",
-    )
-    visit = _owned(db.get(Visit, service_order.visit_id), store_id, "到店记录不存在")
-    order = _owned(db.get(Order, service_order.order_id), store_id, "订单不存在")
+    # 先用不加锁的列查询定位关联键；真正状态读取统一按
+    # SelectionSession -> Revision -> Occupancy -> Order -> ServiceOrder 获取行锁。
+    link = db.execute(
+        select(
+            ServiceOrder.order_id.label("order_id"),
+            ServiceOrder.visit_id.label("visit_id"),
+            Visit.selection_session_id.label("selection_session_id"),
+        )
+        .join(Visit, Visit.id == ServiceOrder.visit_id)
+        .where(ServiceOrder.id == service_order_id)
+    ).mappings().first()
+    if not link:
+        raise HTTPException(status_code=404, detail="服务单不存在")
+
+    selection_authority = None
+    if link["selection_session_id"]:
+        session = _owned(
+            db.scalar(
+                select(SelectionSession)
+                .where(SelectionSession.id == link["selection_session_id"])
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+            store_id,
+            "选单不存在",
+        )
+        revision = _latest_confirmed_revision_for_update(db, session.id)
+        occupancy = _selection_occupancy_for_update(db, session.id)
+        order = _owned(
+            db.scalar(
+                select(Order)
+                .where(Order.id == link["order_id"])
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+            store_id,
+            "订单不存在",
+        )
+        service_order = _owned(
+            db.scalar(
+                select(ServiceOrder)
+                .where(ServiceOrder.id == service_order_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+            store_id,
+            "服务单不存在",
+        )
+        visit = _owned(
+            db.scalar(
+                select(Visit)
+                .where(Visit.id == link["visit_id"])
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+            store_id,
+            "到店记录不存在",
+        )
+        selection_authority = {
+            "session": session,
+            "revision": revision,
+            "occupancy": occupancy,
+        }
+    else:
+        service_order = _owned(
+            db.scalar(
+                select(ServiceOrder)
+                .where(ServiceOrder.id == service_order_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+            store_id,
+            "服务单不存在",
+        )
+        visit = _owned(
+            db.scalar(
+                select(Visit)
+                .where(Visit.id == service_order.visit_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+            store_id,
+            "到店记录不存在",
+        )
+        order = _owned(
+            db.scalar(
+                select(Order)
+                .where(Order.id == service_order.order_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+            store_id,
+            "订单不存在",
+        )
     assignment = db.scalar(
         select(ServiceAssignment)
         .where(
@@ -190,7 +388,7 @@ def _closure_for_service(db: Session, service_order_id: int, store_id: int):
         store_id,
         "房间不存在",
     )
-    return service_order, visit, order, assignment, technician, room
+    return service_order, visit, order, assignment, technician, room, selection_authority
 
 
 @router.get("/live-board")
@@ -420,6 +618,7 @@ def counter_checkout_selection(
             select(SelectionSession)
             .where(SelectionSession.id == selection_session_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         ),
         store_id,
         "选单不存在",
@@ -439,10 +638,7 @@ def counter_checkout_selection(
         db.flush()
         session.customer_id = anonymous.id
 
-    latest_revision = db.scalar(select(SelectionRevision).where(
-        SelectionRevision.selection_session_id == session.id,
-        SelectionRevision.state == "confirmed",
-    ).order_by(SelectionRevision.revision_no.desc()))
+    latest_revision = _latest_confirmed_revision_for_update(db, session.id)
     snapshot = (latest_revision.snapshot or {}) if latest_revision else {}
     pricing_snapshot = snapshot.get("pricing")
     if (
@@ -458,9 +654,7 @@ def counter_checkout_selection(
         raise HTTPException(status_code=409, detail={
             "code": "PAYMENT_NOT_CONFIRMED", "message": "实收金额低于本次选单参考金额",
         })
-    occupancy = db.scalar(select(PositionOccupancy).where(
-        PositionOccupancy.active_session_id == session.id,
-    ).with_for_update())
+    occupancy = _selection_occupancy_for_update(db, session.id)
     if occupancy and occupancy.status not in {"waiting_service", "in_service", "post_service_present"}:
         raise HTTPException(status_code=409, detail={
             "code": "OPERATION_STATE_CONFLICT", "message": "当前服务位状态不能接待该选单",
@@ -469,15 +663,8 @@ def counter_checkout_selection(
     from app.api.orders import gen_order_no
 
     priced_items = list(pricing_snapshot.get("lines") or snapshot.get("items") or [])
-    confirmed_lines = list(db.scalars(select(ServiceLine).where(
-        ServiceLine.selection_session_id == session.id,
-        ServiceLine.selection_revision_id == latest_revision.id,
-        ServiceLine.state != "cancelled",
-    )))
-    if not confirmed_lines:
-        raise HTTPException(status_code=409, detail={
-            "code": "SERVICE_LINES_NOT_CONFIRMED", "message": "实际服务项尚未由前台确认",
-        })
+    confirmed_lines = _active_service_lines_for_update(db, session.id)
+    _require_exact_service_line_snapshot(snapshot, confirmed_lines)
     order = Order(
         order_no=gen_order_no(),
         order_type="service",
@@ -563,6 +750,7 @@ def settle_completed_selection(
             select(SelectionSession)
             .where(SelectionSession.id == selection_session_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         ),
         store_id,
         "选单不存在",
@@ -575,9 +763,19 @@ def settle_completed_selection(
         raise HTTPException(status_code=409, detail={
             "code": "SELECTION_ALREADY_SETTLED", "message": "该选单已经完成结算",
         })
-    occupancy = db.scalar(select(PositionOccupancy).where(
-        PositionOccupancy.active_session_id == session.id,
-    ).with_for_update())
+    latest_revision = _latest_confirmed_revision_for_update(db, session.id)
+    snapshot = (latest_revision.snapshot or {}) if latest_revision else {}
+    pricing = snapshot.get("pricing")
+    if (
+        latest_revision is None
+        or not isinstance(pricing, dict)
+        or "payable_total_cents" not in pricing
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "CONFIRMED_PRICING_REQUIRED",
+            "message": "选单缺少前台确认的冻结价格",
+        })
+    occupancy = _selection_occupancy_for_update(db, session.id)
     abnormal_service = bool(
         occupancy
         and occupancy.status == "cleaning"
@@ -591,14 +789,8 @@ def settle_completed_selection(
             "code": "SERVICE_NOT_COMPLETED", "message": "服务完成后才可以结算",
         })
 
-    service_lines = list(db.scalars(select(ServiceLine).where(
-        ServiceLine.selection_session_id == session.id,
-        ServiceLine.state != "cancelled",
-    )))
-    if not service_lines:
-        raise HTTPException(status_code=409, detail={
-            "code": "SERVICE_LINES_NOT_COMPLETED", "message": "仍有服务项目未完成，不能结算",
-        })
+    service_lines = _active_service_lines_for_update(db, session.id)
+    _require_exact_service_line_snapshot(snapshot, service_lines)
     unfinished_lines = [line for line in service_lines if line.state != "completed"]
     if unfinished_lines and not abnormal_service:
         raise HTTPException(status_code=409, detail={
@@ -614,7 +806,6 @@ def settle_completed_selection(
             "message": "异常服务结算必须填写减免原因、责任归属和现场说明",
         })
 
-    pricing = session.pricing_snapshot or {}
     payable_total = int(pricing.get("payable_total_cents", session.store_total_cents) or 0)
     if body.service_adjustment_cents > payable_total:
         raise HTTPException(status_code=409, detail={
@@ -915,7 +1106,7 @@ def _service_action(
     if replay is not None:
         return replay
 
-    service_order, visit, order, assignment, technician, room = _closure_for_service(
+    service_order, visit, order, assignment, technician, room, selection_authority = _closure_for_service(
         db, service_order_id, store_id
     )
     before = _state(order, visit, service_order, technician, room)
@@ -940,10 +1131,7 @@ def _service_action(
         room.current_tech = ""
     selection_session_id = visit.selection_session_id
     if selection_session_id and action in {"start_service", "finish_service"}:
-        service_lines = list(db.scalars(select(ServiceLine).where(
-            ServiceLine.selection_session_id == selection_session_id,
-            ServiceLine.state != "cancelled",
-        )))
+        service_lines = _active_service_lines_for_update(db, selection_session_id)
         for line in service_lines:
             if action == "start_service" and line.state == "pending":
                 line.state = "in_service"
@@ -952,9 +1140,7 @@ def _service_action(
                 line.state = "completed"
                 line.completed_at = now
     if selection_session_id and action in {"start_service", "finish_service"}:
-        occupancy = db.scalar(select(PositionOccupancy).where(
-            PositionOccupancy.active_session_id == selection_session_id,
-        ).with_for_update())
+        occupancy = selection_authority["occupancy"] if selection_authority else None
         if occupancy:
             occupancy_before = occupancy.status
             if action == "start_service" and occupancy.status == "waiting_service":
@@ -1044,9 +1230,27 @@ def settle(
     if replay is not None:
         return replay
 
-    service_order, visit, order, assignment, technician, room = _closure_for_service(
+    service_order, visit, order, assignment, technician, room, selection_authority = _closure_for_service(
         db, service_order_id, store_id
     )
+    if selection_authority:
+        if selection_authority["session"].status != "confirmed":
+            raise HTTPException(status_code=409, detail={
+                "code": "OPERATION_STATE_CONFLICT",
+                "message": "选单须保持前台确认状态才能线下结算",
+            })
+        latest_revision = selection_authority["revision"]
+        if latest_revision is None:
+            raise HTTPException(status_code=409, detail={
+                "code": "CONFIRMED_PRICING_REQUIRED",
+                "message": "选单缺少前台确认的冻结版本",
+            })
+        service_lines = _active_service_lines_for_update(
+            db,
+            selection_authority["session"].id,
+        )
+        _require_exact_service_line_snapshot(latest_revision.snapshot or {}, service_lines)
+        _require_frozen_billing_snapshot(order, service_order, latest_revision.snapshot or {})
     if order.pay_status != "paid" and body.received_amount_cents < order.pay_amount_cents:
         raise HTTPException(status_code=409, detail={
             "code": "PAYMENT_NOT_CONFIRMED", "message": "实收金额或支付状态尚未确认",

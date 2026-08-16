@@ -30,6 +30,7 @@ class PriceContext:
     store_timezone: str
     member_expire_at: datetime | None = None
     member_type: str | None = None
+    store_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -123,7 +124,7 @@ def confirmed_price_for_line(
     if member is None:
         raise ValueError("member price is required")
 
-    if local_confirmed_at.weekday() == 1:
+    if member_type == "annual" and local_confirmed_at.weekday() == 1:
         tuesday_amount = round(store * 0.68)
         if tuesday_amount < member:
             return ConfirmedPrice(amount_cents=tuesday_amount, basis="tuesday_68")

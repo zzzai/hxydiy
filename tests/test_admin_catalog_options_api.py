@@ -503,7 +503,7 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
             self.assertEqual(draft.status, "draft")
             self.assertIsNone(draft.published_at)
 
-    def test_price_preview_uses_server_prices_for_tuesday_free_linked_and_custom_lines(self):
+    def test_price_preview_uses_member_prices_when_membership_type_is_unknown(self):
         ids = self._create_valid_draft()
         response = self.client.post(
             f"/api/v1/admin/v2/projects/{self.main_id}/price-preview",
@@ -517,9 +517,9 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
-        self.assertEqual([line["basis"] for line in body["lines"]], ["tuesday_68", "free", "tuesday_68", "tuesday_68"])
-        self.assertEqual([line["amount_cents"] for line in body["lines"]], [6800, 0, 2040, 1360])
-        self.assertEqual(body["total_cents"], 10200)
+        self.assertEqual([line["basis"] for line in body["lines"]], ["member", "free", "member", "member"])
+        self.assertEqual([line["amount_cents"] for line in body["lines"]], [8000, 0, 2500, 1500])
+        self.assertEqual(body["total_cents"], 12000)
         invalid_time = self.client.post(
             f"/api/v1/admin/v2/projects/{self.main_id}/price-preview",
             headers=self.staff_headers,

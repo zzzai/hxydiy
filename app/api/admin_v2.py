@@ -26,6 +26,7 @@ from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_
 from app.domain.occupancy import audit_occupancy, release_occupancy
 from app.models.operations import Room, Technician
 from app.models.room_assign import RoomAssignment
+from app.models.service import ServiceOrder
 from app.models.scrm import (
     CustomerTag, CustomerTagRelation, CustomerSegment,
     AutomationRule, AutomationLog,
@@ -229,6 +230,78 @@ def _owned_selection(db: Session, session_id: str, staff: Staff) -> SelectionSes
     return session
 
 
+def _locked_owned_selection(db: Session, session_id: str, staff: Staff) -> SelectionSession:
+    session = db.scalar(
+        select(SelectionSession)
+        .where(SelectionSession.id == session_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not session or session.store_id != _staff_store_id(staff):
+        raise HTTPException(status_code=404, detail="选单不存在")
+    return session
+
+
+def _sync_unsettled_fulfillment_bill(
+    db: Session,
+    session: SelectionSession,
+    pricing: dict,
+) -> None:
+    """把已转服务单但尚未收款的账单更新为本次确认冻结快照。"""
+    if not session.fulfillment_order_id:
+        return
+    order = db.scalar(
+        select(Order)
+        .where(Order.id == session.fulfillment_order_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not order or order.store_id != session.store_id:
+        raise HTTPException(status_code=409, detail={
+            "code": "FULFILLMENT_BILL_UNAVAILABLE",
+            "message": "关联服务账单不存在或不属于当前门店",
+        })
+    service_order = db.scalar(
+        select(ServiceOrder)
+        .where(
+            ServiceOrder.order_id == order.id,
+            ServiceOrder.store_id == session.store_id,
+        )
+        .order_by(ServiceOrder.id.asc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not service_order:
+        raise HTTPException(status_code=409, detail={
+            "code": "FULFILLMENT_BILL_UNAVAILABLE",
+            "message": "关联服务单不存在",
+        })
+    if (
+        order.pay_status != "unpaid"
+        or service_order.settled_at is not None
+        or service_order.status == "completed"
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "FULFILLMENT_BILL_NOT_SYNCABLE",
+            "message": "已收款或已结算的服务单不能追加确认项目",
+        })
+    pricing_lines = pricing.get("lines")
+    if not isinstance(pricing_lines, list) or not all(isinstance(line, dict) for line in pricing_lines):
+        raise HTTPException(status_code=409, detail={
+            "code": "CONFIRMATION_PRICING_INVALID",
+            "message": "确认冻结报价缺少服务账单项目",
+        })
+    frozen_items = [dict(line) for line in pricing_lines]
+    payable_total = int(pricing.get("payable_total_cents", 0))
+    store_total = int(pricing.get("store_total_cents", payable_total))
+    order.items = frozen_items
+    order.total_amount_cents = payable_total
+    order.discount_cents = max(0, store_total - payable_total)
+    order.pay_amount_cents = payable_total
+    service_order.items = frozen_items
+    service_order.total_amount_cents = payable_total
+
+
 def _selection_change_request_view(
     change: SelectionChangeRequest,
     session: SelectionSession,
@@ -282,39 +355,72 @@ def list_selection_change_requests(
 @router.post("/selection-sessions/{session_id}/confirm")
 def confirm_selection_session(session_id: str, db: Session = Depends(get_db), authorization: str | None = Header(None)):
     staff = _current_staff(authorization, db)
-    session = _owned_selection(db, session_id, staff)
+    session = _locked_owned_selection(db, session_id, staff)
     if session.status == "confirmed":
         return _selection_view(session, db.get(User, session.customer_id) if session.customer_id else None)
     if session.status != "submitted":
         raise HTTPException(status_code=409, detail="只有已提交选单可以确认")
-    revision = db.scalar(select(SelectionRevision).where(
-        SelectionRevision.selection_session_id == session.id,
-        SelectionRevision.state == "submitted",
-    ).order_by(SelectionRevision.revision_no.desc()))
+    submitted_revisions = list(db.scalars(
+        select(SelectionRevision)
+        .where(
+            SelectionRevision.selection_session_id == session.id,
+            SelectionRevision.state == "submitted",
+        )
+        .order_by(SelectionRevision.revision_no.desc(), SelectionRevision.id.asc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ))
+    revision = submitted_revisions[0] if submitted_revisions else None
     confirmed_at = datetime.now(timezone.utc)
-    confirmed_items = []
-    if revision:
-        for item in (revision.snapshot or {}).get("items", []):
-            service_line_id = str(uuid.uuid4())
-            confirmed_item = {
-                **item,
-                "service_line_id": service_line_id,
-                "state": "confirmed",
-            }
-            db.add(ServiceLine(
-                id=service_line_id,
-                selection_session_id=session.id,
-                selection_revision_id=revision.id,
-                snapshot=confirmed_item,
-                state="pending",
-            ))
-            confirmed_items.append(confirmed_item)
-        revision.state = "confirmed"
-        revision.confirmed_at = confirmed_at
-        revision.confirmed_by_staff_id = staff.id
+    if revision is None:
+        latest_revision_no = db.scalar(select(sa_func.max(SelectionRevision.revision_no)).where(
+            SelectionRevision.selection_session_id == session.id,
+        )) or 0
+        revision = SelectionRevision(
+            id=str(uuid.uuid4()),
+            selection_session_id=session.id,
+            revision_no=latest_revision_no + 1,
+            state="submitted",
+            idempotency_key=f"legacy-submit-confirm:{session.id}",
+            snapshot={
+                "items": list(session.items or []),
+                "pricing": dict(session.pricing_snapshot or {}),
+                "diy_preferences": dict(session.diy_preferences or {}),
+            },
+        )
+        db.add(revision)
+        db.flush()
     else:
-        # 简化提交路径尚未创建 revision；仍以确认后的独立选单行计价，不能把顾客提交当作已确认服务。
-        confirmed_items = [{**item, "state": "confirmed"} for item in session.items or []]
+        for superseded in submitted_revisions[1:]:
+            superseded.state = "superseded"
+    occupancy = db.scalar(
+        select(PositionOccupancy)
+        .where(PositionOccupancy.selection_session_id == session.id)
+        .order_by(PositionOccupancy.id.desc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if occupancy and occupancy.status in {"post_service_present", "cleaning", "released"}:
+        raise HTTPException(status_code=409, detail="服务已结束，当前选单不能确认")
+    confirmed_items = []
+    for item in (revision.snapshot or {}).get("items", []):
+        service_line_id = str(uuid.uuid4())
+        confirmed_item = {
+            **item,
+            "service_line_id": service_line_id,
+            "state": "confirmed",
+        }
+        db.add(ServiceLine(
+            id=service_line_id,
+            selection_session_id=session.id,
+            selection_revision_id=revision.id,
+            snapshot=confirmed_item,
+            state="pending",
+        ))
+        confirmed_items.append(confirmed_item)
+    revision.state = "confirmed"
+    revision.confirmed_at = confirmed_at
+    revision.confirmed_by_staff_id = staff.id
 
     # 泡脚组合优惠只取前台确认的独立服务单位；确认后立即刷新冻结报价。
     session.items = confirmed_items
@@ -326,12 +432,11 @@ def confirm_selection_session(session_id: str, db: Session = Depends(get_db), au
             "code": "CONFIRMATION_PRICING_INVALID",
             "message": str(exc),
         }) from exc
-    if revision:
-        revision.snapshot = {
-            **(revision.snapshot or {}),
-            "items": confirmed_items,
-            "pricing": pricing,
-        }
+    revision.snapshot = {
+        **(revision.snapshot or {}),
+        "items": confirmed_items,
+        "pricing": pricing,
+    }
     session.status = "confirmed"
     session.confirmed_at = confirmed_at
     _audit(db, staff.name, "confirm_selection", "selection_session", session.id)
@@ -374,21 +479,62 @@ def approve_selection_change_request(
     authorization: str | None = Header(None),
 ):
     staff = _current_staff(authorization, db)
-    change = db.get(SelectionChangeRequest, request_id)
-    if not change:
+    change_ref = db.get(SelectionChangeRequest, request_id)
+    if not change_ref:
         raise HTTPException(status_code=404, detail="加选请求不存在")
-    session = _owned_selection(db, change.selection_session_id, staff)
+    session = _locked_owned_selection(db, change_ref.selection_session_id, staff)
+    change = db.scalar(
+        select(SelectionChangeRequest)
+        .where(SelectionChangeRequest.id == request_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not change or change.selection_session_id != session.id:
+        raise HTTPException(status_code=404, detail="加选请求不存在")
+    revision = db.scalar(
+        select(SelectionRevision)
+        .where(SelectionRevision.id == change.selection_revision_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not revision or revision.selection_session_id != session.id:
+        raise HTTPException(status_code=409, detail="加选版本不存在")
     if change.state == "approved":
-        lines = db.query(ServiceLine).filter(ServiceLine.selection_revision_id == change.selection_revision_id).all()
+        lines = list(db.scalars(
+            select(ServiceLine)
+            .where(ServiceLine.selection_revision_id == change.selection_revision_id)
+            .order_by(ServiceLine.id.asc())
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ))
         return {"id": change.id, "state": change.state, "service_lines": [_service_line_view(line) for line in lines]}
     if change.state != "awaiting_staff_confirmation":
         raise HTTPException(status_code=409, detail="当前加选请求不能确认")
-    revision = db.get(SelectionRevision, change.selection_revision_id)
-    if not revision or revision.selection_session_id != session.id:
-        raise HTTPException(status_code=409, detail="加选版本不存在")
-    occupancy = db.scalar(select(PositionOccupancy).where(
-        PositionOccupancy.selection_session_id == session.id,
-    ).order_by(PositionOccupancy.id.desc()))
+    if session.status != "confirmed":
+        raise HTTPException(status_code=409, detail="当前选单状态不能确认加选")
+    earliest_pending_revision_no = db.scalar(
+        select(sa_func.min(SelectionRevision.revision_no))
+        .join(
+            SelectionChangeRequest,
+            SelectionChangeRequest.selection_revision_id == SelectionRevision.id,
+        )
+        .where(
+            SelectionChangeRequest.selection_session_id == session.id,
+            SelectionChangeRequest.state == "awaiting_staff_confirmation",
+        )
+    )
+    if earliest_pending_revision_no != revision.revision_no:
+        raise HTTPException(status_code=409, detail={
+            "code": "SELECTION_REVISION_OUT_OF_ORDER",
+            "message": "请先处理更早提交的加选版本",
+        })
+    occupancy = db.scalar(
+        select(PositionOccupancy)
+        .where(PositionOccupancy.selection_session_id == session.id)
+        .order_by(PositionOccupancy.id.desc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if not occupancy or occupancy.status != "in_service":
         raise HTTPException(status_code=409, detail="服务已结束，当前加选不能确认")
     approved_at = datetime.now(timezone.utc)
@@ -429,6 +575,7 @@ def approve_selection_change_request(
         "added_items": confirmed_added_items,
         "pricing": pricing,
     }
+    _sync_unsettled_fulfillment_bill(db, session, pricing)
     session.status = "confirmed"
     session.confirmed_at = session.confirmed_at or approved_at
     change.state = "approved"

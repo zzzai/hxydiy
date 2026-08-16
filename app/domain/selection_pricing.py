@@ -70,7 +70,21 @@ def calculate_selection_pricing(
             continue
         project_id = item.get("project_id")
         quantity = max(1, int(item.get("quantity") or 1))
-        standalone_addon = db.get(Addon, item.get("addon_id")) if item.get("item_kind") == "standalone_addon" else None
+        is_standalone_addon = item.get("item_kind") == "standalone_addon"
+        standalone_addon = db.get(Addon, item.get("addon_id")) if is_standalone_addon else None
+        if price_context is not None and is_standalone_addon and (
+            standalone_addon is None
+            or standalone_addon.publication_status != "published"
+            or not standalone_addon.independently_sellable
+            or not standalone_addon.chargeable
+            or (
+                price_context.store_id is not None
+                and standalone_addon.store_id != price_context.store_id
+            )
+        ):
+            raise ValueError(
+                f"confirmation standalone addon {item.get('addon_id')} is unavailable"
+            )
         if standalone_addon:
             base_store = int(
                 standalone_addon.store_price_cents
@@ -88,6 +102,16 @@ def calculate_selection_pricing(
             project = db.get(Project, project_id) if isinstance(project_id, int) else None
             if project is None and isinstance(project_id, str):
                 project = _synthetic_project(db, project_id)
+            if price_context is not None and (
+                project is None
+                or project.publication_status != "published"
+                or (
+                    price_context.store_id is not None
+                    and project.store_id != price_context.store_id
+                )
+            ):
+                entity = "synthetic project" if isinstance(project_id, str) else "project"
+                raise ValueError(f"confirmation {entity} {project_id} is unavailable")
             if project:
                 prices = (
                     price_book_prices(db, project.id)
@@ -107,7 +131,35 @@ def calculate_selection_pricing(
         addon_member = 0
         for addon_id in item.get("addon_ids", []):
             addon = db.get(Addon, addon_id)
-            if not addon or addon.publication_status != "published" or (addon.parent_project_id and addon.parent_project_id != project.id):
+            if price_context is not None and (
+                addon is None
+                or addon.publication_status != "published"
+                or (
+                    price_context.store_id is not None
+                    and addon.store_id != price_context.store_id
+                )
+            ):
+                raise ValueError(f"confirmation attached addon {addon_id} is unavailable")
+            if price_context is not None and (
+                project is None
+                or not addon.can_attach_to_parent
+                or (
+                    addon.parent_project_id is not None
+                    and addon.parent_project_id != project.id
+                )
+            ):
+                raise ValueError(
+                    f"confirmation attached addon {addon_id} is not applicable to project {project_id}"
+                )
+            if (
+                not addon
+                or addon.publication_status != "published"
+                or (
+                    project is not None
+                    and addon.parent_project_id
+                    and addon.parent_project_id != project.id
+                )
+            ):
                 continue
             if not addon.chargeable:
                 continue
@@ -190,7 +242,7 @@ def calculate_selection_pricing(
             seen_bundle_service_lines.add(unit_key)
             if part:
                 local_parts.add(part)
-        lines.append({
+        pricing_line = {
             "line_index": index,
             "project_id": project_id,
             "addon_id": item.get("addon_id"),
@@ -208,7 +260,11 @@ def calculate_selection_pricing(
             "payable_line_total_cents": unit_payable * quantity,
             "addon_store_total_cents": addon_store * quantity,
             "addon_member_total_cents": addon_member * quantity,
-        })
+        }
+        service_line_id = _first_value(item, "service_line_id")
+        if service_line_id is not None and str(service_line_id).strip():
+            pricing_line["service_line_id"] = str(service_line_id).strip()
+        lines.append(pricing_line)
 
     qualified_local_units = _qualified_local_bundle_unit_count(local_bundle_units)
     matched_foot_baths = min(len(foot_bath_units), qualified_local_units // 2)

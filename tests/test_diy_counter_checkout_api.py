@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, Order, PositionOccupancy, Project, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, Staff, Store, User
+from app.models import AuditLog, Order, PositionOccupancy, PriceBook, Project, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, Staff, Store, User
 import app.models as models
 from app.models.operations import Room
 from app.models.operations import Technician
@@ -186,6 +186,261 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
             self.assertEqual(session.fulfillment_order_id, order.id)
             self.assertEqual(occupancy.status, "waiting_service")
 
+    def test_service_time_addition_syncs_unsettled_bill_and_settlement_rejects_stale_snapshot(self):
+        with self.SessionLocal() as db:
+            db.add_all([
+                PriceBook(project_id=self.project_id, price_type="store", amount_cents=4000),
+                PriceBook(project_id=self.project_id, price_type="member", amount_cents=4000),
+            ])
+            db.commit()
+
+        confirmed = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{self.session_id}/confirm",
+            headers=self.headers,
+        )
+        self.assertEqual(confirmed.status_code, 200, confirmed.text)
+        self.assertEqual(confirmed.json()["pricing_snapshot"]["payable_total_cents"], 4000)
+
+        checkout = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "addition-billing-checkout",
+                "payment_method": "cash",
+                "received_amount_cents": 4000,
+                "payment_reference": "",
+            },
+        )
+        self.assertEqual(checkout.status_code, 200, checkout.text)
+        checkout_data = checkout.json()
+
+        assigned = self.client.post(
+            f"/api/v1/operations/visits/{checkout_data['visit_id']}/assign",
+            headers=self.headers,
+            json={
+                "idempotency_key": "addition-billing-assign",
+                "technician_id": self.technician_id,
+                "room_id": self.room_id,
+                "project_ids": [self.project_id],
+            },
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.text)
+        ready = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/ready",
+            headers=self.headers,
+            json={"idempotency_key": "addition-billing-ready"},
+        )
+        self.assertEqual(ready.status_code, 200, ready.text)
+        started = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/start",
+            headers=self.headers,
+            json={"idempotency_key": "addition-billing-start"},
+        )
+        self.assertEqual(started.status_code, 200, started.text)
+
+        addition = self.client.post(
+            f"/api/v1/selection-sessions/{self.session_id}/revisions",
+            headers={
+                "X-Selection-Token": "diy-counter-token",
+                "Idempotency-Key": "addition-billing-request",
+            },
+            json={
+                "items": [
+                    {"project_id": self.project_id, "diy_preferences": ["暖泡舒缓"]},
+                    {"project_id": self.project_id, "diy_preferences": ["加选腿部"]},
+                ],
+            },
+        )
+        self.assertEqual(addition.status_code, 200, addition.text)
+        with self.SessionLocal() as db:
+            change = db.scalar(select(SelectionChangeRequest).where(
+                SelectionChangeRequest.selection_revision_id == addition.json()["id"],
+            ))
+            self.assertIsNotNone(change)
+            change_id = change.id
+
+        approved = self.client.post(
+            f"/api/v1/admin/v2/selection-change-requests/{change_id}/approve",
+            headers=self.headers,
+        )
+        self.assertEqual(approved.status_code, 200, approved.text)
+
+        with self.SessionLocal() as db:
+            revision = db.get(SelectionRevision, addition.json()["id"])
+            order = db.get(Order, checkout_data["order_id"])
+            service_order = db.get(ServiceOrder, checkout_data["service_order_id"])
+            self.assertEqual(revision.snapshot["pricing"]["payable_total_cents"], 8000)
+            self.assertEqual(order.total_amount_cents, 8000)
+            self.assertEqual(order.pay_amount_cents, 8000)
+            self.assertEqual(order.items, revision.snapshot["pricing"]["lines"])
+            self.assertEqual(service_order.total_amount_cents, 8000)
+            self.assertEqual(service_order.items, revision.snapshot["pricing"]["lines"])
+            self.assertEqual(
+                {item["service_line_id"] for item in revision.snapshot["items"]},
+                {line.id for line in db.scalars(select(ServiceLine).where(
+                    ServiceLine.selection_session_id == self.session_id,
+                    ServiceLine.state != "cancelled",
+                ))},
+            )
+
+        finished = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/finish",
+            headers=self.headers,
+            json={"idempotency_key": "addition-billing-finish"},
+        )
+        self.assertEqual(finished.status_code, 200, finished.text)
+
+        with self.SessionLocal() as db:
+            order = db.get(Order, checkout_data["order_id"])
+            service_order = db.get(ServiceOrder, checkout_data["service_order_id"])
+            order.items = list(order.items[:1])
+            order.total_amount_cents = 4000
+            order.pay_amount_cents = 4000
+            service_order.items = list(service_order.items[:1])
+            service_order.total_amount_cents = 4000
+            db.commit()
+
+        stale = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/settle",
+            headers=self.headers,
+            json={
+                "idempotency_key": "addition-billing-stale-settle",
+                "payment_method": "cash",
+                "received_amount_cents": 8000,
+                "payment_reference": "",
+            },
+        )
+        self.assertEqual(stale.status_code, 409, stale.text)
+        self.assertEqual(stale.json()["detail"]["code"], "FROZEN_BILLING_SNAPSHOT_MISMATCH")
+
+        with self.SessionLocal() as db:
+            revision = db.get(SelectionRevision, addition.json()["id"])
+            frozen_items = list(revision.snapshot["pricing"]["lines"])
+            frozen_amount = revision.snapshot["pricing"]["payable_total_cents"]
+            order = db.get(Order, checkout_data["order_id"])
+            service_order = db.get(ServiceOrder, checkout_data["service_order_id"])
+            order.items = frozen_items
+            order.total_amount_cents = frozen_amount
+            order.pay_amount_cents = frozen_amount
+            service_order.items = frozen_items
+            service_order.total_amount_cents = frozen_amount
+            db.commit()
+
+        insufficient = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/settle",
+            headers=self.headers,
+            json={
+                "idempotency_key": "addition-billing-short-settle",
+                "payment_method": "cash",
+                "received_amount_cents": 4000,
+                "payment_reference": "",
+            },
+        )
+        self.assertEqual(insufficient.status_code, 409, insufficient.text)
+        self.assertEqual(insufficient.json()["detail"]["code"], "PAYMENT_NOT_CONFIRMED")
+
+        settled = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/settle",
+            headers=self.headers,
+            json={
+                "idempotency_key": "addition-billing-final-settle",
+                "payment_method": "cash",
+                "received_amount_cents": 8000,
+                "payment_reference": "ADDITION-BILLING-CASH",
+            },
+        )
+        self.assertEqual(settled.status_code, 200, settled.text)
+        with self.SessionLocal() as db:
+            order = db.get(Order, checkout_data["order_id"])
+            service_order = db.get(ServiceOrder, checkout_data["service_order_id"])
+            self.assertEqual(order.pay_amount_cents, 8000)
+            self.assertEqual(order.pay_status, "paid")
+            self.assertEqual(service_order.total_amount_cents, 8000)
+            self.assertEqual(service_order.status, "completed")
+
+    def test_service_completion_before_addition_approval_keeps_authoritative_snapshot_and_bill_unchanged(self):
+        self.confirm_session_for_counter_checkout()
+        checkout = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "completion-before-approval-checkout",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+        self.assertEqual(checkout.status_code, 200, checkout.text)
+        checkout_data = checkout.json()
+        assigned = self.client.post(
+            f"/api/v1/operations/visits/{checkout_data['visit_id']}/assign",
+            headers=self.headers,
+            json={
+                "idempotency_key": "completion-before-approval-assign",
+                "technician_id": self.technician_id,
+                "room_id": self.room_id,
+                "project_ids": [self.project_id],
+            },
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.text)
+        for action in ("ready", "start"):
+            response = self.client.post(
+                f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/{action}",
+                headers=self.headers,
+                json={"idempotency_key": f"completion-before-approval-{action}"},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+
+        addition = self.client.post(
+            f"/api/v1/selection-sessions/{self.session_id}/revisions",
+            headers={
+                "X-Selection-Token": "diy-counter-token",
+                "Idempotency-Key": "completion-before-approval-request",
+            },
+            json={
+                "items": [
+                    {"project_id": self.project_id, "diy_preferences": ["暖泡舒缓"]},
+                    {"project_id": self.project_id, "diy_preferences": ["服务结束前请求的加选"]},
+                ],
+            },
+        )
+        self.assertEqual(addition.status_code, 200, addition.text)
+        with self.SessionLocal() as db:
+            change = db.scalar(select(SelectionChangeRequest).where(
+                SelectionChangeRequest.selection_revision_id == addition.json()["id"],
+            ))
+            self.assertIsNotNone(change)
+            change_id = change.id
+
+        finished = self.client.post(
+            f"/api/v1/operations/service-orders/{checkout_data['service_order_id']}/finish",
+            headers=self.headers,
+            json={"idempotency_key": "completion-before-approval-finish"},
+        )
+        self.assertEqual(finished.status_code, 200, finished.text)
+        rejected = self.client.post(
+            f"/api/v1/admin/v2/selection-change-requests/{change_id}/approve",
+            headers=self.headers,
+        )
+        self.assertEqual(rejected.status_code, 409, rejected.text)
+
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, self.session_id)
+            change = db.get(SelectionChangeRequest, change_id)
+            revision = db.get(SelectionRevision, addition.json()["id"])
+            order = db.get(Order, checkout_data["order_id"])
+            service_order = db.get(ServiceOrder, checkout_data["service_order_id"])
+            active_lines = list(db.scalars(select(ServiceLine).where(
+                ServiceLine.selection_session_id == self.session_id,
+                ServiceLine.state != "cancelled",
+            )))
+            self.assertEqual(change.state, "awaiting_staff_confirmation")
+            self.assertEqual(revision.state, "awaiting_staff_confirmation")
+            self.assertEqual(len(active_lines), 1)
+            self.assertEqual(session.items[0]["service_line_id"], active_lines[0].id)
+            self.assertEqual(order.pay_amount_cents, 2990)
+            self.assertEqual(service_order.total_amount_cents, 2990)
+
     def test_counter_checkout_rejects_submitted_preview_without_confirmation(self):
         response = self.client.post(
             f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
@@ -221,17 +476,162 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409, response.text)
         self.assertEqual(response.json()["detail"]["code"], "CONFIRMED_PRICING_REQUIRED")
 
+    def test_legacy_submit_confirm_creates_authority_for_counter_checkout(self):
+        with self.SessionLocal() as db:
+            db.add_all([
+                PriceBook(project_id=self.project_id, price_type="store", amount_cents=3990),
+                PriceBook(project_id=self.project_id, price_type="member", amount_cents=2990),
+            ])
+            db.commit()
+        created = self.client.post(
+            "/api/v1/selection-sessions",
+            json={
+                "store_id": self.store_id,
+                "source": "personal_qr",
+                "device_label": "兼容提交顾客手机",
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+        session_id = created.json()["session"]["id"]
+        token = created.json()["access_token"]
+        submitted = self.client.post(
+            f"/api/v1/selection-sessions/{session_id}/submit",
+            headers={"X-Selection-Token": token},
+            json={"items": [{"project_id": self.project_id}]},
+        )
+        self.assertEqual(submitted.status_code, 200, submitted.text)
+        self.assertEqual(submitted.json()["status"], "submitted")
+
+        confirmed = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+            headers=self.headers,
+        )
+        self.assertEqual(confirmed.status_code, 200, confirmed.text)
+        self.assertEqual(confirmed.json()["pricing_snapshot"]["payable_total_cents"], 3990)
+        confirmed_retry = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/confirm",
+            headers=self.headers,
+        )
+        self.assertEqual(confirmed_retry.status_code, 200, confirmed_retry.text)
+        self.assertEqual(confirmed_retry.json()["items"], confirmed.json()["items"])
+        with self.SessionLocal() as db:
+            revisions = db.query(SelectionRevision).filter_by(
+                selection_session_id=session_id,
+                state="confirmed",
+            ).all()
+            lines = db.query(ServiceLine).filter_by(selection_session_id=session_id).all()
+            self.assertEqual(len(revisions), 1)
+            self.assertEqual(len(lines), 1)
+            revision = revisions[0]
+            line = lines[0]
+            self.assertEqual(revision.snapshot["items"][0]["service_line_id"], line.id)
+            self.assertEqual(line.snapshot, revision.snapshot["items"][0])
+            self.assertEqual(revision.snapshot["pricing"]["payable_total_cents"], 3990)
+
+        checkout = self.client.post(
+            f"/api/v1/operations/selection-sessions/{session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "legacy-submit-counter-checkout",
+                "payment_method": "cash",
+                "received_amount_cents": 3990,
+                "payment_reference": "",
+            },
+        )
+
+        self.assertEqual(checkout.status_code, 200, checkout.text)
+        self.assertEqual(checkout.json()["payable_total_cents"], 3990)
+        with self.SessionLocal() as db:
+            order = db.get(Order, checkout.json()["order_id"])
+            self.assertEqual(order.pay_status, "unpaid")
+            self.assertEqual(order.pay_amount_cents, 3990)
+
+    def test_counter_checkout_rejects_extra_service_line_outside_authoritative_snapshot(self):
+        self.confirm_session_for_counter_checkout()
+        with self.SessionLocal() as db:
+            revision = db.query(SelectionRevision).filter_by(
+                selection_session_id=self.session_id,
+                state="confirmed",
+            ).one()
+            db.add(ServiceLine(
+                id="diy-counter-orphan-active-line",
+                selection_session_id=self.session_id,
+                selection_revision_id=revision.id,
+                snapshot={"project_id": self.project_id, "name": "快照外服务项"},
+                state="pending",
+            ))
+            db.commit()
+
+        response = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "reject-extra-service-line",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "SERVICE_LINE_SNAPSHOT_MISMATCH")
+
+    def test_counter_checkout_rejects_missing_service_line_from_authoritative_snapshot(self):
+        self.confirm_session_for_counter_checkout()
+        with self.SessionLocal() as db:
+            revision = db.query(SelectionRevision).filter_by(
+                selection_session_id=self.session_id,
+                state="confirmed",
+            ).one()
+            revision.snapshot = {
+                **revision.snapshot,
+                "items": [
+                    *revision.snapshot["items"],
+                    {
+                        "project_id": self.project_id,
+                        "name": "缺少执行行的服务项",
+                        "service_line_id": "diy-counter-missing-active-line",
+                        "state": "confirmed",
+                    },
+                ],
+            }
+            db.commit()
+
+        response = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/counter-checkout",
+            headers=self.headers,
+            json={
+                "idempotency_key": "reject-missing-service-line",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "SERVICE_LINE_SNAPSHOT_MISMATCH")
+
     def test_counter_checkout_rejects_latest_revision_without_its_service_lines(self):
         with self.SessionLocal() as db:
             session = db.get(SelectionSession, self.session_id)
             session.status = "confirmed"
+            older_item = {
+                **session.items[0],
+                "service_line_id": "counter-stale-service-line",
+                "state": "confirmed",
+            }
+            latest_item = {
+                **session.items[0],
+                "service_line_id": "counter-latest-missing-service-line",
+                "state": "confirmed",
+            }
             older = SelectionRevision(
                 id="counter-older-confirmed-revision",
                 selection_session_id=self.session_id,
                 revision_no=1,
                 state="confirmed",
                 idempotency_key="counter-older-confirmed-revision",
-                snapshot={"pricing": session.pricing_snapshot, "items": session.items},
+                snapshot={"pricing": session.pricing_snapshot, "items": [older_item]},
             )
             latest = SelectionRevision(
                 id="counter-latest-confirmed-revision",
@@ -239,7 +639,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 revision_no=2,
                 state="confirmed",
                 idempotency_key="counter-latest-confirmed-revision",
-                snapshot={"pricing": session.pricing_snapshot, "items": session.items},
+                snapshot={"pricing": session.pricing_snapshot, "items": [latest_item]},
             )
             db.add_all([older, latest])
             db.flush()
@@ -247,7 +647,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 id="counter-stale-service-line",
                 selection_session_id=self.session_id,
                 selection_revision_id=older.id,
-                snapshot=session.items[0],
+                snapshot=older_item,
                 state="pending",
             ))
             db.commit()
@@ -264,7 +664,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 409, response.text)
-        self.assertEqual(response.json()["detail"]["code"], "SERVICE_LINES_NOT_CONFIRMED")
+        self.assertEqual(response.json()["detail"]["code"], "SERVICE_LINE_SNAPSHOT_MISMATCH")
 
     def test_counter_checkout_rejects_confirmed_revision_without_pricing(self):
         with self.SessionLocal() as db:
@@ -307,6 +707,12 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         with self.SessionLocal() as db:
             session = db.get(SelectionSession, self.session_id)
             session.status = "confirmed"
+            confirmed_item = {
+                **session.items[0],
+                "service_line_id": "direct-settlement-line",
+                "state": "confirmed",
+            }
+            session.items = [confirmed_item]
             revision = SelectionRevision(
                 id="direct-settlement-revision",
                 selection_session_id=self.session_id,
@@ -314,7 +720,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 state="confirmed",
                 idempotency_key="direct-settlement-revision",
                 snapshot={
-                    "items": session.items,
+                    "items": [confirmed_item],
                     "pricing": session.pricing_snapshot,
                 },
             )
@@ -324,7 +730,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 id="direct-settlement-line",
                 selection_session_id=self.session_id,
                 selection_revision_id=revision.id,
-                snapshot=session.items[0],
+                snapshot=confirmed_item,
                 state="completed",
             ))
             occupancy = db.scalar(select(PositionOccupancy).where(
@@ -355,11 +761,65 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
             self.assertEqual(session.fulfillment_order_id, order.id)
             self.assertIsNone(db.scalar(select(Visit).where(Visit.selection_session_id == self.session_id)))
 
-    def test_diy_service_cannot_settle_before_service_completion(self):
+    def test_direct_settlement_rejects_service_line_set_outside_latest_revision(self):
+        authoritative_line_id = "direct-settlement-authoritative-line"
         with self.SessionLocal() as db:
             session = db.get(SelectionSession, self.session_id)
             session.status = "confirmed"
+            authoritative_item = {
+                **session.items[0],
+                "service_line_id": authoritative_line_id,
+                "state": "confirmed",
+            }
+            revision = SelectionRevision(
+                id="direct-settlement-mismatch-revision",
+                selection_session_id=self.session_id,
+                revision_no=1,
+                state="confirmed",
+                idempotency_key="direct-settlement-mismatch-revision",
+                snapshot={"items": [authoritative_item], "pricing": session.pricing_snapshot},
+            )
+            db.add(revision)
+            db.flush()
+            db.add_all([
+                ServiceLine(
+                    id=authoritative_line_id,
+                    selection_session_id=self.session_id,
+                    selection_revision_id=revision.id,
+                    snapshot=authoritative_item,
+                    state="completed",
+                ),
+                ServiceLine(
+                    id="direct-settlement-orphan-line",
+                    selection_session_id=self.session_id,
+                    selection_revision_id=revision.id,
+                    snapshot={"project_id": self.project_id, "name": "快照外服务项"},
+                    state="completed",
+                ),
+            ])
+            occupancy = db.scalar(select(PositionOccupancy).where(
+                PositionOccupancy.selection_session_id == self.session_id,
+            ))
+            occupancy.status = "post_service_present"
+            occupancy.actual_service_end_at = datetime.now(timezone.utc)
             db.commit()
+
+        response = self.client.post(
+            f"/api/v1/operations/selection-sessions/{self.session_id}/settle",
+            headers=self.headers,
+            json={
+                "idempotency_key": "direct-settlement-mismatch",
+                "payment_method": "cash",
+                "received_amount_cents": 2990,
+                "payment_reference": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "SERVICE_LINE_SNAPSHOT_MISMATCH")
+
+    def test_diy_service_cannot_settle_before_service_completion(self):
+        self.confirm_session_for_counter_checkout()
 
         response = self.client.post(
             f"/api/v1/operations/selection-sessions/{self.session_id}/settle",
@@ -379,13 +839,19 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         with self.SessionLocal() as db:
             session = db.get(SelectionSession, self.session_id)
             session.status = "confirmed"
+            confirmed_item = {
+                **session.items[0],
+                "service_line_id": "abnormal-settlement-line",
+                "state": "confirmed",
+            }
+            session.items = [confirmed_item]
             revision = SelectionRevision(
                 id="abnormal-settlement-revision",
                 selection_session_id=self.session_id,
                 revision_no=1,
                 state="confirmed",
                 idempotency_key="abnormal-settlement-revision",
-                snapshot={"items": session.items, "pricing": session.pricing_snapshot},
+                snapshot={"items": [confirmed_item], "pricing": session.pricing_snapshot},
             )
             db.add(revision)
             db.flush()
@@ -393,7 +859,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 id="abnormal-settlement-line",
                 selection_session_id=self.session_id,
                 selection_revision_id=revision.id,
-                snapshot=session.items[0],
+                snapshot=confirmed_item,
                 state="in_service",
                 started_at=datetime.now(timezone.utc),
             ))
@@ -424,13 +890,19 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         with self.SessionLocal() as db:
             session = db.get(SelectionSession, self.session_id)
             session.status = "confirmed"
+            confirmed_item = {
+                **session.items[0],
+                "service_line_id": "abnormal-adjusted-line",
+                "state": "confirmed",
+            }
+            session.items = [confirmed_item]
             revision = SelectionRevision(
                 id="abnormal-adjusted-revision",
                 selection_session_id=self.session_id,
                 revision_no=1,
                 state="confirmed",
                 idempotency_key="abnormal-adjusted-revision",
-                snapshot={"items": session.items, "pricing": session.pricing_snapshot},
+                snapshot={"items": [confirmed_item], "pricing": session.pricing_snapshot},
             )
             db.add(revision)
             db.flush()
@@ -438,7 +910,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 id="abnormal-adjusted-line",
                 selection_session_id=self.session_id,
                 selection_revision_id=revision.id,
-                snapshot=session.items[0],
+                snapshot=confirmed_item,
                 state="in_service",
                 started_at=datetime.now(timezone.utc),
             ))
@@ -554,7 +1026,15 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
 
     def test_counter_checkout_uses_confirmed_revision_member_price_snapshot(self):
         with self.SessionLocal() as db:
-            db.get(SelectionSession, self.session_id).status = "confirmed"
+            session = db.get(SelectionSession, self.session_id)
+            session.status = "confirmed"
+            confirmed_item = {
+                "project_id": self.project_id,
+                "name": "草本泡脚",
+                "quantity": 1,
+                "service_line_id": "diy-counter-member-line",
+                "state": "confirmed",
+            }
             revision = SelectionRevision(
                 id="diy-counter-revision-member",
                 selection_session_id=self.session_id,
@@ -562,7 +1042,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 state="confirmed",
                 idempotency_key="diy-counter-member-price",
                 snapshot={
-                    "items": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1}],
+                    "items": [confirmed_item],
                     "pricing": {
                         "store_total_cents": 3990,
                         "member_total_cents": 2990,
@@ -571,6 +1051,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                             "project_id": self.project_id,
                             "name": "草本泡脚",
                             "quantity": 1,
+                            "service_line_id": "diy-counter-member-line",
                             "unit_payable_price_cents": 2990,
                             "payable_line_total_cents": 2990,
                         }],
@@ -582,7 +1063,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 id="diy-counter-member-line",
                 selection_session_id=self.session_id,
                 selection_revision_id=revision.id,
-                snapshot={"project_id": self.project_id, "name": "草本泡脚", "quantity": 1},
+                snapshot=confirmed_item,
                 state="pending",
             ))
             db.commit()
@@ -608,7 +1089,15 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
 
     def test_service_actions_keep_linked_position_in_sync(self):
         with self.SessionLocal() as db:
-            db.get(SelectionSession, self.session_id).status = "confirmed"
+            session = db.get(SelectionSession, self.session_id)
+            session.status = "confirmed"
+            confirmed_item = {
+                "project_id": self.project_id,
+                "name": "草本泡脚",
+                "quantity": 1,
+                "service_line_id": "diy-counter-service-line",
+                "state": "confirmed",
+            }
             revision = SelectionRevision(
                 id="diy-counter-service-line-revision",
                 selection_session_id=self.session_id,
@@ -616,12 +1105,12 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 state="confirmed",
                 idempotency_key="diy-counter-service-line-revision",
                 snapshot={
-                    "items": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1}],
+                    "items": [confirmed_item],
                     "pricing": {
                         "store_total_cents": 3990,
                         "member_total_cents": 2990,
                         "payable_total_cents": 2990,
-                        "lines": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1}],
+                        "lines": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1, "service_line_id": "diy-counter-service-line"}],
                     },
                 },
             )
@@ -630,7 +1119,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 id="diy-counter-service-line",
                 selection_session_id=self.session_id,
                 selection_revision_id=revision.id,
-                snapshot={"project_id": self.project_id, "name": "草本泡脚", "quantity": 1},
+                snapshot=confirmed_item,
                 state="pending",
             ))
             db.commit()
@@ -874,7 +1363,15 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
 
     def test_diy_counter_service_settlement_departure_cleaning_and_feedback_close_together(self):
         with self.SessionLocal() as db:
-            db.get(SelectionSession, self.session_id).status = "confirmed"
+            session = db.get(SelectionSession, self.session_id)
+            session.status = "confirmed"
+            confirmed_item = {
+                "project_id": self.project_id,
+                "name": "草本泡脚",
+                "quantity": 1,
+                "service_line_id": "diy-counter-closure-line",
+                "state": "confirmed",
+            }
             revision = SelectionRevision(
                 id="diy-counter-closure-revision",
                 selection_session_id=self.session_id,
@@ -882,12 +1379,12 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 state="confirmed",
                 idempotency_key="diy-counter-closure-revision",
                 snapshot={
-                    "items": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1}],
+                    "items": [confirmed_item],
                     "pricing": {
                         "store_total_cents": 3990,
                         "member_total_cents": 2990,
                         "payable_total_cents": 2990,
-                        "lines": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1}],
+                        "lines": [{"project_id": self.project_id, "name": "草本泡脚", "quantity": 1, "service_line_id": "diy-counter-closure-line"}],
                     },
                 },
             )
@@ -896,7 +1393,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
                 id="diy-counter-closure-line",
                 selection_session_id=self.session_id,
                 selection_revision_id=revision.id,
-                snapshot={"project_id": self.project_id, "name": "草本泡脚", "quantity": 1},
+                snapshot=confirmed_item,
                 state="pending",
             ))
             db.commit()

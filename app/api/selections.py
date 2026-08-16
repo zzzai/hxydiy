@@ -120,6 +120,7 @@ def refresh_session_pricing(
             member_expire_at=member_expire_at,
             confirmed_at=confirmed_at,
             store_timezone="Asia/Shanghai",
+            store_id=session.store_id,
         )
     pricing = calculate_selection_pricing(
         db,

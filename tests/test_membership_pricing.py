@@ -70,6 +70,8 @@ class ConfirmedPriceTests(unittest.TestCase):
             is_member=True,
             confirmed_at=datetime(2026, 8, 18, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
             store_timezone="Asia/Shanghai",
+            member_expire_at=datetime(2027, 8, 18, tzinfo=timezone.utc),
+            member_type="annual",
         )
 
         self.assertEqual(price.amount_cents, 2713)
@@ -81,12 +83,16 @@ class ConfirmedPriceTests(unittest.TestCase):
             is_member=True,
             confirmed_at=datetime(2026, 8, 18, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
             store_timezone="Asia/Shanghai",
+            member_expire_at=datetime(2027, 8, 18, tzinfo=timezone.utc),
+            member_type="annual",
         )
         equal = confirmed_price_for_line(
             prices={"store": 4000, "member": 2720},
             is_member=True,
             confirmed_at=datetime(2026, 8, 18, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
             store_timezone="Asia/Shanghai",
+            member_expire_at=datetime(2027, 8, 18, tzinfo=timezone.utc),
+            member_type="annual",
         )
 
         self.assertEqual(lower.amount_cents, 2500)
@@ -100,10 +106,38 @@ class ConfirmedPriceTests(unittest.TestCase):
             is_member=True,
             confirmed_at=datetime(2026, 8, 17, 16, 30, tzinfo=timezone.utc),
             store_timezone="Asia/Shanghai",
+            member_expire_at=datetime(2027, 8, 18, tzinfo=timezone.utc),
+            member_type="annual",
         )
 
         self.assertEqual(price.amount_cents, 2713)
         self.assertEqual(price.basis, "tuesday_68")
+
+    def test_tuesday_discount_is_annual_only_and_expiry_is_strict(self):
+        confirmed_at = datetime(2026, 8, 18, 2, 0, tzinfo=timezone.utc)
+        cases = [
+            ("annual-active", "annual", datetime(2027, 8, 18, tzinfo=timezone.utc), 6800, "tuesday_68"),
+            ("stored-active", "stored", datetime(2027, 8, 18, tzinfo=timezone.utc), 8000, "member"),
+            ("monthly-active", "monthly", datetime(2027, 8, 18, tzinfo=timezone.utc), 8000, "member"),
+            ("unknown-active", None, datetime(2027, 8, 18, tzinfo=timezone.utc), 8000, "member"),
+            ("annual-expired-before", "annual", datetime(2026, 8, 18, 1, 59, tzinfo=timezone.utc), 10000, "store"),
+            ("annual-expires-at-confirmation", "annual", confirmed_at, 10000, "store"),
+            ("annual-expires-after-confirmation", "annual", datetime(2026, 8, 18, 2, 1, tzinfo=timezone.utc), 6800, "tuesday_68"),
+        ]
+
+        for label, member_type, member_expire_at, expected_amount, expected_basis in cases:
+            with self.subTest(case=label):
+                price = confirmed_price_for_line(
+                    prices={"store": 10000, "group": 9000, "member": 8000},
+                    is_member=True,
+                    confirmed_at=confirmed_at,
+                    store_timezone="Asia/Shanghai",
+                    member_expire_at=member_expire_at,
+                    member_type=member_type,
+                )
+
+                self.assertEqual(price.amount_cents, expected_amount)
+                self.assertEqual(price.basis, expected_basis)
 
     def test_confirmed_at_must_be_timezone_aware(self):
         with self.assertRaisesRegex(ValueError, "confirmed_at must be timezone-aware"):
@@ -244,6 +278,8 @@ class OptionChargeTests(unittest.TestCase):
                     is_member=True,
                     confirmed_at=datetime(2026, 8, 18, 10, tzinfo=ZoneInfo("Asia/Shanghai")),
                     store_timezone="Asia/Shanghai",
+                    member_expire_at=datetime(2027, 8, 18, tzinfo=timezone.utc),
+                    member_type="annual",
                 ),
             )
 
@@ -393,6 +429,7 @@ class OptionChargeTests(unittest.TestCase):
             confirmed_at=confirmed_at,
             store_timezone="Asia/Shanghai",
             member_expire_at=datetime(2026, 8, 19, tzinfo=ZoneInfo("Asia/Shanghai")),
+            member_type="annual",
         )
         expired = confirmed_price_for_line(
             prices,
@@ -400,6 +437,7 @@ class OptionChargeTests(unittest.TestCase):
             confirmed_at=confirmed_at,
             store_timezone="Asia/Shanghai",
             member_expire_at=datetime(2026, 8, 18, 9, tzinfo=ZoneInfo("Asia/Shanghai")),
+            member_type="annual",
         )
 
         self.assertEqual(active.basis, "tuesday_68")
