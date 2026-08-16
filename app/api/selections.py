@@ -14,6 +14,11 @@ from app.db.session import get_db
 from app.domain.occupancy import refresh_hold
 from app.domain.membership_pricing import PriceContext
 from app.domain.selection_pricing import calculate_selection_pricing, price_type_for_member
+from app.domain.selection_options import (
+    CatalogSelectionError,
+    merge_linked_service_units,
+    resolve_catalog_selection,
+)
 from app.models import Addon, CouponTemplate, PositionOccupancy, Project, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
 from app.schemas.selection import (
     MySelectionSessionsOut,
@@ -183,6 +188,8 @@ def _expire_if_needed(session: SelectionSession) -> bool:
 
 def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) -> list[dict]:
     normalized = []
+    linked_items = []
+    dedicated_items = []
     for item in items:
         if item.item_type not in {"service", "preference"}:
             raise HTTPException(status_code=400, detail="选单项目类型无效")
@@ -245,7 +252,7 @@ def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) ->
             {"name": project.name, "category": project.category, "code": project.code}
             if project else SYNTHETIC_PROJECTS[item.project_id]
         )
-        normalized.append({
+        normalized_item = {
             "project_id": item.project_id,
             "item_kind": "project",
             "name": snapshot["name"],
@@ -257,8 +264,62 @@ def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) ->
             "item_type": item.item_type,
             # 收费属性由目录与项目类型决定，不能相信顾客端传入的 chargeable。
             "chargeable": item.item_type != "preference",
-        })
-    return normalized
+        }
+        if item.catalog_version_id is None:
+            if item.option_choice_ids:
+                raise HTTPException(status_code=409, detail={
+                    "code": "CATALOG_VERSION_REQUIRED",
+                    "message": "提交目录选择项时必须指定目录版本",
+                })
+        else:
+            if project is None:
+                raise HTTPException(status_code=409, detail={
+                    "code": "CATALOG_PROJECT_UNAVAILABLE",
+                    "message": "当前项目不支持目录选择",
+                })
+            try:
+                resolved = resolve_catalog_selection(
+                    db,
+                    store_id=store_id,
+                    project_id=project.id,
+                    catalog_version_id=item.catalog_version_id,
+                    choice_ids=item.option_choice_ids,
+                )
+            except CatalogSelectionError as exc:
+                raise HTTPException(status_code=409, detail={
+                    "code": exc.code,
+                    "message": exc.message,
+                }) from exc
+            for linked_item in resolved.linked_items:
+                linked_item["source_project_id"] = project.id
+                linked_item["source_catalog_version_id"] = resolved.catalog_version_id
+            for dedicated_item in resolved.dedicated_items:
+                dedicated_item["source_project_id"] = project.id
+                dedicated_item["source_catalog_version_id"] = resolved.catalog_version_id
+            normalized_item["catalog_version_id"] = resolved.catalog_version_id
+            normalized_item["option_choice_ids"] = [
+                *item.option_choice_ids,
+            ]
+            normalized_item["catalog_selection"] = {
+                "catalog_version_id": resolved.catalog_version_id,
+                "option_choice_ids": [*item.option_choice_ids],
+                "preference_snapshots": resolved.preference_snapshots,
+                "linked_snapshots": [
+                    linked_item["choice_snapshot"]
+                    for linked_item in resolved.linked_items
+                ],
+                "dedicated_snapshots": [
+                    dedicated_item["choice_snapshot"]
+                    for dedicated_item in resolved.dedicated_items
+                ],
+            }
+            linked_items.extend(resolved.linked_items)
+            dedicated_items.extend(resolved.dedicated_items)
+        normalized.append(normalized_item)
+    return [
+        *merge_linked_service_units(normalized, linked_items),
+        *dedicated_items,
+    ]
 
 
 def _saving_hint(db: Session, store_id: int, pricing: dict, customer: User | None) -> dict | None:
