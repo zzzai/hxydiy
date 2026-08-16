@@ -1,16 +1,27 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SelectionItemIn(BaseModel):
     project_id: int | str | None = None
+    catalog_version_id: int | None = Field(default=None, ge=1)
+    option_choice_ids: list[int] = Field(default_factory=list, max_length=40)
     addon_id: int | None = None
     quantity: int = Field(default=1, ge=1, le=20)
     addon_ids: list[int] = Field(default_factory=list)
     diy_preferences: list[str] = Field(default_factory=list)
     item_type: str = "service"
     chargeable: bool = True
+
+    @field_validator("option_choice_ids")
+    @classmethod
+    def validate_option_choice_ids(cls, value: list[int]) -> list[int]:
+        if any(choice_id <= 0 for choice_id in value):
+            raise ValueError("option choice ids must be positive")
+        if len(value) != len(set(value)):
+            raise ValueError("option choice ids must be unique")
+        return value
 
 
 class SelectionSaveIn(BaseModel):

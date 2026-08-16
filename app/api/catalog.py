@@ -143,6 +143,7 @@ def _catalog_option_groups(
                 choice_prices = _current_option_prices(db, choice.id, now)
                 price_source = "option_choice_price"
             choices.append({
+                "id": choice.id,
                 "code": choice.code,
                 "name": choice.name,
                 "description": choice.description,
@@ -162,6 +163,7 @@ def _catalog_option_groups(
                 "prices": choice_prices,
             })
         groups.append({
+            "id": group.id,
             "code": group.code,
             "name": group.name,
             "description": group.description,
