@@ -227,6 +227,16 @@ def test_selection_rejects_choice_from_another_catalog_version(expanded_scenario
     _assert_error_code(response, "OPTION_CHOICE_CATALOG_MISMATCH")
 
 
+def test_selection_requires_catalog_version_for_project_with_published_catalog(
+    expanded_scenario: CatalogSelectionScenario,
+):
+    response = _post_revision(expanded_scenario, [{
+        "project_id": expanded_scenario.qiqing_id,
+    }])
+
+    _assert_error_code(response, "CATALOG_VERSION_REQUIRED")
+
+
 def test_selection_rejects_missing_required_group(expanded_scenario: CatalogSelectionScenario):
     with _session_local()() as db:
         group = db.get(ProjectOptionGroup, expanded_scenario.qiqing_small_group_id)
@@ -381,6 +391,31 @@ def test_local_reference_does_not_create_a_partless_charge_line(expanded_scenari
     linked_snapshot = items[0]["catalog_selection"]["linked_snapshots"][0]
     assert linked_snapshot["option_choice_id"] == expanded_scenario.xiangxiang_local_choice_id
     assert linked_snapshot["qualifies_for_foot_bath_bundle"] is True
+
+
+def test_local_reference_rejects_explicit_local_line_without_body_part(
+    expanded_scenario: CatalogSelectionScenario,
+):
+    response = _post_revision(expanded_scenario, [
+        {
+            "project_id": expanded_scenario.xiangxiang_id,
+            "catalog_version_id": expanded_scenario.xiangxiang_version_id,
+            "option_choice_ids": [expanded_scenario.xiangxiang_local_choice_id],
+        },
+        {"project_id": expanded_scenario.local_project_id},
+    ])
+
+    _assert_error_code(response, "LOCAL_STRENGTH_BODY_PART_REQUIRED")
+
+
+def test_explicit_local_project_requires_body_part_without_catalog_source(
+    expanded_scenario: CatalogSelectionScenario,
+):
+    response = _post_revision(expanded_scenario, [{
+        "project_id": expanded_scenario.local_project_id,
+    }])
+
+    _assert_error_code(response, "LOCAL_STRENGTH_BODY_PART_REQUIRED")
 
 
 def test_same_local_project_keeps_two_distinct_body_parts(expanded_scenario: CatalogSelectionScenario):

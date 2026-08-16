@@ -19,7 +19,7 @@ from app.domain.selection_options import (
     merge_linked_service_units,
     resolve_catalog_selection,
 )
-from app.models import Addon, CouponTemplate, PositionOccupancy, Project, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
+from app.models import Addon, CouponTemplate, PositionOccupancy, Project, ProjectCatalogVersion, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
 from app.schemas.selection import (
     MySelectionSessionsOut,
     SelectionCreateIn,
@@ -266,7 +266,16 @@ def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) ->
             "chargeable": item.item_type != "preference",
         }
         if item.catalog_version_id is None:
-            if item.option_choice_ids:
+            current_catalog = (
+                db.get(ProjectCatalogVersion, project.current_published_version_id)
+                if project and project.current_published_version_id is not None
+                else None
+            )
+            if item.option_choice_ids or (
+                current_catalog is not None
+                and current_catalog.project_id == project.id
+                and current_catalog.status == "published"
+            ):
                 raise HTTPException(status_code=409, detail={
                     "code": "CATALOG_VERSION_REQUIRED",
                     "message": "提交目录选择项时必须指定目录版本",
@@ -316,8 +325,15 @@ def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) ->
             linked_items.extend(resolved.linked_items)
             dedicated_items.extend(resolved.dedicated_items)
         normalized.append(normalized_item)
+    try:
+        merged = merge_linked_service_units(normalized, linked_items)
+    except CatalogSelectionError as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": exc.code,
+            "message": exc.message,
+        }) from exc
     return [
-        *merge_linked_service_units(normalized, linked_items),
+        *merged,
         *dedicated_items,
     ]
 

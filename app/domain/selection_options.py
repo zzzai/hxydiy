@@ -256,6 +256,15 @@ def merge_linked_service_units(
             if str(value).strip()
         ]
         key = _service_unit_key(item)
+        if (
+            isinstance(item.get("project_id"), int)
+            and item.get("category") == "local-strength"
+            and (key is None or key[1] is None)
+        ):
+            _fail(
+                "LOCAL_STRENGTH_BODY_PART_REQUIRED",
+                "局部加强必须选择具体部位",
+            )
         if key is not None and item.get("project_id") in linked_project_ids and key in by_key:
             continue
         merged.append(item)
