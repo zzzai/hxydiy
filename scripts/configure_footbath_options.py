@@ -12,11 +12,11 @@ SERVER_ROOT = Path(__file__).resolve().parents[1]
 if str(SERVER_ROOT) not in sys.path:
     sys.path.insert(0, str(SERVER_ROOT))
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.domain.catalog_options import copy_catalog_version_graph, lock_catalog_projects
+from app.domain.catalog_options import copy_catalog_version_graph
 from app.domain.membership_pricing import price_book_snapshot
 from app.models import (
     OptionChoicePrice,
@@ -319,41 +319,26 @@ def _lock_price_books(db: Session, project_ids: set[int]) -> None:
 def _locked_revalidated_configuration(
     db: Session,
     store_id: int,
-    initial_targets: list[Project],
-    initial_small_projects: list[Project],
-    initial_local_project: Project,
 ) -> tuple[list[Project], list[Project], Project]:
-    initial_projects = [*initial_targets, *initial_small_projects, initial_local_project]
-    locked = lock_catalog_projects(db, [project.id for project in initial_projects])
-    if len(locked) != len({project.id for project in initial_projects}):
-        raise ValueError("a catalog project disappeared while acquiring locks")
-
+    scope_ids = list(
+        db.scalars(
+            select(Project.id)
+            .where(Project.store_id == store_id)
+            .order_by(Project.id)
+        )
+    )
     scope_projects = list(
         db.scalars(
             select(Project)
-            .where(
-                or_(
-                    Project.code.in_(TARGET_CODES),
-                    and_(
-                        Project.store_id == store_id,
-                        Project.category.in_(("small", "local-strength")),
-                    ),
-                )
-            )
+            .where(Project.id.in_(scope_ids))
             .order_by(Project.id)
             .with_for_update()
             .execution_options(populate_existing=True)
         )
     )
-    candidate_reference_ids = {
-        project.id
-        for project in scope_projects
-        if project.store_id == store_id and project.category in {"small", "local-strength"}
-    }
-    candidate_reference_ids.update(
-        project.id for project in (*initial_small_projects, initial_local_project)
-    )
-    _lock_price_books(db, candidate_reference_ids)
+    if [project.id for project in scope_projects] != scope_ids:
+        raise ValueError("a project disappeared while locking the configuration scope")
+    _lock_price_books(db, set(scope_ids))
 
     targets = published_projects_by_code(db, store_id, TARGET_CODES)
     small_projects = published_independent_projects_by_category(db, store_id, "small")
@@ -361,7 +346,7 @@ def _locked_revalidated_configuration(
         raise ValueError("no independently sellable published project in category: small")
     local_project = require_published_project_by_category(db, store_id, "local-strength")
     final_ids = {project.id for project in (*targets, *small_projects, local_project)}
-    if not final_ids.issubset(set(locked) | {project.id for project in scope_projects}):
+    if not final_ids.issubset(set(scope_ids)):
         raise ValueError("a catalog project entered the configuration scope without a lock")
     return targets, small_projects, local_project
 
@@ -391,9 +376,6 @@ def reconcile_footbath_drafts(
     targets, small_projects, local_project = _locked_revalidated_configuration(
         db,
         store_ids.pop(),
-        targets,
-        small_projects,
-        local_project,
     )
     specs = (
         _GroupSpec("small-services", "小项", tuple(small_projects), 10),
