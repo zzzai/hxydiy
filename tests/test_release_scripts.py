@@ -12,6 +12,12 @@ ACTIVATE = REPO_ROOT / "deploy/diy/activate-release.sh"
 
 
 class ReleaseScriptTests(unittest.TestCase):
+    def test_container_entrypoint_uses_unix_line_endings(self):
+        entrypoint = (REPO_ROOT / "hxy-server/entrypoint.sh").read_bytes()
+
+        self.assertTrue(entrypoint.startswith(b"#!/bin/sh\n"))
+        self.assertNotIn(b"\r\n", entrypoint)
+
     def test_existing_database_migrations_require_explicit_opt_in(self):
         entrypoint = (REPO_ROOT / "hxy-server/entrypoint.sh").read_text(encoding="utf-8")
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
