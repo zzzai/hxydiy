@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
-from app.models import CouponTemplate, User, UserCoupon
+from app.models import CouponTemplate, User, UserCoupon, SelectionSession
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
 
@@ -28,6 +28,19 @@ def _user_id(authorization: str | None) -> int | None:
         return None
     payload = decode_token(authorization[7:])
     return int(payload["sub"]) if payload else None
+
+def _trusted_store_id(db: Session, user: User | None) -> int | None:
+    if not user:
+        return None
+    if user.membership_store_id:
+        return user.membership_store_id
+    return db.scalar(select(SelectionSession.store_id).where(
+        SelectionSession.customer_id == user.id,
+        SelectionSession.store_id.is_not(None),
+    ).order_by(SelectionSession.created_at.desc()).limit(1))
+
+def _template_allowed(tpl: CouponTemplate, store_id: int | None) -> bool:
+    return tpl.store_id is None or (store_id is not None and tpl.store_id == store_id)
 
 
 def _template_out(tpl: CouponTemplate, claimed_today: bool, claimed_total: int) -> dict:
@@ -59,10 +72,16 @@ def claimable_templates(
 ) -> dict:
     """领券中心：可公开领取的券模板（无需登录可看，领取需登录）。"""
     user_id = _user_id(authorization)
+    user = db.get(User, user_id) if user_id is not None else None
+    if user_id is not None:
+        if user and user.is_member:
+            return {"items": [], "total": 0}
     templates = list(db.scalars(select(CouponTemplate).where(
         CouponTemplate.is_claimable.is_(True),
         CouponTemplate.status == "published",
     )))
+    trusted_store_id = _trusted_store_id(db, user)
+    templates = [tpl for tpl in templates if _template_allowed(tpl, trusted_store_id)]
     now = datetime.now(timezone.utc)
     day_start = now - timedelta(hours=now.hour, minutes=now.minute,
                                 seconds=now.second, microseconds=now.microsecond)
@@ -81,11 +100,23 @@ def claimable_templates(
 
 
 @router.get("/activity")
-def activity_promotion(db: Session = Depends(get_db)) -> dict:
-    """全场满减活动（结算页展示）：取 auto_apply 模板中最高面额。"""
+def activity_promotion(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """全场满减活动（结算页展示）：取 auto_apply 模板中最高面额。
+
+    会员直接享会员最低价，不展示非会员券活动。
+    """
+    user_id = _user_id(authorization)
+    user = db.get(User, user_id) if user_id is not None else None
+    if user_id is not None:
+        if user and user.is_member:
+            return {"items": [], "total": 0}
     tpls = list(db.scalars(select(CouponTemplate).where(
         CouponTemplate.auto_apply.is_(True), CouponTemplate.status == "published"
     )))
+    tpls = [tpl for tpl in tpls if _template_allowed(tpl, _trusted_store_id(db, user))]
     items = [{
         "id": t.id,
         "name": t.name,
@@ -111,10 +142,13 @@ def claim_coupon(
     user_id = _user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先完成手机号登录")
+    user = db.get(User, user_id)
+    if user and user.is_member:
+        raise HTTPException(status_code=400, detail="会员已享会员价，无需领取优惠券")
     # 锁用户行：同一顾客的并发领券串行化，防止重复突破限领。
     db.scalar(select(User.id).where(User.id == user_id).with_for_update())
     tpl = db.get(CouponTemplate, body.template_id)
-    if not tpl or not tpl.is_claimable or tpl.status != "published":
+    if not tpl or not tpl.is_claimable or tpl.status != "published" or not _template_allowed(tpl, _trusted_store_id(db, user)):
         raise HTTPException(status_code=404, detail="券不存在或不可领取")
 
     now = datetime.now(timezone.utc)
@@ -149,9 +183,12 @@ def claim_share_coupon(
     user_id = _user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
+    user = db.get(User, user_id)
+    if user and user.is_member:
+        return {"code": 0, "granted": False, "reason": "会员已享会员价，无需领取优惠券"}
     db.scalar(select(User.id).where(User.id == user_id).with_for_update())
     tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.code == SHARE_COUPON_CODE))
-    if not tpl or tpl.status != "published":
+    if not tpl or tpl.status != "published" or not _template_allowed(tpl, _trusted_store_id(db, user)):
         return {"code": 0, "granted": False, "reason": "分享券未配置"}
 
     now = datetime.now(timezone.utc)
@@ -189,6 +226,11 @@ def my_coupons(
         .join(CouponTemplate, UserCoupon.template_id == CouponTemplate.id)
         .where(UserCoupon.user_id == user_id)
     )
+    trusted_store_id = _trusted_store_id(db, db.get(User, user_id))
+    if trusted_store_id is not None:
+        stmt = stmt.where((CouponTemplate.store_id == trusted_store_id) | CouponTemplate.store_id.is_(None))
+    else:
+        stmt = stmt.where(CouponTemplate.store_id.is_(None))
     rows = db.execute(stmt).all()
     now = datetime.now(timezone.utc)
 

@@ -6,7 +6,9 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260826_technician_portal"
-down_revision: Union[str, None] = "20260825_staff_expiry"
+# Keep the migration graph rooted in the tracked production head.  The
+# intermediate development-only staff-expiry revision is not shipped.
+down_revision: Union[str, None] = "20260815_member_grants"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

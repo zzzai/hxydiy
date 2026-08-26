@@ -356,10 +356,10 @@ def operations_summary(
     events = list(db.scalars(event_stmt))
     scoped_events = []
     for event in events:
-        event_store_id = (event.data or {}).get("store_id")
-        if selected_store_id is not None and event_store_id != selected_store_id:
+        # 门店归属只信任规范化列，绝不采信客户端可写的 data.store_id。
+        if selected_store_id is not None and event.store_id != selected_store_id:
             continue
-        if selected_store_id is None and event_store_id is None:
+        if selected_store_id is None and event.store_id is None:
             continue
         scoped_events.append(event)
 
@@ -658,7 +658,8 @@ def admin_analytics(
     db: Session = Depends(get_db),
 ) -> dict:
     """行为看板：转化漏斗 / 项目热度 / 近期错误 / 每日访问（按天）。"""
-    _require_admin(authorization, db)
+    staff = _require_admin(authorization, db)
+    store_id = _staff_store_id(staff)
     from sqlalchemy import func
 
     days = max(1, min(days, 30))
@@ -669,12 +670,12 @@ def admin_analytics(
     funnel = {}
     for ev in ("diy_entry_view", "project_view", "project_config_save", "selection_submit_success", "feedback_submit_success"):
         funnel[ev] = db.scalar(select(func.count()).select_from(EventLog).where(
-            EventLog.event == ev, EventLog.created_at >= since
+            EventLog.event == ev, EventLog.store_id == store_id, EventLog.created_at >= since
         )) or 0
 
     # 2. 项目热度（Python 聚合，量级小、简单可靠）
     view_events = list(db.scalars(select(EventLog).where(
-        EventLog.event == "project_view", EventLog.created_at >= since
+        EventLog.event == "project_view", EventLog.store_id == store_id, EventLog.created_at >= since
     ).limit(3000)))
     pid_counter: Counter = Counter(
         (ev.data or {}).get("project_id") for ev in view_events if (ev.data or {}).get("project_id")
@@ -682,17 +683,19 @@ def admin_analytics(
     from app.models import Project
     hot_projects = []
     for pid, cnt in pid_counter.most_common(5):
-        proj = db.get(Project, int(pid))
+        proj = db.scalar(select(Project).where(Project.id == int(pid), Project.store_id == store_id))
+        if proj is None:
+            continue
         hot_projects.append({
             "project_id": int(pid),
-            "name": proj.name if proj else f"项目#{pid}",
+            "name": proj.name,
             "views": cnt,
         })
 
     # 3. 近期错误（近 24h，按信息聚合 Top + 最新 5 条）
     err_since = datetime.now(timezone.utc) - timedelta(hours=24)
     err_events = list(db.scalars(select(EventLog).where(
-        EventLog.event == "error", EventLog.created_at >= err_since
+        EventLog.event == "error", EventLog.store_id == store_id, EventLog.created_at >= err_since
     ).order_by(EventLog.id.desc()).limit(500)))
     err_counter: Counter = Counter(
         ((ev.data or {}).get("type", "unknown"), str((ev.data or {}).get("message", ""))[:60])
@@ -714,6 +717,7 @@ def admin_analytics(
     daily = db.execute(
         select(day_expr, func.count())
         .where(EventLog.event == "diy_entry_view", EventLog.created_at >= since)
+        .where(EventLog.store_id == store_id)
         .group_by(day_expr)
         .order_by(day_expr)
     ).all()
@@ -801,8 +805,9 @@ def admin_coupons(
     db: Session = Depends(get_db),
 ) -> dict:
     """券模板列表（营销配置）。"""
-    _require_admin(authorization, db)
-    tpls = list(db.scalars(select(CouponTemplate).order_by(CouponTemplate.id)))
+    staff = _require_admin(authorization, db)
+    store_id = _staff_store_id(staff)
+    tpls = list(db.scalars(select(CouponTemplate).where(CouponTemplate.store_id == store_id).order_by(CouponTemplate.id)))
     return {"items": [_coupon_out(t) for t in tpls], "total": len(tpls)}
 
 
@@ -813,13 +818,14 @@ def admin_create_coupon(
     db: Session = Depends(get_db),
 ) -> dict:
     """新建券模板。"""
-    _require_admin(authorization, db)
+    staff = _require_admin(authorization, db)
+    store_id = _staff_store_id(staff)
     code = (body.code or "").strip()
     if not code:
         raise HTTPException(status_code=400, detail="请填写券编码")
-    if db.scalar(select(CouponTemplate).where(CouponTemplate.code == code)):
+    if db.scalar(select(CouponTemplate).where(CouponTemplate.store_id == store_id, CouponTemplate.code == code)):
         raise HTTPException(status_code=400, detail="券编码已存在")
-    tpl = CouponTemplate(**body.model_dump(), code=code)
+    tpl = CouponTemplate(**body.model_dump(exclude={"code"}), code=code, store_id=store_id)
     db.add(tpl)
     db.commit()
     db.refresh(tpl)
@@ -834,8 +840,9 @@ def admin_update_coupon(
     db: Session = Depends(get_db),
 ) -> dict:
     """更新券模板（含上下架：status 置 published/draft/archived）。"""
-    _require_admin(authorization, db)
-    tpl = db.get(CouponTemplate, tpl_id)
+    staff = _require_admin(authorization, db)
+    store_id = _staff_store_id(staff)
+    tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.id == tpl_id, CouponTemplate.store_id == store_id))
     if not tpl:
         raise HTTPException(status_code=404, detail="券不存在")
     data = body.model_dump(exclude_unset=True)
@@ -843,6 +850,7 @@ def admin_update_coupon(
         raise HTTPException(status_code=400, detail="没有可更新的字段")
     if body.code and body.code != tpl.code:
         if db.scalar(select(CouponTemplate).where(
+                CouponTemplate.store_id == store_id,
                 CouponTemplate.code == body.code, CouponTemplate.id != tpl_id)):
             raise HTTPException(status_code=400, detail="券编码已存在")
     for k, v in data.items():
