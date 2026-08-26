@@ -2,8 +2,8 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, func, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func, text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
@@ -29,6 +29,10 @@ class User(Base):
     is_member: Mapped[bool] = mapped_column(default=False)
     member_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     member_expire_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 会员开通归属门店仅用于后台数据范围与运营归因；会员权益本身仍可按业务规则跨店使用。
+    membership_store_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stores.id"), nullable=True, index=True
+    )
     # 当前年度权益周期的稳定幂等键；取消后保留，防止同周期重开重复发放权益。
     annual_membership_cycle_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     balance_cents: Mapped[int] = mapped_column(Integer, default=0)  # 储值余额（分）
@@ -59,17 +63,24 @@ class Store(Base):
 
 
 class Staff(Base):
-    """门店员工（管理后台登录）。role: staff / admin"""
+    """门店员工登录身份；技师业务档案通过 technician_id 显式关联。"""
 
     __tablename__ = "staff"
+    # 迁移窗口保留 legacy 值，normalize_staff_roles 完成数据清理后由数据库策略收紧。
+    __table_args__ = (CheckConstraint("role IN ('manager', 'technician', 'admin', 'staff')", name="ck_staff_role_values"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(128))
     name: Mapped[str] = mapped_column(String(32), default="")
-    role: Mapped[str] = mapped_column(String(16), default="staff")
+    role: Mapped[str] = mapped_column(String(16), default="manager")
     store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True)
+    technician_id: Mapped[int | None] = mapped_column(
+        ForeignKey("technicians.id"), nullable=True, unique=True, index=True
+    )
+    technician = relationship("Technician", back_populates="staff_account", foreign_keys=[technician_id], uselist=False)
     status: Mapped[str] = mapped_column(String(16), default="active")
+    temporary_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -81,6 +92,8 @@ class AuditLog(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     actor_type: Mapped[str] = mapped_column(String(16))  # user / staff / system
     actor_id: Mapped[str] = mapped_column(String(64), default="")
+    # 审计记录的明确门店归属。与 detail 中的业务快照分离，供权限过滤和索引查询使用。
+    store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True, index=True)
     action: Mapped[str] = mapped_column(String(64), index=True)
     entity_type: Mapped[str] = mapped_column(String(32), index=True)
     entity_id: Mapped[str] = mapped_column(String(64), default="")
@@ -95,6 +108,7 @@ class EventLog(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True, index=True)
     event: Mapped[str] = mapped_column(String(32), index=True)
     page: Mapped[str] = mapped_column(String(64), default="")
     data: Mapped[dict] = mapped_column(JSON, default=dict)

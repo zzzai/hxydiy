@@ -9,24 +9,25 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, field_validator, model_validator
-from sqlalchemy import delete, select, func as sa_func, and_
+from sqlalchemy import delete, select, func as sa_func, and_, or_, union
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.admin import _current_staff
+from app.api.admin import _current_staff, normalize_staff_role
 from app.db.session import get_db
 from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, PageContent,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, PositionOccupancy,
     MembershipBenefitGrant,
+    CustomerProfileRecord,
     ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup,
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.occupancy import audit_occupancy, release_occupancy
 from app.models.operations import Room, Technician
 from app.models.room_assign import RoomAssignment
-from app.models.service import ServiceOrder
+from app.models.service import ServiceAssignment, ServiceOrder, Visit
 from app.models.scrm import (
     CustomerTag, CustomerTagRelation, CustomerSegment,
     AutomationRule, AutomationLog,
@@ -38,8 +39,8 @@ router = APIRouter(prefix="/admin/v2", tags=["admin-v2"])
 # ─── helpers ─────────────────────────────────────────
 
 def _require_admin(staff: Staff):
-    if staff.role != "admin":
-        raise HTTPException(status_code=403, detail="仅管理员可操作")
+    if normalize_staff_role(staff.role, staff.technician_id) != "manager":
+        raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可操作"})
 
 
 def _staff_store_id(staff: Staff) -> int:
@@ -55,6 +56,14 @@ def _scoped_store_id(staff: Staff, requested_store_id: int | None = None) -> int
     return store_id
 
 
+def _require_headquarters_admin(staff: Staff) -> None:
+    raise HTTPException(status_code=403, detail={"code": "STORE_MASTER_DISABLED", "message": "门店主数据仅由部署管理员维护"})
+
+
+def _reject_physical_resource_api() -> None:
+    raise HTTPException(status_code=410, detail={"code": "DIY_PHYSICAL_RESOURCE_FORBIDDEN", "message": "DIY 管理端不提供物理资源派单操作"})
+
+
 def _require_owned(entity, staff: Staff, not_found_detail: str):
     if not entity or entity.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail=not_found_detail)
@@ -62,13 +71,17 @@ def _require_owned(entity, staff: Staff, not_found_detail: str):
 
 
 def _store_user_ids(store_id: int):
-    """门店顾客：有本店订单的用户 ∪ 有本店选单的 DIY 顾客。"""
+    """门店顾客：有本店订单/选单，或由本店开通会员的顾客。"""
     order_users = select(Order.user_id).where(Order.store_id == store_id)
     selection_users = select(SelectionSession.customer_id).where(
         SelectionSession.store_id == store_id,
         SelectionSession.customer_id.is_not(None),
     )
-    return order_users.union(selection_users)
+    member_users = select(User.id).where(
+        User.is_member == True,
+        User.membership_store_id == store_id,
+    )
+    return union(order_users, selection_users, member_users)
 
 
 def _require_store_user(db: Session, user_id: int, staff: Staff) -> User:
@@ -96,18 +109,138 @@ def _locked_store_user(db: Session, user_id: int, staff: Staff) -> User:
     return user
 
 
-def _audit(db: Session, actor: str, action: str, entity: str, eid: str, detail: dict = None):
+def _audit(db: Session, actor: str | Staff, action: str, entity: str, eid: str, detail: dict = None):
+    """写入带门店作用域的后台审计记录。
+
+    新调用应传入 Staff 实例，这样门店归属不会依赖 detail JSON；保留字符串
+    actor 兼容旧调用和系统脚本，并从 detail/实体标识中尽力读取历史作用域。
+    """
+    detail = detail or {}
+    if isinstance(actor, Staff):
+        actor_id = actor.name
+        store_id = actor.store_id
+    else:
+        actor_id = actor
+        store_id = detail.get("store_id")
+    if store_id is None and entity == "store":
+        try:
+            store_id = int(str(eid).split(":", 1)[0])
+        except (TypeError, ValueError):
+            store_id = None
     db.add(AuditLog(
-        actor_type="staff", actor_id=actor, action=action,
-        entity_type=entity, entity_id=eid, detail=detail or {},
+        actor_type="staff", actor_id=actor_id, store_id=store_id, action=action,
+        entity_type=entity, entity_id=eid, detail=detail,
     ))
 
 
 Paginated = dict  # { items, total, page, page_size }
 
 
+class StoreMasterIn(BaseModel):
+    store_code: str
+    name: str
+    city: str = ""
+    address: str
+    phone: str = ""
+    business_hours: str = ""
+    status: Literal["preparing", "open", "closed"] = "preparing"
+
+
+class StoreMasterPatch(BaseModel):
+    name: str | None = None
+    city: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    business_hours: str | None = None
+    status: Literal["preparing", "open", "closed"] | None = None
+
+
+def _store_master_view(store: Store) -> dict:
+    return {
+        "id": store.id,
+        "store_code": store.store_code,
+        "name": store.name,
+        "city": store.city,
+        "address": store.address,
+        "phone": store.phone,
+        "business_hours": store.business_hours,
+        "status": store.status,
+        "created_at": store.created_at.isoformat() if store.created_at else None,
+        "updated_at": store.updated_at.isoformat() if store.updated_at else None,
+    }
+
+
+@router.get("/stores")
+def list_store_master_data(
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> Paginated:
+    staff = _current_staff(authorization, db)
+    _require_headquarters_admin(staff)
+    query = select(Store).order_by(Store.id)
+    total = db.scalar(select(sa_func.count()).select_from(Store)) or 0
+    items = db.execute(query.offset((page - 1) * page_size).limit(page_size)).scalars().all()
+    return {"items": [_store_master_view(store) for store in items], "total": total, "page": page, "page_size": page_size}
+
+
+@router.post("/stores")
+def create_store_master_data(
+    body: StoreMasterIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_headquarters_admin(staff)
+    if db.scalar(select(Store).where(Store.store_code == body.store_code)):
+        raise HTTPException(status_code=400, detail="门店编码已存在")
+    store = Store(**body.model_dump())
+    db.add(store)
+    db.flush()
+    _audit(db, staff, "create_store", "store", str(store.id), {"store_code": store.store_code})
+    db.commit()
+    db.refresh(store)
+    return _store_master_view(store)
+
+
+@router.patch("/stores/{store_id}")
+def update_store_master_data(
+    store_id: int,
+    body: StoreMasterPatch,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_headquarters_admin(staff)
+    store = db.get(Store, store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="门店不存在")
+    changes = body.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        setattr(store, field, value)
+    _audit(db, staff, "update_store", "store", str(store.id), changes)
+    db.commit()
+    db.refresh(store)
+    return _store_master_view(store)
+
+
+def _customer_display_name(user: User) -> str:
+    if user.nickname:
+        return user.nickname
+    if user.openid.startswith("anon_"):
+        return f"匿名访客#{user.openid[-6:].upper()}"
+    return f"用户{user.id}"
+
+
+def _masked_phone(phone: str | None) -> str:
+    if not phone:
+        return ""
+    return f"{phone[:3]}****{phone[-4:]}" if len(phone) == 11 else phone
+
+
 class PageContentIn(BaseModel):
-    title: str = "到店选项目"
+    title: str = "到店服务选单"
     subtitle: str = "按需要，自由搭配"
     promo_banners: list = []
     tea_options: list = []
@@ -151,13 +284,13 @@ def update_page_content(page_key: str = Query("diy-home"), body: PageContentIn =
         db.add(content)
     for key, value in body.model_dump().items():
         setattr(content, key, value)
-    _audit(db, staff.name, "update_page_content", "page_content", f"{store_id}:{page_key}")
+    _audit(db, staff, "update_page_content", "page_content", f"{store_id}:{page_key}", {"store_id": store_id})
     db.commit()
     db.refresh(content)
     return _page_content_view(content)
 
 # ──────────────────────────────────────────────────────
-# 0. 到店选项目：独立于订单的顾客 DIY 需求
+# 0. 到店服务选单：独立于订单的顾客 DIY 需求
 # ──────────────────────────────────────────────────────
 
 def _selection_view(session: SelectionSession, customer: User | None = None, feedback: ServiceFeedback | None = None) -> dict:
@@ -171,8 +304,8 @@ def _selection_view(session: SelectionSession, customer: User | None = None, fee
         "fulfillment_order_id": session.fulfillment_order_id,
         "customer": ({
             "id": customer.id,
-            "nickname": customer.nickname,
-            "phone": customer.phone,
+            "nickname": _customer_display_name(customer),
+            "phone": _masked_phone(customer.phone),
             "is_member": customer.is_member,
             "member_type": customer.member_type,
             "member_expire_at": customer.member_expire_at.isoformat() if customer.member_expire_at else None,
@@ -194,6 +327,80 @@ def _selection_view(session: SelectionSession, customer: User | None = None, fee
         "submitted_at": session.submitted_at.isoformat() if session.submitted_at else None,
         "confirmed_at": session.confirmed_at.isoformat() if session.confirmed_at else None,
         "cancelled_at": session.cancelled_at.isoformat() if session.cancelled_at else None,
+    }
+
+
+class FeedbackFollowUpIn(BaseModel):
+    follow_up_status: Literal["open", "in_progress", "resolved", "dismissed"]
+    follow_up_note: str = ""
+
+
+@router.get("/feedback")
+def list_feedback(
+    low_rating_only: bool = Query(False),
+    follow_up_status: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> Paginated:
+    staff = _current_staff(authorization, db)
+    store_id = _staff_store_id(staff)
+    query = select(ServiceFeedback).where(ServiceFeedback.store_id == store_id)
+    if low_rating_only:
+        query = query.where(ServiceFeedback.rating <= 2)
+    if follow_up_status:
+        query = query.where(ServiceFeedback.follow_up_status == follow_up_status)
+    query = query.order_by(ServiceFeedback.created_at.desc(), ServiceFeedback.id.desc())
+    total = db.scalar(select(sa_func.count()).select_from(query.subquery())) or 0
+    rows = list(db.scalars(query.offset((page - 1) * page_size).limit(page_size)))
+    return {
+        "items": [{
+            "id": row.id,
+            "store_id": row.store_id,
+            "selection_session_id": row.selection_session_id,
+            "customer_id": row.customer_id,
+            "rating": row.rating,
+            "tags": row.tags or [],
+            "note": row.note,
+            "follow_up_status": row.follow_up_status,
+            "follow_up_staff_id": row.follow_up_staff_id,
+            "follow_up_note": row.follow_up_note,
+            "followed_up_at": row.followed_up_at.isoformat() if row.followed_up_at else None,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        } for row in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.patch("/feedback/{feedback_id}")
+def update_feedback_follow_up(
+    feedback_id: int,
+    body: FeedbackFollowUpIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    feedback = db.get(ServiceFeedback, feedback_id)
+    if not feedback or feedback.store_id != _staff_store_id(staff):
+        raise HTTPException(status_code=404, detail="评价不存在")
+    feedback.follow_up_status = body.follow_up_status
+    feedback.follow_up_note = body.follow_up_note.strip()[:1000]
+    feedback.follow_up_staff_id = staff.id
+    feedback.followed_up_at = datetime.now(timezone.utc)
+    _audit(db, staff, "update_feedback_follow_up", "service_feedback", str(feedback.id), {
+        "store_id": feedback.store_id,
+        "follow_up_status": feedback.follow_up_status,
+    })
+    db.commit()
+    return {
+        "id": feedback.id,
+        "follow_up_status": feedback.follow_up_status,
+        "follow_up_staff_id": feedback.follow_up_staff_id,
+        "follow_up_note": feedback.follow_up_note,
+        "followed_up_at": feedback.followed_up_at.isoformat() if feedback.followed_up_at else None,
     }
 
 
@@ -297,6 +504,10 @@ def _sync_unsettled_fulfillment_bill(
     order.items = frozen_items
     order.total_amount_cents = payable_total
     order.discount_cents = max(0, store_total - payable_total)
+    order.member_discount_cents = max(
+        0,
+        store_total - int(pricing.get("member_total_cents", payable_total) or payable_total),
+    )
     order.pay_amount_cents = payable_total
     service_order.items = frozen_items
     service_order.total_amount_cents = payable_total
@@ -439,7 +650,7 @@ def confirm_selection_session(session_id: str, db: Session = Depends(get_db), au
     }
     session.status = "confirmed"
     session.confirmed_at = confirmed_at
-    _audit(db, staff.name, "confirm_selection", "selection_session", session.id)
+    _audit(db, staff, "confirm_selection", "selection_session", session.id)
     db.commit()
     db.refresh(session)
     return _selection_view(session, db.get(User, session.customer_id) if session.customer_id else None)
@@ -466,7 +677,7 @@ def cancel_selection_session(session_id: str, db: Session = Depends(get_db), aut
             "to_status": occupancy.status,
             "selection_session_id": session.id,
         })
-    _audit(db, staff.name, "cancel_selection", "selection_session", session.id)
+    _audit(db, staff, "cancel_selection", "selection_session", session.id)
     db.commit()
     db.refresh(session)
     return _selection_view(session, db.get(User, session.customer_id) if session.customer_id else None)
@@ -584,7 +795,7 @@ def approve_selection_change_request(
     revision.state = "confirmed"
     revision.confirmed_at = approved_at
     revision.confirmed_by_staff_id = staff.id
-    _audit(db, staff.name, "approve_selection_change", "selection_change_request", change.id, {
+    _audit(db, staff, "approve_selection_change", "selection_change_request", change.id, {
         "selection_session_id": session.id,
         "service_line_count": len(lines),
     })
@@ -600,10 +811,18 @@ def reject_selection_change_request(
     authorization: str | None = Header(None),
 ):
     staff = _current_staff(authorization, db)
-    change = db.get(SelectionChangeRequest, request_id)
-    if not change:
+    change_ref = db.get(SelectionChangeRequest, request_id)
+    if not change_ref:
         raise HTTPException(status_code=404, detail="加选请求不存在")
-    session = _owned_selection(db, change.selection_session_id, staff)
+    session = _locked_owned_selection(db, change_ref.selection_session_id, staff)
+    change = db.scalar(
+        select(SelectionChangeRequest)
+        .where(SelectionChangeRequest.id == request_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not change or change.selection_session_id != session.id:
+        raise HTTPException(status_code=404, detail="加选请求不存在")
     reason = body.reason.strip()
     if not reason:
         raise HTTPException(status_code=400, detail="拒绝加选必须填写原因")
@@ -611,7 +830,12 @@ def reject_selection_change_request(
         return {"id": change.id, "state": change.state, "reason": change.reason}
     if change.state != "awaiting_staff_confirmation":
         raise HTTPException(status_code=409, detail="当前加选请求不能拒绝")
-    revision = db.get(SelectionRevision, change.selection_revision_id)
+    revision = db.scalar(
+        select(SelectionRevision)
+        .where(SelectionRevision.id == change.selection_revision_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if not revision or revision.selection_session_id != session.id:
         raise HTTPException(status_code=409, detail="加选版本不存在")
     change.state = "rejected"
@@ -619,7 +843,7 @@ def reject_selection_change_request(
     change.resolved_at = datetime.now(timezone.utc)
     change.resolved_by_staff_id = staff.id
     revision.state = "rejected"
-    _audit(db, staff.name, "reject_selection_change", "selection_change_request", change.id, {
+    _audit(db, staff, "reject_selection_change", "selection_change_request", change.id, {
         "selection_session_id": session.id,
         "reason": reason,
     })
@@ -651,6 +875,9 @@ class RoomIn(BaseModel):
     status: str = "available"
     note: str = ""
     sort_order: int = 0
+    parent_room_id: int | None = None
+    is_space_container: bool = False
+    is_service_position: bool | None = None
 
 
 @router.get("/rooms")
@@ -669,12 +896,21 @@ def list_rooms(
     q = q.order_by(Room.sort_order, Room.id)
     total = db.scalar(select(sa_func.count()).select_from(q.subquery()))
     items = db.execute(q.offset((page - 1) * page_size).limit(page_size)).scalars().all()
+    bed_counts = dict(db.execute(
+        select(Room.parent_room_id, sa_func.count(Room.id))
+        .where(Room.parent_room_id.is_not(None), Room.room_type == "bed")
+        .group_by(Room.parent_room_id)
+    ).all())
     return {"items": [{
         "id": r.id, "store_id": r.store_id, "code": r.code, "name": r.name,
         "room_type": r.room_type, "floor": r.floor, "capacity": r.capacity,
         "room_group": r.room_group, "used_count": r.used_count,
         "current_tech": r.current_tech,
         "status": r.status, "note": r.note, "sort_order": r.sort_order,
+        "parent_room_id": r.parent_room_id,
+        "is_space_container": r.is_space_container,
+        "is_service_position": r.is_service_position,
+        "bed_count": bed_counts.get(r.id, 0),
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at else None,
     } for r in items], "total": total, "page": page, "page_size": page_size}
@@ -688,9 +924,21 @@ def create_room(body: RoomIn, db: Session = Depends(get_db),
     _scoped_store_id(s, body.store_id)
     if db.scalar(select(Room).where(Room.code == body.code)):
         raise HTTPException(400, "编码已存在")
-    r = Room(**body.model_dump())
+    payload = body.model_dump()
+    if body.is_space_container:
+        payload["is_service_position"] = False
+        payload["customer_selectable"] = False
+    elif body.is_service_position is None:
+        payload["is_service_position"] = True
+    if body.parent_room_id is not None:
+        parent = _require_owned(db.get(Room, body.parent_room_id), s, "所属房间不存在")
+        if not parent.is_space_container:
+            raise HTTPException(400, "床位只能归属房间空间容器")
+        if body.room_type != "bed":
+            raise HTTPException(400, "只有床位可以归属房间空间容器")
+    r = Room(**payload)
     db.add(r)
-    _audit(db, s.name, "create_room", "room", body.code)
+    _audit(db, s, "create_room", "room", body.code)
     db.commit()
     return {"id": r.id, "code": r.code}
 
@@ -701,6 +949,10 @@ def update_room(room_id: int, body: dict, db: Session = Depends(get_db),
     s = _current_staff(authorization, db)
     _require_admin(s)
     r = _require_owned(db.get(Room, room_id), s, "房间不存在")
+    if r.is_space_container:
+        child_count = db.scalar(select(sa_func.count(Room.id)).where(Room.parent_room_id == r.id)) or 0
+        if child_count:
+            raise HTTPException(409, "请先移除房间内的床位，再删除房间")
     active_occupancy = db.scalar(select(PositionOccupancy).where(
         PositionOccupancy.active_room_id == r.id,
     ))
@@ -709,10 +961,21 @@ def update_room(room_id: int, body: dict, db: Session = Depends(get_db),
     runtime_fields = {"status", "used_count", "current_tech", "version"}
     if runtime_fields.intersection(body):
         raise HTTPException(400, "房态和服务信息请使用房态操作或服务位看板更新")
+    if "parent_room_id" in body:
+        parent_id = body["parent_room_id"]
+        if parent_id is not None:
+            parent = _require_owned(db.get(Room, parent_id), s, "所属房间不存在")
+            if not parent.is_space_container or r.room_type != "bed":
+                raise HTTPException(400, "床位只能归属房间空间容器")
+        if r.is_space_container and parent_id is not None:
+            raise HTTPException(400, "空间容器不能归属其他房间")
+    if body.get("is_space_container") is True:
+        body["is_service_position"] = False
+        body["customer_selectable"] = False
     for k, v in body.items():
         if hasattr(r, k) and k not in {"id", "store_id", *runtime_fields}:
             setattr(r, k, v)
-    _audit(db, s.name, "update_room", "room", str(room_id))
+    _audit(db, s, "update_room", "room", str(room_id))
     db.commit()
     return {"ok": True}
 
@@ -729,7 +992,7 @@ def delete_room(room_id: int, db: Session = Depends(get_db),
     if active_occupancy:
         raise HTTPException(409, "当前服务位已有活动占用，请在服务位看板完成现场操作")
     db.delete(r)
-    _audit(db, s.name, "delete_room", "room", str(room_id))
+    _audit(db, s, "delete_room", "room", str(room_id))
     db.commit()
     return {"ok": True}
 
@@ -795,7 +1058,7 @@ def create_technician(body: TechIn, db: Session = Depends(get_db),
         raise HTTPException(400, "编码已存在")
     t = Technician(**body.model_dump())
     db.add(t)
-    _audit(db, s.name, "create_tech", "technician", body.code)
+    _audit(db, s, "create_tech", "technician", body.code)
     db.commit()
     return {"id": t.id, "code": t.code}
 
@@ -809,7 +1072,7 @@ def update_technician(tech_id: int, body: dict, db: Session = Depends(get_db),
     for k, v in body.items():
         if hasattr(t, k) and k not in {"id", "store_id"}:
             setattr(t, k, v)
-    _audit(db, s.name, "update_tech", "technician", str(tech_id))
+    _audit(db, s, "update_tech", "technician", str(tech_id))
     db.commit()
     return {"ok": True}
 
@@ -821,7 +1084,7 @@ def delete_technician(tech_id: int, db: Session = Depends(get_db),
     _require_admin(s)
     t = _require_owned(db.get(Technician, tech_id), s, "技师不存在")
     db.delete(t)
-    _audit(db, s.name, "delete_tech", "technician", str(tech_id))
+    _audit(db, s, "delete_tech", "technician", str(tech_id))
     db.commit()
     return {"ok": True}
 
@@ -1017,7 +1280,7 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db),
     db.add(project)
     db.flush()
     _append_project_prices(db, project.id, body.prices, staff.name)
-    _audit(db, staff.name, "create_project", "project", project.code)
+    _audit(db, staff, "create_project", "project", project.code)
     _commit_project_or_conflict(db)
     return {"id": project.id, "code": project.code}
 
@@ -1039,7 +1302,7 @@ def _update_project_strict(project_id: int, body: ProjectPatch, db: Session, sta
         setattr(project, key, value)
     if "prices" in body.model_fields_set:
         _append_project_prices(db, project.id, body.prices or {}, staff.name)
-    _audit(db, staff.name, "update_project", "project", str(project.id))
+    _audit(db, staff, "update_project", "project", str(project.id))
     _commit_project_or_conflict(db)
     return {"ok": True, "id": project.id, "code": project.code, "publication_status": project.publication_status}
 
@@ -1107,7 +1370,7 @@ def duplicate_project(proj_id: int, body: ProjectDuplicateIn, db: Session = Depe
         except CatalogDomainError as exc:
             db.rollback()
             raise HTTPException(status_code=409, detail="源项目已发布目录快照校验失败") from exc
-    _audit(db, staff.name, "duplicate_project", "project", str(source.id), {"duplicate_project_id": duplicate.id})
+    _audit(db, staff, "duplicate_project", "project", str(source.id), {"duplicate_project_id": duplicate.id})
     _commit_project_or_conflict(db)
     return {"id": duplicate.id, "code": duplicate.code, "catalog_version_id": draft.id}
 
@@ -1243,7 +1506,7 @@ def create_addon(body: AddonIn, db: Session = Depends(get_db), authorization: st
     addon = Addon(**addon_data)
     db.add(addon)
     db.flush()
-    _audit(db, staff.name, "create_addon", "addon", str(addon.id), {"code": addon.code})
+    _audit(db, staff, "create_addon", "addon", str(addon.id), {"code": addon.code})
     db.commit()
     db.refresh(addon)
     return _addon_view(addon)
@@ -1285,7 +1548,7 @@ def update_addon(addon_id: int, body: AddonPatchIn, db: Session = Depends(get_db
     addon.store_price_cents = merged.store_price_cents if merged.chargeable else 0
     addon.member_price_cents = merged.member_price_cents if merged.chargeable else None
     addon.member_price_enabled = merged.member_price_enabled if merged.chargeable else False
-    _audit(db, staff.name, "update_addon", "addon", str(addon.id))
+    _audit(db, staff, "update_addon", "addon", str(addon.id))
     db.commit()
     db.refresh(addon)
     return _addon_view(addon)
@@ -1338,7 +1601,7 @@ def create_product(body: ProductIn, db: Session = Depends(get_db),
     _scoped_store_id(s, body.store_id)
     p = Product(**body.model_dump())
     db.add(p)
-    _audit(db, s.name, "create_product", "product", body.code)
+    _audit(db, s, "create_product", "product", body.code)
     db.commit()
     return {"id": p.id, "code": p.code}
 
@@ -1352,7 +1615,7 @@ def update_product(prod_id: int, body: dict, db: Session = Depends(get_db),
     for k, v in body.items():
         if hasattr(p, k) and k not in {"id", "store_id"}:
             setattr(p, k, v)
-    _audit(db, s.name, "update_product", "product", str(prod_id))
+    _audit(db, s, "update_product", "product", str(prod_id))
     db.commit()
     return {"ok": True}
 
@@ -1365,8 +1628,10 @@ def update_product(prod_id: int, body: dict, db: Session = Depends(get_db),
 def list_tags(db: Session = Depends(get_db),
               authorization: str | None = Header(None)) -> list:
     staff = _current_staff(authorization, db)
-    _require_admin(staff)
-    tags = db.execute(select(CustomerTag).order_by(CustomerTag.id)).scalars().all()
+    store_id = _staff_store_id(staff)
+    tags = db.execute(select(CustomerTag).where(
+        CustomerTag.store_id == store_id,
+    ).order_by(CustomerTag.id)).scalars().all()
     return [{
         "id": t.id, "name": t.name, "color": t.color,
         "tag_type": t.tag_type, "description": t.description,
@@ -1386,16 +1651,52 @@ class TagIn(BaseModel):
     auto_rule: dict | None = None
 
 
+class CustomerProfileRecordIn(BaseModel):
+    user_id: int
+    selection_session_id: str | None = None
+    technician_id: int | None = None
+    profile: dict = Field(default_factory=dict)
+    signals: list[str] = Field(default_factory=list, max_length=30)
+    note: str = Field(default="", max_length=1000)
+    correction_of_id: int | None = None
+    correction_reason: str = Field(default="", max_length=256)
+
+    @field_validator("signals")
+    @classmethod
+    def validate_signals(cls, value: list[str]) -> list[str]:
+        forbidden = ("确诊", "诊断", "疾病", "治疗", "癌", "处方")
+        cleaned: list[str] = []
+        for item in value:
+            text = str(item).strip()
+            if not text or len(text) > 64:
+                raise ValueError("画像标签长度不合法")
+            if any(word in text for word in forbidden):
+                raise ValueError("画像记录仅支持非医疗描述，请勿填写诊断或治疗结论")
+            if text not in cleaned:
+                cleaned.append(text)
+        return cleaned
+
+    @field_validator("note")
+    @classmethod
+    def validate_note(cls, value: str) -> str:
+        forbidden = ("确诊", "诊断", "疾病", "治疗", "处方")
+        text = value.strip()
+        if any(word in text for word in forbidden):
+            raise ValueError("画像记录仅支持非医疗描述，请勿填写诊断或治疗结论")
+        return text
+
+
 @router.post("/tags")
 def create_tag(body: TagIn, db: Session = Depends(get_db),
                authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    if db.scalar(select(CustomerTag).where(CustomerTag.name == body.name)):
+    store_id = _staff_store_id(s)
+    if db.scalar(select(CustomerTag).where(CustomerTag.store_id == store_id, CustomerTag.name == body.name)):
         raise HTTPException(400, "标签名已存在")
-    t = CustomerTag(**body.model_dump())
+    t = CustomerTag(store_id=store_id, **body.model_dump())
     db.add(t)
-    _audit(db, s.name, "create_tag", "tag", body.name)
+    _audit(db, s, "create_tag", "tag", body.name)
     db.commit()
     return {"id": t.id}
 
@@ -1405,7 +1706,10 @@ def update_tag(tag_id: int, body: dict, db: Session = Depends(get_db),
                authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    t = db.get(CustomerTag, tag_id)
+    t = db.scalar(select(CustomerTag).where(
+        CustomerTag.id == tag_id,
+        CustomerTag.store_id == _staff_store_id(s),
+    ))
     if not t:
         raise HTTPException(404)
     for k, v in body.items():
@@ -1420,7 +1724,10 @@ def delete_tag(tag_id: int, db: Session = Depends(get_db),
                authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    t = db.get(CustomerTag, tag_id)
+    t = db.scalar(select(CustomerTag).where(
+        CustomerTag.id == tag_id,
+        CustomerTag.store_id == _staff_store_id(s),
+    ))
     if not t:
         raise HTTPException(404)
     # 删除关联
@@ -1433,6 +1740,129 @@ def delete_tag(tag_id: int, db: Session = Depends(get_db),
     db.delete(t)
     db.commit()
     return {"ok": True}
+
+
+def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
+    creator = db.get(Staff, record.created_by_staff_id)
+    technician = db.get(Technician, record.technician_id) if record.technician_id else None
+    return {
+        "id": record.id,
+        "store_id": record.store_id,
+        "user_id": record.user_id,
+        "selection_session_id": record.selection_session_id,
+        "technician_id": record.technician_id,
+        "technician_name": technician.name if technician else None,
+        "created_by_staff_id": record.created_by_staff_id,
+        "created_by_name": creator.name if creator else "",
+        "profile": record.profile or {},
+        "signals": record.signals or [],
+        "note": record.note,
+        "correction_of_id": record.correction_of_id,
+        "correction_reason": record.correction_reason,
+        "disclaimer": "仅作到店服务参考，不构成医疗建议",
+        "created_at": record.created_at.isoformat() if record.created_at else None,
+        "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+    }
+
+
+@router.post("/customer-profile-records")
+def create_customer_profile_record(
+    body: CustomerProfileRecordIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    store_id = _staff_store_id(staff)
+    is_bound_technician = normalize_staff_role(staff.role, staff.technician_id) == "technician" and bool(staff.technician_id)
+    if not is_bound_technician and normalize_staff_role(staff.role, staff.technician_id) != "manager" and body.technician_id is not None:
+        raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可代录顾客画像"})
+    technician_id = staff.technician_id if is_bound_technician else body.technician_id
+    if is_bound_technician:
+        if not body.selection_session_id:
+            raise HTTPException(status_code=403, detail="技师画像记录必须关联已完成服务")
+    _require_store_user(db, body.user_id, staff)
+    if body.selection_session_id:
+        session = db.get(SelectionSession, body.selection_session_id)
+        if not session or session.store_id != store_id or session.customer_id != body.user_id:
+            raise HTTPException(status_code=404, detail="本次服务记录不存在")
+        occupancy = db.scalar(select(PositionOccupancy).where(
+            PositionOccupancy.selection_session_id == session.id,
+        ).order_by(PositionOccupancy.id.desc()))
+        if not occupancy or not occupancy.actual_service_end_at:
+            raise HTTPException(status_code=409, detail="服务完成后才能记录顾客画像")
+        if is_bound_technician:
+            assignment = db.scalar(select(ServiceAssignment).join(ServiceOrder, ServiceOrder.id == ServiceAssignment.service_order_id).join(Visit, Visit.id == ServiceOrder.visit_id).where(ServiceAssignment.technician_id == staff.technician_id, ServiceAssignment.store_id == store_id, Visit.selection_session_id == session.id))
+            if not assignment:
+                raise HTTPException(status_code=403, detail="技师只能记录本人服务的顾客画像")
+    if technician_id:
+        technician = db.get(Technician, technician_id)
+        if not technician or technician.store_id != store_id:
+            raise HTTPException(status_code=404, detail="技师不存在")
+    if body.correction_of_id is not None:
+        original = db.scalar(select(CustomerProfileRecord).where(
+            CustomerProfileRecord.id == body.correction_of_id,
+            CustomerProfileRecord.store_id == store_id,
+            CustomerProfileRecord.user_id == body.user_id,
+        ))
+        if not original:
+            raise HTTPException(status_code=404, detail="原画像记录不存在")
+        if not body.correction_reason.strip():
+            raise HTTPException(status_code=422, detail="更正记录需要填写原因")
+    record = CustomerProfileRecord(
+        store_id=store_id,
+        user_id=body.user_id,
+        selection_session_id=body.selection_session_id,
+        technician_id=technician_id,
+        created_by_staff_id=staff.id,
+        profile=body.profile,
+        signals=body.signals,
+        note=body.note,
+        correction_of_id=body.correction_of_id,
+        correction_reason=body.correction_reason.strip(),
+    )
+    db.add(record)
+    db.flush()
+    # 已存在的门店运营标签自动建立关联；画像原始信号仍保留在记录快照中，避免跨门店污染标签字典。
+    for signal in body.signals:
+        tag = db.scalar(select(CustomerTag).where(
+            CustomerTag.store_id == store_id,
+            CustomerTag.name == signal,
+            CustomerTag.status == "active",
+        ))
+        if tag and not db.scalar(select(CustomerTagRelation).where(
+            CustomerTagRelation.user_id == body.user_id,
+            CustomerTagRelation.tag_id == tag.id,
+        )):
+            db.add(CustomerTagRelation(user_id=body.user_id, tag_id=tag.id, source="profile"))
+    _audit(db, staff, "create_customer_profile_record", "user", str(body.user_id), {
+        "record_id": record.id,
+        "selection_session_id": body.selection_session_id,
+        "technician_id": technician_id,
+        "signals": body.signals,
+    })
+    if not is_bound_technician and technician_id:
+        _audit(db, staff, "manager_entered_customer_profile_record", "user", str(body.user_id), {
+            "record_id": record.id,
+            "technician_id": technician_id,
+        })
+    db.commit()
+    db.refresh(record)
+    return _profile_record_view(record, db)
+
+
+@router.get("/users/{user_id}/customer-profile-records")
+def list_customer_profile_records(
+    user_id: int,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_store_user(db, user_id, staff)
+    records = db.scalars(select(CustomerProfileRecord).where(
+        CustomerProfileRecord.store_id == _staff_store_id(staff),
+        CustomerProfileRecord.user_id == user_id,
+    ).order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc())).all()
+    return {"items": [_profile_record_view(record, db) for record in records]}
 
 
 # ──────────────────────────────────────────────────────
@@ -1454,7 +1884,10 @@ def list_users(
     store_id = _staff_store_id(staff)
     q = select(User).where(User.id.in_(_store_user_ids(store_id)))
     if tag_id:
-        sub = select(CustomerTagRelation.user_id).where(CustomerTagRelation.tag_id == tag_id)
+        sub = select(CustomerTagRelation.user_id).where(
+            CustomerTagRelation.tag_id == tag_id,
+            CustomerTagRelation.tag_id.in_(select(CustomerTag.id).where(CustomerTag.store_id == store_id)),
+        )
         q = q.where(User.id.in_(sub))
     if segment_id:
         seg = db.get(CustomerSegment, segment_id)
@@ -1462,7 +1895,10 @@ def list_users(
             conds = seg.conditions
             if "tags" in conds:
                 tag_names = conds["tags"]
-                tag_ids_sub = select(CustomerTag.id).where(CustomerTag.name.in_(tag_names))
+                tag_ids_sub = select(CustomerTag.id).where(
+                    CustomerTag.store_id == store_id,
+                    CustomerTag.name.in_(tag_names),
+                )
                 tagged_users = select(CustomerTagRelation.user_id).where(
                     CustomerTagRelation.tag_id.in_(tag_ids_sub)
                 )
@@ -1480,7 +1916,12 @@ def list_users(
                 )
                 q = q.where(User.id.in_(select(spend_sub.c.user_id)))
     if search:
-        q = q.where(User.nickname.ilike(f"%{search}%"))
+        search_term = search.strip()
+        if search_term:
+            q = q.where(or_(
+                User.nickname.ilike(f"%{search_term}%"),
+                User.phone.ilike(f"%{search_term}%"),
+            ))
     if is_member is not None:
         q = q.where(User.is_member == is_member)
     q = q.order_by(User.id.desc())
@@ -1497,8 +1938,9 @@ def list_users(
             if t:
                 tag_info.append({"id": t.id, "name": t.name, "color": t.color})
         items.append({
-            "id": u.id, "nickname": u.nickname or f"用户{u.id}",
+            "id": u.id, "nickname": _customer_display_name(u),
             "phone_tail": u.phone[-4:] if u.phone else "",
+            "phone_masked": _masked_phone(u.phone),
             "is_member": u.is_member, "member_type": u.member_type,
             "balance_cents": u.balance_cents,
             "tags": tag_info,
@@ -1646,6 +2088,7 @@ def set_user_membership(user_id: int, body: MembershipUpdateIn, db: Session = De
         user.member_type = "annual"
         user.member_expire_at = body.member_expire_at
         user.annual_membership_cycle_id = body.cycle_id
+        user.membership_store_id = _staff_store_id(staff)
 
     # 会员身份变化后，重算该顾客未完结选单的计价快照（draft/submitted）。
     from app.api.selections import refresh_session_pricing
@@ -1655,12 +2098,13 @@ def set_user_membership(user_id: int, body: MembershipUpdateIn, db: Session = De
     ))
     for session in open_sessions:
         refresh_session_pricing(db, session)
-    _audit(db, staff.name, "set_membership", "user", str(user_id), {
+    _audit(db, staff, "set_membership", "user", str(user_id), {
         "is_member": user.is_member,
         "previous": previous,
         "previous_member_type": previous_member_type,
         "member_type": user.member_type,
         "membership_cycle_id": user.annual_membership_cycle_id,
+        "membership_store_id": user.membership_store_id,
         "member_expire_at": user.member_expire_at.isoformat() if user.member_expire_at else None,
         "grant_id": grant.id if grant else None,
     })
@@ -1670,6 +2114,7 @@ def set_user_membership(user_id: int, body: MembershipUpdateIn, db: Session = De
         "is_member": user.is_member,
         "member_type": user.member_type,
         "membership_cycle_id": user.annual_membership_cycle_id,
+        "membership_store_id": user.membership_store_id,
         "member_expire_at": user.member_expire_at.isoformat() if user.member_expire_at else None,
         "grant_id": grant.id if grant else None,
     }
@@ -1683,13 +2128,18 @@ def add_user_tag(user_id: int, body: dict, db: Session = Depends(get_db),
     _require_admin(s)
     _require_store_user(db, user_id, s)
     tag_id = body.get("tag_id")
+    if not db.scalar(select(CustomerTag.id).where(
+        CustomerTag.id == tag_id,
+        CustomerTag.store_id == _staff_store_id(s),
+    )):
+        raise HTTPException(404, "标签不存在")
     exist = db.scalar(select(CustomerTagRelation).where(
         CustomerTagRelation.user_id == user_id, CustomerTagRelation.tag_id == tag_id
     ))
     if exist:
         return {"ok": True, "msg": "已有此标签"}
     db.add(CustomerTagRelation(user_id=user_id, tag_id=tag_id, source="manual"))
-    _audit(db, s.name, "add_tag", "user", str(user_id), {"tag_id": tag_id})
+    _audit(db, s, "add_tag", "user", str(user_id), {"tag_id": tag_id})
     db.commit()
     return {"ok": True}
 
@@ -1705,7 +2155,7 @@ def remove_user_tag(user_id: int, tag_id: int, db: Session = Depends(get_db),
     ))
     if rel:
         db.delete(rel)
-        _audit(db, s.name, "remove_tag", "user", str(user_id), {"tag_id": tag_id})
+        _audit(db, s, "remove_tag", "user", str(user_id), {"tag_id": tag_id})
         db.commit()
     return {"ok": True}
 
@@ -1718,8 +2168,10 @@ def remove_user_tag(user_id: int, tag_id: int, db: Session = Depends(get_db),
 def list_segments(db: Session = Depends(get_db),
                   authorization: str | None = Header(None)) -> list:
     staff = _current_staff(authorization, db)
-    _require_admin(staff)
-    segs = db.execute(select(CustomerSegment).order_by(CustomerSegment.id)).scalars().all()
+    store_id = _staff_store_id(staff)
+    segs = db.execute(select(CustomerSegment).where(
+        CustomerSegment.store_id == store_id,
+    ).order_by(CustomerSegment.id)).scalars().all()
     return [{
         "id": sg.id, "name": sg.name, "description": sg.description,
         "conditions": sg.conditions, "user_count": sg.user_count,
@@ -1738,9 +2190,9 @@ def create_segment(body: SegmentIn, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    sg = CustomerSegment(**body.model_dump())
+    sg = CustomerSegment(store_id=_staff_store_id(s), **body.model_dump())
     db.add(sg)
-    _audit(db, s.name, "create_segment", "segment", body.name)
+    _audit(db, s, "create_segment", "segment", body.name)
     db.commit()
     return {"id": sg.id}
 
@@ -1750,7 +2202,10 @@ def update_segment(seg_id: int, body: dict, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    sg = db.get(CustomerSegment, seg_id)
+    sg = db.scalar(select(CustomerSegment).where(
+        CustomerSegment.id == seg_id,
+        CustomerSegment.store_id == _staff_store_id(s),
+    ))
     if not sg:
         raise HTTPException(404)
     for k, v in body.items():
@@ -1767,14 +2222,20 @@ def recount_segment(seg_id: int, db: Session = Depends(get_db),
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     store_id = _staff_store_id(staff)
-    sg = db.get(CustomerSegment, seg_id)
+    sg = db.scalar(select(CustomerSegment).where(
+        CustomerSegment.id == seg_id,
+        CustomerSegment.store_id == _staff_store_id(staff),
+    ))
     if not sg:
         raise HTTPException(404)
     # 使用 list_users 同样的逻辑粗略计算
     q = select(User).where(User.id.in_(_store_user_ids(store_id)))
     conds = sg.conditions
     if conds.get("tags"):
-        tag_ids_sub = select(CustomerTag.id).where(CustomerTag.name.in_(conds["tags"]))
+        tag_ids_sub = select(CustomerTag.id).where(
+            CustomerTag.store_id == store_id,
+            CustomerTag.name.in_(conds["tags"]),
+        )
         tagged = select(CustomerTagRelation.user_id).where(CustomerTagRelation.tag_id.in_(tag_ids_sub))
         q = q.where(User.id.in_(tagged))
     if conds.get("is_member"):
@@ -1793,8 +2254,10 @@ def recount_segment(seg_id: int, db: Session = Depends(get_db),
 def list_automations(db: Session = Depends(get_db),
                      authorization: str | None = Header(None)) -> list:
     staff = _current_staff(authorization, db)
-    _require_admin(staff)
-    rules = db.execute(select(AutomationRule).order_by(AutomationRule.id)).scalars().all()
+    store_id = _staff_store_id(staff)
+    rules = db.execute(select(AutomationRule).where(
+        AutomationRule.store_id == store_id,
+    ).order_by(AutomationRule.id)).scalars().all()
     return [{
         "id": r.id, "name": r.name, "description": r.description,
         "trigger_event": r.trigger_event, "conditions": r.conditions,
@@ -1829,7 +2292,7 @@ TRIGGER_EVENTS = [
 def list_trigger_events(db: Session = Depends(get_db),
                         authorization: str | None = Header(None)):
     staff = _current_staff(authorization, db)
-    _require_admin(staff)
+    _staff_store_id(staff)
     return TRIGGER_EVENTS
 
 
@@ -1838,9 +2301,9 @@ def create_automation(body: AutomationIn, db: Session = Depends(get_db),
                       authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    r = AutomationRule(**body.model_dump())
+    r = AutomationRule(store_id=_staff_store_id(s), **body.model_dump())
     db.add(r)
-    _audit(db, s.name, "create_automation", "automation", body.name)
+    _audit(db, s, "create_automation", "automation", body.name)
     db.commit()
     return {"id": r.id}
 
@@ -1850,7 +2313,10 @@ def update_automation(rule_id: int, body: dict, db: Session = Depends(get_db),
                       authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    r = db.get(AutomationRule, rule_id)
+    r = db.scalar(select(AutomationRule).where(
+        AutomationRule.id == rule_id,
+        AutomationRule.store_id == _staff_store_id(s),
+    ))
     if not r:
         raise HTTPException(404)
     for k, v in body.items():
@@ -1865,7 +2331,10 @@ def delete_automation(rule_id: int, db: Session = Depends(get_db),
                       authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    r = db.get(AutomationRule, rule_id)
+    r = db.scalar(select(AutomationRule).where(
+        AutomationRule.id == rule_id,
+        AutomationRule.store_id == _staff_store_id(s),
+    ))
     if not r:
         raise HTTPException(404)
     db.delete(r)
@@ -1886,6 +2355,7 @@ def list_assignments(
     authorization: str | None = Header(None),
 ) -> list:
     """查询房间-技师绑定关系"""
+    _reject_physical_resource_api()
     staff = _current_staff(authorization, db)
     store_id = _staff_store_id(staff)
     own_room_ids = select(Room.id).where(Room.store_id == store_id)
@@ -1973,7 +2443,7 @@ def room_stats(db: Session = Depends(get_db), authorization: str | None = Header
     from sqlalchemy import func
     rows = db.execute(
         select(Room.status, func.count(Room.id))
-        .where(Room.store_id == store_id)
+        .where(Room.store_id == store_id, Room.is_service_position.is_(True))
         .group_by(Room.status)
     ).all()
     stats = {status: 0 for status in VALID_ROOM_STATUSES}
@@ -2002,10 +2472,13 @@ def operate_room(room_id: int, body: RoomOperateIn,
                  db: Session = Depends(get_db),
                  authorization: str | None = Header(None)):
     """房间状态操作"""
+    _reject_physical_resource_api()
     s = _current_staff(authorization, db)
     _require_admin(s)
     from app.models.operations import Room
     room = _require_owned(db.get(Room, room_id), s, "房间不存在")
+    if room.is_space_container or not room.is_service_position:
+        raise HTTPException(400, "房间是空间容器，请操作房间内的具体床位")
     active_occupancy = db.scalar(select(PositionOccupancy).where(
         PositionOccupancy.active_room_id == room.id,
     ))
@@ -2031,7 +2504,7 @@ def operate_room(room_id: int, body: RoomOperateIn,
         room.current_tech = ""
     if body.note:
         room.note = body.note
-    _audit(db, s.name, "room_operate", "room", str(room_id), {
+    _audit(db, s, "room_operate", "room", str(room_id), {
         "from_status": old_status,
         "to_status": target,
         "technician_id": body.technician_id,
@@ -2075,6 +2548,7 @@ class AssignmentIn(BaseModel):
 def create_assignment(body: AssignmentIn, db: Session = Depends(get_db),
                       authorization: str | None = Header(None)):
     """为房间绑定技师和项目"""
+    _reject_physical_resource_api()
     s = _current_staff(authorization, db)
     _require_admin(s)
     _staff_store_id(s)
@@ -2095,12 +2569,12 @@ def create_assignment(body: AssignmentIn, db: Session = Depends(get_db),
         exist.project_ids = body.project_ids
         exist.commission_overrides = body.commission_overrides
         exist.note = body.note
-        _audit(db, s.name, "update_assignment", "assignment", str(exist.id))
+        _audit(db, s, "update_assignment", "assignment", str(exist.id))
         db.commit()
         return {"id": exist.id, "updated": True}
     a = RoomAssignment(**body.model_dump())
     db.add(a)
-    _audit(db, s.name, "create_assignment", "assignment", f"room_{body.room_id}_tech_{body.technician_id}")
+    _audit(db, s, "create_assignment", "assignment", f"room_{body.room_id}_tech_{body.technician_id}")
     db.commit()
     return {"id": a.id}
 
@@ -2109,6 +2583,7 @@ def create_assignment(body: AssignmentIn, db: Session = Depends(get_db),
 def delete_assignment(assign_id: int, db: Session = Depends(get_db),
                       authorization: str | None = Header(None)):
     """移除房间绑定（软删除）"""
+    _reject_physical_resource_api()
     s = _current_staff(authorization, db)
     _require_admin(s)
     a = db.get(RoomAssignment, assign_id)
@@ -2116,7 +2591,7 @@ def delete_assignment(assign_id: int, db: Session = Depends(get_db),
         raise HTTPException(404, "绑定不存在")
     _require_owned(db.get(Room, a.room_id), s, "绑定不存在")
     a.is_active = False
-    _audit(db, s.name, "delete_assignment", "assignment", str(assign_id))
+    _audit(db, s, "delete_assignment", "assignment", str(assign_id))
     db.commit()
     return {"ok": True}
 
@@ -2125,6 +2600,7 @@ def delete_assignment(assign_id: int, db: Session = Depends(get_db),
 def get_room_detail(room_id: int, db: Session = Depends(get_db),
                     authorization: str | None = Header(None)):
     """获取房间详情：含绑定的技师和项目"""
+    _reject_physical_resource_api()
     staff = _current_staff(authorization, db)
     room = _require_owned(db.get(Room, room_id), staff, "房间不存在")
     assigns = db.execute(

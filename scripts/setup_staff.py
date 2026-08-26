@@ -34,7 +34,7 @@ def setup_staff(db: Session, usernames: list[str]) -> list[tuple[str, str]]:
             username=username,
             password_hash=hash_password(password),
             name=username,
-            role="staff",
+            role="manager",
             status="active",
             store_id=stores[0].id,
         ))
@@ -45,7 +45,10 @@ def setup_staff(db: Session, usernames: list[str]) -> list[tuple[str, str]]:
 
 def write_credentials(credentials_path: Path, credentials: list[tuple[str, str]]) -> None:
     descriptor = os.open(credentials_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    os.fchmod(descriptor, 0o600)
+    if hasattr(os, "fchmod"):
+        os.fchmod(descriptor, 0o600)
+    else:
+        os.chmod(credentials_path, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as credential_file:
         for username, password in credentials:
             credential_file.write(f"username: {username}\npassword: {password}\n")

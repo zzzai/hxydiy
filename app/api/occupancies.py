@@ -1,6 +1,9 @@
 """扫码入口、服务位平面图和门店占用动作 API。"""
 
+import base64
 import hashlib
+import hmac
+import json
 import secrets
 import uuid
 from datetime import timedelta
@@ -10,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.admin import _current_staff, _staff_store_id
+from app.api.admin import _current_staff, _staff_store_id, normalize_staff_role
 from app.core.config import settings
 from app.db.session import get_db
 from app.domain.occupancy import (
@@ -23,9 +26,21 @@ from app.domain.occupancy import (
     release_occupancy,
     utcnow,
 )
-from app.models import BrowserInstance, PositionOccupancy, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceLine, Store, User
+from app.domain.occupancy_release_policy import (
+    WAITING_SERVICE_TTL_MINUTES,
+    list_release_candidates,
+    release_selected_occupancies,
+)
+from app.models import AuditLog, BrowserInstance, PositionOccupancy, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceLine, ServicePositionQr, Store, User
 from app.models.service import ServiceOrder, Visit
-from app.schemas.occupancy import EntrySessionIn, KioskSessionIn, MoveOccupancyIn, OccupancyActionIn
+from app.schemas.occupancy import (
+    BulkReleaseIn,
+    EntrySessionIn,
+    KioskSessionIn,
+    MoveOccupancyIn,
+    OccupancyActionIn,
+    RetainOccupancyIn,
+)
 from app.schemas.selection import SelectionSessionOut
 
 
@@ -38,6 +53,66 @@ def _selection_view(session: SelectionSession) -> dict:
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_position_qr_token(store_id: int, position_code: str, source: str = "personal_qr") -> str:
+    """生成兼容既有投放的 v1 签名；新管理端二维码统一使用持久化 v2。"""
+    payload = {"v": 1, "store_id": int(store_id), "position_code": position_code, "source": source}
+    raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
+    signature = hmac.new(settings.jwt_secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
+    return f"{raw}.{signature}"
+
+
+def _managed_position_qr_token(qr: ServicePositionQr, position_code: str) -> str:
+    payload = {
+        "v": 2,
+        "qr_id": qr.public_id,
+        "store_id": qr.store_id,
+        "position_code": position_code,
+        "source": qr.source,
+    }
+    raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
+    signature = hmac.new(settings.jwt_secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
+    return f"{raw}.{signature}"
+
+
+def _qr_error(code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=403, detail={"code": code, "message": message})
+
+
+def _verify_position_qr_token(
+    db: Session,
+    token: str,
+    store_id: int,
+    position_code: str,
+    source: str,
+) -> ServicePositionQr | None:
+    try:
+        raw, signature = token.split(".", 1)
+        expected = hmac.new(settings.jwt_secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
+        payload = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
+    except (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError):
+        raise _qr_error("QR_BINDING_INVALID", "二维码无效，请重新扫码")
+    if not hmac.compare_digest(signature, expected):
+        raise _qr_error("QR_BINDING_INVALID", "二维码无效，请重新扫码")
+    if payload.get("store_id") != store_id or payload.get("position_code") != position_code or payload.get("source") != source:
+        raise _qr_error("QR_BINDING_INVALID", "二维码与门店或服务位不匹配，请重新扫码")
+    version = payload.get("v")
+    if version == 1:
+        # 兼容已投放旧码；旧码的历史行为保持不变，后台生成的新码使用 v2 才支持停用/换绑。
+        return None
+    if version != 2 or not payload.get("qr_id"):
+        raise _qr_error("QR_BINDING_INVALID", "二维码版本无效，请重新扫码")
+    qr = db.scalar(select(ServicePositionQr).where(ServicePositionQr.public_id == payload["qr_id"]))
+    if not qr:
+        raise _qr_error("QR_BINDING_INVALID", "二维码不存在，请联系前台")
+    if qr.status != "active":
+        raise _qr_error("QR_DISABLED", "二维码已停用，请联系前台获取新二维码")
+    room = db.get(Room, qr.room_id)
+    if not room or qr.store_id != store_id or room.code != position_code or qr.source != source:
+        raise _qr_error("QR_BINDING_INVALID", "二维码绑定信息已变化，请重新扫码")
+    qr.last_accessed_at = utcnow()
+    return qr
 
 
 ANONYMOUS_COOKIE = "hxy_browser_token"
@@ -69,6 +144,10 @@ def _active_occupancy_for_room(db: Session, room_id: int) -> PositionOccupancy |
 
 
 def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[SelectionSession, PositionOccupancy, Room, str, bool, str]:
+    if body.entry_token:
+        _verify_position_qr_token(db, body.entry_token, body.store_id, body.position_code, body.source)
+    elif settings.environment == "production" and body.source in {"personal_qr", "room_qr"}:
+        raise HTTPException(status_code=403, detail={"code": "QR_BINDING_REQUIRED", "message": "请使用门店服务位二维码进入"})
     expire_stale_holds(db, body.store_id)
     store = db.get(Store, body.store_id)
     if not store:
@@ -77,7 +156,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
         Room.store_id == body.store_id,
         Room.code == body.position_code,
     ).with_for_update())
-    if not room or room.operational_status != "active":
+    if not room or room.operational_status != "active" or not room.is_service_position or room.is_space_container:
         raise HTTPException(status_code=404, detail="服务位不存在或暂不可用")
     anonymous_customer_id, browser_token, _ = _browser_customer(db, request)
     browser_occupancy = db.scalar(
@@ -144,7 +223,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
         selection_session_id=session.id,
         active_session_id=session.id,
         status="held",
-        source=body.source,
+        source="bound_qr" if body.entry_token else body.source,
         hold_expires_at=now + timedelta(minutes=HOLD_TTL_MINUTES),
     )
     db.add(occupancy)
@@ -194,6 +273,188 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
     }
 
 
+@router.get("/admin/service-positions/{room_id}/qr-link")
+def admin_position_qr_link(room_id: int, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
+    staff = _current_staff(authorization, db)
+    room = db.get(Room, room_id)
+    store_id = _staff_store_id(staff)
+    if not room or room.store_id != store_id:
+        raise HTTPException(status_code=404, detail="服务位不存在")
+    if not room.is_service_position or room.is_space_container:
+        raise HTTPException(status_code=400, detail="房间是空间容器，请为具体沙发或床位生成二维码")
+    qr = db.scalar(select(ServicePositionQr).where(
+        ServicePositionQr.store_id == store_id,
+        ServicePositionQr.room_id == room.id,
+        ServicePositionQr.replaced_by_id.is_(None),
+    ).order_by(ServicePositionQr.id.desc()))
+    if not qr:
+        if normalize_staff_role(staff.role, staff.technician_id) != "manager":
+            raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可创建服务位二维码"})
+        qr = _create_managed_qr(db, room, staff.id)
+        _audit_qr(db, staff, qr, "service_position_qr_created", {"room_id": room.id})
+        db.commit()
+        db.refresh(qr)
+    return _managed_qr_view(qr, room)
+
+
+def _create_managed_qr(db: Session, room: Room, staff_id: int) -> ServicePositionQr:
+    source = "room_qr" if room.room_type in {"room", "bed"} else "personal_qr"
+    qr = ServicePositionQr(
+        public_id=str(uuid.uuid4()),
+        store_id=room.store_id,
+        room_id=room.id,
+        source=source,
+        status="active",
+        created_by_staff_id=staff_id,
+    )
+    db.add(qr)
+    db.flush()
+    return qr
+
+
+def _managed_qr_view(qr: ServicePositionQr, room: Room) -> dict:
+    token = _managed_position_qr_token(qr, room.code)
+    base = settings.h5_public_base_url.rstrip("/") + "/"
+    from urllib.parse import urlencode
+    url = base + "?" + urlencode({"store": qr.store_id, "seat": room.code, "source": qr.source, "qr": token})
+    return {
+        "qr_id": qr.id,
+        "store_id": qr.store_id,
+        "room_id": qr.room_id,
+        "position_code": room.code,
+        "position_name": room.name,
+        "source": qr.source,
+        "status": qr.status,
+        "token": token,
+        "url": url,
+        "last_accessed_at": qr.last_accessed_at.isoformat() if qr.last_accessed_at else None,
+        "created_at": qr.created_at.isoformat() if qr.created_at else None,
+    }
+
+
+def _audit_qr(db: Session, staff, qr: ServicePositionQr, action: str, detail: dict) -> None:
+    db.add(AuditLog(
+        actor_type="staff",
+        actor_id=str(staff.id),
+        store_id=qr.store_id,
+        action=action,
+        entity_type="service_position_qr",
+        entity_id=str(qr.id),
+        detail={"store_id": qr.store_id, "room_id": qr.room_id, **detail},
+    ))
+
+
+def _owned_qr(db: Session, qr_id: int, staff) -> ServicePositionQr:
+    qr = db.get(ServicePositionQr, qr_id)
+    if not qr or qr.store_id != _staff_store_id(staff):
+        raise HTTPException(status_code=404, detail="服务位二维码不存在")
+    return qr
+
+
+@router.patch("/admin/service-position-qrs/{qr_id}")
+def update_service_position_qr(
+    qr_id: int,
+    body: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    if normalize_staff_role(staff.role, staff.technician_id) != "manager":
+        raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可修改服务位二维码"})
+    qr = _owned_qr(db, qr_id, staff)
+    target_status = body.get("status")
+    if target_status not in {"active", "disabled"}:
+        raise HTTPException(status_code=422, detail="二维码状态只能是 active 或 disabled")
+    if qr.replaced_by_id and target_status == "active":
+        raise HTTPException(status_code=409, detail="该二维码已被替换，不能重新启用")
+    if target_status == "active":
+        active = db.scalar(select(ServicePositionQr).where(
+            ServicePositionQr.room_id == qr.room_id,
+            ServicePositionQr.status == "active",
+            ServicePositionQr.id != qr.id,
+        ))
+        if active:
+            raise HTTPException(status_code=409, detail="该服务位已有启用中的二维码")
+        room = db.get(Room, qr.room_id)
+        if not room or room.operational_status != "active" or room.is_space_container or not room.is_service_position:
+            raise HTTPException(status_code=409, detail="服务位当前不可启用二维码")
+        qr.disabled_at = None
+    else:
+        qr.disabled_at = utcnow()
+    qr.status = target_status
+    _audit_qr(db, staff, qr, f"service_position_qr_{target_status}", {"reason": str(body.get("reason") or "")[:256]})
+    db.commit()
+    db.refresh(qr)
+    return _managed_qr_view(qr, db.get(Room, qr.room_id))
+
+
+@router.post("/admin/service-position-qrs/{qr_id}/regenerate")
+def regenerate_service_position_qr(
+    qr_id: int,
+    body: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    if normalize_staff_role(staff.role, staff.technician_id) != "manager":
+        raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可重新生成服务位二维码"})
+    old = _owned_qr(db, qr_id, staff)
+    room = db.get(Room, old.room_id)
+    if not room or room.is_space_container or not room.is_service_position:
+        raise HTTPException(status_code=409, detail="服务位当前不能生成二维码")
+    old.status = "disabled"
+    old.disabled_at = utcnow()
+    db.flush()
+    new = _create_managed_qr(db, room, staff.id)
+    old.replaced_by_id = new.id
+    reason = str(body.get("reason") or "重新生成现场二维码")[:256]
+    _audit_qr(db, staff, old, "service_position_qr_replaced", {"reason": reason, "new_qr_id": new.id})
+    _audit_qr(db, staff, new, "service_position_qr_created", {"reason": reason, "old_qr_id": old.id})
+    db.commit()
+    db.refresh(new)
+    return _managed_qr_view(new, room)
+
+
+@router.post("/admin/service-position-qrs/{qr_id}/rebind")
+def rebind_service_position_qr(
+    qr_id: int,
+    body: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    if normalize_staff_role(staff.role, staff.technician_id) != "manager":
+        raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可调整二维码绑定"})
+    old = _owned_qr(db, qr_id, staff)
+    target_room_id = body.get("target_room_id")
+    target = db.get(Room, target_room_id) if target_room_id else None
+    if not target or target.store_id != old.store_id:
+        raise HTTPException(status_code=404, detail="目标服务位不存在")
+    if target.is_space_container or not target.is_service_position or target.operational_status != "active":
+        raise HTTPException(status_code=409, detail="目标位置不是可用的实际服务位")
+    active = db.scalar(select(ServicePositionQr).where(
+        ServicePositionQr.room_id == target.id,
+        ServicePositionQr.status == "active",
+    ))
+    if active:
+        raise HTTPException(status_code=409, detail="目标服务位已有启用中的二维码，请先停用")
+    new = _create_managed_qr(db, target, staff.id)
+    old.status = "disabled"
+    old.disabled_at = utcnow()
+    old.replaced_by_id = new.id
+    reason = str(body.get("reason") or "调整二维码绑定服务位")[:256]
+    _audit_qr(db, staff, old, "service_position_qr_rebound", {
+        "reason": reason,
+        "from_room_id": old.room_id,
+        "to_room_id": target.id,
+        "new_qr_id": new.id,
+    })
+    _audit_qr(db, staff, new, "service_position_qr_created", {"reason": reason, "old_qr_id": old.id})
+    db.commit()
+    db.refresh(new)
+    return _managed_qr_view(new, target)
+
+
 @router.get("/stores/{store_id}/service-position-map")
 def customer_position_map(
     store_id: int,
@@ -213,6 +474,8 @@ def customer_position_map(
     rooms = list(db.scalars(select(Room).where(
         Room.store_id == store_id,
         Room.room_type == "sofa",
+        Room.is_service_position.is_(True),
+        Room.is_space_container.is_(False),
         Room.customer_selectable.is_(True),
     ).order_by(Room.sort_order, Room.id)))
     # 房间不进入公共平面图；仅向已验证的当前房间会话追加“当前房间”，
@@ -253,7 +516,7 @@ def customer_move_occupancy(
         raise HTTPException(status_code=404, detail="选单不存在")
     _verify_selection_token(session, x_selection_token)
     current_room = db.get(Room, occupancy.active_room_id)
-    if occupancy.source == "kiosk" or (current_room and current_room.room_type == "room"):
+    if occupancy.source in {"kiosk", "bound_qr", "room_qr"} or (current_room and current_room.room_type == "room"):
         raise HTTPException(status_code=403, detail={
             "code": "POSITION_LOCKED",
             "message": "当前服务位已由前台或房间二维码绑定，请联系工作人员调整",
@@ -302,7 +565,11 @@ def customer_move_occupancy(
 
 def _admin_live_map(db: Session, store_id: int) -> dict:
     expire_stale_holds(db, store_id)
-    rooms = list(db.scalars(select(Room).where(Room.store_id == store_id).order_by(Room.sort_order, Room.id)))
+    rooms = list(db.scalars(select(Room).where(
+        Room.store_id == store_id,
+        Room.is_service_position.is_(True),
+        Room.is_space_container.is_(False),
+    ).order_by(Room.sort_order, Room.id)))
     active = list(db.scalars(select(PositionOccupancy).where(
         PositionOccupancy.store_id == store_id,
         PositionOccupancy.active_room_id.is_not(None),
@@ -380,6 +647,124 @@ def _owned_occupancy(db: Session, occupancy_id: int, store_id: int) -> PositionO
     if not occupancy or occupancy.store_id != store_id or not occupancy.active_room_id:
         raise HTTPException(status_code=404, detail="活动占用不存在")
     return occupancy
+
+
+@router.post("/admin/occupancies/{occupancy_id}/retain")
+def retain_position_occupancy(
+    occupancy_id: int,
+    body: RetainOccupancyIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    store_id = _staff_store_id(staff)
+    occupancy = db.scalar(
+        select(PositionOccupancy)
+        .where(
+            PositionOccupancy.id == occupancy_id,
+            PositionOccupancy.store_id == store_id,
+            PositionOccupancy.active_room_id.is_not(None),
+        )
+        .with_for_update()
+    )
+    if occupancy is None:
+        raise HTTPException(status_code=404, detail="活动占用不存在")
+    if occupancy.version != body.version:
+        raise HTTPException(status_code=409, detail={
+            "code": "VERSION_CONFLICT",
+            "message": "服务位状态已变化，请刷新",
+        })
+    session = db.scalar(
+        select(SelectionSession)
+        .where(SelectionSession.id == occupancy.selection_session_id)
+        .with_for_update()
+    )
+    if (
+        occupancy.status != "waiting_service"
+        or occupancy.actual_start_at is not None
+        or session is None
+        or session.status != "submitted"
+        or session.fulfillment_order_id is not None
+        or session.submitted_at is None
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "OCCUPANCY_NOT_RETAINABLE",
+            "message": "当前服务位已不能续留，请刷新状态",
+        })
+    now = utcnow()
+    default_deadline = aware(session.submitted_at) + timedelta(
+        minutes=WAITING_SERVICE_TTL_MINUTES
+    )
+    current_retention = aware(occupancy.retained_until)
+    bases = [now, default_deadline]
+    if current_retention is not None:
+        bases.append(current_retention)
+    occupancy.retained_until = max(bases) + timedelta(minutes=body.minutes)
+    occupancy.version += 1
+    audit_occupancy(db, occupancy, "occupancy_retained", "staff", str(staff.id), {
+        "minutes": body.minutes,
+        "reason": body.reason,
+        "retained_until": occupancy.retained_until.isoformat(),
+    })
+    db.commit()
+    db.refresh(occupancy)
+    return occupancy_view(occupancy)
+
+
+@router.get("/admin/occupancies/release-candidates")
+def admin_release_candidates(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    candidates = list_release_candidates(
+        db,
+        utcnow(),
+        store_id=_staff_store_id(staff),
+    )
+    return {"items": [
+        {
+            "occupancy_id": candidate.occupancy_id,
+            "version": candidate.version,
+            "room_id": candidate.room_id,
+            "room_code": candidate.room_code,
+            "status": candidate.status,
+            "selection_session_id": candidate.selection_session_id,
+            "due_at": candidate.due_at,
+            "overdue_seconds": candidate.overdue_seconds,
+            "reason_code": candidate.reason_code,
+        }
+        for candidate in candidates
+    ]}
+
+
+@router.post("/admin/occupancies/bulk-release")
+def admin_bulk_release_occupancies(
+    body: BulkReleaseIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    if staff.role != "admin":
+        raise HTTPException(status_code=403, detail="只有店长可以批量释放服务位")
+    expected_versions = {item.occupancy_id: item.version for item in body.items}
+    if len(expected_versions) != len(body.items):
+        raise HTTPException(status_code=422, detail="不能重复提交同一个服务位")
+    result = release_selected_occupancies(
+        db,
+        utcnow(),
+        expected_versions,
+        store_id=_staff_store_id(staff),
+        trigger=str(staff.id),
+        release_reason=body.reason,
+    )
+    return {
+        "released": list(result.released_ids),
+        "skipped": [
+            {"occupancy_id": occupancy_id, "reason": reason}
+            for occupancy_id, reason in result.skipped
+        ],
+    }
 
 
 @router.post("/admin/occupancies/{occupancy_id}/move")

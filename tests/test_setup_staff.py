@@ -1,4 +1,5 @@
 import importlib
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -48,8 +49,9 @@ class SetupStaffTests(unittest.TestCase):
             self.assertEqual(credentials[0][0], "tech-1")
             self.assertTrue(verify_password(credentials[0][1], staff.password_hash))
             self.assertEqual(staff.store_id, store.id)
-            self.assertEqual(staff.role, "staff")
-            self.assertEqual(staff.status, "active")
+            self.assertEqual(staff.role, "manager")
+        self.assertEqual(staff.status, "active")
+        self.assertIsNone(staff.temporary_expires_at)
 
     def test_refuses_to_guess_a_store_when_multiple_stores_exist(self):
         script = load_setup_staff_module()
@@ -72,7 +74,8 @@ class SetupStaffTests(unittest.TestCase):
 
             script.write_credentials(credential_path, [("tech-1", "test-password")])
 
-            self.assertEqual(credential_path.stat().st_mode & 0o777, 0o600)
+            if os.name == "posix":
+                self.assertEqual(credential_path.stat().st_mode & 0o777, 0o600)
             self.assertEqual(
                 credential_path.read_text(encoding="utf-8"),
                 "username: tech-1\npassword: test-password\n",

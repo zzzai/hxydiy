@@ -3,18 +3,23 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, JSON, DateTime, ForeignKey, Integer, String, Float, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
 
 class Room(Base):
-    """足疗沙发 / 包间 / 床位——排钟用"""
+    """空间容器与实际服务位。
+
+    房间是空间容器时 is_space_container=True，不参与占用和服务流转；
+    沙发、床位等实际服务位通过 parent_room_id 关联到房间（沙发可为空）。
+    """
 
     __tablename__ = "rooms"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
+    parent_room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id"), nullable=True, index=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(64))             # 如 "1 号包间""靠窗沙发 A"
     room_type: Mapped[str] = mapped_column(String(16), default="room")  # room / sofa / bed
@@ -33,6 +38,8 @@ class Room(Base):
     map_width: Mapped[float] = mapped_column(Float, default=0.2)
     map_height: Mapped[float] = mapped_column(Float, default=0.13)
     customer_selectable: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_space_container: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_service_position: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     operational_status: Mapped[str] = mapped_column(String(16), default="active", index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -68,3 +75,4 @@ class Technician(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    staff_account = relationship("Staff", back_populates="technician", uselist=False, foreign_keys="Staff.technician_id")
