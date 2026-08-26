@@ -14,7 +14,7 @@ class CouponTemplate(Base):
     __tablename__ = "coupon_templates"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # 营销券归属门店；历史全局券允许为空，迁移会按默认门店回填。
+    # 营销券归属门店；历史全局券允许为空，迁移不会猜测性回填。
     store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True, index=True)
     code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(64))
