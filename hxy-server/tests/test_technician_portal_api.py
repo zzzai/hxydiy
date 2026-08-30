@@ -396,6 +396,48 @@ class TestTechnicianPortalApi:
         assert all(item["occupancy_status"] == "available" for item in items)
         assert all(item["items"] == [] for item in items)
 
+    def test_technician_tasks_do_not_expose_orphan_bed_as_standalone_position(self):
+        with self.SessionLocal() as db:
+            staff = Staff(
+                username="tech-orphan-bed",
+                password_hash=hash_password("tech-pass"),
+                name="孤立床位看板技师",
+                role="technician",
+                status="active",
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+            )
+            sofa = Room(
+                store_id=self.store_id,
+                code="SOFA-ORPHAN-BED",
+                name="大厅沙发 03",
+                room_type="sofa",
+                status="available",
+                is_service_position=True,
+                is_space_container=False,
+                operational_status="active",
+            )
+            orphan_bed = Room(
+                store_id=self.store_id,
+                code="BED-ORPHAN",
+                name="未归属房间 A 床",
+                room_type="bed",
+                status="available",
+                is_service_position=True,
+                is_space_container=False,
+                operational_status="active",
+                parent_room_id=None,
+            )
+            db.add_all([staff, sofa, orphan_bed])
+            db.commit()
+            staff_id = staff.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/tasks", headers=headers)
+
+        assert response.status_code == 200, response.text
+        assert [item["room_name"] for item in response.json()["items"]] == ["大厅沙发 03"]
+
     def test_technician_tasks_map_a_bed_order_to_its_parent_room(self):
         with self.SessionLocal() as db:
             staff = Staff(username="tech-room-board", password_hash=hash_password("tech-pass"), name="房间看板技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)

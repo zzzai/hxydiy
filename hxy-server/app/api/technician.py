@@ -110,6 +110,9 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
         Room.store_id == technician.store_id,
         Room.is_service_position.is_(True),
         Room.is_space_container.is_(False),
+        # 床位必须归属于房间；技师端只展示沙发和房间容器，
+        # 避免异常/未配置父房间的床位泄漏成独立服务位。
+        Room.room_type != "bed",
         Room.parent_room_id.is_(None),
         Room.operational_status == "active",
     ).order_by(Room.sort_order, Room.id)))
