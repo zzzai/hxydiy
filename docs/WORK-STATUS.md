@@ -1689,3 +1689,35 @@
 - 本地完成：以上代码和测试均在工作区完成。
 - 已发布生产：无。本轮未切换服务器 `current`，未重建生产 API 容器。
 - 待现场验收：店长/员工/技师真实账号的权限穿透、门店隔离、服务单闭环、断网恢复、并发幂等及智慧宝联调。
+
+# 2026-08-30 技师服务动作幂等键作用域修复（本地完成，未发布）
+
+## 本地完成
+
+- 修复 `hxy-server/app/api/technician.py` 服务确认/结束接口的幂等重放边界。
+- 幂等键严格绑定服务位、动作和登录技师；跨目标、跨动作或跨技师复用统一返回 `409 IDEMPOTENCY_KEY_REUSED`，避免把首笔操作结果错误返回给另一请求。
+- 新增跨目标/跨动作回归测试，并在共享记忆中记录该 API 安全契约。
+
+## 涉及文件
+
+- `hxy-server/app/api/technician.py`
+- `hxy-server/tests/test_technician_portal_api.py`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/technician.md`
+
+## 测试结果
+
+- 幂等键回归：`1 passed`。
+- 技师后端专项：`21 passed, 1 warning`（既有 Starlette/httpx 弃用警告）。
+- 管理端：`npm test` 为 `107 passed`；`npm run build` 成功，保留既有大 chunk 警告。
+
+## 发布状态
+
+- 未发布生产；服务器实际 current 仍为 `/root/hxy-diy-20260811/releases/customer-profile-member-no-coupon-20260829-1`。
+- 未执行数据库备份、迁移、Manifest 发布切换或线上完整链路验收。
+- 源码仓库 `hxy-server` 未配置 Git remote `origin`，无法按要求从 `origin/main` 推送本任务分支或创建 PR；现有其他窗口未提交改动均已保留。
+
+## 待门店现场验收
+
+- 待授权手机完成“顾客提交 → 技师查看区位和选单 → 确认服务 → 服务结束 → 顾客画像快记保存/重试 → 审计核对”闭环。
+- 待配置源码远端后执行 CI、数据库备份、Manifest 校验、生产发布和回滚演练。
