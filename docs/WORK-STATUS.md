@@ -1689,3 +1689,28 @@
 - 本地完成：以上代码和测试均在工作区完成。
 - 已发布生产：无。本轮未切换服务器 `current`，未重建生产 API 容器。
 - 待现场验收：店长/员工/技师真实账号的权限穿透、门店隔离、服务单闭环、断网恢复、并发幂等及智慧宝联调。
+
+# 2026-08-30 三端窗口协作协议与启动提示词（本地完成，未发布）
+
+## 本地完成
+
+- 新增 `docs/AI-WINDOW-PROMPTS.md`，提供公共启动提示词以及顾客端、管理端、技师端的职责附录、分支规则和交接模板。
+- README 明确本目录是 Obsidian Vault 与 GitHub 协作文档仓库，不是实际源码仓库；Obsidian 用于阅读/编辑，GitHub 用于版本、PR 和审计。
+- 共享记忆补充分支/PR、跨端合同变更、端工作流缺失时的建立规则，避免三个窗口依赖彼此聊天上下文。
+
+## 涉及文件
+
+- `README.md`
+- `docs/AI-WINDOW-PROMPTS.md`
+- `docs/TEAM-MEMORY.md`
+- `docs/WORK-STATUS.md`
+
+## 验证结果
+
+- 已从 `origin/main` 创建独立文档分支，并通过 Markdown 文件存在性、引用路径和 Git diff 空白检查。
+- 本轮只修改协作文档，未修改业务源码、数据库、服务器或生产 release；不需要执行业务测试或生产构建。
+
+## 发布状态
+
+- 未发布生产；生产服务器、数据库和 `current` 均未修改。
+- 待推送 `codex/docs/three-window-protocol` 并创建 Pull Request 后，由三个端窗口审核采用。
