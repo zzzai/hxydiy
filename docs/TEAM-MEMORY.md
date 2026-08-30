@@ -23,7 +23,7 @@
 
 - 生产服务器：`root@115.190.245.14`。
 - 生产部署根目录：`/root/hxy-diy-20260811`。
-- 2026-08-30 核对的服务器 `current`：`customer-profile-member-no-coupon-20260829-1`。
+- 2026-08-30 核对的服务器 `current`：`admin-qiniu-private-cdn-20260830-1`（以服务器 `readlink -f /root/hxy-diy-20260811/current` 为准）。
 - 技师移动端入口：`https://diy.hexiaoyue.com/technician/`。
 - 生产发布前必须完成测试、构建、数据库备份、Manifest 校验、原子切换和健康检查。
 

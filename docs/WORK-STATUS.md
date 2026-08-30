@@ -1867,6 +1867,7 @@
 
 - 本地完成：分支 `codex/technician/profile-record-admin-closure`。
 - 已发布生产：否。未执行数据库备份、迁移、Manifest 校验、生产切换或线上健康检查。
+- 服务器实测 current：`/root/hxy-diy-20260811/releases/admin-qiniu-private-cdn-20260830-1`；本轮未修改该 release。
 
 ## 尚未完成事项
 
