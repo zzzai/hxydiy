@@ -48,3 +48,11 @@
 验证：管理端 `npm test` 109 passed；`npx tsc -b` 通过；`npm run build` 成功；后端媒体、权限和目录专项 34 passed（1 个既有 Starlette/httpx 弃用警告）。
 
 发布状态：未发布生产，未执行数据库迁移、OSS 配置和线上切换；待 CI、备份恢复、Manifest、健康检查及门店现场验收。
+
+## 2026-08-30 七牛私有 CDN 连通性验证与签名 URL 修复（本地完成，未发布）
+
+- 使用服务器 `/root/qiniu` 中的环境变量进行一次性真实探针，未输出或保存 AK/SK，测试对象已清理。
+- 结果：上传 HTTP 200；绑定域名匿名读取 HTTP 403（空间为私有访问）；使用七牛签名下载读取 HTTP 200；删除 HTTP 200。
+- 适配器现通过 `QINIU_SIGNED_URL_TTL_SECONDS`（默认 600 秒）生成短期签名 URL，避免管理端拿到不可访问的裸地址。
+- 管理端 `npm test` 109 passed；TypeScript 检查和生产构建通过；后端媒体专项 11 passed。
+- 尚未发布生产，服务器 `current`、数据库和 API 容器未修改；待单独发布确认后执行备份、Manifest、重建和线上验收。

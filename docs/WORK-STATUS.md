@@ -1,3 +1,34 @@
+# 2026-08-30 七牛私有 CDN 连通性验证与签名 URL 修复（本地完成，未发布）
+
+## 本地完成
+
+- 使用服务器 `/root/qiniu` 中的环境变量进行一次性真实探针，未输出或保存 AK/SK，测试对象已清理。
+- 结果：上传 HTTP 200；绑定域名匿名读取 HTTP 403（空间为私有访问）；使用七牛签名下载读取 HTTP 200；删除 HTTP 200。
+- 七牛适配器现通过 `QINIU_SIGNED_URL_TTL_SECONDS`（默认 600 秒）生成短期签名 URL，并校验有效期必须大于 0 秒。
+
+## 涉及文件
+
+- `hxy-server/app/core/config.py`
+- `hxy-server/app/services/media_storage.py`
+- `hxy-server/.env.example`
+- `hxy-server/tests/test_media_storage.py`
+
+## 测试结果
+
+- 管理端：`npm test`，109 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 警告）。
+- 后端媒体专项（服务器临时容器）：`11 passed`；存在既有 Starlette/httpx 弃用警告。
+- 七牛真实探针：上传 200、签名读取 200、删除 200。
+
+## 发布状态
+
+- 本地完成：签名 URL 代码、测试和文档已在 `codex/admin/media-upload` 分支完成并推送。
+- 已发布生产：否。生产 `current`、数据库和 API 容器未修改，未注入七牛环境变量。
+
+## 待现场验收
+
+- 需单独确认发布授权后，完成数据库备份、环境文件备份、release 构建、Manifest 校验、原子切换、API 重建和线上健康检查。
+- 发布后需用管理端授权账号验证媒体上传、签名预览、替换、软删除和门店隔离；自动化测试与七牛探针不替代门店现场营业验收。
+
 # 技师端与员工工作台工作状态
 
 # 2026-08-29 智慧宝后台只读审计与 DIY 对接字段基线
