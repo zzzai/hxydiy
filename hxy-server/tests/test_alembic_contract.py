@@ -73,7 +73,7 @@ class AlembicContractTests(unittest.TestCase):
     def test_production_sms_revision_upgrades_to_current_head(self):
         project_root = Path(__file__).resolve().parents[1]
         previous_metadata = MetaData()
-        excluded_tables = {"service_position_qrs", "customer_profile_records"}
+        excluded_tables = {"service_position_qrs", "customer_profile_records", "media_assets"}
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
                 continue
@@ -216,6 +216,7 @@ class AlembicContractTests(unittest.TestCase):
             "membership_benefit_grants",
             "service_position_qrs",
             "customer_profile_records",
+            "media_assets",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():

@@ -4,6 +4,7 @@ import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import {
   ModalForm,
   PageContainer,
+  ProForm,
   ProFormDigit,
   ProFormSelect,
   ProFormText,
@@ -15,6 +16,7 @@ import { getStaff } from '../api';
 import { canManageConfiguration, getStoreId } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
+import MediaUploadField from '../components/MediaUploadField';
 import {
   formatProductPrice,
   normalizeProductList,
@@ -112,6 +114,7 @@ export default function ProductsPage() {
         <ProFormDigit name="price" label="价格（元）" min={0} fieldProps={{ precision: 2, addonBefore: '¥' }} rules={[{ required: true, message: '请输入商品价格' }]} />
         <ProFormText name="spec" label="规格" />
         <ProFormText name="desc" label="说明" />
+        <ProForm.Item name="image_url" label="商品图片"><MediaUploadField purpose="product" /></ProForm.Item>
       </ModalForm>
     </PageContainer>
   );

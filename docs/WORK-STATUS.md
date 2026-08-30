@@ -1780,3 +1780,30 @@
 
 - 待推送分支并通过 CI；完成数据库备份与恢复演练、Manifest 校验、线上健康检查后，才能安排发布。
 - 待门店授权账号现场验收管理端权限、门店隔离及三端服务闭环；自动化测试不等同营业现场验收。
+
+# 2026-08-30 管理端媒体上传（本地完成，未发布）
+
+## 本地完成
+
+- 新增 `MediaAsset` 模型、Alembic 迁移和 `/api/v1/admin/media` 上传、列表、认证预览及软删除接口。
+- 上传按门店隔离并记录审计；支持 JPG/PNG/WebP/GIF，单文件上限 5MB；总部上传需指定门店，店长不得跨店。
+- 项目、项目详情图片、商品和加项表单接入 `MediaUploadField`，移除图片地址手填入口。
+
+## 涉及文件
+
+- `hxy-server/app/api/media.py`
+- `hxy-server/app/models/media.py`
+- `hxy-server/alembic/versions/20260830_media_assets.py`
+- `admin-react/src/components/MediaUploadField.tsx`
+- `admin-react/src/api.ts`、项目/商品/加项页面及对应测试
+
+## 测试结果
+
+- 管理端：`npm test` 109 passed；`npx tsc -b` 通过；`npm run build` 成功（保留既有共享 chunk 警告）。
+- 后端媒体/管理权限/目录专项：34 passed；存在既有 Starlette/httpx 弃用警告。
+
+## 发布状态
+
+- 本地完成：代码和测试在 `codex/admin/media-upload` 分支完成。
+- 已发布生产：否。未执行生产数据库备份、迁移、OSS 配置、Manifest 校验或线上切换。
+- 待现场验收：CI/PR 审核、OSS 适配与配置、备份恢复、线上健康检查、门店权限穿透和媒体上传预览验收。

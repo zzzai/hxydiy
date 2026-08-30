@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     occupancy_timezone: str = "Asia/Shanghai"
     h5_public_base_url: str = "https://diy.hexiaoyue.com/"
 
+    # 媒体存储：local 供开发/测试使用；production 应配置 OSS 适配器参数。
+    media_storage_backend: str = "local"
+    media_storage_root: str = "./media"
+    media_max_size_bytes: int = 5 * 1024 * 1024
+    media_public_base_url: str = ""
+
     # 微信小程序
     wx_appid: str = ""
     wx_appsecret: str = ""

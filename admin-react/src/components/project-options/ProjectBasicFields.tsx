@@ -1,5 +1,6 @@
 import { Button, Form, Input, InputNumber, Select, Space } from 'antd';
 import type { FormInstance } from 'antd';
+import MediaUploadField from '../MediaUploadField';
 
 const CAT_MAP: Record<string, string> = { bath: '泡脚沐足', balance: '推拿', care: '精油SPA', small: '养生小项', 'local-strength': '局部调理', kit: '功夫调理', tea: '茶饮' };
 
@@ -16,7 +17,7 @@ export default function ProjectBasicFields({ form, editing }: { form: FormInstan
     <Space wrap><Form.Item name="store_price" label="门店价(元)"><InputNumber min={0} /></Form.Item>
       <Form.Item name="member_price" label="会员价(元)"><InputNumber min={0} /></Form.Item>
       <Form.Item name="group_price" label="团购价(元)"><InputNumber min={0} /></Form.Item></Space>
-    <Form.Item name="image_url" label="主图地址"><Input placeholder="/diy/assets/... 或公网图片地址" /></Form.Item>
+    <Form.Item name="image_url" label="主图"><MediaUploadField purpose="project_cover" /></Form.Item>
     <Form.Item name="tags_text" label="标签"><Input placeholder="多个标签用逗号分隔" /></Form.Item>
     <Form.Item name="summary" label="简介"><Input.TextArea rows={2} /></Form.Item>
     <div className="admin-subtitle">详情模块</div>
@@ -25,7 +26,11 @@ export default function ProjectBasicFields({ form, editing }: { form: FormInstan
         {fields.map(({ key, name, ...restField }) => <Space key={key} align="start" style={{ display: 'flex', width: '100%' }}>
           <Form.Item {...restField} name={[name, 'type']} initialValue="text"><Select style={{ width: 100 }} options={[{ value: 'text', label: '文字' }, { value: 'image', label: '图片' }, { value: 'highlight', label: '亮点' }]} /></Form.Item>
           <Form.Item {...restField} name={[name, 'title']}><Input placeholder="标题" /></Form.Item>
-          <Form.Item {...restField} name={[name, 'body']}><Input placeholder="内容" /></Form.Item>
+          <Form.Item noStyle shouldUpdate={(prev, current) => prev.detail_modules?.[name]?.type !== current.detail_modules?.[name]?.type}>
+            {({ getFieldValue }) => getFieldValue(['detail_modules', name, 'type']) === 'image'
+              ? <Form.Item {...restField} name={[name, 'body']} label="图片"><MediaUploadField purpose="project_detail" /></Form.Item>
+              : <Form.Item {...restField} name={[name, 'body']}><Input placeholder="内容" /></Form.Item>}
+          </Form.Item>
           <Button danger type="text" onClick={() => remove(name)}>删除</Button>
         </Space>)}
         <Button type="dashed" onClick={() => add({ type: 'text' })} block>增加详情模块</Button>

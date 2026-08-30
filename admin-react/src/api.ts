@@ -240,6 +240,15 @@ export const getAddonsAdmin = (params?: any) => client.get('/admin/v2/addons', {
 export const createAddon = (data: any) => client.post('/admin/v2/addons', data);
 export const updateAddon = (id: number, data: any) => client.post(`/admin/v2/addons/${id}`, data);
 
+export const uploadMedia = (file: File, purpose = 'general', storeId?: number) => {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('purpose', purpose);
+  if (storeId !== undefined) form.append('store_id', String(storeId));
+  return client.post('/admin/media', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const deleteMedia = (id: number) => client.delete(`/admin/media/${id}`);
+
 // Project catalog options
 export const getOptionGroups = (projectId: number) => client.get(`/admin/v2/projects/${projectId}/option-groups`);
 export const createOptionGroup = (projectId: number, data: any) => client.post(`/admin/v2/projects/${projectId}/option-groups`, data);

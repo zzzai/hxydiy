@@ -4,6 +4,7 @@ import { EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { createAddon, getAddonsAdmin, getProjectsAdmin, getStaff, updateAddon } from '../api';
 import { addonFormPayload, addonToForm } from '../addonContent';
 import { getStoreId } from '../auth';
+import MediaUploadField from '../components/MediaUploadField';
 
 const STATUS_OPTIONS = [
   { value: 'draft', label: '草稿' },
@@ -131,7 +132,7 @@ export default function AddonsPage() {
               </Space>
             </>}
             <Form.Item name="summary" label="简介"><Input.TextArea rows={2} maxLength={512} /></Form.Item>
-            <Form.Item name="image_url" label="图片地址"><Input /></Form.Item>
+            <Form.Item name="image_url" label="图片"><MediaUploadField purpose="addon" /></Form.Item>
             <Button type="primary" htmlType="submit" block>保存</Button>
           </Space>
         </Form>

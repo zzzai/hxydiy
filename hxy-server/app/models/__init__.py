@@ -18,6 +18,7 @@ from app.models.settlement import SettlementAdjustment
 from app.models.service_position_qr import ServicePositionQr
 from app.models.customer_profile import CustomerProfileRecord
 from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
+from app.models.media import MediaAsset
 from app.models.catalog_options import (
     CHARGE_MODES,
     CHOICE_TYPES,
@@ -38,6 +39,7 @@ __all__ = [
     "MembershipBenefitGrant", "SettlementAdjustment", "ServicePositionQr",
     "CustomerProfileRecord",
     "TechnicianInvite", "TechnicianLeaveRequest",
+    "MediaAsset",
     "CHARGE_MODES", "CHOICE_TYPES", "OptionChoicePrice", "ProjectCatalogVersion",
     "ProjectOptionChoice", "ProjectOptionGroup",
 ]
