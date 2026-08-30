@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api import admin_v2
-from app.api.admin import create_staff_token, hash_password
+from app.api.admin import create_staff_token, hash_password, staff_snapshot
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import (
@@ -34,6 +34,13 @@ from app.models.orders import ORDER_STATUSES
 
 
 class AdminV2ContractTests(unittest.TestCase):
+    def test_staff_snapshot_preserves_headquarters_admin_role(self):
+        headquarters = SimpleNamespace(role="admin", store_id=None, technician_id=None, id=1, name="总部")
+        store_admin = SimpleNamespace(role="admin", store_id=2, technician_id=None, id=2, name="店长")
+
+        self.assertEqual(staff_snapshot(headquarters)["role"], "admin")
+        self.assertEqual(staff_snapshot(store_admin)["role"], "manager")
+
     def test_project_write_contract_preserves_legacy_diy_options(self):
         body = admin_v2.ProjectCreate(
             store_id=1,
@@ -457,6 +464,43 @@ class AdminV2ContractTests(unittest.TestCase):
         )
         self.assertEqual(product.status_code, 200, product.text)
         self.__class__.current_staff_id = self.staff_id
+
+    def test_product_patch_supports_headquarters_edit_and_store_manager_toggle(self):
+        """管理端 Refine 使用 PATCH；总部可编辑主数据，店长只能改上下架。"""
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        with self.SessionLocal() as db:
+            product = db.get(Product, 1)
+            original = {
+                "name": product.name,
+                "price_cents": product.price_cents,
+                "image_url": product.image_url,
+                "publication_status": product.publication_status,
+            }
+        try:
+            updated = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"name": "总部编辑商品", "price_cents": 1290, "image_url": "media/1"},
+            )
+            self.assertEqual(updated.status_code, 200, updated.text)
+            self.assertEqual(updated.json()["name"], "总部编辑商品")
+
+            self.__class__.current_staff_id = self.staff_id
+            allowed = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"publication_status": "published"},
+            )
+            self.assertEqual(allowed.status_code, 200, allowed.text)
+
+            blocked = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"name": "店长不应修改商品"},
+            )
+            self.assertEqual(blocked.status_code, 403, blocked.text)
+            self.assertEqual(blocked.json()["detail"]["code"], "HEADQUARTERS_ADMIN_REQUIRED")
+        finally:
+            self.__class__.current_staff_id = self.headquarters_admin_id
+            self.client.patch("/api/v1/admin/v2/products/1", json=original)
+            self.__class__.current_staff_id = self.staff_id
 
     def test_bound_admin_cannot_manage_store_master_data(self):
         self.__class__.current_staff_id = self.staff_id

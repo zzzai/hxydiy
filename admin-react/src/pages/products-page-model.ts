@@ -32,6 +32,19 @@ export function normalizeProductList(result: unknown) {
   return { data, total: Number(value?.total ?? data.length) };
 }
 
+export function productToForm(product: Product) {
+  return {
+    code: product.code,
+    name: product.name,
+    desc: product.desc || '',
+    spec: product.spec || '',
+    product_type: product.product_type,
+    price: Number((Number(product.price_cents || 0) / 100).toFixed(2)),
+    image_url: product.image_url || '',
+    publication_status: product.publication_status,
+  };
+}
+
 export function toProductPayload(values: Record<string, unknown>, storeId: number) {
   const { price, ...rest } = values as { price?: number } & Record<string, unknown>;
   return {
@@ -40,4 +53,9 @@ export function toProductPayload(values: Record<string, unknown>, storeId: numbe
     price_cents: Math.round(Number(price ?? 0) * 100),
     image_url: values.image_url || '',
   };
+}
+
+export function toProductUpdatePayload(values: Record<string, unknown>) {
+  const { store_id: _storeId, ...payload } = toProductPayload(values, 0);
+  return payload;
 }

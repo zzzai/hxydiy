@@ -1714,6 +1714,48 @@ class ProductIn(BaseModel):
     publication_status: str = "draft"
 
 
+ProductPublicationStatus = Literal["draft", "candidate", "published", "inactive", "archived"]
+
+
+class ProductPatch(BaseModel):
+    """商品主数据的部分更新；门店店长最终只允许提交 publication_status。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: StrictStr | None = Field(default=None, min_length=1, max_length=32)
+    name: StrictStr | None = Field(default=None, min_length=1, max_length=64)
+    desc: StrictStr | None = Field(default=None, max_length=256)
+    spec: StrictStr | None = Field(default=None, max_length=64)
+    product_type: StrictStr | None = Field(default=None, min_length=1, max_length=16)
+    price_cents: StrictInt | None = Field(default=None, ge=0)
+    image_url: StrictStr | None = Field(default=None, max_length=512)
+    publication_status: ProductPublicationStatus | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_explicit_nulls(cls, value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if item is None:
+                    raise ValueError(f"{key} must not be null")
+        return value
+
+
+def _product_view(product: Product) -> dict:
+    return {
+        "id": product.id,
+        "store_id": product.store_id,
+        "code": product.code,
+        "name": product.name,
+        "desc": product.desc,
+        "spec": product.spec,
+        "product_type": product.product_type,
+        "price_cents": product.price_cents,
+        "image_url": product.image_url,
+        "publication_status": product.publication_status,
+    }
+
+
 @router.post("/products")
 def create_product(body: ProductIn, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
@@ -1726,20 +1768,38 @@ def create_product(body: ProductIn, db: Session = Depends(get_db),
     return {"id": p.id, "code": p.code}
 
 
-@router.post("/products/{prod_id}")
-def update_product(prod_id: int, body: dict, db: Session = Depends(get_db),
-                   authorization: str | None = Header(None)):
-    s = _current_staff(authorization, db)
-    _require_catalog_write(s, set(body))
-    p = db.get(Product, prod_id) if _is_headquarters_admin(s) else _require_owned(db.get(Product, prod_id), s, "商品不存在")
+def _update_product(prod_id: int, body: ProductPatch, db: Session, staff: Staff) -> dict:
+    fields = set(body.model_fields_set)
+    _require_catalog_write(staff, fields)
+    p = db.get(Product, prod_id) if _is_headquarters_admin(staff) else _require_owned(db.get(Product, prod_id), staff, "商品不存在")
     if not p:
         raise HTTPException(status_code=404, detail="商品不存在")
-    for k, v in body.items():
-        if hasattr(p, k) and k not in {"id", "store_id"}:
-            setattr(p, k, v)
-    _audit(db, s, "update_product", "product", str(prod_id))
-    db.commit()
-    return {"ok": True}
+    for key, value in body.model_dump(exclude_unset=True).items():
+        if key != "store_id":
+            setattr(p, key, value)
+    _audit(db, staff, "update_product", "product", str(prod_id))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="商品编码冲突") from exc
+    db.refresh(p)
+    return _product_view(p)
+
+
+@router.patch("/products/{prod_id}")
+def patch_product(prod_id: int, body: ProductPatch, db: Session = Depends(get_db),
+                  authorization: str | None = Header(None)):
+    s = _current_staff(authorization, db)
+    return _update_product(prod_id, body, db, s)
+
+
+@router.post("/products/{prod_id}")
+def update_product(prod_id: int, body: ProductPatch, db: Session = Depends(get_db),
+                   authorization: str | None = Header(None)):
+    """保留旧 POST 路径，但与 PATCH 共用严格契约。"""
+    s = _current_staff(authorization, db)
+    return _update_product(prod_id, body, db, s)
 
 
 # ──────────────────────────────────────────────────────

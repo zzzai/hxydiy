@@ -91,10 +91,12 @@ def normalize_staff_role(role: str | None, technician_id: int | None = None) -> 
 
 
 def staff_snapshot(staff: Staff, store_name: str = "") -> dict:
+    # 未绑定门店的 admin 是总部管理员；绑定门店的历史 admin 继续按店长对外呈现。
+    public_role = "admin" if staff.role == "admin" and staff.store_id is None else normalize_staff_role(staff.role, staff.technician_id)
     return {
         "id": staff.id,
         "name": staff.name,
-        "role": normalize_staff_role(staff.role, staff.technician_id),
+        "role": public_role,
         "store_id": staff.store_id,
         "technician_id": staff.technician_id,
         "store_name": store_name,

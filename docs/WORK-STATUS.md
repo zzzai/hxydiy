@@ -1838,3 +1838,34 @@
 - 本地完成：代码和测试在 `codex/admin/media-upload` 分支完成。
 - 已发布生产：否。未执行生产数据库备份、迁移、OSS 配置、Manifest 校验或线上切换。
 - 待现场验收：CI/PR 审核、OSS 适配与配置、备份恢复、线上健康检查、门店权限穿透和媒体上传预览验收。
+
+# 2026-08-30 管理端商品编辑与门店上下架（本地完成，未发布）
+
+## 本地完成
+
+- 商品管理页新增总部商品编辑和新建目标门店选择；编辑表单回填分转元价格及七牛媒体，不再通过图片地址手填。
+- 店长仅显示本店商品“上架/下架”开关，不显示新建和主数据编辑入口；总部列表可查看跨店商品。
+- 修复登录员工快照的角色呈现：未绑定门店的 `admin` 保留总部角色，绑定门店的历史 `admin` 对外呈现为店长，保证总部导航和目录权限前端可用。
+- 商品更新统一使用严格 PATCH 负载，更新不携带 `store_id`；后端保留旧 POST 更新路径兼容并补充权限回归测试。
+
+## 涉及文件
+
+- `admin-react/src/pages/ProductsPage.tsx`
+- `admin-react/src/pages/products-page-model.ts`
+- `admin-react/tests/products-page-model.test.ts`
+- `hxy-server/app/api/admin.py`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_api_contracts.py`
+- `docs/TEAM-MEMORY.md`、`docs/workstreams/admin.md`
+
+## 测试结果
+
+- 管理端：`npm test`，112 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 警告）。
+- 后端商品 API、管理权限及角色快照专项：48 passed，1 个既有 Starlette/httpx 弃用警告。
+- 依赖安装审计提示 7 个 npm 漏洞（2 moderate、5 high），未执行自动升级，避免引入无关变更。
+
+## 发布状态
+
+- 本地完成：分支 `codex/admin/catalog-management`，已基于最新 `origin/main` 复核。
+- 已发布生产：否；未执行数据库迁移、生产备份、Manifest 校验、线上切换或 API 重建。
+- 待现场验收：CI/PR 审核后，使用总部管理员和店长测试账号验证商品编辑、目标门店选择、门店隔离及上下架权限；自动化测试不等同营业现场验收。
