@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Form, Header, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.api.admin_v2 import _audit, _is_headquarters_admin, _staff_store_id
 from app.core.config import settings
 from app.db.session import get_db
 from app.models import MediaAsset, Staff, Store
+from app.services.media_storage import MediaStorageError, get_media_storage as _build_media_storage
 
 router = APIRouter(prefix="/admin/media", tags=["admin-media"])
 
@@ -43,7 +44,21 @@ def _media_store_id(staff: Staff, requested: int | None) -> int:
     return store_id
 
 
-def _view(media: MediaAsset) -> dict:
+def get_media_storage():
+    """按当前运行配置创建存储适配器；测试可替换此工厂。"""
+
+    return _build_media_storage(settings)
+
+
+def _storage_or_http():
+    try:
+        return get_media_storage()
+    except MediaStorageError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _view(media: MediaAsset, storage=None) -> dict:
+    public_url = storage.url(media.object_key) if storage else None
     return {
         "id": media.id,
         "store_id": media.store_id,
@@ -52,7 +67,7 @@ def _view(media: MediaAsset) -> dict:
         "media_type": media.media_type,
         "size_bytes": media.size_bytes,
         "purpose": media.purpose,
-        "url": f"/api/v1/admin/media/{media.id}/content",
+        "url": public_url or f"/api/v1/admin/media/{media.id}/content",
         "created_at": media.created_at.isoformat() if media.created_at else None,
     }
 
@@ -68,8 +83,8 @@ async def upload_media(
     staff = _current_staff(authorization, db)
     _require_media_writer(staff)
     target_store_id = _media_store_id(staff, store_id)
-    if settings.environment == "production" and settings.media_storage_backend != "oss":
-        raise HTTPException(status_code=503, detail="生产媒体存储尚未配置 OSS")
+    if settings.environment == "production" and settings.media_storage_backend.strip().lower() != "qiniu":
+        raise HTTPException(status_code=503, detail="生产媒体存储必须配置七牛云")
     if not db.get(Store, target_store_id):
         raise HTTPException(status_code=404, detail="门店不存在")
     if file.content_type not in ALLOWED_TYPES:
@@ -81,12 +96,11 @@ async def upload_media(
     if len(content) > settings.media_max_size_bytes:
         raise HTTPException(status_code=413, detail="图片不能超过 5MB")
     object_key = f"stores/{target_store_id}/media/{uuid4().hex}{EXTENSIONS[file.content_type]}"
-    root = Path(settings.media_storage_root).resolve()
-    target = (root / object_key).resolve()
-    if root not in target.parents:
-        raise HTTPException(status_code=500, detail="媒体存储路径配置无效")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(content)
+    storage = _storage_or_http()
+    try:
+        storage.put(object_key, content, file.content_type)
+    except MediaStorageError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     media = MediaAsset(
         store_id=target_store_id,
         object_key=object_key,
@@ -102,7 +116,7 @@ async def upload_media(
     _audit(db, staff, "media_upload", "media", str(media.id), {"store_id": target_store_id, "purpose": purpose, "size_bytes": len(content)})
     db.commit()
     db.refresh(media)
-    return _view(media)
+    return _view(media, storage)
 
 
 @router.get("")
@@ -115,11 +129,12 @@ def list_media(
     staff = _current_staff(authorization, db)
     _require_media_writer(staff)
     target_store_id = _media_store_id(staff, store_id)
+    storage = _storage_or_http()
     query = select(MediaAsset).where(MediaAsset.store_id == target_store_id, MediaAsset.deleted_at.is_(None)).order_by(MediaAsset.id.desc())
     if purpose:
         query = query.where(MediaAsset.purpose == purpose)
     items = list(db.scalars(query))
-    return {"items": [_view(item) for item in items], "total": len(items)}
+    return {"items": [_view(item, storage) for item in items], "total": len(items)}
 
 
 @router.get("/{media_id}/content")
@@ -128,7 +143,13 @@ def get_media_content(media_id: int, db: Session = Depends(get_db), authorizatio
     media = db.get(MediaAsset, media_id)
     if not media or media.deleted_at or (not _is_headquarters_admin(staff) and media.store_id != _media_store_id(staff, None)):
         raise HTTPException(status_code=404, detail="媒体不存在")
-    path = (Path(settings.media_storage_root).resolve() / media.object_key).resolve()
+    storage = _storage_or_http()
+    public_url = storage.url(media.object_key)
+    if public_url:
+        return RedirectResponse(public_url, status_code=307)
+    if not hasattr(storage, "path"):
+        raise HTTPException(status_code=503, detail="当前媒体存储不支持内容代理")
+    path = storage.path(media.object_key)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="媒体文件不存在")
     return FileResponse(path, media_type=media.content_type, filename=media.original_name)
@@ -141,6 +162,11 @@ def delete_media(media_id: int, db: Session = Depends(get_db), authorization: st
     media = db.get(MediaAsset, media_id)
     if not media or media.deleted_at or (not _is_headquarters_admin(staff) and media.store_id != _media_store_id(staff, None)):
         raise HTTPException(status_code=404, detail="媒体不存在")
+    storage = _storage_or_http()
+    try:
+        storage.delete(media.object_key)
+    except MediaStorageError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     media.deleted_at = datetime.now(timezone.utc)
     _audit(db, staff, "media_delete", "media", str(media.id), {"store_id": media.store_id})
     db.commit()

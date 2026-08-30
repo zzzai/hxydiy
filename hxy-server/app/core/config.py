@@ -52,11 +52,17 @@ class Settings(BaseSettings):
     occupancy_timezone: str = "Asia/Shanghai"
     h5_public_base_url: str = "https://diy.hexiaoyue.com/"
 
-    # 媒体存储：local 供开发/测试使用；production 应配置 OSS 适配器参数。
+    # 媒体存储：local 供开发/测试使用；production 使用 qiniu。
     media_storage_backend: str = "local"
     media_storage_root: str = "./media"
     media_max_size_bytes: int = 5 * 1024 * 1024
     media_public_base_url: str = ""
+    qiniu_access_key: str = ""
+    qiniu_secret_key: str = ""
+    qiniu_bucket: str = "diyhxy"
+    qiniu_cdn_domain: str = "https://img.hexiaoyue.com"
+    # 七牛区域不做猜测；为空时由 SDK 按上传凭证自动探测。
+    qiniu_zone: str = ""
 
     # 微信小程序
     wx_appid: str = ""

@@ -1,5 +1,6 @@
 import io
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -10,6 +11,28 @@ from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import AuditLog, Staff, Store
+from app.services.media_storage import MediaStorageError
+
+
+class _FakeStorage:
+    def __init__(self):
+        self.put_calls = []
+        self.delete_calls = []
+
+    def put(self, object_key, content, content_type):
+        self.put_calls.append((object_key, content, content_type))
+
+    def delete(self, object_key):
+        self.delete_calls.append(object_key)
+
+    def url(self, object_key):
+        return f"https://img.hexiaoyue.com/{object_key}"
+
+
+class _FailingDeleteStorage(_FakeStorage):
+    def delete(self, object_key):
+        self.delete_calls.append(object_key)
+        raise MediaStorageError("七牛云删除失败，HTTP 500")
 
 
 class AdminMediaApiTests(unittest.TestCase):
@@ -106,6 +129,40 @@ class AdminMediaApiTests(unittest.TestCase):
             media = db.get(__import__("app.models", fromlist=["MediaAsset"]).MediaAsset, uploaded["id"])
             self.assertIsNotNone(media)
             self.assertIsNotNone(media.deleted_at)
+
+    def test_qiniu_backend_uses_storage_adapter_and_cdn_url(self):
+        storage = _FakeStorage()
+        with patch("app.api.media.get_media_storage", return_value=storage), patch.object(
+            __import__("app.core.config", fromlist=["settings"]).settings,
+            "media_storage_backend",
+            "qiniu",
+        ):
+            response = self.client.post(
+                "/api/v1/admin/media",
+                headers=self._headers(self.manager_id),
+                files={"file": ("cover.png", io.BytesIO(b"png-bytes"), "image/png")},
+                data={"purpose": "project_cover"},
+            )
+            self.assertEqual(response.status_code, 201, response.text)
+            body = response.json()
+            self.assertEqual(body["url"], f"https://img.hexiaoyue.com/{storage.put_calls[0][0]}")
+            self.client.delete(f"/api/v1/admin/media/{body['id']}", headers=self._headers(self.manager_id))
+        self.assertEqual(len(storage.put_calls), 1)
+        self.assertEqual(storage.delete_calls, [storage.put_calls[0][0]])
+
+    def test_storage_delete_failure_does_not_soft_delete_database_record(self):
+        uploaded = self.client.post(
+            "/api/v1/admin/media",
+            headers=self._headers(self.manager_id),
+            files={"file": ("cover.jpg", io.BytesIO(b"jpg-bytes"), "image/jpeg")},
+        ).json()
+        storage = _FailingDeleteStorage()
+        with patch("app.api.media.get_media_storage", return_value=storage):
+            response = self.client.delete(f"/api/v1/admin/media/{uploaded['id']}", headers=self._headers(self.manager_id))
+        self.assertEqual(response.status_code, 502)
+        with self.SessionLocal() as db:
+            media = db.get(__import__("app.models", fromlist=["MediaAsset"]).MediaAsset, uploaded["id"])
+            self.assertIsNone(media.deleted_at)
 
 
 if __name__ == "__main__":
