@@ -31,6 +31,43 @@
 
 # 技师端与员工工作台工作状态
 
+# 2026-08-30 管理端商品权限与分页契约修复（本地完成，未发布）
+
+## 本地完成
+
+- 总部创建商品时保留显式目标门店；门店选择器改为服务端分页和关键词搜索，商品列表支持服务端分页、分类和状态筛选。
+- 店长商品上下架权限收紧为 `published`/`inactive`，允许从草稿或待发布首次上架，但不能恢复总部 `archived` 强制下线商品；页面同步禁用该开关并显示“总部强制下线”。
+- 总部商品更新审计显式记录目标门店；旧 `POST /products/{id}` 接受历史完整对象、忽略旧字段并保持 `{"ok": true}` 响应；旧 `staff` 角色写入返回结构化 403。
+
+## 涉及文件
+
+- `admin-react/src/core/auth/storeContext.ts`
+- `admin-react/src/pages/ProductsPage.tsx`
+- `admin-react/src/pages/products-page-model.ts`
+- `admin-react/tests/dataProvider.test.ts`
+- `admin-react/tests/products-page-model.test.ts`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_api_contracts.py`
+- `docs/TEAM-MEMORY.md`、`docs/workstreams/admin.md`
+
+## 当前验证
+
+- 管理端完整测试：114 passed。
+- 管理端 TypeScript 检查：`npx tsc -b` 通过；生产构建：Vite 成功转换 4001 个模块（保留既有大 chunk 警告）。
+- 后端商品/权限专项：`tests/test_api_contracts.py` 与 `tests/test_admin_resource_permissions.py` 合计 52 passed，1 个既有 Starlette/httpx 弃用警告。
+- 后端完整套件：531 passed、6 skipped、16 failed；失败来自既有角色迁移测试夹具、缺失 `deploy/` 基线文件、旧 Alembic 头断言和媒体迁移重复建表，未涉及本次商品改动，待后端/发布窗口另行处理。
+
+## 发布状态
+
+- 本地完成：分支 `codex/admin/catalog-management`，本轮修复已完成并准备推送 PR #3。
+- 已发布生产：否；未执行数据库迁移、生产备份、Manifest 校验、线上切换或 API 重建。
+- 生产 `current` 未改变，仍以线上服务器实际 readlink 为准。
+
+## 尚未完成事项
+
+- 后端完整套件中的 16 个既有失败需由后端/发布窗口处理。
+- PR/CI 审核、总部/店长账号现场验收和跨店权限穿透仍未完成；自动化结果不等于现场营业验收。
+
 # 2026-08-29 智慧宝后台只读审计与 DIY 对接字段基线
 
 ## 本地完成

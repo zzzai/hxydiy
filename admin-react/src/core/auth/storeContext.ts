@@ -20,7 +20,9 @@ export function requireStoreId(context: StoreContext): number {
 export function withBoundStore<T extends Record<string, unknown>>(
   input: T,
   storeId: number | null,
-): Omit<T, 'store_id'> & { store_id?: number } {
+): Record<string, unknown> {
+  // 总部没有绑定门店时，目录创建的目标门店由调用方显式提供，仍由服务端鉴权。
+  if (!storeId) return input;
   const { store_id: _ignored, ...rest } = input;
-  return storeId ? { ...rest, store_id: storeId } : rest;
+  return { ...rest, store_id: storeId };
 }

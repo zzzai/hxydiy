@@ -10,7 +10,7 @@ import uuid
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, field_validator, model_validator
 from sqlalchemy import delete, select, func as sa_func, and_, or_, union
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -82,16 +82,26 @@ def _require_catalog_master_admin(staff: Staff) -> None:
     _require_headquarters_admin(staff)
 
 
-def _require_catalog_write(staff: Staff, fields: set[str], *, allow_store_toggle: bool = True) -> None:
+def _require_catalog_write(
+    staff: Staff,
+    fields: set[str],
+    *,
+    publication_status: str | None = None,
+    current_publication_status: str | None = None,
+    store_allowed_publication_statuses: set[str] | None = None,
+    allow_store_toggle: bool = True,
+) -> None:
     """总部可完整写主数据；店长仅可修改本店 publication_status。"""
     if _is_headquarters_admin(staff):
         return
-    if (
-        allow_store_toggle
-        and normalize_staff_role(staff.role, staff.technician_id) == "manager"
-        and staff.store_id is not None
-        and fields == {"publication_status"}
-    ):
+    try:
+        normalized_role = normalize_staff_role(staff.role, staff.technician_id)
+    except (AttributeError, TypeError, ValueError):
+        normalized_role = None
+    allowed_statuses = store_allowed_publication_statuses or {"published", "inactive"}
+    if (allow_store_toggle and normalized_role == "manager" and staff.store_id is not None
+            and fields == {"publication_status"} and publication_status in allowed_statuses
+            and current_publication_status in {"draft", "candidate", "published", "inactive"}):
         return
     raise HTTPException(
         status_code=403,
@@ -148,7 +158,16 @@ def _locked_store_user(db: Session, user_id: int, staff: Staff) -> User:
     return user
 
 
-def _audit(db: Session, actor: str | Staff, action: str, entity: str, eid: str, detail: dict = None):
+def _audit(
+    db: Session,
+    actor: str | Staff,
+    action: str,
+    entity: str,
+    eid: str,
+    detail: dict = None,
+    *,
+    store_id: int | None = None,
+):
     """写入带门店作用域的后台审计记录。
 
     新调用应传入 Staff 实例，这样门店归属不会依赖 detail JSON；保留字符串
@@ -157,10 +176,10 @@ def _audit(db: Session, actor: str | Staff, action: str, entity: str, eid: str, 
     detail = detail or {}
     if isinstance(actor, Staff):
         actor_id = actor.name
-        store_id = actor.store_id
+        store_id = store_id if store_id is not None else actor.store_id
     else:
         actor_id = actor
-        store_id = detail.get("store_id")
+        store_id = store_id if store_id is not None else detail.get("store_id")
     if store_id is None and entity == "store":
         try:
             store_id = int(str(eid).split(":", 1)[0])
@@ -241,14 +260,18 @@ def _store_master_view(store: Store) -> dict:
 def list_store_master_data(
     page: int = 1,
     page_size: int = 50,
+    keyword: str | None = Query(None, max_length=64),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
 ) -> Paginated:
     staff = _current_staff(authorization, db)
     _require_headquarters_admin(staff)
-    query = select(Store).order_by(Store.id)
-    total = db.scalar(select(sa_func.count()).select_from(Store)) or 0
-    items = db.execute(query.offset((page - 1) * page_size).limit(page_size)).scalars().all()
+    query = select(Store)
+    if keyword and keyword.strip():
+        term = f"%{keyword.strip()}%"
+        query = query.where(or_(Store.name.ilike(term), Store.store_code.ilike(term), Store.city.ilike(term)))
+    total = db.scalar(select(sa_func.count()).select_from(query.subquery())) or 0
+    items = db.execute(query.order_by(Store.id).offset((page - 1) * page_size).limit(page_size)).scalars().all()
     return {"items": [_store_master_view(store) for store in items], "total": total, "page": page, "page_size": page_size}
 
 
@@ -1397,8 +1420,15 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db),
 
 
 def _update_project_strict(project_id: int, body: ProjectPatch, db: Session, staff: Staff) -> dict:
-    _require_catalog_write(staff, set(body.model_fields_set))
     project, referrers = _locked_project_for_update(db, project_id, staff)
+    _require_catalog_write(
+        staff,
+        set(body.model_fields_set),
+        publication_status=body.publication_status,
+        current_publication_status=project.publication_status,
+        # 历史项目流仍允许店长在总部下发后标记待发布；商品只允许上下架。
+        store_allowed_publication_statuses={"candidate", "published", "inactive"},
+    )
     data = body.model_dump(exclude_unset=True, exclude={"prices"})
     if "code" in data and data["code"] != project.code and referrers:
         raise HTTPException(status_code=409, detail="已发布目录引用的项目编码不可直接修改")
@@ -1679,9 +1709,12 @@ def update_addon(addon_id: int, body: AddonPatchIn, db: Session = Depends(get_db
 def list_products_admin(
     store_id: int | None = Query(None),
     status: str | None = Query(None),
+    product_type: str | None = Query(None),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=100),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
-) -> list:
+):
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     q = select(Product)
@@ -1692,14 +1725,23 @@ def list_products_admin(
         q = q.where(Product.store_id == store_id)
     if status:
         q = q.where(Product.publication_status == status)
-    q = q.order_by(Product.id)
-    products = db.execute(q).scalars().all()
-    return [{
-        "id": p.id, "store_id": p.store_id, "code": p.code, "name": p.name,
-        "desc": p.desc, "spec": p.spec, "product_type": p.product_type,
-        "price_cents": p.price_cents, "image_url": p.image_url,
-        "publication_status": p.publication_status,
-    } for p in products]
+    if product_type:
+        q = q.where(Product.product_type == product_type)
+    if page is None and page_size is None:
+        return [_product_view(product) for product in db.execute(q.order_by(Product.id)).scalars().all()]
+
+    resolved_page = page or 1
+    resolved_page_size = page_size or 50
+    total = db.scalar(select(sa_func.count()).select_from(q.subquery())) or 0
+    products = db.execute(
+        q.order_by(Product.id).offset((resolved_page - 1) * resolved_page_size).limit(resolved_page_size),
+    ).scalars().all()
+    return {
+        "items": [_product_view(product) for product in products],
+        "total": total,
+        "page": resolved_page,
+        "page_size": resolved_page_size,
+    }
 
 
 class ProductIn(BaseModel):
@@ -1763,21 +1805,26 @@ def create_product(body: ProductIn, db: Session = Depends(get_db),
     _require_catalog_master_admin(s)
     p = Product(**body.model_dump())
     db.add(p)
-    _audit(db, s, "create_product", "product", body.code)
+    _audit(db, s, "create_product", "product", body.code, store_id=p.store_id)
     db.commit()
     return {"id": p.id, "code": p.code}
 
 
 def _update_product(prod_id: int, body: ProductPatch, db: Session, staff: Staff) -> dict:
     fields = set(body.model_fields_set)
-    _require_catalog_write(staff, fields)
     p = db.get(Product, prod_id) if _is_headquarters_admin(staff) else _require_owned(db.get(Product, prod_id), staff, "商品不存在")
     if not p:
         raise HTTPException(status_code=404, detail="商品不存在")
+    _require_catalog_write(
+        staff,
+        fields,
+        publication_status=body.publication_status,
+        current_publication_status=p.publication_status,
+    )
     for key, value in body.model_dump(exclude_unset=True).items():
         if key != "store_id":
             setattr(p, key, value)
-    _audit(db, staff, "update_product", "product", str(prod_id))
+    _audit(db, staff, "update_product", "product", str(prod_id), store_id=p.store_id)
     try:
         db.commit()
     except IntegrityError as exc:
@@ -1795,11 +1842,17 @@ def patch_product(prod_id: int, body: ProductPatch, db: Session = Depends(get_db
 
 
 @router.post("/products/{prod_id}")
-def update_product(prod_id: int, body: ProductPatch, db: Session = Depends(get_db),
+def update_product(prod_id: int, body: dict, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
-    """保留旧 POST 路径，但与 PATCH 共用严格契约。"""
+    """保留旧 POST 路径：接受历史完整对象，忽略非商品字段并保留旧响应。"""
     s = _current_staff(authorization, db)
-    return _update_product(prod_id, body, db, s)
+    known_fields = {key: value for key, value in body.items() if key in ProductPatch.model_fields}
+    try:
+        patch = ProductPatch.model_validate(known_fields)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
+    _update_product(prod_id, patch, db, s)
+    return {"ok": True}
 
 
 # ──────────────────────────────────────────────────────

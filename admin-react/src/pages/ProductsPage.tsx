@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Form, Space, Switch, Tag } from 'antd';
+import { App, Button, Form, Popconfirm, Space, Switch, Tag } from 'antd';
 import { EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import {
   ModalForm,
@@ -22,6 +22,7 @@ import {
   normalizeProductList,
   PRODUCT_TYPE_LABELS,
   PRODUCT_TYPE_OPTIONS,
+  canStoreToggleProductPublication,
   productToForm,
   toProductUpdatePayload,
   toProductPayload,
@@ -33,7 +34,7 @@ const PRODUCT_STATUS_LABELS: Record<string, string> = {
   candidate: '待发布',
   published: '已发布',
   inactive: '已下架',
-  archived: '已归档',
+  archived: '总部强制下线',
 };
 
 export default function ProductsPage() {
@@ -47,18 +48,23 @@ export default function ProductsPage() {
   const [stores, setStores] = useState<Array<{ id: number; name: string; store_code?: string }>>([]);
   const [form] = Form.useForm();
 
+  const loadStoreOptions = async (keyword = '') => {
+    try {
+      const result = await refineDataProvider.getList({
+        resource: resources.stores,
+        pagination: { currentPage: 1, pageSize: 50, mode: 'server' },
+        filters: keyword ? [{ field: 'keyword', operator: 'contains' as const, value: keyword }] : [],
+        sorters: [],
+      });
+      setStores(result.data as Array<{ id: number; name: string; store_code?: string }>);
+    } catch {
+      message.error('门店列表加载失败，请稍后重试');
+    }
+  };
+
   useEffect(() => {
     if (!isHeadquartersAdmin) return;
-    let active = true;
-    refineDataProvider.getList({
-      resource: resources.stores,
-      pagination: { mode: 'off' },
-      filters: [],
-      sorters: [],
-    }).then((result) => {
-      if (active) setStores(result.data as Array<{ id: number; name: string; store_code?: string }>);
-    }).catch(() => message.error('门店列表加载失败，请稍后重试'));
-    return () => { active = false; };
+    void loadStoreOptions();
   }, [isHeadquartersAdmin, message]);
 
   if (!canManage) {
@@ -75,19 +81,21 @@ export default function ProductsPage() {
     setOpen(true);
   };
 
-  const togglePublication = async (product: Product, checked: boolean) => {
+  const updatePublication = async (product: Product, publicationStatus: 'published' | 'inactive' | 'archived') => {
     try {
       await refineDataProvider.update({
         resource: resources.products,
         id: product.id,
-        variables: { publication_status: checked ? 'published' : 'inactive' },
+        variables: { publication_status: publicationStatus },
       });
-      message.success(checked ? '商品已上架' : '商品已下架');
+      message.success(publicationStatus === 'published' ? '商品已上架' : publicationStatus === 'archived' ? '商品已强制下线' : '商品已下架');
       actionRef.current?.reload();
     } catch {
       // 统一错误处理器已提示具体原因，保留当前开关状态由表格刷新恢复。
     }
   };
+
+  const togglePublication = (product: Product, checked: boolean) => updatePublication(product, checked ? 'published' : 'inactive');
 
   const columns: ProColumns<Product>[] = [
     { title: '商品编码', dataIndex: 'code', width: 140, copyable: true },
@@ -106,10 +114,13 @@ export default function ProductsPage() {
     },
     ...(isHeadquartersAdmin ? [{ title: '门店', dataIndex: 'store_id', width: 110 }] : []),
     {
-      title: '操作', valueType: 'option', width: isHeadquartersAdmin ? 110 : 130, fixed: 'right',
+      title: '操作', valueType: 'option', width: isHeadquartersAdmin ? 190 : 160, fixed: 'right',
       render: (_, record) => isHeadquartersAdmin
-        ? <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openEditor(record)}>编辑</Button>
-        : <Space size={8}><span>{record.publication_status === 'published' ? '已上架' : '已下架'}</span><Switch size="small" checked={record.publication_status === 'published'} checkedChildren="上架" unCheckedChildren="下架" onChange={(checked) => togglePublication(record, checked)} /></Space>,
+        ? <Space size={4}>
+          <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openEditor(record)}>编辑</Button>
+          {record.publication_status !== 'archived' && <Popconfirm title="确定强制下线该商品吗？店长不能自行恢复。" onConfirm={() => updatePublication(record, 'archived')}><Button size="small" type="link" danger>强制下线</Button></Popconfirm>}
+        </Space>
+        : <Space size={8}><span>{record.publication_status === 'published' ? '已上架' : '未上架'}</span><Switch size="small" disabled={record.publication_status === 'archived' || !canStoreToggleProductPublication(record.publication_status)} checked={record.publication_status === 'published'} checkedChildren="上架" unCheckedChildren="下架" onChange={(checked) => togglePublication(record, checked)} /></Space>,
     },
   ];
 
@@ -140,11 +151,7 @@ export default function ProductsPage() {
             sorters: [],
           });
           const normalized = normalizeProductList({ data: result.data as Product[], total: result.total });
-          const filtered = normalized.data.filter((item) =>
-            (!params.product_type || item.product_type === params.product_type)
-            && (!params.publication_status || item.publication_status === params.publication_status),
-          );
-          return { success: true, data: filtered.map((item) => ({ ...item, store_id: item.store_id || storeId || 0 })), total: filtered.length };
+          return { success: true, data: normalized.data.map((item) => ({ ...item, store_id: item.store_id || storeId || 0 })), total: normalized.total };
         }}
         options={{ density: true, fullScreen: true, reload: true, setting: true }}
         scroll={{ x: 850 }}
@@ -173,7 +180,7 @@ export default function ProductsPage() {
       >
         <ProFormText name="code" label="编码" rules={[{ required: true, message: '请输入商品编码' }]} />
         <ProFormText name="name" label="名称" rules={[{ required: true, message: '请输入商品名称' }]} />
-        {!editing && <ProFormSelect name="store_id" label="目标门店" options={stores.map((store) => ({ value: store.id, label: `${store.name}${store.store_code ? `（${store.store_code}）` : ''}` }))} rules={[{ required: true, message: '请选择目标门店' }]} />}
+        {!editing && <ProFormSelect name="store_id" label="目标门店" options={stores.map((store) => ({ value: store.id, label: `${store.name}${store.store_code ? `（${store.store_code}）` : ''}` }))} fieldProps={{ showSearch: true, filterOption: false, onSearch: (keyword: string) => { void loadStoreOptions(keyword); } }} rules={[{ required: true, message: '请选择目标门店' }]} />}
         <ProFormSelect name="product_type" label="分类" options={PRODUCT_TYPE_OPTIONS} />
         <ProFormDigit name="price" label="价格（元）" min={0} fieldProps={{ precision: 2, addonBefore: '¥' }} rules={[{ required: true, message: '请输入商品价格' }]} />
         <ProFormText name="spec" label="规格" />

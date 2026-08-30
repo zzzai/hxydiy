@@ -32,6 +32,16 @@ test('create 发送幂等键且 store_id 不可被输入覆盖', async () => {
   dataProvider.request = original;
 });
 
+test('总部创建目录资源时保留显式选择的目标门店', async () => {
+  let captured: any;
+  const original = dataProvider.request;
+  dataProvider.request = async (config: any) => { captured = config; return { data: { id: 1, store_id: 12 } }; };
+  dataProvider.setStoreId(null);
+  await dataProvider.create('admin/v2/products', { name: '总部商品', store_id: 12 });
+  assert.equal(captured.data.store_id, 12);
+  dataProvider.request = original;
+});
+
 test('update 传递版本并缓存失效', async () => {
   let captured: any;
   const original = dataProvider.request;

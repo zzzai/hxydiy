@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   formatProductPrice,
+  canStoreToggleProductPublication,
   normalizeProductList,
   productToForm,
   toProductUpdatePayload,
@@ -60,4 +61,15 @@ test('商品管理页面提供编辑和店长上下架入口', async () => {
   assert.match(source, /publication_status/);
   assert.match(source, /Switch/);
   assert.match(source, /refineDataProvider\.update/);
+  assert.match(source, /强制下线/);
+  assert.match(source, /publication_status === 'archived'/);
+  assert.match(source, /canStoreToggleProductPublication/);
+});
+
+test('店长只能切换已下发目录的上架状态，不能恢复总部归档商品', () => {
+  assert.equal(canStoreToggleProductPublication('candidate'), true);
+  assert.equal(canStoreToggleProductPublication('published'), true);
+  assert.equal(canStoreToggleProductPublication('inactive'), true);
+  assert.equal(canStoreToggleProductPublication('draft'), false);
+  assert.equal(canStoreToggleProductPublication('archived'), false);
 });

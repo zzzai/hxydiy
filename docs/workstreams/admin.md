@@ -61,11 +61,12 @@
 
 - 商品管理页新增总部商品编辑入口，编辑表单自动回填价格（分转元）和七牛媒体；总部账号不再因未绑定门店而被错误拦截。
 - 总部新建商品时必须选择目标门店；更新负载不携带 `store_id`，避免通过编辑改变门店归属。
-- 绑定门店店长不显示新建和主数据编辑入口，只能在本店商品列表切换“上架/下架”；商品状态展示覆盖草稿、待发布、已发布、已下架和已归档。
-- 后端新增严格 `PATCH /api/v1/admin/v2/products/{id}` 契约，保留旧 POST 更新路径兼容；总部可改主数据，店长仅可改 `publication_status`。
+- 绑定门店店长不显示新建和主数据编辑入口，只能在本店商品列表切换“上架/下架”；商品状态展示覆盖草稿、待发布、已发布、已下架和总部强制下线。
+- 后端新增严格 `PATCH /api/v1/admin/v2/products/{id}` 契约，保留旧 POST 更新路径兼容；总部可改主数据，店长仅可改 `publication_status`，不能恢复总部强制下线商品。
+- 商品列表支持 `page`、`page_size`、`product_type` 筛选和服务端总数；不带分页参数时继续返回旧数组，门店选择器支持关键词搜索。
 
 涉及文件：`admin-react/src/pages/ProductsPage.tsx`、`admin-react/src/pages/products-page-model.ts`、`admin-react/tests/products-page-model.test.ts`、`hxy-server/app/api/admin_v2.py`、`hxy-server/tests/test_api_contracts.py`、`docs/TEAM-MEMORY.md`。
 
-验证：管理端 `npm test` 112 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 警告）；后端 API 契约与管理权限专项 48 passed（1 个既有 Starlette/httpx 弃用警告）。
+验证：管理端完整测试 114 passed；`npx tsc -b` 通过；生产构建成功（Vite 4001 modules，保留既有大 chunk 警告）；后端商品/权限专项 52 passed（1 个既有 Starlette/httpx 弃用警告）。后端完整套件另有 16 个既有基线/发布环境失败，未涉及本次商品改动。
 
-发布状态：本地完成，未发布生产；未执行数据库迁移、备份、Manifest 校验或线上切换。待 PR/CI 审核及总部、店长账号现场验收。
+发布状态：本地完成，未发布生产；未执行数据库迁移、备份、Manifest 校验或线上切换。待完整验证、PR/CI 审核及总部、店长账号现场验收。

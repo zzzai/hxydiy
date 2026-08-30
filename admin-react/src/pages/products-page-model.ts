@@ -21,6 +21,12 @@ export const PRODUCT_TYPE_LABELS = Object.fromEntries(
   PRODUCT_TYPE_OPTIONS.map((option) => [option.value, option.label]),
 ) as Record<string, string>;
 
+const STORE_TOGGLEABLE_PRODUCT_STATUSES = new Set(['candidate', 'published', 'inactive']);
+
+export function canStoreToggleProductPublication(status: string) {
+  return STORE_TOGGLEABLE_PRODUCT_STATUSES.has(status);
+}
+
 export function formatProductPrice(priceCents: number) {
   return `¥${(Number(priceCents || 0) / 100).toFixed(2)}`;
 }

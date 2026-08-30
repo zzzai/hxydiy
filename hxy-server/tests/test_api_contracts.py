@@ -491,6 +491,26 @@ class AdminV2ContractTests(unittest.TestCase):
             )
             self.assertEqual(allowed.status_code, 200, allowed.text)
 
+            invalid_status = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"publication_status": "archived"},
+            )
+            self.assertEqual(invalid_status.status_code, 403, invalid_status.text)
+
+            self.__class__.current_staff_id = self.headquarters_admin_id
+            forced_offline = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"publication_status": "archived"},
+            )
+            self.assertEqual(forced_offline.status_code, 200, forced_offline.text)
+
+            self.__class__.current_staff_id = self.staff_id
+            restore_forbidden = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"publication_status": "published"},
+            )
+            self.assertEqual(restore_forbidden.status_code, 403, restore_forbidden.text)
+
             blocked = self.client.patch(
                 "/api/v1/admin/v2/products/1",
                 json={"name": "店长不应修改商品"},
@@ -500,6 +520,76 @@ class AdminV2ContractTests(unittest.TestCase):
         finally:
             self.__class__.current_staff_id = self.headquarters_admin_id
             self.client.patch("/api/v1/admin/v2/products/1", json=original)
+            self.__class__.current_staff_id = self.staff_id
+
+    def test_legacy_product_post_accepts_full_object_and_keeps_legacy_response(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        with self.SessionLocal() as db:
+            product = db.get(Product, 1)
+            original_name = product.name
+            store_id = product.store_id
+        try:
+            response = self.client.post(
+                "/api/v1/admin/v2/products/1",
+                json={
+                    "id": 1,
+                    "store_id": store_id,
+                    "name": "旧客户端更新商品",
+                    "legacy_client_field": "ignored",
+                },
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json(), {"ok": True})
+            with self.SessionLocal() as db:
+                self.assertEqual(db.get(Product, 1).name, "旧客户端更新商品")
+        finally:
+            self.client.patch("/api/v1/admin/v2/products/1", json={"name": original_name})
+            self.__class__.current_staff_id = self.staff_id
+
+    def test_headquarters_product_update_audit_uses_target_store(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        response = self.client.patch(
+            "/api/v1/admin/v2/products/1",
+            json={"desc": "审计门店归属测试"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        with self.SessionLocal() as db:
+            product = db.get(Product, 1)
+            audit = db.scalar(
+                select(AuditLog)
+                .where(AuditLog.action == "update_product", AuditLog.entity_id == "1")
+                .order_by(AuditLog.id.desc())
+            )
+            self.assertIsNotNone(audit)
+            self.assertEqual(audit.store_id, product.store_id)
+        self.__class__.current_staff_id = self.staff_id
+
+    def test_product_list_supports_server_pagination_without_breaking_legacy_list(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        first_page = self.client.get("/api/v1/admin/v2/products", params={"page": 1, "page_size": 1})
+        second_page = self.client.get("/api/v1/admin/v2/products", params={"page": 2, "page_size": 1})
+        legacy = self.client.get("/api/v1/admin/v2/products")
+        self.assertEqual(first_page.status_code, 200, first_page.text)
+        self.assertEqual(second_page.status_code, 200, second_page.text)
+        self.assertEqual(first_page.json()["total"], 2)
+        self.assertEqual(len(first_page.json()["items"]), 1)
+        self.assertEqual(len(second_page.json()["items"]), 1)
+        self.assertNotEqual(first_page.json()["items"][0]["id"], second_page.json()["items"][0]["id"])
+        self.assertIsInstance(legacy.json(), list)
+        self.__class__.current_staff_id = self.staff_id
+
+    def test_legacy_staff_product_write_returns_structured_forbidden(self):
+        self.__class__.current_staff_id = self.read_only_staff_id
+        client = TestClient(app, raise_server_exceptions=False)
+        try:
+            response = client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"publication_status": "published"},
+            )
+            self.assertEqual(response.status_code, 403, response.text)
+            self.assertEqual(response.json()["detail"]["code"], "HEADQUARTERS_ADMIN_REQUIRED")
+        finally:
+            client.close()
             self.__class__.current_staff_id = self.staff_id
 
     def test_bound_admin_cannot_manage_store_master_data(self):
