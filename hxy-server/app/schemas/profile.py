@@ -23,7 +23,7 @@ class ProfileRecordCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     tags: list[str] = Field(default_factory=list, max_length=20)
-    service_note: str = Field(default="", max_length=1000)
+    service_note: str = Field(default="", max_length=500)
 
     @field_validator("tags")
     @classmethod

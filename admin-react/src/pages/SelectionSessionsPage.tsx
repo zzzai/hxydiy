@@ -8,6 +8,11 @@ const STATUS: Record<string, { label: string; color: string }> = {
   submitted: { label: '待确认', color: 'processing' }, confirmed: { label: '已确认', color: 'success' },
   cancelled: { label: '已取消', color: 'default' }, expired: { label: '已过期', color: 'default' },
 };
+const PROFILE_AGE_RANGES = ['18-25', '26-35', '36-45', '46岁以上', '不确定'];
+const PROFILE_GENDERS = ['男', '女', '不记录'];
+const PROFILE_BODY_TYPES = ['偏瘦', '标准', '偏壮', '不记录'];
+const PROFILE_OCCUPATIONS = ['久坐', '久站', '体力工作', '其他', '不记录'];
+const PROFILE_SIGNALS = ['肩颈紧张', '腰部不适', '腿部酸胀', '局部紧绷', '放松需求', '偏好轻柔力度', '偏好中等力度', '偏好强力力度'];
 const sourceLabel = (source: string) => source === 'tablet' ? '门店平板' : source === 'mini_program' ? '顾客手机' : source || '门店端';
 const itemSummary = (items: any[]) => (items || []).map((item) => `${item.name || `项目 ${item.project_id}`}${item.quantity > 1 ? ` ×${item.quantity}` : ''}`).join('、') || '未填写项目';
 const dateText = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-';
@@ -142,13 +147,13 @@ export default function SelectionSessionsPage() {
     <Drawer title={correctionId ? '更正顾客画像' : '快速记录顾客画像'} open={profileOpen} onClose={() => setProfileOpen(false)} placement="bottom" height="78vh" extra={<Button type="primary" onClick={() => void saveProfile()} loading={profileSaving}>{correctionId ? '保存更正' : '保存记录'}</Button>}>
       <Typography.Paragraph type="secondary">服务后快速勾选顾客特征；身体情况请使用非医疗描述。历史记录不会被覆盖。</Typography.Paragraph>
       <Form form={profileForm} layout="vertical">
-        <Form.Item name="age_range" label="年龄段"><Select allowClear options={['18-25岁', '26-35岁', '36-45岁', '46岁以上', '不确定'].map(value => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="gender" label="性别"><Select allowClear options={['男', '女', '不记录'].map(value => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="body_type" label="体型"><Select allowClear options={['偏瘦', '标准', '偏壮', '不记录'].map(value => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="occupation" label="职业场景"><Select allowClear options={['久坐', '久站', '体力工作', '其他', '不记录'].map(value => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="signals" label="服务特征"><Select mode="multiple" options={['肩颈紧张', '腰部不适', '腿部酸胀', '局部硬结', '偏好轻柔力度', '偏好中等力度', '偏好强力力度', '首次到店', '重点维护'].map(value => ({ value, label: value }))} /></Form.Item>
+        <Form.Item name="age_range" label="年龄段"><Select allowClear options={PROFILE_AGE_RANGES.map(value => ({ value, label: value }))} /></Form.Item>
+        <Form.Item name="gender" label="性别"><Select allowClear options={PROFILE_GENDERS.map(value => ({ value, label: value }))} /></Form.Item>
+        <Form.Item name="body_type" label="体型"><Select allowClear options={PROFILE_BODY_TYPES.map(value => ({ value, label: value }))} /></Form.Item>
+        <Form.Item name="occupation" label="职业场景"><Select allowClear options={PROFILE_OCCUPATIONS.map(value => ({ value, label: value }))} /></Form.Item>
+        <Form.Item name="signals" label="服务特征"><Select mode="multiple" options={PROFILE_SIGNALS.map(value => ({ value, label: value }))} /></Form.Item>
         {correctionId && <Form.Item name="correction_reason" label="更正原因" rules={[{ required: true, message: '请填写更正原因' }]}><Input maxLength={256} placeholder="例如：顾客补充说明、上次选择有误" /></Form.Item>}
-        <Form.Item name="note" label="补充备注"><Input.TextArea rows={3} maxLength={1000} showCount placeholder="记录服务后的客观反馈，不填写诊断或治疗结论" /></Form.Item>
+        <Form.Item name="note" label="补充备注"><Input.TextArea rows={3} maxLength={500} showCount placeholder="记录顾客自述、服务观察和服务注意事项，不填写诊断或治疗结论" /></Form.Item>
       </Form>
     </Drawer>
   </Space>;

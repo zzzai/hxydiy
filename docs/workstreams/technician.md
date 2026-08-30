@@ -79,3 +79,35 @@
 
 - 使用授权测试账号完成顾客提交后看板同步、确认服务、服务结束、快记保存/失败重试及审计闭环。
 - 自动化测试不替代真实手机、断网和并发场景验收。
+
+## 2026-08-30 顾客画像记录契约收口（本地完成，未发布）
+
+### 修改内容
+
+- 管理端画像快记与技师端统一年龄段编码（`18-25`）和安全服务特征标签，移除“局部硬结”“首次到店”“重点维护”等旧文案。
+- 管理端备注改为“顾客自述、服务观察和服务注意事项”提示，前后端长度上限统一为 500 字。
+- 保留技师画像写入的本人完成服务关联、门店隔离、字段白名单、医疗诊断词拦截、幂等和审计约束。
+
+### 涉及文件
+
+- `admin-react/src/pages/SelectionSessionsPage.tsx`
+- `admin-react/tests/technician-workspace.test.ts`
+- `hxy-server/app/schemas/profile.py`
+- `hxy-server/tests/test_profile_record_contract.py`
+- `docs/TEAM-MEMORY.md`
+
+### 测试结果
+
+- 管理端：`npm test` 110 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有 chunk 体积警告）。
+- 后端画像/技师专项：22 passed；扩展员工生命周期专项 19 passed、1 failed，失败为基线中 legacy `staff` 未绑定 Technician 仍期望登录的契约冲突，与本次改动无关。
+- Python 测试使用工作树显式 `PYTHONPATH` 和现有项目虚拟环境执行；存在既有 Starlette/httpx 弃用警告。
+
+### 发布状态
+
+- 未发布生产；未执行数据库迁移、备份、Manifest 切换或 API 重建。
+- 当前分支：`codex/technician/profile-record-admin-closure`，待 CI/PR 审核。
+
+### 待现场验收
+
+- 使用门店授权手机验证真实账号权限、门店隔离、弱网/断网失败重试和并发重复点击。
+- 完成“顾客提交 → 技师查看区位和选单 → 确认服务 → 服务结束 → 快记保存 → 审计核对”营业闭环；自动化测试不等同现场验收。

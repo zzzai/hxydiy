@@ -145,12 +145,18 @@ class TestProfileRecordContract:
             headers={**self.manager_headers, "Idempotency-Key": "legacy-long-note-001"},
             json={"tags": [], "service_note": "顾" * 1001},
         )
+        quick_note_limit = self.client.post(
+            f"/api/v1/admin/v2/customers/{self.own_user_id}/profile-records",
+            headers={**self.manager_headers, "Idempotency-Key": "legacy-quick-note-limit-001"},
+            json={"tags": [], "service_note": "顾" * 501},
+        )
 
         assert cross_store.status_code == 404
         assert diagnosis.status_code == 422
         assert curative_claim.status_code == 422
         assert long_tag.status_code == 422
         assert long_note.status_code == 422
+        assert quick_note_limit.status_code == 422
 
     def test_manager_can_create_record_and_action_is_audited(self):
         response = self.client.post(

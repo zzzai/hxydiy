@@ -61,3 +61,16 @@ test('画像写入请求附带幂等键', () => {
   const nextExport = source.indexOf('\nexport const ', start + 1);
   assert.match(source.slice(start, nextExport > start ? nextExport : undefined), /Idempotency-Key/);
 });
+
+test('管理端画像快记沿用技师安全字段契约', () => {
+  const source = readFileSync(new URL('../src/pages/SelectionSessionsPage.tsx', import.meta.url), 'utf8');
+  for (const signal of ['肩颈紧张', '腰部不适', '腿部酸胀', '局部紧绷', '放松需求']) {
+    assert.match(source, new RegExp(signal));
+  }
+  for (const legacySignal of ['局部硬结', '首次到店', '重点维护']) {
+    assert.doesNotMatch(source, new RegExp(legacySignal));
+  }
+  assert.match(source, /'18-25'/);
+  assert.doesNotMatch(source, /'18-25岁'/);
+  assert.match(source, /maxLength=\{500\}/);
+});

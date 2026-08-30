@@ -1838,3 +1838,37 @@
 - 本地完成：代码和测试在 `codex/admin/media-upload` 分支完成。
 - 已发布生产：否。未执行生产数据库备份、迁移、OSS 配置、Manifest 校验或线上切换。
 - 待现场验收：CI/PR 审核、OSS 适配与配置、备份恢复、线上健康检查、门店权限穿透和媒体上传预览验收。
+
+# 2026-08-30 顾客画像记录契约收口（本地完成，未发布）
+
+## 本地完成
+
+- 管理端画像快记与技师端统一安全标签和年龄段编码，移除旧的医疗化/经营性标签文案。
+- 服务参考备注前后端上限统一为 500 字，补充管理端字段契约测试和后端 501 字拒绝测试。
+- 未改变技师服务状态机、门店隔离、幂等或审计边界；未加入派单及智慧宝物理资源操作。
+
+## 涉及文件
+
+- `admin-react/src/pages/SelectionSessionsPage.tsx`
+- `admin-react/tests/technician-workspace.test.ts`
+- `hxy-server/app/schemas/profile.py`
+- `hxy-server/tests/test_profile_record_contract.py`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/technician.md`
+
+## 测试结果
+
+- 管理端全量：`110 passed`。
+- 管理端类型检查：`npx tsc -b` 通过。
+- 管理端生产构建：成功（Vite `4001 modules transformed`，保留既有 chunk 体积警告）。
+- 后端画像/技师专项：`22 passed`；扩展员工生命周期专项：`19 passed, 1 failed`。失败测试为基线角色迁移契约冲突：未绑定 Technician 的 legacy `staff` 账号仍断言可登录，当前实现按角色迁移规则返回 403；本轮未修改该逻辑。
+
+## 发布状态
+
+- 本地完成：分支 `codex/technician/profile-record-admin-closure`。
+- 已发布生产：否。未执行数据库备份、迁移、Manifest 校验、生产切换或线上健康检查。
+
+## 尚未完成事项
+
+- 待 CI/PR 审核后再评估是否进入发布窗口；发布前必须完成数据库备份、迁移演练、Manifest 校验、原子切换和健康检查。
+- 待门店现场用授权手机验收真实账号权限、门店隔离、弱网/断网重试、并发重复点击及画像审计闭环。
