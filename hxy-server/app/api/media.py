@@ -10,13 +10,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff, normalize_staff_role
-from app.api.admin_v2 import _audit, _is_headquarters_admin, _staff_store_id
+from app.api.admin_v2 import _audit, _staff_store_id
 from app.core.config import settings
 from app.db.session import get_db
 from app.models import MediaAsset, Staff, Store
 from app.services.media_storage import MediaStorageError, get_media_storage as _build_media_storage
 
 router = APIRouter(prefix="/admin/media", tags=["admin-media"])
+
+
+def _is_headquarters_admin(staff: Staff) -> bool:
+    """总部管理员是未绑定门店的 admin；兼容旧生产 admin_v2 helper 集合。"""
+    return getattr(staff, "role", None) == "admin" and getattr(staff, "store_id", None) is None
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
