@@ -1689,3 +1689,94 @@
 - 本地完成：以上代码和测试均在工作区完成。
 - 已发布生产：无。本轮未切换服务器 `current`，未重建生产 API 容器。
 - 待现场验收：店长/员工/技师真实账号的权限穿透、门店隔离、服务单闭环、断网恢复、并发幂等及智慧宝联调。
+
+# 2026-08-30 管理后台基线复验（本地完成，未发布）
+
+## 本地完成
+
+- 按管理端职责边界复验导航、权限前端呈现、门店隔离及 DIY 物理资源禁用契约；未修改顾客端、技师端或智慧宝物理资源逻辑。
+- 重新执行管理端测试、TypeScript 检查、生产构建及后端管理专项测试。
+- 核对服务器实际 `current` 为 `customer-profile-member-no-coupon-20260829-1`。
+
+## 测试结果
+
+- 管理端：`npm test`，107 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4000 modules）。
+- 后端管理/权限/目录/菜单/Alembic 组合回归：75 passed。
+- 后端全量：`525 passed, 4 failed, 7 skipped`；失败集中在旧 `staff` 临时角色登录和占用续留接口契约，当前正式角色迁移逻辑返回 `403 ROLE_MIGRATION_REQUIRED`。
+
+## 分支与发布状态
+
+- 未创建新分支、未提交、未推送、未创建 Pull Request：仓库未配置 `origin`，不存在可用的 `origin/main`；当前工作区含其他窗口未提交改动，无法安全切分。
+- 未发布生产；服务器 `current`、数据库和 API 容器未修改。
+
+## 待处理
+
+- 后续任务应先配置可访问的 Git remote `origin`，再从 `origin/main` 创建带实际任务名的分支；本轮技师修复分支为 `codex/technician/idempotency-scope`。
+- 需单独确认 4 个旧迁移契约是更新测试还是保留兼容，不应在管理端任务中擅自恢复旧 `staff` 权限。
+- 待完成分支 CI、数据库备份、Manifest 校验、线上健康检查和门店现场权限验收。
+
+# 2026-08-30 技师服务动作幂等键作用域修复（本地完成，未发布）
+
+## 本地完成
+
+- 修复 `hxy-server/app/api/technician.py` 服务确认/结束接口的幂等重放边界。
+- 幂等键严格绑定服务位、动作和登录技师；跨目标、跨动作或跨技师复用统一返回 `409 IDEMPOTENCY_KEY_REUSED`，避免把首笔操作结果错误返回给另一请求。
+- 新增跨目标/跨动作回归测试，并在共享记忆中记录该 API 安全契约。
+
+## 涉及文件
+
+- `hxy-server/app/api/technician.py`
+- `hxy-server/tests/test_technician_portal_api.py`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/technician.md`
+
+## 测试结果
+
+- 幂等键回归：`1 passed`。
+- 技师后端专项：`21 passed, 1 warning`（既有 Starlette/httpx 弃用警告）。
+- 管理端：`npm test` 为 `107 passed`；`npm run build` 成功，保留既有大 chunk 警告。
+
+## 发布状态
+
+- 未发布生产；服务器实际 current 仍为 `/root/hxy-diy-20260811/releases/customer-profile-member-no-coupon-20260829-1`。
+- 未执行数据库备份、迁移、Manifest 发布切换或线上完整链路验收。
+- 源码仓库此前未配置 Git remote `origin`；本轮 fetch 后发现远端已恢复，但同名分支已被文档仓库占用。源码提交已推送到独立分支 `codex/technician/idempotency-scope-api`，现有其他窗口未提交改动均已保留。
+
+## 待门店现场验收
+
+- 待授权手机完成“顾客提交 → 技师查看区位和选单 → 确认服务 → 服务结束 → 顾客画像快记保存/重试 → 审计核对”闭环。
+- 待配置源码远端后执行 CI、数据库备份、Manifest 校验、生产发布和回滚演练。
+# 2026-08-30 三端 monorepo 基线同步（本地完成，未发布）
+
+## 本地完成
+
+- 在 `origin/main` 基础上建立 `codex/admin/monorepo-bootstrap` 任务分支，将管理端 `admin-react`、顾客端 `diy-web`、后端 `hxy-server` 与共享文档统一纳入同一 GitHub monorepo。
+- 根目录可直接作为 Obsidian Vault；`docs/TEAM-MEMORY.md`、`docs/workstreams/*.md` 和 `docs/WORK-STATUS.md` 作为三端窗口共享记忆入口。
+- 清理不应入库的构建缓存和本地敏感配置；预览管理员密码改为环境变量或随机生成，不再使用固定默认密码。
+- Alembic 链测试按已跟踪迁移的实际唯一 head `20260829_tech_profile_note` 对齐。
+
+## 涉及文件
+
+- `README.md`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/admin.md`
+- `hxy-server/tests/test_task2_alembic_chain.py`
+- 三端源码与测试基线（首次 monorepo 同步）
+
+## 测试结果
+
+- 管理端：`npm test`，107 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4000 modules，保留既有共享 chunk 警告）。
+- 后端管理/权限/目录/菜单/Alembic 专项：75 passed，1 个既有 Starlette/httpx 弃用警告。
+- 敏感文件扫描未发现 `.env`、私钥、AccessKey、真实数据库文件或固定预览密码。
+
+## 分支与发布状态
+
+- 分支：`codex/admin/monorepo-bootstrap`，基于 `origin/main`；已推送到 `origin`，Pull Request 待通过 GitHub 创建入口提交。
+- 本地完成：代码、文档和测试已在 monorepo 工作树完成。
+- 已发布生产：否。未连接服务器、未修改数据库、未切换生产 `current`。
+- 生产实际 `current` 仍为 `/root/hxy-diy-20260811/releases/customer-profile-member-no-coupon-20260829-1`。
+
+## 待现场验收与后续
+
+- 待推送分支并通过 CI；完成数据库备份与恢复演练、Manifest 校验、线上健康检查后，才能安排发布。
+- 待门店授权账号现场验收管理端权限、门店隔离及三端服务闭环；自动化测试不等同营业现场验收。

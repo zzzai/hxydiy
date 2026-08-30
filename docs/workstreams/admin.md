@@ -9,6 +9,13 @@
 - 管理端导航、表格、表单、Refine 渐进式数据访问和门店隔离。
 - 技师移动端保持独立路由；DIY 管理端不开放智慧宝派单、开房、离位、清洁或物理资源释放。
 
+## 三端协作入口
+
+- 统一代码仓库：GitHub `zzzai/hxydiy`。
+- 管理端代码：`admin-react/`；顾客端和后端仅作为同仓库联调基线，不在本工作流中修改其业务。
+- 共享记忆：`docs/TEAM-MEMORY.md`；任务交接：本目录；发布事实：`docs/WORK-STATUS.md`。
+- Obsidian 打开仓库根目录即可阅读上述 Markdown；代码变更必须走 `codex/admin/<task>` 分支和 Pull Request。
+
 ## 本轮完成
 
 - 管理权限 helper 对旧/非法角色统一返回结构化 403，避免 `ValueError` 变成 500。
@@ -19,10 +26,11 @@
 
 ## 验证
 
-- 管理端：`npm test`，107 passed；`npm run build` 成功。
+- 管理端：`npm test`，107 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4000 modules）。
 - 后端管理/权限/目录/菜单/Alembic 组合回归：75 passed。
 - 后端 API 契约：37 passed。
-- 当前后端全量仍有历史角色、旧占用续留接口等迁移契约待清理，不能据此宣称生产可用。
+- 最新后端全量：`525 passed, 4 failed, 7 skipped`；4 个失败均为旧 `staff` 临时角色/占用续留迁移契约，当前实现按正式角色规则返回 `403 ROLE_MIGRATION_REQUIRED`，未作为生产通过依据。
+- 构建仍有既有共享 chunk 体积警告（约 1.23 MB、710 KB），不影响构建成功。
 
 ## 发布与验收
 
