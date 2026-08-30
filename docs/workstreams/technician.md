@@ -73,7 +73,7 @@
 
 - 新增幂等键跨目标/跨动作回归测试：`1 passed`。
 - 技师后端专项：`21 passed`；管理端测试：`107 passed`；管理端生产构建成功。
-- 未发布生产，服务器 current 未改变；待配置源码仓库 `origin` 后推送分支并创建 PR。
+- 未发布生产，服务器 current 未改变；源码提交已推送到 `codex/technician/idempotency-scope-api`，待 CI 和 PR 审核。
 
 ### 待门店现场验收
 

@@ -1740,7 +1740,7 @@
 
 - 未发布生产；服务器实际 current 仍为 `/root/hxy-diy-20260811/releases/customer-profile-member-no-coupon-20260829-1`。
 - 未执行数据库备份、迁移、Manifest 发布切换或线上完整链路验收。
-- 源码仓库 `hxy-server` 未配置 Git remote `origin`，无法按要求从 `origin/main` 推送本任务分支或创建 PR；现有其他窗口未提交改动均已保留。
+- 源码仓库此前未配置 Git remote `origin`；本轮 fetch 后发现远端已恢复，但同名分支已被文档仓库占用。源码提交已推送到独立分支 `codex/technician/idempotency-scope-api`，现有其他窗口未提交改动均已保留。
 
 ## 待门店现场验收
 
