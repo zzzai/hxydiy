@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     qiniu_secret_key: str = ""
     qiniu_bucket: str = "diyhxy"
     qiniu_cdn_domain: str = "https://img.hexiaoyue.com"
+    qiniu_signed_url_ttl_seconds: int = 600
     # 七牛区域不做猜测；为空时由 SDK 按上传凭证自动探测。
     qiniu_zone: str = ""
 

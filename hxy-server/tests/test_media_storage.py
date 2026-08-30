@@ -20,6 +20,9 @@ class _FakeAuth:
         self.upload_token_calls.append((bucket, key, expires))
         return "upload-token"
 
+    def private_download_url(self, url, expires=3600):
+        return f"{url}?e={expires}&token=signed"
+
 
 class _FakeBucketManager:
     instances = []
@@ -65,6 +68,7 @@ class MediaStorageTests(unittest.TestCase):
             "QINIU_SECRET_KEY": "sk-test",
             "QINIU_BUCKET": "diyhxy",
             "QINIU_CDN_DOMAIN": "https://img.hexiaoyue.com",
+            "QINIU_SIGNED_URL_TTL_SECONDS": "900",
             "QINIU_ZONE": "z0",
         }
         with patch.dict(os.environ, env, clear=False):
@@ -74,6 +78,7 @@ class MediaStorageTests(unittest.TestCase):
         self.assertEqual(loaded.qiniu_secret_key, "sk-test")
         self.assertEqual(loaded.qiniu_bucket, "diyhxy")
         self.assertEqual(loaded.qiniu_cdn_domain, "https://img.hexiaoyue.com")
+        self.assertEqual(loaded.qiniu_signed_url_ttl_seconds, 900)
         self.assertEqual(loaded.qiniu_zone, "z0")
 
     def test_qiniu_put_data_uses_credentials_and_returns_cdn_url(self):
@@ -92,7 +97,21 @@ class MediaStorageTests(unittest.TestCase):
         self.assertEqual(_FakeQiniu.put_data_calls[0][1], "stores/1/media/a.png")
         self.assertEqual(_FakeQiniu.put_data_calls[0][2], b"png")
         self.assertEqual(_FakeQiniu.put_data_calls[0][3]["mime_type"], "image/png")
-        self.assertEqual(storage.url("stores/1/media/a.png"), "https://img.hexiaoyue.com/stores/1/media/a.png")
+        self.assertEqual(
+            storage.url("stores/1/media/a.png"),
+            "https://img.hexiaoyue.com/stores/1/media/a.png?e=600&token=signed",
+        )
+
+    def test_qiniu_signed_url_ttl_must_be_positive(self):
+        with self.assertRaises(MediaStorageError):
+            QiniuMediaStorage(
+                access_key="ak-test",
+                secret_key="sk-test",
+                bucket="diyhxy",
+                cdn_domain="https://img.hexiaoyue.com",
+                signed_url_ttl_seconds=0,
+                qiniu_module=_FakeQiniu,
+            )
 
     def test_qiniu_delete_calls_bucket_manager(self):
         storage = QiniuMediaStorage(

@@ -61,6 +61,7 @@ class QiniuMediaStorage:
         bucket: str,
         cdn_domain: str,
         zone: str = "",
+        signed_url_ttl_seconds: int = 600,
         qiniu_module=None,
     ):
         if not access_key or not secret_key:
@@ -78,6 +79,9 @@ class QiniuMediaStorage:
         if not self.cdn_domain.startswith(("http://", "https://")):
             self.cdn_domain = f"https://{self.cdn_domain}"
         self.auth = self.qiniu.Auth(access_key, secret_key)
+        if signed_url_ttl_seconds <= 0:
+            raise MediaStorageError("七牛云签名 URL 有效期必须大于 0 秒")
+        self.signed_url_ttl_seconds = signed_url_ttl_seconds
         # 新版 SDK 会按上传凭证自动查询区域；旧版 SDK 则可通过 Config/Zone 显式指定。
         self.zone = None
         if zone:
@@ -116,7 +120,15 @@ class QiniuMediaStorage:
             raise MediaStorageError(f"七牛云删除失败，HTTP {getattr(info, 'status_code', 'unknown')}")
 
     def url(self, object_key: str) -> str:
-        return f"{self.cdn_domain}/{quote(object_key, safe='/')}"
+        public_url = f"{self.cdn_domain}/{quote(object_key, safe='/')}"
+        # 生产空间通常禁止匿名访问，优先返回短期签名 URL；fake/旧 SDK 无此能力时保留裸 URL 兼容性。
+        private_download_url = getattr(self.auth, "private_download_url", None)
+        if private_download_url is None:
+            return public_url
+        try:
+            return private_download_url(public_url, expires=self.signed_url_ttl_seconds)
+        except Exception as exc:
+            raise MediaStorageError(f"七牛云生成签名 URL 失败: {exc}") from exc
 
 
 def get_media_storage(runtime_settings) -> MediaStorage:
@@ -130,5 +142,6 @@ def get_media_storage(runtime_settings) -> MediaStorage:
             bucket=runtime_settings.qiniu_bucket,
             cdn_domain=runtime_settings.qiniu_cdn_domain,
             zone=runtime_settings.qiniu_zone,
+            signed_url_ttl_seconds=runtime_settings.qiniu_signed_url_ttl_seconds,
         )
     raise MediaStorageError(f"不支持的媒体存储后端: {runtime_settings.media_storage_backend}")
