@@ -12,6 +12,18 @@
 - `docs/WORK-STATUS.md` 记录发布、回滚和现场验收历史。
 - `docs/AI-WINDOW-PROMPTS.md` 是三个窗口复制使用的公共启动提示词和端职责附录。
 
+## 代码目录边界
+
+以下目录在当前三窗口协作中承担不同职责，不能混用：
+
+| 目录 | 定位 | 使用规则 |
+|---|---|---|
+| `C:\Users\gaoji\WorkBuddy\hxy-diy-monorepo-bootstrap` | 三端统一源码候选基线，包含 `admin-react`、`diy-web`、`hxy-server` | 当前为干净的 `codex/admin/monorepo-bootstrap` 分支；必须经 PR 审核并合并到 `main` 后，才作为所有新源码任务的唯一基线。 |
+| `C:\Users\gaoji\WorkBuddy\2026-07-31-12-31-02` | 历史生产工作区和迁移核对来源 | 顶层不是 Git 仓库，且存在其他窗口未提交改动；只能用于核对遗漏和生产差异，不作为新任务的共同开发基线。 |
+| `C:\Users\gaoji\Documents\ChatGPT\hxy-diy` | Obsidian Vault 和共享协作文档工作区 | 用于 Markdown 记忆、决策、交接和发布记录，不存放或替代完整三端源码。 |
+
+当前 `origin/main` 仍只有文档，尚未包含三端源码。源码基线 PR 合并前，不得从 `origin/main` 创建三端代码任务分支，也不得将代码复制进本 Obsidian 文档工作区。生产版本始终以服务器部署目录的实际 `current`、生产 API 和数据库为准，而非任何本地目录名称或分支名称。
+
 ## 三窗口同步
 
 每个窗口使用 `docs/AI-WINDOW-PROMPTS.md` 中的公共提示词，再追加自己负责端的提示词。窗口之间不共享聊天上下文，必须通过 Git 文档和代码仓库交接。

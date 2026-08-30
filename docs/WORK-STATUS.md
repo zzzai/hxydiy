@@ -1714,3 +1714,28 @@
 
 - 未发布生产；生产服务器、数据库和 `current` 均未修改。
 - 待推送 `codex/docs/three-window-protocol` 并创建 Pull Request 后，由三个端窗口审核采用。
+
+## 2026-08-30 三端源码基线边界更正（本地完成，未发布）
+
+### 本地完成
+
+- 实际核对本地目录后，明确 `hxy-diy-monorepo-bootstrap` 是包含三端源码的统一候选基线；当前分支为 `codex/admin/monorepo-bootstrap`。
+- 明确 `2026-07-31-12-31-02` 顶层不是 Git 仓库，且含未提交历史改动，仅可作为迁移/生产差异核对来源。
+- 明确 Obsidian 工作区是共享文档层；当前 `origin/main` 仅含文档，源码基线合并前不得从其中创建三端代码任务。
+
+### 涉及文件
+
+- `README.md`
+- `docs/AI-WINDOW-PROMPTS.md`
+- `docs/TEAM-MEMORY.md`
+- `docs/WORK-STATUS.md`
+
+### 验证结果
+
+- 已核对三个目录的仓库根、远端、分支和工作区状态，并确认 `origin/main` 当前未包含三端源码目录。
+- 本轮仅更正协作文档，未修改业务代码、数据库、服务器或生产 release。
+
+### 发布状态
+
+- 未发布生产。
+- 待源码基线 PR 合并后，三个端窗口才可按本协议从 `origin/main` 开始独立任务。

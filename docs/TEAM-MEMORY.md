@@ -30,6 +30,7 @@
 ## 协作规则
 
 - 三个窗口都先读取本文件、`PROJECT-CONTEXT-20260826.md`、`WORK-STATUS.md`、`AI-WINDOW-PROMPTS.md` 和对应的 `docs/workstreams/<端>.md`；端工作流尚未建立时，先在本端分支创建，不得跳过交接记录。
+- 统一源码候选基线位于 `C:\Users\gaoji\WorkBuddy\hxy-diy-monorepo-bootstrap` 的 `codex/admin/monorepo-bootstrap` 分支；在其经 PR 审核合并到 `main` 前，`origin/main` 不可用于启动三端代码任务。历史 `2026-07-31-12-31-02` 工作区仅用于迁移和生产差异核对。
 - 每个窗口只修改自己负责的源码目录和本端工作流；影响 API、状态机、权限、服务位、价格或画像字段的共享事实，在代码修改前更新本文件，并在 Pull Request 中通知受影响端。
 - 共享文档和源码都使用带实际任务名的 `codex/<端>/<任务>` 分支与 Pull Request，不直接推送 `main`；发布事实统一追加到 `docs/WORK-STATUS.md`。
 - 技师端窗口同步更新 `docs/workstreams/technician.md`；顾客端和管理端分别维护各自同名工作流文档。

@@ -17,15 +17,16 @@
 开始工作前必须执行：
 1. 在当前源码仓库执行 git fetch origin。
 2. 检查 git status、当前分支、最近提交、origin/main、相关 API 合同和最近生产 release/current。
-3. 从 origin/main 创建 codex/<端>/<实际任务名> 分支；已有任务分支先 rebase origin/main。
-4. 在共享文档仓库读取：
+3. 确认 `origin/main` 已包含 `admin-react`、`diy-web`、`hxy-server` 三端统一源码基线；若源码基线 PR 尚未合并，先报告阻塞，不得从仅含文档的 `origin/main` 开始三端代码任务。
+4. 从已包含源码的 origin/main 创建 codex/<端>/<实际任务名> 分支；已有任务分支先 rebase origin/main。
+5. 在共享文档仓库读取：
    - docs/PROJECT-CONTEXT-20260826.md
    - docs/TEAM-MEMORY.md
    - docs/WORK-STATUS.md
    - docs/AI-WINDOW-PROMPTS.md
    - docs/workstreams/<本端>.md（不存在时先在本端分支创建）
    - 当前项目 AGENTS.md（如果存在）
-5. 确认实际源码目录是 Git 仓库并配置了正确的 origin；如果不是，先报告阻塞，不要把未上传目录当成已共享代码。
+6. 确认实际源码目录是 Git 仓库并配置了正确的 origin；如果不是，先报告阻塞，不要把未上传目录当成已共享代码。
 
 工作规则：
 - 生产 API、数据库实际状态、服务器 current、最新测试结果优先于旧聊天、旧截图和历史 PRD。
@@ -33,6 +34,7 @@
 - 所有写操作必须有服务端身份、角色、门店范围、状态和幂等校验，并写入审计；前端校验不能代替服务端校验。
 - 不读取或提交密码、验证码、私钥、AccessKey、真实顾客敏感信息。
 - 不使用浏览器 localStorage 作为跨端订单、服务状态或审计的数据源；以 API/PostgreSQL 为准。
+- 历史工作区仅用于迁移核对；不在其中启动新任务，也不把它的未提交改动作为团队共享基线。
 - 发现跨端 API、状态机、权限、价格、服务位或画像字段变化时，先更新 docs/TEAM-MEMORY.md，并在完成后通知相关窗口。
 - 不把自动化测试、无痕浏览器或公网探针冒充门店现场营业验收。
 - 未完成测试、构建、数据库备份、迁移/回滚验证、Manifest 校验和线上健康检查前，不得发布生产。
