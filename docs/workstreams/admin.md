@@ -9,6 +9,13 @@
 - 管理端导航、表格、表单、Refine 渐进式数据访问和门店隔离。
 - 技师移动端保持独立路由；DIY 管理端不开放智慧宝派单、开房、离位、清洁或物理资源释放。
 
+## 三端协作入口
+
+- 统一代码仓库：GitHub `zzzai/hxydiy`。
+- 管理端代码：`admin-react/`；顾客端和后端仅作为同仓库联调基线，不在本工作流中修改其业务。
+- 共享记忆：`docs/TEAM-MEMORY.md`；任务交接：本目录；发布事实：`docs/WORK-STATUS.md`。
+- Obsidian 打开仓库根目录即可阅读上述 Markdown；代码变更必须走 `codex/admin/<task>` 分支和 Pull Request。
+
 ## 本轮完成
 
 - 管理权限 helper 对旧/非法角色统一返回结构化 403，避免 `ValueError` 变成 500。
@@ -19,12 +26,47 @@
 
 ## 验证
 
-- 管理端：`npm test`，107 passed；`npm run build` 成功。
+- 管理端：`npm test`，107 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4000 modules）。
 - 后端管理/权限/目录/菜单/Alembic 组合回归：75 passed。
 - 后端 API 契约：37 passed。
-- 当前后端全量仍有历史角色、旧占用续留接口等迁移契约待清理，不能据此宣称生产可用。
+- 最新后端全量：`525 passed, 4 failed, 7 skipped`；4 个失败均为旧 `staff` 临时角色/占用续留迁移契约，当前实现按正式角色规则返回 `403 ROLE_MIGRATION_REQUIRED`，未作为生产通过依据。
+- 构建仍有既有共享 chunk 体积警告（约 1.23 MB、710 KB），不影响构建成功。
 
 ## 发布与验收
 
 - 本轮未发布生产，服务器 `current` 与生产 release 未改变。
 - 待完成数据库备份与恢复演练、Manifest 校验、线上健康检查、跨店权限穿透、断网/并发幂等和智慧宝联调后，再安排生产发布与现场验收。
+
+## 2026-08-30 媒体上传能力（本地完成，未发布）
+
+- 新增门店隔离媒体元数据与上传/列表/受控预览/软删除 API；限制图片类型为 JPG、PNG、WebP、GIF，单文件最大 5MB。
+- 店长只能操作绑定门店；总部管理员上传时必须显式指定门店；跨店访问和删除返回 404；上传与删除写入审计日志。
+- 项目主图、项目详情图片模块、商品图片和加项图片改用 `MediaUploadField`，不再要求人工填写图片地址；预览通过带认证的 API 请求加载。
+
+涉及文件：`hxy-server/app/api/media.py`、`hxy-server/app/models/media.py`、`hxy-server/alembic/versions/20260830_media_assets.py`、`admin-react/src/components/MediaUploadField.tsx` 及对应页面/API/测试。
+
+验证：管理端 `npm test` 109 passed；`npx tsc -b` 通过；`npm run build` 成功；后端媒体、权限和目录专项 34 passed（1 个既有 Starlette/httpx 弃用警告）。
+
+发布状态：未发布生产，未执行数据库迁移、OSS 配置和线上切换；待 CI、备份恢复、Manifest、健康检查及门店现场验收。
+
+## 2026-08-30 七牛私有 CDN 连通性验证与签名 URL 修复（本地完成，未发布）
+
+- 使用服务器 `/root/qiniu` 中的环境变量进行一次性真实探针，未输出或保存 AK/SK，测试对象已清理。
+- 结果：上传 HTTP 200；绑定域名匿名读取 HTTP 403（空间为私有访问）；使用七牛签名下载读取 HTTP 200；删除 HTTP 200。
+- 适配器现通过 `QINIU_SIGNED_URL_TTL_SECONDS`（默认 600 秒）生成短期签名 URL，避免管理端拿到不可访问的裸地址。
+- 管理端 `npm test` 109 passed；TypeScript 检查和生产构建通过；后端媒体专项 11 passed。
+- 尚未发布生产，服务器 `current`、数据库和 API 容器未修改；待单独发布确认后执行备份、Manifest、重建和线上验收。
+
+## 2026-08-30 商品管理编辑与门店上下架（本地完成，未发布）
+
+- 商品管理页新增总部商品编辑入口，编辑表单自动回填价格（分转元）和七牛媒体；总部账号不再因未绑定门店而被错误拦截。
+- 总部新建商品时必须选择目标门店；更新负载不携带 `store_id`，避免通过编辑改变门店归属。
+- 绑定门店店长不显示新建和主数据编辑入口，只能在本店商品列表切换“上架/下架”；商品状态展示覆盖草稿、待发布、已发布、已下架和总部强制下线。
+- 后端新增严格 `PATCH /api/v1/admin/v2/products/{id}` 契约，保留旧 POST 更新路径兼容；总部可改主数据，店长仅可改 `publication_status`，不能恢复总部强制下线商品。
+- 商品列表支持 `page`、`page_size`、`product_type` 筛选和服务端总数；不带分页参数时继续返回旧数组，门店选择器支持关键词搜索。
+
+涉及文件：`admin-react/src/pages/ProductsPage.tsx`、`admin-react/src/pages/products-page-model.ts`、`admin-react/tests/products-page-model.test.ts`、`hxy-server/app/api/admin_v2.py`、`hxy-server/tests/test_api_contracts.py`、`docs/TEAM-MEMORY.md`。
+
+验证：管理端完整测试 114 passed；`npx tsc -b` 通过；生产构建成功（Vite 4001 modules，保留既有大 chunk 警告）；后端商品/权限专项 52 passed（1 个既有 Starlette/httpx 弃用警告）。后端完整套件另有 16 个既有基线/发布环境失败，未涉及本次商品改动。
+
+发布状态：本地完成，未发布生产；未执行数据库迁移、备份、Manifest 校验或线上切换。待完整验证、PR/CI 审核及总部、店长账号现场验收。

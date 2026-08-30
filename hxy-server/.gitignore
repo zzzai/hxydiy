@@ -1,0 +1,26 @@
+# 依赖与虚拟环境
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# 环境变量（含真实凭证，严禁入库）
+.env
+.env.local
+.env.staging
+.env.production
+
+# 本地数据库与临时文件
+*.db
+*.sqlite3
+dev.db
+data/
+
+# 编辑器
+.idea/
+.vscode/
+.DS_Store
+
+# 隔离开发工作树
+.worktrees/
