@@ -1,6 +1,6 @@
 # 荷小悦 DIY 当前项目上下文
 
-更新时间：2026-08-26
+更新时间：2026-08-30
 
 ## 使用规则
 
@@ -12,7 +12,8 @@
 - 当前任务审计/快照：`C:\Users\gaoji\Documents\ChatGPT\hxy-diy`
 - 生产服务器：`root@115.190.245.14`
 - 生产部署根目录：`/root/hxy-diy-20260811`
-- 当前生产 release：`position-board-20260826-1`
+- 当前生产 release：`technician-profile-contract-20260830-1`
+- 当前 release 的 `MANIFEST.sha256` 文件 SHA-256：`e3e438dc53a6d930ccebf9ecd6bd5bec0a32d009b2b67836da0aa3103f443be1`
 - 顾客端：`https://diy.hexiaoyue.com/`
 - 管理端/员工端：`https://diy.hexiaoyue.com/admin/`
 
