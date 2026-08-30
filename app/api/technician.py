@@ -10,9 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff, create_staff_token, hash_password, normalize_staff_role
 from app.db.session import get_db
-from app.models import AuditLog, PositionOccupancy, Staff
+from app.models import AuditLog, PositionOccupancy, SelectionSession, Staff
 from app.models.operations import Room, Technician
-from app.models.service import ServiceAssignment, ServiceOrder, StateTransition, Visit
+from app.models.catalog import Addon, Project
+from app.models.service import StateTransition
 from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
 
 router = APIRouter(prefix="/technician", tags=["technician"])
@@ -61,21 +62,28 @@ def activate(body: ActivateIn, db: Session = Depends(get_db)) -> dict:
     invite = db.scalar(select(TechnicianInvite).where(TechnicianInvite.token_hash == token_hash(body.token)))
     now = datetime.now(timezone.utc)
     if not invite or invite.used_at is not None:
-        raise HTTPException(status_code=400, detail="激活凭证无效")
+        raise HTTPException(status_code=400, detail={"code": "TECHNICIAN_INVITE_INVALID", "message": "激活凭证无效或已过期"})
     expires_at = invite.expires_at if invite.expires_at.tzinfo else invite.expires_at.replace(tzinfo=timezone.utc)
     if now >= expires_at:
-        raise HTTPException(status_code=400, detail="激活凭证已过期")
+        raise HTTPException(status_code=400, detail={"code": "TECHNICIAN_INVITE_INVALID", "message": "激活凭证无效或已过期"})
     staff = db.get(Staff, invite.staff_id)
     technician = db.get(Technician, invite.technician_id)
-    if not staff or not technician or staff.store_id != invite.store_id or technician.store_id != invite.store_id:
-        raise HTTPException(status_code=400, detail="激活凭证关联数据异常")
+    if (
+        not staff
+        or not technician
+        or staff.store_id != invite.store_id
+        or technician.store_id != invite.store_id
+        or staff.technician_id != technician.id
+        or technician.status == "resigned"
+    ):
+        raise HTTPException(status_code=400, detail={"code": "TECHNICIAN_INVITE_INVALID", "message": "激活凭证无效或已过期"})
     staff.password_hash = hash_password(body.password)
     staff.status = "active"
     staff.role = "technician"
     invite.used_at = now
-    db.add(AuditLog(actor_type="staff", actor_id=str(staff.id), store_id=staff.store_id, action="activate_technician", entity_type="technician", entity_id=str(technician.id), detail={"staff_id": staff.id, "invite_id": invite.id}))
+    db.add(AuditLog(actor_type="staff", actor_id=str(staff.id), store_id=staff.store_id, action="activate_technician", entity_type="technician", entity_id=str(technician.id), detail={"staff_id": staff.id, "invite_id": invite.id, "purpose": invite.purpose}))
     db.commit()
-    return {"token": create_staff_token(staff.id, staff.role), "staff": {"id": staff.id, "name": staff.name, "role": staff.role, "store_id": staff.store_id, "technician_id": staff.technician_id}}
+    return {"token": create_staff_token(staff.id, staff.role, staff.credentials_version), "staff": {"id": staff.id, "name": staff.name, "role": staff.role, "store_id": staff.store_id, "technician_id": staff.technician_id}}
 
 
 @router.get("/me")
@@ -86,32 +94,109 @@ def me(authorization: str | None = Header(None), db: Session = Depends(get_db)) 
 
 @router.get("/tasks")
 def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
-    _, technician = current_technician(authorization, db)
-    assignments = db.scalars(select(ServiceAssignment).where(ServiceAssignment.store_id == technician.store_id, ServiceAssignment.technician_id == technician.id, ServiceAssignment.status.in_(("assigned", "ready", "in_service"))).order_by(ServiceAssignment.assigned_at, ServiceAssignment.id)).all()
+    staff, technician = current_technician(authorization, db)
+    completed_occupancy_ids = {
+        row.entity_id for row in db.scalars(select(AuditLog).where(
+            AuditLog.store_id == technician.store_id,
+            AuditLog.actor_type == "staff",
+            AuditLog.actor_id == str(staff.id),
+            AuditLog.action == "technician_finish_service",
+            AuditLog.entity_type == "position_occupancy",
+        )).all()
+    }
+    # 技师端按现场区位展示：沙发是独立区位，房间以空间容器为一个区位。
+    # 底层床位仅保留给占用、订单和审计，不向技师端暴露 A/B 床位。
+    standalone_rooms = list(db.scalars(select(Room).where(
+        Room.store_id == technician.store_id,
+        Room.is_service_position.is_(True),
+        Room.is_space_container.is_(False),
+        Room.parent_room_id.is_(None),
+        Room.operational_status == "active",
+    ).order_by(Room.sort_order, Room.id)))
+    room_containers = list(db.scalars(select(Room).where(
+        Room.store_id == technician.store_id,
+        Room.room_type == "room",
+        Room.is_space_container.is_(True),
+        Room.operational_status == "active",
+    ).order_by(Room.sort_order, Room.id)))
+    rooms = sorted([*standalone_rooms, *room_containers], key=lambda room: (room.sort_order, room.id))
+    display_room_ids = {room.id for room in rooms}
+    occupancy_by_room: dict[int, tuple[PositionOccupancy, SelectionSession]] = {}
+    if display_room_ids:
+        active_rows = db.execute(
+            select(PositionOccupancy, SelectionSession, Room)
+            .join(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
+            .join(Room, Room.id == PositionOccupancy.room_id)
+            .where(
+                PositionOccupancy.store_id == technician.store_id,
+                PositionOccupancy.status.in_(("waiting_service", "in_service", "post_service_present")),
+                SelectionSession.status.in_(("submitted", "confirmed")),
+            )
+            .order_by(PositionOccupancy.id)
+        ).all()
+        for occupancy, session, occupied_room in active_rows:
+            display_room_id = occupied_room.parent_room_id or occupied_room.id
+            if display_room_id in display_room_ids and display_room_id not in occupancy_by_room:
+                occupancy_by_room[display_room_id] = (occupancy, session)
+
     items = []
-    for assignment in assignments:
-        order = db.get(ServiceOrder, assignment.service_order_id)
-        visit = db.get(Visit, order.visit_id) if order else None
-        room = db.get(Room, assignment.room_id)
-        occupancy = db.scalar(select(PositionOccupancy).where(PositionOccupancy.store_id == technician.store_id, PositionOccupancy.selection_session_id == visit.selection_session_id)) if visit and visit.selection_session_id else None
-        if order and visit and room and occupancy and visit.store_id == technician.store_id:
-            items.append({"service_order_id": order.id, "assignment_id": assignment.id, "occupancy_id": occupancy.id, "user_id": visit.user_id, "selection_session_id": visit.selection_session_id, "assignment_status": assignment.status, "service_order_status": order.status, "occupancy_status": occupancy.status, "room_name": room.name, "items": order.items or []})
+    for room in rooms:
+        occupancy_session = occupancy_by_room.get(room.id)
+        occupancy, session = occupancy_session if occupancy_session else (None, None)
+        items.append({
+            "occupancy_id": occupancy.id if occupancy else None,
+            "user_id": session.customer_id if session else None,
+            "selection_session_id": session.id if session else None,
+            "occupancy_status": occupancy.status if occupancy else "available",
+            "completed_by_me": bool(occupancy and str(occupancy.id) in completed_occupancy_ids),
+            "selection_status": session.status if session else None,
+            "room_id": room.id,
+            "room_name": room.name,
+            "room_type": room.room_type,
+            "room_status": room.status,
+            "items": session.items or [] if session else [],
+        })
     return {"items": items}
 
 
 def _technician_occupancy(db: Session, occupancy_id: int, technician: Technician) -> PositionOccupancy:
     occupancy = db.get(PositionOccupancy, occupancy_id)
-    assignment = db.scalar(select(ServiceAssignment).join(ServiceOrder, ServiceOrder.id == ServiceAssignment.service_order_id).join(Visit, Visit.id == ServiceOrder.visit_id).where(ServiceAssignment.technician_id == technician.id, ServiceAssignment.store_id == technician.store_id, Visit.selection_session_id == occupancy.selection_session_id if occupancy else False))
-    if not occupancy or not assignment:
+    session = db.get(SelectionSession, occupancy.selection_session_id) if occupancy else None
+    if not occupancy or occupancy.store_id != technician.store_id or not session or session.store_id != technician.store_id:
         raise HTTPException(status_code=404, detail="服务任务不存在")
     return occupancy
 
 
-def _occupancy_action(occupancy: PositionOccupancy, action: str) -> None:
+def _selection_duration_minutes(db: Session, session: SelectionSession | None) -> int:
+    """Use the submitted service snapshot to establish the timeout deadline."""
+    if session is None:
+        return 60
+    total = 0
+    for item in session.items or []:
+        quantity = max(1, int(item.get("quantity") or 1))
+        project_id = item.get("project_id")
+        project = db.get(Project, project_id) if isinstance(project_id, int) else None
+        if project and project.duration_min:
+            total += int(project.duration_min) * quantity
+        for addon_id in item.get("addon_ids", []):
+            addon = db.get(Addon, addon_id)
+            if addon and addon.duration_min:
+                total += int(addon.duration_min) * quantity
+        if item.get("item_kind") == "standalone_addon":
+            addon = db.get(Addon, item.get("addon_id"))
+            if addon and addon.duration_min:
+                total += int(addon.duration_min) * quantity
+    return max(total, 60)
+
+
+def _occupancy_action(db: Session, occupancy: PositionOccupancy, action: str) -> None:
     if action == "confirm":
         if occupancy.status == "waiting_service":
+            now = datetime.now(timezone.utc)
+            session = db.get(SelectionSession, occupancy.selection_session_id)
             occupancy.status = "in_service"
-            occupancy.actual_start_at = datetime.now(timezone.utc)
+            occupancy.actual_start_at = now
+            occupancy.expected_end_at = now + timedelta(minutes=_selection_duration_minutes(db, session))
             occupancy.version += 1
             return
         if occupancy.status == "in_service":
@@ -129,15 +214,31 @@ def _occupancy_action(occupancy: PositionOccupancy, action: str) -> None:
 
 def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str | None, db: Session) -> dict:
     staff, technician = current_technician(authorization, db)
+    occupancy = _technician_occupancy(db, occupancy_id, technician)
     replay = db.scalar(select(StateTransition).where(StateTransition.store_id == technician.store_id, StateTransition.idempotency_key == body.idempotency_key))
     if replay:
+        # 幂等键只允许重放同一登录技师对同一服务位执行的同一动作。
+        # 门店级唯一键用于防止并发重复写入，但不能把不同目标的请求误当成重试。
+        if (
+            replay.entity_type != "position_occupancy"
+            or replay.entity_id != str(occupancy.id)
+            or replay.action != action
+            or replay.actor_type != "staff"
+            or replay.actor_id != str(staff.id)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "IDEMPOTENCY_KEY_REUSED",
+                    "message": "该幂等键已用于其他服务操作，请生成新的幂等键",
+                },
+            )
         return replay.result_snapshot
-    occupancy = _technician_occupancy(db, occupancy_id, technician)
     before = occupancy.status
-    _occupancy_action(occupancy, action)
+    _occupancy_action(db, occupancy, action)
     result = {"occupancy_id": occupancy.id, "status": occupancy.status, "version": occupancy.version}
     db.add(StateTransition(store_id=technician.store_id, entity_type="position_occupancy", entity_id=str(occupancy.id), action=action, from_status=before, to_status=occupancy.status, actor_type="staff", actor_id=str(staff.id), actor_role=staff.role, idempotency_key=body.idempotency_key, request_hash=hashlib.sha256(json.dumps(body.model_dump(), sort_keys=True).encode()).hexdigest(), result_snapshot=result))
-    db.add(AuditLog(actor_type="staff", actor_id=str(staff.id), store_id=technician.store_id, action=f"technician_{action}_service", entity_type="position_occupancy", entity_id=str(occupancy.id), detail={"from_status": before, "to_status": occupancy.status, "note": body.note}))
+    db.add(AuditLog(actor_type="staff", actor_id=str(staff.id), store_id=technician.store_id, action=f"technician_{action}_service", entity_type="position_occupancy", entity_id=str(occupancy.id), detail={"from_status": before, "to_status": occupancy.status, "selection_session_id": occupancy.selection_session_id, "note": body.note}))
     db.commit()
     return result
 
