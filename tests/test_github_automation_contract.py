@@ -53,6 +53,13 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("curl -fsS", script)
         self.assertIn("rehearsal", script)
 
+    def test_release_boundaries_reject_symbolic_links(self):
+        create = (REPO_ROOT / "deploy" / "diy" / "create-release.sh").read_text(encoding="utf-8")
+        activate = (REPO_ROOT / "deploy" / "diy" / "activate-release.sh").read_text(encoding="utf-8")
+
+        self.assertIn("find \"$workspace_root/$required\" -type l", create)
+        self.assertIn("find \"$target\" -type l", activate)
+
 
 if __name__ == "__main__":
     unittest.main()

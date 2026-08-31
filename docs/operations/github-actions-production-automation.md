@@ -35,6 +35,23 @@
 - 管理端、顾客端测试和 TypeScript/生产构建通过；后端专项测试通过。
 - 发布脚本会比较新旧 Alembic 文件列表。检测到迁移变化时自动阻断，不会自动 downgrade；迁移必须走单独审批、备份和恢复方案。
 
+## 当前验收状态（2026-08-31）
+
+- PR #6（`codex/admin/cicd-automation`）当前为 open，提交 `021afa7406dd82939f18641b03e55e6cbb2eb58b` 的 CI 已通过：Static contracts、Admin tests and build、Customer tests and build、Backend tests。
+- 已完成针对本 PR 发布脚本和 Compose 的 Codex Security diff scan：覆盖 4 个发布文件，0 个可报告发现；该结果是合并前参考，不替代人工审批和非生产演练。
+- GitHub 主分支目前只识别 `CI` 工作流；`AI PR Review` 文件必须先合并到 `main`，才会对之后新建或更新的 PR 触发。它不会追溯触发当前 PR #6。
+- 生产发布仍未执行。公网仓库无法匿名读取分支保护配置，因此必须由仓库管理员在 GitHub 页面确认规则已启用。
+
+## 必须启用的分支保护
+
+在 `Settings → Branches → main` 设置：
+
+- 必须通过 Pull Request，禁止直接 push；
+- 必须通过 `CI / Static contracts`、`CI / Admin tests and build`、`CI / Customer tests and build`、`CI / Backend tests`；
+- 要求至少 1 名人工审批，并启用“新提交需重新审批”；
+- 启用“分支必须最新后才能合并”；
+- 不启用自动合并。AI 审核使用 `REQUEST_CHANGES` 阻断高危发现，但不代替人工审批。
+
 ## 远端脚本保证
 
 - 先使用 `pg_dump -Fc` 备份 PostgreSQL，再写入 SHA-256 校验文件。

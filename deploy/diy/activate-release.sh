@@ -21,6 +21,11 @@ for required in MANIFEST.sha256 hxy-server diy-web/dist/index.html admin-react/d
   fi
 done
 
+if find "$target" -type l -print -quit | grep -q .; then
+  echo "release contains a symbolic link: $target" >&2
+  exit 1
+fi
+
 (
   cd "$target"
   sha256sum -c MANIFEST.sha256 >/dev/null

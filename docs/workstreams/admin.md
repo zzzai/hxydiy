@@ -1,6 +1,6 @@
 # 管理后台与员工工作台工作流
 
-更新时间：2026-08-30
+更新时间：2026-08-31
 
 ## 负责范围
 
@@ -38,11 +38,14 @@
 
 ## 自动化验证
 
-- `python -m unittest tests/test_github_automation_contract.py`：3 passed。
+- `python -m unittest tests/test_github_automation_contract.py`：5 passed。
 - `bash -n deploy/diy/create-release.sh deploy/diy/activate-release.sh deploy/diy/deploy-production.sh`：通过。
 - `git diff --check`：通过。
+- PR #6 分支 CI：Static contracts、Admin tests and build、Customer tests and build、Backend tests 全部通过。
+- Codex Security diff scan（发布脚本/Compose）：4 个文件、0 个可报告发现；未执行真实生产发布。
 
 ## 生产状态
 
 - 本轮仅完成仓库自动化基础设施，未发布生产，未修改生产数据库或 `current`。
 - 待 monorepo 基线合并、GitHub `production` Environment 审批人和 Secrets 配置后，才可启用真实自动发布。
+- GitHub 主分支尚未加载 `AI PR Review` 工作流；合并本 PR 后才会对后续 PR 生效，当前 PR 不会追溯触发。

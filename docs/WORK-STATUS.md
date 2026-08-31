@@ -1731,3 +1731,9 @@
 - 合并完整 monorepo 基线后，在 GitHub 配置 `production` Environment Required reviewer 和 Secrets。
 - 在非生产环境演练上传、备份恢复、原子切换和失败回滚，再安排生产灰度。
 - 自动化通过后仍需管理员、店长、普通员工和技师授权账号的现场验收；自动化测试不等于营业验收。
+
+## 2026-08-31 自动化验收补充
+
+- PR #6（`codex/admin/cicd-automation`）仍为 open，提交 `021afa7406dd82939f18641b03e55e6cbb2eb58b` 的 CI 四项必需检查已通过。
+- 针对发布脚本与 Compose 完成 Codex Security diff scan：覆盖 4 个文件，0 个可报告发现；报告位于本机临时扫描目录，未写入仓库。
+- 由于无法匿名读取 GitHub 分支保护配置，仍待仓库管理员确认 `main` 的必需检查、至少一名人工审批和禁止直接 push 规则。

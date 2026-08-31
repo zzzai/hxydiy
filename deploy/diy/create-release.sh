@@ -21,6 +21,10 @@ for required in hxy-server diy-web/dist admin-react/dist deploy/diy; do
     echo "missing release input: $workspace_root/$required" >&2
     exit 1
   fi
+  if find "$workspace_root/$required" -type l -print -quit | grep -q .; then
+    echo "release input contains a symbolic link: $workspace_root/$required" >&2
+    exit 1
+  fi
 done
 
 if [[ -e "$target" ]]; then
