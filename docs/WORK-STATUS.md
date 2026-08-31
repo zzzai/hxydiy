@@ -1954,3 +1954,23 @@
 
 - 发布静态资源后需重新进行线上三栏点击、刷新/返回和退出登录验证。
 - 待门店现场用真实手机验收导航切换，并继续完成服务闭环、弱网/断网、并发和门店隔离验收。
+
+# 2026-08-31 技师移动端底部导航修复（已发布生产）
+
+## 本地完成
+
+- 修复 `BrowserRouter basename="/technician"` 下底部导航使用绝对路径导致点击后仍停留在“今日服务”的问题。
+- 导航改用 basename 内部相对路径 `today`、`history`、`me`；退出登录改为内部 `/login`。
+- 管理端测试 `111 passed`，生产构建成功，`git diff --check` 通过。
+
+## 已发布生产
+
+- Release：`technician-nav-basename-20260831-1`；服务器 `current` 已原子切换至该 release。
+- `MANIFEST.sha256` 全量校验通过，文件 SHA-256：`ea43b9442802d89c05e2f2dd00aa250ad3fae4181169a78f153417952ea171c1`。
+- 发布前已备份生产数据库、环境文件和 current 指针：`backups/technician-nav-basename-20260831-1-pre/`；本次未执行数据库迁移。
+- API 镜像 `diy-api:technician-nav-basename-20260831-1` 已重建，容器健康检查返回 `200`，数据库卷未更换。
+- 生产 Edge 手机视图已验证：`今日服务 → 服务记录 → 我的 → 今日服务` 分别进入 `/technician/today`、`/technician/history`、`/technician/me`，控制台无错误。
+
+## 待门店现场验收
+
+- 真实门店手机复核三栏点击、刷新/返回和退出登录；自动化及线上授权会话验证不替代营业现场验收。
