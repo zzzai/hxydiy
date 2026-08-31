@@ -1,6 +1,6 @@
 # 管理后台与员工工作台工作流
 
-更新时间：2026-08-30
+更新时间：2026-08-31
 
 ## 负责范围
 
@@ -15,6 +15,35 @@
 - 管理端代码：`admin-react/`；顾客端和后端仅作为同仓库联调基线，不在本工作流中修改其业务。
 - 共享记忆：`docs/TEAM-MEMORY.md`；任务交接：本目录；发布事实：`docs/WORK-STATUS.md`。
 - Obsidian 打开仓库根目录即可阅读上述 Markdown；代码变更必须走 `codex/admin/<task>` 分支和 Pull Request。
+
+## 2026-08-31 服务位二维码查看与店长配置边界（本地完成，未发布）
+
+- 服务位看板中的“查看顾客二维码”不再受“服务位可用”状态限制；服务中、待服务等现场状态仍可查看既有码并下载有效二维码，避免临时无法补印或核对。
+- 普通员工在本店可查看二维码，但页面不再展示停用、重新启用、重新生成或换绑操作；只有当前门店店长可见这些配置控制项。
+- 前端权限 helper 与服务端的门店归属和 `manager` 写权限保持一致；本轮未改动二维码 API、顾客端、技师端、智慧宝或任何物理资源操作。
+
+涉及文件：`admin-react/src/pages/ServicePositionsPage.tsx`、`admin-react/src/servicePositionQr.ts`、`admin-react/tests/qr-management.test.ts`、`docs/TEAM-MEMORY.md`。
+
+验证：先新增并确认权限回归测试失败，再完成最小实现；管理端 `npm test` 为 119 passed，`npx tsc -b` 通过，`npm run build` 成功（Vite 转换 4001 个模块，保留既有共享 chunk 体积警告）。后端 `python -m pytest tests/test_admin_resource_permissions.py` 为 9 passed，含 1 个既有 Starlette/httpx 弃用警告。新工作树按锁文件执行 `npm ci` 后发现 7 个既有依赖漏洞（2 moderate、5 high），未进行无关依赖升级。
+
+发布状态：本地完成，分支 `codex/admin/store-position-qr`；未发布生产，未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查。
+
+待现场验收：使用授权店长与普通员工账号分别验证服务中服务位的二维码查看、有效码下载、店长二维码变更入口与普通员工无变更入口；自动化测试不等于真实门店营业验收。
+
+## 2026-08-31 服务位停用与现场二维码简化（本地完成，未发布）
+
+- 服务位看板为店长新增“停用服务位/重新启用服务位”入口；仅无活动占用的本店实际服务位可操作，普通员工不显示入口。
+- 停用仅写入 DIY 的 `operational_status`：阻止新的顾客扫码和共享 iPad 入口，不调用智慧宝开沙发、开房、离位、清洁或物理资源释放。服务端同时校验店长角色、门店归属、实际服务位和活动占用，并记录前后状态及原因审计。
+- 服务位停用后不再新建二维码；已有二维码绑定保留，恢复服务位后可继续使用。新生成二维码使用紧凑 v3 令牌，旧 v2 印刷码继续兼容；前端二维码使用 `M` 级纠错、1024 像素输出和标准 4 模块静区，减少码图模块密度并提升现场打印扫码容错。
+- 发现现有普通员工认证缺口：未迁移的 `staff` 账号在登录层即返回 `ROLE_MIGRATION_REQUIRED`，无法进入“只读二维码”现场验收；本轮未改后端权限模型，必须作为独立角色迁移任务处理。
+
+涉及文件：`admin-react/src/pages/ServicePositionsPage.tsx`、`admin-react/src/servicePositions.ts`、`admin-react/src/servicePositionQr.ts`、`admin-react/src/api.ts`、`hxy-server/app/api/occupancies.py`、对应管理端/后端测试及 `docs/TEAM-MEMORY.md`。
+
+验证：先新增并确认前端缺失导出、后端缺失 v3/停用接口的失败测试，再完成最小实现。管理端 `npm test` 为 121 passed，`npx tsc -b` 通过，`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 体积警告）。后端 `python -m pytest tests/test_admin_resource_permissions.py tests/test_occupancy_api.py -q` 为 45 passed，含 1 个既有 Starlette/httpx 弃用警告。
+
+发布状态：本地完成，分支 `codex/admin/store-position-qr`；未发布生产，未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查。
+
+待现场验收：待发布后使用店长账号验证空闲服务位停用、扫码拒绝、重新启用和原二维码恢复；用已迁移为正式普通员工的账号验证只读二维码边界。不得在营业服务位上执行停用、重新生成或换绑测试。
 
 ## 本轮完成
 
@@ -84,3 +113,17 @@
 验证：管理端 `npm test` 116 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有大共享 chunk 警告）；后端目录与权限专项 34 passed，含 1 个既有 Starlette/httpx 弃用警告。当前任务工作树缺失锁定的开发依赖，已用 `npm ci --ignore-scripts` 按锁文件恢复；审计提示 7 个既有 npm 漏洞，未做无关依赖升级。
 
 发布状态：未发布生产，未执行数据库迁移、备份、Manifest 校验、服务器切换或线上健康检查。待 Pull Request/CI 审核后，以总部管理员和店长真实账号完成跨店可见范围、目标门店选择、上架/下架及强制下线不可恢复的现场验收。
+
+## 2026-08-31 PR 自动化验收
+
+- 新增 GitHub Actions 工作流 `.github/workflows/ci.yml`；Pull Request 与 `main` 推送会自动执行管理端 `npm test`、`npx tsc -b`、`npm run build`，以及后端服务位/权限专项测试。
+- 工作流仅执行测试和构建，不执行生产发布、数据库迁移、七牛写入或任何智慧宝物理资源操作。
+- 补充服务位二维码回归保护：已替换二维码不可再次重生、停用服务位不可生成新码；公网入口禁止伪造内部 `bound_qr` 来源，均有后端契约测试覆盖。
+- 生产环境不再接受无法撤销的 v1 服务位二维码，统一提示更换 v2/v3 码；本地迁移测试仍保留 v1 兼容读取。
+
+## 2026-08-31 CI 自动验收环境修复
+
+- `.github/workflows/ci.yml` 使用 Node 22 执行管理端测试、TypeScript 检查和生产构建，匹配当前 `node --experimental-strip-types` 测试入口。
+- 后端 CI 在安装业务依赖时显式安装 `pytest`，避免云端出现 `No module named pytest` 的环境性失败。
+- 首次 CI 失败已完成根因定位；修复仅涉及工作流，不涉及业务代码和生产配置。
+- GitHub Actions 运行 `33387935310` 已通过：管理端测试与构建、后端权限与服务位契约两个 job 均成功。

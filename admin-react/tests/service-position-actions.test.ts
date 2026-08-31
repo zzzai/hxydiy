@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   buildKioskUrl,
   countPositionStates,
+  getServicePositionOperationalAction,
   getForceReleaseTargets,
   getPositionActions,
   occupancyStatusMeta,
@@ -168,6 +169,13 @@ test('服务位看板按现场状态统计，不把停用位算作可用', () =>
     attention: 2,
     unavailable: 1,
   });
+});
+
+test('空闲服务位可由店长停用，已停用服务位可重新启用，活动占用不能改配置', () => {
+  assert.equal(getServicePositionOperationalAction('active', false), 'disable');
+  assert.equal(getServicePositionOperationalAction('inactive', false), 'enable');
+  assert.equal(getServicePositionOperationalAction('unknown', false), null);
+  assert.equal(getServicePositionOperationalAction('active', true), null);
 });
 
 test('共享 iPad 链接包含一次性会话且不依赖管理端路由', () => {

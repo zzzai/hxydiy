@@ -38,6 +38,7 @@ import {
   rebindPositionQr,
   regeneratePositionQr,
   startPositionService,
+  updateServicePositionOperationalStatus,
   updatePositionQr,
   type PositionQr,
 } from '../api';
@@ -47,6 +48,7 @@ import {
   buildKioskUrl,
   countPositionStates,
   getPositionActions,
+  getServicePositionOperationalAction,
   occupancyStatusMeta,
   positionTypeLabel,
   splitPositionGroups,
@@ -55,7 +57,8 @@ import {
   type PositionAction,
   type ServicePosition,
 } from '../servicePositions';
-import { servicePositionQrActions } from '../servicePositionQr';
+import { canManageConfiguration } from '../auth';
+import { getServicePositionQrPermissions, servicePositionQrActions, servicePositionQrRenderOptions } from '../servicePositionQr';
 
 type ActionMode = 'start_service' | 'kiosk' | null;
 
@@ -131,6 +134,8 @@ function PositionTile({ position, now, onClick }: { position: ServicePosition; n
 export default function ServicePositionsPage() {
   const { message, modal } = App.useApp();
   const staff = getStaff();
+  const qrPermissions = getServicePositionQrPermissions(staff?.role);
+  const canManageServicePosition = canManageConfiguration(staff?.role);
   const [positions, setPositions] = useState<ServicePosition[]>([]);
   const [updatedAt, setUpdatedAt] = useState('');
   const [selected, setSelected] = useState<ServicePosition | null>(null);
@@ -146,6 +151,7 @@ export default function ServicePositionsPage() {
   const [positionQr, setPositionQr] = useState<PositionQr | null>(null);
   const [qrTargetRoomId, setQrTargetRoomId] = useState<number>();
   const [qrBusy, setQrBusy] = useState(false);
+  const [positionConfigBusy, setPositionConfigBusy] = useState(false);
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -247,7 +253,7 @@ export default function ServicePositionsPage() {
       const response = await getPositionQrLink(selected.id);
       setPositionQr(response.data);
       setPositionQrLink(response.data.url);
-      setPositionQrImage(await QRCode.toDataURL(response.data.url, { width: 720, margin: 3, errorCorrectionLevel: 'H' }));
+      setPositionQrImage(await QRCode.toDataURL(response.data.url, servicePositionQrRenderOptions));
       if (response.data.status === 'active') {
         await navigator.clipboard.writeText(response.data.url);
         message.success(`${selected.name}二维码链接已复制`);
@@ -260,7 +266,7 @@ export default function ServicePositionsPage() {
   const applyQr = async (qr: PositionQr, success: string) => {
     setPositionQr(qr);
     setPositionQrLink(qr.url);
-    setPositionQrImage(await QRCode.toDataURL(qr.url, { width: 720, margin: 3, errorCorrectionLevel: 'H' }));
+    setPositionQrImage(await QRCode.toDataURL(qr.url, servicePositionQrRenderOptions));
     setQrTargetRoomId(undefined);
     message.success(success);
   };
@@ -309,6 +315,36 @@ export default function ServicePositionsPage() {
     });
   };
 
+  const confirmServicePositionOperationalStatus = () => {
+    if (!selected) return;
+    const action = getServicePositionOperationalAction(selected.operational_status, Boolean(selected.occupancy));
+    if (!action) return;
+    const disabling = action === 'disable';
+    modal.confirm({
+      title: `${disabling ? '停用' : '重新启用'}${selected.name}？`,
+      content: disabling
+        ? '停用后，DIY 将拒绝新的顾客扫码和共享 iPad 入口；不会操作智慧宝的沙发、房间或清洁状态。已有顾客时不能停用。'
+        : '重新启用后，服务位可再次接收顾客扫码和共享 iPad 入口；不会操作智慧宝的物理资源。',
+      okText: disabling ? '确认停用' : '确认启用',
+      okButtonProps: disabling ? { danger: true } : undefined,
+      cancelText: '返回',
+      onOk: async () => {
+        setPositionConfigBusy(true);
+        try {
+          await updateServicePositionOperationalStatus(
+            selected.id,
+            disabling ? 'inactive' : 'active',
+            disabling ? '店长停用服务位' : '店长重新启用服务位',
+          );
+          message.success(disabling ? '服务位已停用，不再接收新的扫码入口' : '服务位已重新启用');
+          await load(true);
+        } finally {
+          setPositionConfigBusy(false);
+        }
+      },
+    });
+  };
+
   const downloadPositionQr = () => {
     if (!selected || !positionQrImage) return;
     const link = document.createElement('a');
@@ -322,7 +358,11 @@ export default function ServicePositionsPage() {
     message.success('试用链接已复制');
   };
 
-  const detailMeta = selected ? occupancyStatusMeta(selected.state) : null;
+  const detailMeta = selected
+    ? selected.operational_status !== 'active'
+      ? { label: '已停用', color: '#84928e', tone: 'muted' as const, description: 'DIY 已暂停新的顾客扫码和共享 iPad 入口。' }
+      : occupancyStatusMeta(selected.state)
+    : null;
   const selectionItems = selected?.selection?.items || [];
   const detailWaiting = selected?.occupancy && selected.state === 'waiting_service'
     ? waitingReleaseMeta(selected.occupancy, selected.selection?.status, selected.selection?.submitted_at, now)
@@ -420,7 +460,9 @@ export default function ServicePositionsPage() {
               className="position-waiting-alert"
             />}
 
-            {selected.occupancy ? (
+            {selected.operational_status !== 'active' ? (
+              <div className="available-position-state"><StopOutlined /><div><strong>服务位已停用</strong><span>DIY 不再接收新的顾客扫码或共享 iPad 入口；不会影响智慧宝物理资源。</span></div></div>
+            ) : selected.occupancy ? (
               <>
                 <Descriptions
                   column={{ xs: 1, sm: 2 }}
@@ -458,9 +500,11 @@ export default function ServicePositionsPage() {
               <Space wrap>
                 {actions.includes('start_service') && <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => setActionMode('start_service')}>确认服务</Button>}
                 {actions.includes('finish_service') && <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => void runAction('finish_service')}>服务结束</Button>}
+                {qrPermissions.canView && <Button icon={<CopyOutlined />} onClick={() => void copyPositionQrLink()}>查看顾客二维码</Button>}
+                {canManageServicePosition && getServicePositionOperationalAction(selected.operational_status, Boolean(selected.occupancy)) === 'disable' && <Button danger icon={<StopOutlined />} loading={positionConfigBusy} onClick={confirmServicePositionOperationalStatus}>停用服务位</Button>}
+                {canManageServicePosition && getServicePositionOperationalAction(selected.operational_status, Boolean(selected.occupancy)) === 'enable' && <Button type="primary" icon={<CheckCircleOutlined />} loading={positionConfigBusy} onClick={confirmServicePositionOperationalStatus}>重新启用服务位</Button>}
                 {selected.state === 'available' && <>
                   <Button type="primary" icon={<TabletOutlined />} onClick={() => setActionMode('kiosk')}>绑定共享 iPad</Button>
-                  <Button icon={<CopyOutlined />} onClick={() => void copyPositionQrLink()}>复制顾客二维码链接</Button>
                 </>}
               </Space>
             </div>
@@ -496,21 +540,21 @@ export default function ServicePositionsPage() {
                     : <Typography.Text type="secondary">该二维码已失效，不再展示或提供下载。重新启用，或生成新二维码后再打印投放。</Typography.Text>}
                   <Typography.Text type="secondary">二维码只绑定当前门店和具体服务位；停用或换绑后旧码立即失效。</Typography.Text>
                   <Space wrap>
-                    {servicePositionQrActions(positionQr.status, false).includes('disable') && <Button danger icon={<StopOutlined />} loading={qrBusy} onClick={() => void changeQrStatus('disabled')}>停用二维码</Button>}
-                    {servicePositionQrActions(positionQr.status, false).includes('enable') && <Button type="primary" loading={qrBusy} onClick={() => void changeQrStatus('active')}>重新启用</Button>}
+                    {qrPermissions.canManage && servicePositionQrActions(positionQr.status, false).includes('disable') && <Button danger icon={<StopOutlined />} loading={qrBusy} onClick={() => void changeQrStatus('disabled')}>停用二维码</Button>}
+                    {qrPermissions.canManage && servicePositionQrActions(positionQr.status, false).includes('enable') && <Button type="primary" loading={qrBusy} onClick={() => void changeQrStatus('active')}>重新启用</Button>}
                     {positionQr.status === 'active' && <Button type="primary" onClick={downloadPositionQr}>下载打印二维码</Button>}
-                    {!positionQr.status || positionQr.status === 'active' ? <Button onClick={confirmRegenerateQr}>重新生成</Button> : <Button onClick={confirmRegenerateQr}>生成新二维码</Button>}
+                    {qrPermissions.canManage && (!positionQr.status || positionQr.status === 'active' ? <Button onClick={confirmRegenerateQr}>重新生成</Button> : <Button onClick={confirmRegenerateQr}>生成新二维码</Button>)}
                   </Space>
-                  <Space wrap>
-                    <Select
-                      value={qrTargetRoomId}
-                      onChange={setQrTargetRoomId}
-                      placeholder="选择换绑目标服务位"
-                      style={{ minWidth: 220 }}
-                      options={availableTargets.filter((item) => item.id !== selected.id).map((item) => ({ value: item.id, label: item.name }))}
-                    />
-                    <Button icon={<SwapOutlined />} disabled={!qrTargetRoomId} onClick={confirmRebindQr}>换绑服务位</Button>
-                  </Space>
+                  {qrPermissions.canManage && <Space wrap>
+                      <Select
+                        value={qrTargetRoomId}
+                        onChange={setQrTargetRoomId}
+                        placeholder="选择换绑目标服务位"
+                        style={{ minWidth: 220 }}
+                        options={availableTargets.filter((item) => item.id !== selected.id).map((item) => ({ value: item.id, label: item.name }))}
+                      />
+                      <Button icon={<SwapOutlined />} disabled={!qrTargetRoomId} onClick={confirmRebindQr}>换绑服务位</Button>
+                    </Space>}
                 </Space>}
               />
             )}

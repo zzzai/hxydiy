@@ -8,10 +8,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.admin import create_staff_token, hash_password
-from app.api.occupancies import create_position_qr_token
+from app.api.occupancies import _managed_position_qr_token_v2, create_position_qr_token
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import BrowserInstance, PositionOccupancy, PriceBook, Project, Room, SelectionSession, ServicePositionQr, Staff, Store, User
+from app.models import AuditLog, BrowserInstance, PositionOccupancy, PriceBook, Project, Room, SelectionSession, ServicePositionQr, Staff, Store, User
 
 
 class OccupancyApiTests(unittest.TestCase):
@@ -152,6 +152,12 @@ class OccupancyApiTests(unittest.TestCase):
         with self.SessionLocal() as db:
             room = db.scalar(select(Room).where(Room.code == code))
             room.status = status
+            db.commit()
+
+    def set_room_operational_status(self, code: str, status: str) -> None:
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == code))
+            room.operational_status = status
             db.commit()
 
     def test_occupancy_timestamps_are_serialized_as_utc(self):
@@ -388,6 +394,44 @@ class OccupancyApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(response.json()["detail"]["code"], "QR_BINDING_REQUIRED")
 
+    def test_production_rejects_unrevocable_v1_position_qr(self):
+        self.release_if_active("sofa-05")
+        self.addCleanup(self.release_if_active, "sofa-05")
+        self.client.cookies.delete("hxy_browser_token")
+        legacy_token = create_position_qr_token(self.store_id, "sofa-05", "personal_qr")
+        with mock.patch("app.api.occupancies.settings.environment", "production"):
+            response = self.client.post("/api/v1/entry-sessions", json={
+                "store_id": self.store_id,
+                "position_code": "sofa-05",
+                "source": "personal_qr",
+                "entry_token": legacy_token,
+                "device_label": "不可撤销旧二维码",
+            })
+
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "QR_VERSION_EXPIRED")
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-05"))
+            self.assertIsNone(db.scalar(select(PositionOccupancy).where(PositionOccupancy.active_room_id == room.id)))
+
+    def test_bound_qr_is_internal_only_and_cannot_be_forged_by_public_entry(self):
+        self.release_if_active("sofa-08")
+        self.addCleanup(self.release_if_active, "sofa-08")
+        self.client.cookies.delete("hxy_browser_token")
+        with mock.patch("app.api.occupancies.settings.environment", "production"):
+            response = self.client.post("/api/v1/entry-sessions", json={
+                "store_id": self.store_id,
+                "position_code": "sofa-08",
+                "source": "bound_qr",
+                "device_label": "伪造内部绑定来源",
+            })
+
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "ENTRY_SOURCE_FORBIDDEN")
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-08"))
+            self.assertIsNone(db.scalar(select(PositionOccupancy).where(PositionOccupancy.active_room_id == room.id)))
+
     def test_public_entry_cannot_create_kiosk_session(self):
         self.release_if_active("sofa-01")
         response = self.client.post("/api/v1/entry-sessions", json={
@@ -545,6 +589,258 @@ class OccupancyApiTests(unittest.TestCase):
 
         self.assertEqual(entry.status_code, 403, entry.text)
         self.assertEqual(entry.json()["detail"]["code"], "QR_DISABLED")
+
+    def test_manager_can_disable_and_restore_idle_service_position_without_replacing_its_qr(self):
+        self.release_if_active("sofa-05")
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-05"))
+            qr = db.scalar(select(ServicePositionQr).where(
+                ServicePositionQr.room_id == room.id,
+                ServicePositionQr.replaced_by_id.is_(None),
+            ).order_by(ServicePositionQr.id.desc()))
+            room.operational_status = "active"
+            if qr:
+                qr.status = "active"
+                qr.disabled_at = None
+            db.commit()
+        self.addCleanup(self.release_if_active, "sofa-05")
+        self.addCleanup(self.set_room_status, "sofa-05", "available")
+        self.addCleanup(self.set_room_operational_status, "sofa-05", "active")
+        generated = self.client.get(
+            f"/api/v1/admin/service-positions/{room.id}/qr-link",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(generated.status_code, 200, generated.text)
+        qr = generated.json()
+
+        disabled = self.client.patch(
+            f"/api/v1/admin/service-positions/{room.id}/operational-status",
+            headers=self.admin_headers,
+            json={"operational_status": "inactive", "reason": "现场维护"},
+        )
+        self.assertEqual(disabled.status_code, 200, disabled.text)
+        self.assertEqual(disabled.json()["operational_status"], "inactive")
+        self.assertEqual(disabled.json()["state"], "unavailable")
+        with self.SessionLocal() as db:
+            audit = db.scalar(select(AuditLog).where(
+                AuditLog.action == "service_position_disabled",
+                AuditLog.entity_id == str(room.id),
+            ))
+            self.assertIsNotNone(audit)
+            self.assertEqual(audit.detail["from_operational_status"], "active")
+            self.assertEqual(audit.detail["to_operational_status"], "inactive")
+
+        self.client.cookies.delete("hxy_browser_token")
+        blocked_entry = self.client.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id,
+            "position_code": "sofa-05",
+            "source": qr["source"],
+            "entry_token": qr["token"],
+            "device_label": "扫码手机",
+        })
+        self.assertEqual(blocked_entry.status_code, 404, blocked_entry.text)
+
+        restored = self.client.patch(
+            f"/api/v1/admin/service-positions/{room.id}/operational-status",
+            headers=self.admin_headers,
+            json={"operational_status": "active", "reason": "维护完成"},
+        )
+        self.assertEqual(restored.status_code, 200, restored.text)
+        self.assertEqual(restored.json()["operational_status"], "active")
+        self.assertEqual(restored.json()["state"], "available")
+
+        self.client.cookies.delete("hxy_browser_token")
+        restored_entry = self.client.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id,
+            "position_code": "sofa-05",
+            "source": qr["source"],
+            "entry_token": qr["token"],
+            "device_label": "扫码手机",
+        })
+        self.assertEqual(restored_entry.status_code, 200, restored_entry.text)
+
+    def test_staff_cannot_change_service_position_operational_status(self):
+        with self.SessionLocal() as db:
+            staff = Staff(
+                username="occupancy-staff",
+                password_hash=hash_password("pass"),
+                name="普通员工",
+                role="staff",
+                store_id=self.store_id,
+                status="active",
+            )
+            room = db.scalar(select(Room).where(Room.code == "sofa-04"))
+            db.add(staff)
+            db.commit()
+            staff_id = staff.id
+
+        response = self.client.patch(
+            f"/api/v1/admin/service-positions/{room.id}/operational-status",
+            headers={"Authorization": f"Bearer {create_staff_token(staff_id, 'staff')}"},
+            json={"operational_status": "inactive", "reason": "越权测试"},
+        )
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "ROLE_MIGRATION_REQUIRED")
+
+    def test_position_disable_rejects_active_occupancy(self):
+        self.release_if_active("sofa-06")
+        entry = self.entry("sofa-06")
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-06"))
+
+        response = self.client.patch(
+            f"/api/v1/admin/service-positions/{room.id}/operational-status",
+            headers=self.admin_headers,
+            json={"operational_status": "inactive", "reason": "现场维护"},
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "POSITION_OCCUPIED")
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(Room, room.id).operational_status, "active")
+            self.assertEqual(db.get(PositionOccupancy, entry["occupancy"]["id"]).active_room_id, room.id)
+
+    def test_disabled_service_position_does_not_create_a_new_qr(self):
+        with self.SessionLocal() as db:
+            room = Room(
+                store_id=self.store_id,
+                code="sofa-disabled-without-qr",
+                name="停用测试沙发",
+                customer_label="停用测试沙发",
+                room_type="sofa",
+                room_group="sofa",
+                is_service_position=True,
+                is_space_container=False,
+                customer_selectable=True,
+                operational_status="inactive",
+            )
+            db.add(room)
+            db.commit()
+            room_id = room.id
+
+        response = self.client.get(
+            f"/api/v1/admin/service-positions/{room_id}/qr-link",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "SERVICE_POSITION_DISABLED")
+        with self.SessionLocal() as db:
+            self.assertIsNone(db.scalar(select(ServicePositionQr).where(ServicePositionQr.room_id == room_id)))
+
+    def test_compact_managed_qr_keeps_existing_v2_qr_compatible(self):
+        self.release_if_active("sofa-07")
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-07"))
+        generated = self.client.get(
+            f"/api/v1/admin/service-positions/{room.id}/qr-link",
+            headers=self.admin_headers,
+        )
+        self.assertEqual(generated.status_code, 200, generated.text)
+        compact = generated.json()
+        self.assertTrue(compact["token"].startswith("v3."))
+
+        with self.SessionLocal() as db:
+            qr = db.get(ServicePositionQr, compact["qr_id"])
+            v2_token = _managed_position_qr_token_v2(qr, room.code)
+        self.assertLess(len(compact["token"]), len(v2_token) - 100)
+
+        self.client.cookies.delete("hxy_browser_token")
+        legacy_entry = self.client.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id,
+            "position_code": room.code,
+            "source": compact["source"],
+            "entry_token": v2_token,
+            "device_label": "历史二维码",
+        })
+        self.assertEqual(legacy_entry.status_code, 200, legacy_entry.text)
+
+    def test_replaced_qr_cannot_be_regenerated_again(self):
+        room = Room(
+            store_id=self.store_id,
+            code="sofa-qr-regenerate-once",
+            name="二维码重生幂等测试沙发",
+            customer_label="二维码重生幂等测试沙发",
+            room_type="sofa",
+            room_group="sofa",
+            is_service_position=True,
+            is_space_container=False,
+            customer_selectable=True,
+            operational_status="active",
+        )
+        with self.SessionLocal() as db:
+            db.add(room)
+            db.commit()
+            room_id = room.id
+        try:
+            original_response = self.client.get(
+                f"/api/v1/admin/service-positions/{room_id}/qr-link",
+                headers=self.admin_headers,
+            )
+            self.assertEqual(original_response.status_code, 200, original_response.text)
+            original = original_response.json()
+
+            regenerated = self.client.post(
+                f"/api/v1/admin/service-position-qrs/{original['qr_id']}/regenerate",
+                headers=self.admin_headers,
+                json={"reason": "测试重生一次"},
+            )
+            self.assertEqual(regenerated.status_code, 200, regenerated.text)
+
+            repeated = self.client.post(
+                f"/api/v1/admin/service-position-qrs/{original['qr_id']}/regenerate",
+                headers=self.admin_headers,
+                json={"reason": "不应再次重生旧码"},
+            )
+            self.assertEqual(repeated.status_code, 409, repeated.text)
+            self.assertEqual(repeated.json()["detail"]["code"], "QR_REPLACED")
+        finally:
+            with self.SessionLocal() as db:
+                db.query(ServicePositionQr).filter(ServicePositionQr.room_id == room_id).delete()
+                db.query(Room).filter(Room.id == room_id).delete()
+                db.commit()
+
+    def test_disabled_service_position_cannot_regenerate_qr(self):
+        room = Room(
+            store_id=self.store_id,
+            code="sofa-qr-regenerate-disabled",
+            name="二维码停用重生测试沙发",
+            customer_label="二维码停用重生测试沙发",
+            room_type="sofa",
+            room_group="sofa",
+            is_service_position=True,
+            is_space_container=False,
+            customer_selectable=True,
+            operational_status="active",
+        )
+        with self.SessionLocal() as db:
+            db.add(room)
+            db.commit()
+            room_id = room.id
+        try:
+            original_response = self.client.get(
+                f"/api/v1/admin/service-positions/{room_id}/qr-link",
+                headers=self.admin_headers,
+            )
+            self.assertEqual(original_response.status_code, 200, original_response.text)
+            original = original_response.json()
+            disabled = self.client.patch(
+                f"/api/v1/admin/service-positions/{room_id}/operational-status",
+                headers=self.admin_headers,
+                json={"operational_status": "inactive", "reason": "测试停用"},
+            )
+            self.assertEqual(disabled.status_code, 200, disabled.text)
+
+            regenerated = self.client.post(
+                f"/api/v1/admin/service-position-qrs/{original['qr_id']}/regenerate",
+                headers=self.admin_headers,
+                json={"reason": "停用服务位不应重生"},
+            )
+            self.assertEqual(regenerated.status_code, 409, regenerated.text)
+            self.assertEqual(regenerated.json()["detail"]["code"], "SERVICE_POSITION_DISABLED")
+        finally:
+            with self.SessionLocal() as db:
+                db.query(ServicePositionQr).filter(ServicePositionQr.room_id == room_id).delete()
+                db.query(Room).filter(Room.id == room_id).delete()
+                db.commit()
 
     def test_rebinding_qr_invalidates_old_code_and_creates_new_binding(self):
         self.release_if_active("sofa-07")
