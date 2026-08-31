@@ -38,6 +38,26 @@
 - 当前未迁移的 `staff` 登录时返回 `403 ROLE_MIGRATION_REQUIRED`，不能作为正式普通员工账号进行二维码只读验收；需单独完成角色迁移后再验证。
 - 发布后需在非营业测试服务位验证：店长停用后扫码被拒、重新启用后原二维码恢复；普通员工仅查看二维码；跨门店访问继续不可见/不可操作。
 
+# 2026-08-31 管理后台 PR 自动化验收（本地完成，待 GitHub 首次运行）
+
+## 本地完成
+
+- 新增 `.github/workflows/ci.yml`，让 Pull Request 与 `main` 推送自动运行管理端测试、TypeScript 检查、生产构建和后端服务位/权限专项测试。
+- 现有 PR #4 已通过 GitHub REST API 更新标题和验收说明，不依赖本机安装 `gh`。
+- 修复二维码重生状态一致性：已替换二维码与停用服务位分别返回 `409 QR_REPLACED`、`409 SERVICE_POSITION_DISABLED`；拒绝顾客伪造内部 `bound_qr` 来源（`403 ENTRY_SOURCE_FORBIDDEN`），避免匿名占位绕过。
+- 生产入口拒绝不可撤销的旧 v1 服务位二维码（`403 QR_VERSION_EXPIRED`）；v2/v3 仍按持久化二维码记录校验，停用、重生和换绑可以立即失效。
+
+## 测试结果
+
+- 管理端：`npm test`，121 passed；`npx tsc -b` 通过；`npm run build` 通过（保留既有大 chunk 警告）。
+- 后端专项：`python -m pytest tests/test_admin_resource_permissions.py tests/test_occupancy_api.py -q`，49 passed，1 个既有 Starlette/httpx 弃用警告。
+- 本地浏览器烟测：`/admin/` 登录页渲染正常、控制台无 error/warn，密码显示/隐藏控件可用。
+
+## 发布状态
+
+- 未发布生产；服务器 `current`、数据库和 API 容器均未修改。
+- GitHub 首次 CI 需在本提交推送后由 GitHub Actions 执行；自动化验收不替代门店现场权限验收。
+
 # 2026-08-30 七牛私有 CDN 连通性验证与签名 URL 修复（本地完成，未发布）
 
 ## 本地完成

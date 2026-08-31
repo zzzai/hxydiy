@@ -139,7 +139,9 @@ def _verify_position_qr_token(
         raise _qr_error("QR_BINDING_INVALID", "二维码与门店或服务位不匹配，请重新扫码")
     version = payload.get("v")
     if version == 1:
-        # 兼容已投放旧码；旧码的历史行为保持不变，后台生成的新码使用 v2 才支持停用/换绑。
+        if settings.environment == "production":
+            raise _qr_error("QR_VERSION_EXPIRED", "该二维码已过期，请联系门店更换新二维码")
+        # 本地迁移测试仍可读取 v1；生产入口只接受可撤销的 v2/v3 二维码。
         return None
     if version != 2 or not payload.get("qr_id"):
         raise _qr_error("QR_BINDING_INVALID", "二维码版本无效，请重新扫码")
@@ -293,6 +295,11 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
         raise HTTPException(status_code=403, detail={
             "code": "KIOSK_REQUIRES_STAFF_BINDING",
             "message": "共享 iPad 必须由前台先绑定服务位",
+        })
+    if body.source == "bound_qr":
+        raise HTTPException(status_code=403, detail={
+            "code": "ENTRY_SOURCE_FORBIDDEN",
+            "message": "该入口来源仅由服务端在验证二维码后记录",
         })
     session, occupancy, room, token, resumed, browser_token = _create_entry(db, body, request)
     response.set_cookie(
@@ -497,9 +504,19 @@ def regenerate_service_position_qr(
     if normalize_staff_role(staff.role, staff.technician_id) != "manager":
         raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可重新生成服务位二维码"})
     old = _owned_qr(db, qr_id, staff)
+    if old.replaced_by_id:
+        raise HTTPException(status_code=409, detail={
+            "code": "QR_REPLACED",
+            "message": "该二维码已被替换，不能再次重新生成",
+        })
     room = db.get(Room, old.room_id)
     if not room or room.is_space_container or not room.is_service_position:
         raise HTTPException(status_code=409, detail="服务位当前不能生成二维码")
+    if room.operational_status != "active":
+        raise HTTPException(status_code=409, detail={
+            "code": "SERVICE_POSITION_DISABLED",
+            "message": "服务位已停用，请重新启用后再生成二维码",
+        })
     old.status = "disabled"
     old.disabled_at = utcnow()
     db.flush()
