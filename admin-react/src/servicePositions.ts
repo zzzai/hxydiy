@@ -199,6 +199,16 @@ export function getForceReleaseTargets(status: OccupancyStatus | string): Array<
   return ['released'];
 }
 
+export function getServicePositionOperationalAction(
+  operationalStatus: string,
+  hasActiveOccupancy: boolean,
+): 'enable' | 'disable' | null {
+  if (hasActiveOccupancy) return null;
+  if (operationalStatus === 'active') return 'disable';
+  if (operationalStatus === 'inactive') return 'enable';
+  return null;
+}
+
 export const POSITION_ACTION_LABELS: Record<PositionAction, string> = {
   start_service: '确认服务',
   finish_service: '服务结束',

@@ -1,3 +1,43 @@
+# 2026-08-31 服务位停用与现场二维码简化（本地完成，未发布）
+
+## 修改内容
+
+- 服务位看板新增店长专属的“停用服务位/重新启用服务位”操作；活动占用存在时服务端返回 `409 POSITION_OCCUPIED`，普通员工由认证/权限层拒绝。
+- 停用只暂停 DIY 新的扫码和共享 iPad 入口，保留服务位二维码绑定，且不调用智慧宝物理资源接口。审计记录操作者、门店、服务位、前后 `operational_status` 和原因。
+- 停用服务位若没有既有二维码，读取二维码接口返回 `409 SERVICE_POSITION_DISABLED`，避免生成无法投放的贴码。
+- 新二维码改用紧凑 v3 签名令牌，缩短二维码承载内容；已投放的 v2 二维码仍可扫码。管理端改用 1024 像素、`M` 级纠错和 4 模块静区生成二维码图片。
+
+## 涉及文件
+
+- `admin-react/src/api.ts`
+- `admin-react/src/pages/ServicePositionsPage.tsx`
+- `admin-react/src/servicePositionQr.ts`
+- `admin-react/src/servicePositions.ts`
+- `admin-react/tests/qr-management.test.ts`
+- `admin-react/tests/service-position-actions.test.ts`
+- `hxy-server/app/api/occupancies.py`
+- `hxy-server/tests/test_occupancy_api.py`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/admin.md`
+
+## 测试结果
+
+- 管理端 `npm test`：121 passed。
+- 管理端 `npx tsc -b`：通过。
+- 管理端 `npm run build`：通过；保留既有共享 chunk 体积警告。
+- 后端 `python -m pytest tests/test_admin_resource_permissions.py tests/test_occupancy_api.py -q`：45 passed，1 个既有 Starlette/httpx 弃用警告。
+
+## 发布状态
+
+- 本地完成：是，分支 `codex/admin/store-position-qr`。
+- 已发布生产：否。
+- 生产 release：未变更；未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查。
+
+## 尚未完成事项
+
+- 当前未迁移的 `staff` 登录时返回 `403 ROLE_MIGRATION_REQUIRED`，不能作为正式普通员工账号进行二维码只读验收；需单独完成角色迁移后再验证。
+- 发布后需在非营业测试服务位验证：店长停用后扫码被拒、重新启用后原二维码恢复；普通员工仅查看二维码；跨门店访问继续不可见/不可操作。
+
 # 2026-08-30 七牛私有 CDN 连通性验证与签名 URL 修复（本地完成，未发布）
 
 ## 本地完成

@@ -5,6 +5,12 @@ export type ServicePositionQrPermissions = {
   canManage: boolean;
 };
 
+export const servicePositionQrRenderOptions = {
+  width: 1024,
+  margin: 4,
+  errorCorrectionLevel: 'M' as const,
+};
+
 export function getServicePositionQrPermissions(role?: string): ServicePositionQrPermissions {
   const canView = role === 'admin' || role === 'manager' || role === 'staff';
   return {

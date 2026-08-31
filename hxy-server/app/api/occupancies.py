@@ -63,7 +63,8 @@ def create_position_qr_token(store_id: int, position_code: str, source: str = "p
     return f"{raw}.{signature}"
 
 
-def _managed_position_qr_token(qr: ServicePositionQr, position_code: str) -> str:
+def _managed_position_qr_token_v2(qr: ServicePositionQr, position_code: str) -> str:
+    """兼容已打印的 v2 码；新码改用更短的 v3 令牌。"""
     payload = {
         "v": 2,
         "qr_id": qr.public_id,
@@ -74,6 +75,21 @@ def _managed_position_qr_token(qr: ServicePositionQr, position_code: str) -> str
     raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
     signature = hmac.new(settings.jwt_secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
     return f"{raw}.{signature}"
+
+
+def _managed_position_qr_token(qr: ServicePositionQr, position_code: str) -> str:
+    """生成紧凑 v3 码。
+
+    门店、服务位和来源均以持久化二维码记录为准，码面只保存不可猜测的
+    public_id 与 128 位 HMAC 标签，减少现场打印二维码的模块密度。
+    """
+    del position_code
+    public_id = qr.public_id.replace("-", "")
+    payload = f"v3.{public_id}"
+    signature = base64.urlsafe_b64encode(
+        hmac.new(settings.jwt_secret.encode(), payload.encode(), hashlib.sha256).digest()[:16]
+    ).decode().rstrip("=")
+    return f"{payload}.{signature}"
 
 
 def _qr_error(code: str, message: str) -> HTTPException:
@@ -87,6 +103,30 @@ def _verify_position_qr_token(
     position_code: str,
     source: str,
 ) -> ServicePositionQr | None:
+    if token.startswith("v3."):
+        try:
+            version, public_id, signature = token.split(".")
+            if version != "v3" or len(public_id) != 32 or any(char not in "0123456789abcdef" for char in public_id):
+                raise ValueError
+            canonical_public_id = str(uuid.UUID(hex=public_id))
+        except (ValueError, TypeError):
+            raise _qr_error("QR_BINDING_INVALID", "二维码无效，请重新扫码")
+        expected = base64.urlsafe_b64encode(
+            hmac.new(settings.jwt_secret.encode(), f"v3.{public_id}".encode(), hashlib.sha256).digest()[:16]
+        ).decode().rstrip("=")
+        if not hmac.compare_digest(signature, expected):
+            raise _qr_error("QR_BINDING_INVALID", "二维码无效，请重新扫码")
+        qr = db.scalar(select(ServicePositionQr).where(ServicePositionQr.public_id == canonical_public_id))
+        if not qr:
+            raise _qr_error("QR_BINDING_INVALID", "二维码不存在，请联系前台")
+        if qr.status != "active":
+            raise _qr_error("QR_DISABLED", "二维码已停用，请联系前台获取新二维码")
+        room = db.get(Room, qr.room_id)
+        if not room or qr.store_id != store_id or room.code != position_code or qr.source != source:
+            raise _qr_error("QR_BINDING_INVALID", "二维码绑定信息已变化，请重新扫码")
+        qr.last_accessed_at = utcnow()
+        return qr
+
     try:
         raw, signature = token.split(".", 1)
         expected = hmac.new(settings.jwt_secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
@@ -288,6 +328,11 @@ def admin_position_qr_link(room_id: int, authorization: str | None = Header(defa
         ServicePositionQr.replaced_by_id.is_(None),
     ).order_by(ServicePositionQr.id.desc()))
     if not qr:
+        if room.operational_status != "active":
+            raise HTTPException(status_code=409, detail={
+                "code": "SERVICE_POSITION_DISABLED",
+                "message": "服务位已停用，请重新启用后再生成二维码",
+            })
         if normalize_staff_role(staff.role, staff.technician_id) != "manager":
             raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可创建服务位二维码"})
         qr = _create_managed_qr(db, room, staff.id)
@@ -295,6 +340,59 @@ def admin_position_qr_link(room_id: int, authorization: str | None = Header(defa
         db.commit()
         db.refresh(qr)
     return _managed_qr_view(qr, room)
+
+
+@router.patch("/admin/service-positions/{room_id}/operational-status")
+def update_service_position_operational_status(
+    room_id: int,
+    body: dict,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """切换 DIY 服务位入口，不触发智慧宝物理资源操作。"""
+    staff = _current_staff(authorization, db)
+    if normalize_staff_role(staff.role, staff.technician_id) != "manager":
+        raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可停用或启用服务位"})
+    room = db.scalar(select(Room).where(
+        Room.id == room_id,
+        Room.store_id == _staff_store_id(staff),
+    ).with_for_update())
+    if not room:
+        raise HTTPException(status_code=404, detail="服务位不存在")
+    if room.is_space_container or not room.is_service_position:
+        raise HTTPException(status_code=400, detail="房间是空间容器，请操作具体服务位")
+    target_status = body.get("operational_status")
+    if target_status not in {"active", "inactive"}:
+        raise HTTPException(status_code=422, detail="服务位状态只能是 active 或 inactive")
+    active_occupancy = db.scalar(select(PositionOccupancy).where(
+        PositionOccupancy.active_room_id == room.id,
+    ))
+    if active_occupancy:
+        raise HTTPException(status_code=409, detail={
+            "code": "POSITION_OCCUPIED",
+            "message": "当前服务位有活动占用，请完成服务流程后再调整配置",
+        })
+    previous_status = room.operational_status
+    if previous_status != target_status:
+        room.operational_status = target_status
+        action = "service_position_disabled" if target_status == "inactive" else "service_position_enabled"
+        db.add(AuditLog(
+            actor_type="staff",
+            actor_id=str(staff.id),
+            store_id=room.store_id,
+            action=action,
+            entity_type="service_position",
+            entity_id=str(room.id),
+            detail={
+                "room_id": room.id,
+                "from_operational_status": previous_status,
+                "to_operational_status": target_status,
+                "reason": str(body.get("reason") or "")[:256],
+            },
+        ))
+        db.commit()
+        db.refresh(room)
+    return position_view(room)
 
 
 def _create_managed_qr(db: Session, room: Room, staff_id: int) -> ServicePositionQr:

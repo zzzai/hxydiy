@@ -30,6 +30,21 @@
 
 待现场验收：使用授权店长与普通员工账号分别验证服务中服务位的二维码查看、有效码下载、店长二维码变更入口与普通员工无变更入口；自动化测试不等于真实门店营业验收。
 
+## 2026-08-31 服务位停用与现场二维码简化（本地完成，未发布）
+
+- 服务位看板为店长新增“停用服务位/重新启用服务位”入口；仅无活动占用的本店实际服务位可操作，普通员工不显示入口。
+- 停用仅写入 DIY 的 `operational_status`：阻止新的顾客扫码和共享 iPad 入口，不调用智慧宝开沙发、开房、离位、清洁或物理资源释放。服务端同时校验店长角色、门店归属、实际服务位和活动占用，并记录前后状态及原因审计。
+- 服务位停用后不再新建二维码；已有二维码绑定保留，恢复服务位后可继续使用。新生成二维码使用紧凑 v3 令牌，旧 v2 印刷码继续兼容；前端二维码使用 `M` 级纠错、1024 像素输出和标准 4 模块静区，减少码图模块密度并提升现场打印扫码容错。
+- 发现现有普通员工认证缺口：未迁移的 `staff` 账号在登录层即返回 `ROLE_MIGRATION_REQUIRED`，无法进入“只读二维码”现场验收；本轮未改后端权限模型，必须作为独立角色迁移任务处理。
+
+涉及文件：`admin-react/src/pages/ServicePositionsPage.tsx`、`admin-react/src/servicePositions.ts`、`admin-react/src/servicePositionQr.ts`、`admin-react/src/api.ts`、`hxy-server/app/api/occupancies.py`、对应管理端/后端测试及 `docs/TEAM-MEMORY.md`。
+
+验证：先新增并确认前端缺失导出、后端缺失 v3/停用接口的失败测试，再完成最小实现。管理端 `npm test` 为 121 passed，`npx tsc -b` 通过，`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 体积警告）。后端 `python -m pytest tests/test_admin_resource_permissions.py tests/test_occupancy_api.py -q` 为 45 passed，含 1 个既有 Starlette/httpx 弃用警告。
+
+发布状态：本地完成，分支 `codex/admin/store-position-qr`；未发布生产，未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查。
+
+待现场验收：待发布后使用店长账号验证空闲服务位停用、扫码拒绝、重新启用和原二维码恢复；用已迁移为正式普通员工的账号验证只读二维码边界。不得在营业服务位上执行停用、重新生成或换绑测试。
+
 ## 本轮完成
 
 - 管理权限 helper 对旧/非法角色统一返回结构化 403，避免 `ValueError` 变成 500。

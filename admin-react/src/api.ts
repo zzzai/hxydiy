@@ -159,6 +159,8 @@ export type PositionQr = {
 };
 export const getPositionQrLink = (roomId: number) =>
   client.get<PositionQr>(`/admin/service-positions/${roomId}/qr-link`);
+export const updateServicePositionOperationalStatus = (roomId: number, operationalStatus: 'active' | 'inactive', reason: string) =>
+  client.patch(`/admin/service-positions/${roomId}/operational-status`, { operational_status: operationalStatus, reason });
 export const updatePositionQr = (qrId: number, status: 'active' | 'disabled', reason: string) =>
   client.patch<PositionQr>(`/admin/service-position-qrs/${qrId}`, { status, reason });
 export const regeneratePositionQr = (qrId: number, reason = '重新生成现场二维码') =>
