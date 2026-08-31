@@ -180,6 +180,94 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
         cross_store = self.client.get(f"/api/v1/admin/v2/projects/{self.main_id}/option-groups", headers=self.other_headers)
         self.assertEqual(cross_store.status_code, 404)
 
+    def test_project_list_uses_server_category_filter_and_pagination(self):
+        with self.SessionLocal() as db:
+            db.add(Project(
+                store_id=self.store_id,
+                code="PAGED-CARE",
+                category="care",
+                name="分页精油项目",
+                publication_status="candidate",
+            ))
+            db.commit()
+
+        response = self.client.get(
+            "/api/v1/admin/v2/projects",
+            headers=self.admin_headers,
+            params={"category": "catalog-test", "page": 1, "page_size": 2},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["total"], 4)
+        self.assertEqual(body["page"], 1)
+        self.assertEqual(body["page_size"], 2)
+        self.assertEqual(len(body["items"]), 2)
+        self.assertTrue(all(item["category"] == "catalog-test" for item in body["items"]))
+
+    def test_headquarters_project_writes_audit_target_store(self):
+        created = self.client.post(
+            "/api/v1/admin/v2/projects",
+            headers=self.admin_headers,
+            json={
+                "store_id": self.store_id,
+                "code": "AUDIT-PROJECT",
+                "category": "care",
+                "name": "审计归属项目",
+                "publication_status": "draft",
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.text)
+
+        updated = self.client.patch(
+            f"/api/v1/admin/v2/projects/{created.json()['id']}",
+            headers=self.admin_headers,
+            json={"name": "审计归属项目（已更新）"},
+        )
+        self.assertEqual(updated.status_code, 200, updated.text)
+
+        with self.SessionLocal() as db:
+            audit_rows = list(db.scalars(
+                select(AuditLog)
+                .where(AuditLog.entity_type == "project", AuditLog.entity_id == str(created.json()["id"]))
+                .order_by(AuditLog.id)
+            ))
+        self.assertEqual([row.action for row in audit_rows], ["update_project"])
+        self.assertEqual(audit_rows[0].store_id, self.store_id)
+        with self.SessionLocal() as db:
+            create_audit = db.scalar(select(AuditLog).where(
+                AuditLog.action == "create_project", AuditLog.entity_id == "AUDIT-PROJECT",
+            ))
+        self.assertIsNotNone(create_audit)
+        self.assertEqual(create_audit.store_id, self.store_id)
+
+    def test_manager_can_only_toggle_local_project_and_cannot_restore_archived(self):
+        master_data_change = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.main_id}",
+            headers=self.staff_headers,
+            json={"name": "店长越权修改"},
+        )
+        self.assertEqual(master_data_change.status_code, 403, master_data_change.text)
+
+        take_down = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.main_id}",
+            headers=self.staff_headers,
+            json={"publication_status": "inactive"},
+        )
+        self.assertEqual(take_down.status_code, 200, take_down.text)
+        put_up = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.main_id}",
+            headers=self.staff_headers,
+            json={"publication_status": "published"},
+        )
+        self.assertEqual(put_up.status_code, 200, put_up.text)
+        restore_archived = self.client.patch(
+            f"/api/v1/admin/v2/projects/{self.archived_id}",
+            headers=self.staff_headers,
+            json={"publication_status": "published"},
+        )
+        self.assertEqual(restore_archived.status_code, 403, restore_archived.text)
+
     def test_linked_project_create_patch_and_preview_reject_cross_store_without_leaking_source(self):
         ids = self._create_valid_draft()
         cross_store_create = self.client.post(

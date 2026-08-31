@@ -1906,3 +1906,33 @@
 - 本地完成：分支 `codex/admin/catalog-management`，已基于最新 `origin/main` 复核。
 - 已发布生产：否；未执行数据库迁移、生产备份、Manifest 校验、线上切换或 API 重建。
 - 待现场验收：CI/PR 审核后，使用总部管理员和店长测试账号验证商品编辑、目标门店选择、门店隔离及上下架权限；自动化测试不等同营业现场验收。
+
+# 2026-08-31 项目管理权限与分页契约收口（本地完成，未发布）
+
+## 本地完成
+
+- 管理端项目页按总部管理员和店长分别呈现权限：总部可跨门店查看、选择目标门店新建、编辑和强制下线；店长仅可在本店切换项目上架/下架。
+- 已被总部强制下线的项目在店长端锁定，不提供恢复路径；`archived` 状态明确展示为“总部强制下线”。
+- 后端项目列表支持 `category`、`status`、`page`、`page_size` 服务端筛选和准确总数，并保留未分页旧数组响应兼容。
+- 项目创建和更新审计均记录项目所属 `store_id`；店长越权编辑主数据或恢复强制下线项目仍被后端拒绝。
+
+## 涉及文件
+
+- `admin-react/src/pages/ProjectsPage.tsx`
+- `admin-react/src/pages/projects-page-model.ts`
+- `admin-react/tests/projects-page-model.test.ts`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_admin_catalog_options_api.py`
+- `docs/TEAM-MEMORY.md`、`docs/workstreams/admin.md`
+
+## 测试结果
+
+- 管理端：`npm test`，116 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 体积警告）。
+- 后端目录与权限专项：34 passed，1 个既有 Starlette/httpx 弃用警告。
+- 本任务工作树缺少锁定的开发依赖，已执行 `npm ci --ignore-scripts` 恢复；npm 审计仍提示 7 个既有漏洞（2 moderate、5 high），未做超出本轮范围的自动升级。
+
+## 发布状态
+
+- 本地完成：是，分支 `codex/admin/project-management`。
+- 已发布生产：否。本轮未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查；生产 release 未改变。
+- 待现场验收：Pull Request/CI 审核通过后，以总部管理员、店长真实账号验证跨店列表、目标门店选择、本店上下架、强制下线不可恢复及审计记录；自动化测试不等同真实门店营业验收。

@@ -70,3 +70,17 @@
 验证：管理端完整测试 114 passed；`npx tsc -b` 通过；生产构建成功（Vite 4001 modules，保留既有大 chunk 警告）；后端商品/权限专项 52 passed（1 个既有 Starlette/httpx 弃用警告）。后端完整套件另有 16 个既有基线/发布环境失败，未涉及本次商品改动。
 
 发布状态：本地完成，未发布生产；未执行数据库迁移、备份、Manifest 校验或线上切换。待完整验证、PR/CI 审核及总部、店长账号现场验收。
+
+## 2026-08-31 项目管理权限与分页契约收口（本地完成，未发布）
+
+- 总部管理员可跨门店查看项目、在新建时显式选择目标门店，并可编辑主数据或强制下线。
+- 店长仅能查看本店项目并切换“上架/下架”；不显示新建和编辑入口，已被总部强制下线的项目不能恢复。
+- 项目列表的分类、状态和分页改为服务端执行，分页响应携带准确 `total`；未传分页参数的旧客户端仍收到历史数组响应。
+- 项目创建和更新审计记录目标 `store_id`，以便跨店总部操作可追溯。
+- 状态 `archived` 的操作文案统一为“总部强制下线”，避免与可恢复的普通归档混淆。
+
+涉及文件：`admin-react/src/pages/ProjectsPage.tsx`、`admin-react/src/pages/projects-page-model.ts`、`admin-react/tests/projects-page-model.test.ts`、`hxy-server/app/api/admin_v2.py`、`hxy-server/tests/test_admin_catalog_options_api.py`、`docs/TEAM-MEMORY.md`。
+
+验证：管理端 `npm test` 116 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有大共享 chunk 警告）；后端目录与权限专项 34 passed，含 1 个既有 Starlette/httpx 弃用警告。当前任务工作树缺失锁定的开发依赖，已用 `npm ci --ignore-scripts` 按锁文件恢复；审计提示 7 个既有 npm 漏洞，未做无关依赖升级。
+
+发布状态：未发布生产，未执行数据库迁移、备份、Manifest 校验、服务器切换或线上健康检查。待 Pull Request/CI 审核后，以总部管理员和店长真实账号完成跨店可见范围、目标门店选择、上架/下架及强制下线不可恢复的现场验收。

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   CATEGORY_OPTIONS,
   PROJECT_STATUS_OPTIONS,
+  canStoreToggleProjectPublication,
   formatProjectPrice,
   normalizeProjectList,
   projectFilterParams,
@@ -31,4 +32,24 @@ test('项目价格以元显示并保留两位小数', () => {
 test('项目分类和状态选项包含正式业务文案', () => {
   assert.equal(CATEGORY_OPTIONS.find((item) => item.value === 'local-strength')?.label, '局部调理');
   assert.equal(PROJECT_STATUS_OPTIONS.find((item) => item.value === 'published')?.label, '已发布');
+  assert.equal(PROJECT_STATUS_OPTIONS.find((item) => item.value === 'archived')?.label, '总部强制下线');
+});
+
+test('店长只能切换已下发项目的上下架状态，不能恢复总部强制下线项目', () => {
+  assert.equal(canStoreToggleProjectPublication('candidate'), true);
+  assert.equal(canStoreToggleProjectPublication('published'), true);
+  assert.equal(canStoreToggleProjectPublication('inactive'), true);
+  assert.equal(canStoreToggleProjectPublication('draft'), false);
+  assert.equal(canStoreToggleProjectPublication('archived'), false);
+});
+
+test('项目管理页面为总部提供编辑和目标门店选择，为店长只提供上下架入口', async () => {
+  const source = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/pages/ProjectsPage.tsx', import.meta.url), 'utf8'));
+  assert.match(source, /canManageStoreMasterData/);
+  assert.match(source, /ProFormSelect name="store_id"/);
+  assert.match(source, /店长不能恢复/);
+  assert.match(source, /canStoreToggleProjectPublication/);
+  assert.match(source, /publication_status === 'archived'/);
+  assert.doesNotMatch(source, /const filtered = normalized\.data\.filter/);
+  assert.match(source, /total: normalized\.total/);
 });

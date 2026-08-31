@@ -1211,9 +1211,12 @@ def delete_technician(tech_id: int, db: Session = Depends(get_db),
 def list_projects_admin(
     store_id: int | None = Query(None),
     status: str | None = Query(None),
+    category: str | None = Query(None),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=100),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
-) -> list:
+):
     staff = _current_staff(authorization, db)
     q = select(Project)
     if not _is_headquarters_admin(staff):
@@ -1223,8 +1226,21 @@ def list_projects_admin(
         q = q.where(Project.store_id == store_id)
     if status:
         q = q.where(Project.publication_status == status)
-    q = q.order_by(Project.id)
-    projects = db.execute(q).scalars().all()
+    if category:
+        q = q.where(Project.category == category)
+    if page is None and page_size is None:
+        q = q.order_by(Project.id)
+        projects = db.execute(q).scalars().all()
+        total = None
+        resolved_page = None
+        resolved_page_size = None
+    else:
+        resolved_page = page or 1
+        resolved_page_size = page_size or 50
+        total = db.scalar(select(sa_func.count()).select_from(q.subquery())) or 0
+        projects = db.execute(
+            q.order_by(Project.id).offset((resolved_page - 1) * resolved_page_size).limit(resolved_page_size),
+        ).scalars().all()
     result = []
     for p in projects:
         prices = db.execute(
@@ -1249,7 +1265,9 @@ def list_projects_admin(
             "publication_status": p.publication_status,
             "prices": price_map,  # {"store": 8900, "member": 6900, "group": 2990}
         })
-    return result
+    if total is None:
+        return result
+    return {"items": result, "total": total, "page": resolved_page, "page_size": resolved_page_size}
 
 
 ProjectPriceType = Literal["store", "group", "member"]
@@ -1414,7 +1432,7 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db),
     db.add(project)
     db.flush()
     _append_project_prices(db, project.id, body.prices, staff.name)
-    _audit(db, staff, "create_project", "project", project.code)
+    _audit(db, staff, "create_project", "project", project.code, store_id=project.store_id)
     _commit_project_or_conflict(db)
     return {"id": project.id, "code": project.code}
 
@@ -1426,8 +1444,6 @@ def _update_project_strict(project_id: int, body: ProjectPatch, db: Session, sta
         set(body.model_fields_set),
         publication_status=body.publication_status,
         current_publication_status=project.publication_status,
-        # 历史项目流仍允许店长在总部下发后标记待发布；商品只允许上下架。
-        store_allowed_publication_statuses={"candidate", "published", "inactive"},
     )
     data = body.model_dump(exclude_unset=True, exclude={"prices"})
     if "code" in data and data["code"] != project.code and referrers:
@@ -1444,7 +1460,7 @@ def _update_project_strict(project_id: int, body: ProjectPatch, db: Session, sta
         setattr(project, key, value)
     if "prices" in body.model_fields_set:
         _append_project_prices(db, project.id, body.prices or {}, staff.name)
-    _audit(db, staff, "update_project", "project", str(project.id))
+    _audit(db, staff, "update_project", "project", str(project.id), store_id=project.store_id)
     _commit_project_or_conflict(db)
     return {"ok": True, "id": project.id, "code": project.code, "publication_status": project.publication_status}
 

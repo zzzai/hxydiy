@@ -32,7 +32,7 @@ export const PROJECT_STATUS_OPTIONS = [
   { value: 'candidate', label: '待审核' },
   { value: 'published', label: '已发布' },
   { value: 'inactive', label: '已停用' },
-  { value: 'archived', label: '已归档' },
+  { value: 'archived', label: '总部强制下线' },
 ] as const;
 
 export const CATEGORY_LABELS = Object.fromEntries(
@@ -42,6 +42,12 @@ export const CATEGORY_LABELS = Object.fromEntries(
 export const PROJECT_STATUS_LABELS = Object.fromEntries(
   PROJECT_STATUS_OPTIONS.map((item) => [item.value, item.label]),
 ) as Record<string, string>;
+
+const STORE_TOGGLEABLE_PROJECT_STATUSES = new Set(['candidate', 'published', 'inactive']);
+
+export function canStoreToggleProjectPublication(status: string) {
+  return STORE_TOGGLEABLE_PROJECT_STATUSES.has(status);
+}
 
 export function normalizeProjectList(result: unknown): { data: Project[]; total: number } {
   if (Array.isArray(result)) return { data: result as Project[], total: result.length };
