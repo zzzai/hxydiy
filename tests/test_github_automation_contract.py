@@ -37,6 +37,12 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("deploy-production.sh", content)
         self.assertIn("concurrency:", content)
 
+    def test_ci_fetches_the_pr_base_before_comparing_whitespace(self):
+        content = workflow("ci.yml")
+
+        self.assertIn("fetch-depth: 0", content)
+        self.assertIn('git diff --check "$BASE_SHA" "$GITHUB_SHA"', content)
+
     def test_remote_release_script_backs_up_verifies_and_rolls_back(self):
         script = (REPO_ROOT / "deploy" / "diy" / "deploy-production.sh").read_text(encoding="utf-8")
 
