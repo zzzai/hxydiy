@@ -1,3 +1,20 @@
+# 2026-08-31 顾客端足部精修素材同步提交（未推送）
+
+## 本地完成
+
+- 顾客端分支 `codex/customer/source-baseline` 新增提交 `2222d99 feat(customer): update foot refinement assets`。
+- 同步足部精修主图 `hxy-foot-refine-1.webp`、详情图 `hxy-foot-refinement-1.webp`，去除详情文案中不准确的“温水”表述，并增加 WebP 格式、源码/构建字节一致及主图/详情图不复用回归测试。
+- 顾客端 `npm test`：153 passed / 0 failed / 0 skipped；`HXY_PRODUCTION_SMOKE=1 npm test`：153 passed / 0 failed / 0 skipped；`npm run build` 和 `git diff --check` 通过。
+
+## 推送与发布状态
+
+- `git push -u origin codex/customer/source-baseline` 因当前环境无法连接 `github.com:443` 超时，提交尚未推送到 GitHub，未创建 Pull Request。
+- 未发布生产；线上继续使用 `customer-foot-refine-illustration-20260830-1`，生产数据库和 `current` 未修改。
+
+## 待处理
+
+- 网络恢复后推送该分支，并基于完整应用源码基线创建 PR；合并后再按发布门禁执行生产发布和无缓存验收。
+
 # 2026-08-30 七牛私有 CDN 连通性验证与签名 URL 修复（本地完成，未发布）
 
 ## 本地完成
