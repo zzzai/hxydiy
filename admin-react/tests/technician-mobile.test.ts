@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TECHNICIAN_MOBILE_ROUTES, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
+import { readFileSync } from 'node:fs';
+import { TECHNICIAN_MOBILE_ROUTES, TECHNICIAN_MOBILE_TAB_PATHS, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
 
 test('移动技师端只暴露三栏业务路由', () => {
   assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/history', '/technician/me']);
+});
+
+test('底部导航在 basename 路由中使用相对路径', () => {
+  assert.deepEqual(TECHNICIAN_MOBILE_TAB_PATHS, ['today', 'history', 'me']);
+  const shell = readFileSync(new URL('../src/technician/TechnicianMobileShell.tsx', import.meta.url), 'utf8');
+  assert.match(shell, /navigate\(tab\.path\)/);
+  assert.doesNotMatch(shell, /path: '\/technician\/(today|history|me)'/);
 });
 
 test('技师状态使用现场可理解文案', () => {

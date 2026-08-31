@@ -137,3 +137,36 @@
 - 后端技师/画像专项 `22 passed`，管理端测试 `110 passed`，类型检查和生产构建通过；生产 Alembic 为 `20260830_media_assets (head)`，Manifest 全量校验和公网健康检查通过。
 - 本轮未发现新的技师端源码或迁移，不制作空 release、不重复切换 `current`。媒体/七牛、顾客端及未单独验证的管理端改动不纳入本次技师发布。
 - 待真实门店手机完成顾客提交、区位订单查看、确认服务、服务结束、快记保存/失败重试和审计核对，并补验弱网/断网、并发和门店隔离。
+
+## 2026-08-31 技师移动端底部导航路径修复（本地完成，未发布）
+
+### 修改内容
+
+- 修复技师移动端底部“服务记录”“我的”点击后仍停留在“今日服务”的问题。
+- `BrowserRouter basename="/technician"` 下导航改用 `today`、`history`、`me` 相对路径；完整公网路由常量继续保留用于外部契约和测试。
+- 退出登录同步使用 Router basename 下的 `/login`，避免跳转到重复的 `/technician/technician/login` 路径。
+- 未改变技师权限、门店隔离、服务状态机或任何顾客数据写入流程。
+
+### 涉及文件
+
+- `admin-react/src/technician/TechnicianMobileShell.tsx`
+- `admin-react/src/technician/TechnicianMobileApp.tsx`
+- `admin-react/src/technician/technicianMobile.ts`
+- `admin-react/tests/technician-mobile.test.ts`
+
+### 测试结果
+
+- 新增 basename 导航路径回归测试；技师移动端相关测试通过。
+- 管理端全量测试：`111 passed`。
+- 管理端生产构建：通过（Vite `4001 modules transformed`，保留既有 chunk 体积警告）。
+- 已在生产页面稳定复现原问题（点击两个入口 URL 均保持 `/technician/today`）；本地构建未进行线上切换，待静态资源发布后复验三栏真实点击。
+
+### 发布状态
+
+- 本地完成：当前分支 `codex/technician/profile-record-admin-closure`。
+- 未发布生产；服务器 `current` 仍为 `technician-profile-contract-20260830-1`。
+
+### 待现场验收
+
+- 发布后用手机验证“今日服务 → 服务记录 → 我的 → 今日服务”完整切换、刷新/返回和退出登录。
+- 自动化测试和生产只读复现不替代真实门店营业验收。

@@ -8,7 +8,7 @@ import TechnicianHistoryPage from './TechnicianHistoryPage';
 import TechnicianMePage from './TechnicianMePage';
 import './technician-mobile.css';
 
-export { TECHNICIAN_MOBILE_ROUTES, technicianStatusLabel, technicianActions } from './technicianMobile';
+export { TECHNICIAN_MOBILE_ROUTES, TECHNICIAN_MOBILE_TAB_PATHS, technicianStatusLabel, technicianActions } from './technicianMobile';
 
 export default function TechnicianMobileApp() {
   const [loggedIn, setLoggedIn] = useState(() => !!getToken() && getStaff()?.role === 'technician');

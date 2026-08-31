@@ -1,4 +1,5 @@
 export const TECHNICIAN_MOBILE_ROUTES = ['/technician/today', '/technician/history', '/technician/me'] as const;
+export const TECHNICIAN_MOBILE_TAB_PATHS = ['today', 'history', 'me'] as const;
 
 export function technicianStatusLabel(status: string): string {
   return ({ available: '空闲', waiting_service: '待确认', in_service: '服务中', post_service_present: '已完成' } as Record<string, string>)[status] || '处理中';

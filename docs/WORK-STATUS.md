@@ -1921,3 +1921,36 @@
 ### 待门店现场验收
 
 - 真实门店手机仍需完成“顾客提交 → 查看沙发/房间订单 → 确认服务 → 服务结束 → 快记保存/失败重试 → 审计核对”，并验证弱网/断网、并发重复点击、账号权限和门店隔离。
+
+# 2026-08-31 技师移动端底部导航路径修复（本地完成，未发布）
+
+## 修改内容
+
+- 修复 `basename="/technician"` 场景下底部“服务记录”“我的”点击后不切换页面的问题。
+- 导航项统一使用 Router 内部相对路径 `today`、`history`、`me`；退出登录改为 basename 内部 `/login`。
+- 未涉及顾客端、管理后台业务、服务状态机、权限边界或数据库迁移。
+
+## 涉及文件
+
+- `admin-react/src/technician/TechnicianMobileShell.tsx`
+- `admin-react/src/technician/TechnicianMobileApp.tsx`
+- `admin-react/src/technician/technicianMobile.ts`
+- `admin-react/tests/technician-mobile.test.ts`
+- `docs/workstreams/technician.md`
+
+## 测试结果
+
+- 管理端全量测试：`111 passed`。
+- 管理端生产构建：成功（Vite `4001 modules transformed`，存在既有 chunk 体积警告）。
+- 生产页面已复现原故障：点击“服务记录”和“我的”后 URL/主内容仍为 `/technician/today`；修复后已通过 basename 路径契约回归测试。
+
+## 发布状态
+
+- 本地完成：分支 `codex/technician/profile-record-admin-closure`。
+- 未发布生产；服务器 `current` 仍为 `technician-profile-contract-20260830-1`。
+- 本轮未执行数据库备份、迁移、Manifest 切换或 API 重建。
+
+## 尚未完成事项
+
+- 发布静态资源后需重新进行线上三栏点击、刷新/返回和退出登录验证。
+- 待门店现场用真实手机验收导航切换，并继续完成服务闭环、弱网/断网、并发和门店隔离验收。
