@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: admin-react/package-lock.json
       - run: npm ci
@@ -42,5 +42,5 @@ jobs:
           cache: pip
           cache-dependency-path: hxy-server/requirements.txt
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r requirements.txt
+      - run: python -m pip install -r requirements.txt pytest
       - run: python -m pytest tests/test_admin_resource_permissions.py tests/test_occupancy_api.py -q
