@@ -1,6 +1,6 @@
 # 管理后台与员工工作台工作流
 
-更新时间：2026-08-30
+更新时间：2026-08-31
 
 ## 负责范围
 
@@ -15,6 +15,20 @@
 - 管理端代码：`admin-react/`；顾客端和后端仅作为同仓库联调基线，不在本工作流中修改其业务。
 - 共享记忆：`docs/TEAM-MEMORY.md`；任务交接：本目录；发布事实：`docs/WORK-STATUS.md`。
 - Obsidian 打开仓库根目录即可阅读上述 Markdown；代码变更必须走 `codex/admin/<task>` 分支和 Pull Request。
+
+## 2026-08-31 服务位二维码查看与店长配置边界（本地完成，未发布）
+
+- 服务位看板中的“查看顾客二维码”不再受“服务位可用”状态限制；服务中、待服务等现场状态仍可查看既有码并下载有效二维码，避免临时无法补印或核对。
+- 普通员工在本店可查看二维码，但页面不再展示停用、重新启用、重新生成或换绑操作；只有当前门店店长可见这些配置控制项。
+- 前端权限 helper 与服务端的门店归属和 `manager` 写权限保持一致；本轮未改动二维码 API、顾客端、技师端、智慧宝或任何物理资源操作。
+
+涉及文件：`admin-react/src/pages/ServicePositionsPage.tsx`、`admin-react/src/servicePositionQr.ts`、`admin-react/tests/qr-management.test.ts`、`docs/TEAM-MEMORY.md`。
+
+验证：先新增并确认权限回归测试失败，再完成最小实现；管理端 `npm test` 为 119 passed，`npx tsc -b` 通过，`npm run build` 成功（Vite 转换 4001 个模块，保留既有共享 chunk 体积警告）。后端 `python -m pytest tests/test_admin_resource_permissions.py` 为 9 passed，含 1 个既有 Starlette/httpx 弃用警告。新工作树按锁文件执行 `npm ci` 后发现 7 个既有依赖漏洞（2 moderate、5 high），未进行无关依赖升级。
+
+发布状态：本地完成，分支 `codex/admin/store-position-qr`；未发布生产，未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查。
+
+待现场验收：使用授权店长与普通员工账号分别验证服务中服务位的二维码查看、有效码下载、店长二维码变更入口与普通员工无变更入口；自动化测试不等于真实门店营业验收。
 
 ## 本轮完成
 

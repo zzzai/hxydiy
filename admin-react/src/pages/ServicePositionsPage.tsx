@@ -55,7 +55,7 @@ import {
   type PositionAction,
   type ServicePosition,
 } from '../servicePositions';
-import { servicePositionQrActions } from '../servicePositionQr';
+import { getServicePositionQrPermissions, servicePositionQrActions } from '../servicePositionQr';
 
 type ActionMode = 'start_service' | 'kiosk' | null;
 
@@ -131,6 +131,7 @@ function PositionTile({ position, now, onClick }: { position: ServicePosition; n
 export default function ServicePositionsPage() {
   const { message, modal } = App.useApp();
   const staff = getStaff();
+  const qrPermissions = getServicePositionQrPermissions(staff?.role);
   const [positions, setPositions] = useState<ServicePosition[]>([]);
   const [updatedAt, setUpdatedAt] = useState('');
   const [selected, setSelected] = useState<ServicePosition | null>(null);
@@ -458,9 +459,9 @@ export default function ServicePositionsPage() {
               <Space wrap>
                 {actions.includes('start_service') && <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => setActionMode('start_service')}>确认服务</Button>}
                 {actions.includes('finish_service') && <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => void runAction('finish_service')}>服务结束</Button>}
+                {qrPermissions.canView && <Button icon={<CopyOutlined />} onClick={() => void copyPositionQrLink()}>查看顾客二维码</Button>}
                 {selected.state === 'available' && <>
                   <Button type="primary" icon={<TabletOutlined />} onClick={() => setActionMode('kiosk')}>绑定共享 iPad</Button>
-                  <Button icon={<CopyOutlined />} onClick={() => void copyPositionQrLink()}>复制顾客二维码链接</Button>
                 </>}
               </Space>
             </div>
@@ -496,21 +497,21 @@ export default function ServicePositionsPage() {
                     : <Typography.Text type="secondary">该二维码已失效，不再展示或提供下载。重新启用，或生成新二维码后再打印投放。</Typography.Text>}
                   <Typography.Text type="secondary">二维码只绑定当前门店和具体服务位；停用或换绑后旧码立即失效。</Typography.Text>
                   <Space wrap>
-                    {servicePositionQrActions(positionQr.status, false).includes('disable') && <Button danger icon={<StopOutlined />} loading={qrBusy} onClick={() => void changeQrStatus('disabled')}>停用二维码</Button>}
-                    {servicePositionQrActions(positionQr.status, false).includes('enable') && <Button type="primary" loading={qrBusy} onClick={() => void changeQrStatus('active')}>重新启用</Button>}
+                    {qrPermissions.canManage && servicePositionQrActions(positionQr.status, false).includes('disable') && <Button danger icon={<StopOutlined />} loading={qrBusy} onClick={() => void changeQrStatus('disabled')}>停用二维码</Button>}
+                    {qrPermissions.canManage && servicePositionQrActions(positionQr.status, false).includes('enable') && <Button type="primary" loading={qrBusy} onClick={() => void changeQrStatus('active')}>重新启用</Button>}
                     {positionQr.status === 'active' && <Button type="primary" onClick={downloadPositionQr}>下载打印二维码</Button>}
-                    {!positionQr.status || positionQr.status === 'active' ? <Button onClick={confirmRegenerateQr}>重新生成</Button> : <Button onClick={confirmRegenerateQr}>生成新二维码</Button>}
+                    {qrPermissions.canManage && (!positionQr.status || positionQr.status === 'active' ? <Button onClick={confirmRegenerateQr}>重新生成</Button> : <Button onClick={confirmRegenerateQr}>生成新二维码</Button>)}
                   </Space>
-                  <Space wrap>
-                    <Select
-                      value={qrTargetRoomId}
-                      onChange={setQrTargetRoomId}
-                      placeholder="选择换绑目标服务位"
-                      style={{ minWidth: 220 }}
-                      options={availableTargets.filter((item) => item.id !== selected.id).map((item) => ({ value: item.id, label: item.name }))}
-                    />
-                    <Button icon={<SwapOutlined />} disabled={!qrTargetRoomId} onClick={confirmRebindQr}>换绑服务位</Button>
-                  </Space>
+                  {qrPermissions.canManage && <Space wrap>
+                      <Select
+                        value={qrTargetRoomId}
+                        onChange={setQrTargetRoomId}
+                        placeholder="选择换绑目标服务位"
+                        style={{ minWidth: 220 }}
+                        options={availableTargets.filter((item) => item.id !== selected.id).map((item) => ({ value: item.id, label: item.name }))}
+                      />
+                      <Button icon={<SwapOutlined />} disabled={!qrTargetRoomId} onClick={confirmRebindQr}>换绑服务位</Button>
+                    </Space>}
                 </Space>}
               />
             )}
