@@ -1,4 +1,4 @@
-# 2026-08-31 顾客端足部精修素材同步提交（未推送）
+# 2026-08-31 顾客端足部精修素材同步提交（PR #5，未发布）
 
 ## 本地完成
 
@@ -8,12 +8,13 @@
 
 ## 推送与发布状态
 
-- `git push -u origin codex/customer/source-baseline` 因当前环境无法连接 `github.com:443` 超时，提交尚未推送到 GitHub，未创建 Pull Request。
+- 已推送分支：`codex/customer/source-baseline`。
+- 已创建 Pull Request：[#5 feat(customer): update foot refinement assets](https://github.com/zzzai/hxydiy/pull/5)，目标基线为 `codex/technician/profile-record-admin-closure`，差异为 7 个文件。
 - 未发布生产；线上继续使用 `customer-foot-refine-illustration-20260830-1`，生产数据库和 `current` 未修改。
 
 ## 待处理
 
-- 网络恢复后推送该分支，并基于完整应用源码基线创建 PR；合并后再按发布门禁执行生产发布和无缓存验收。
+- 待 PR #5 审核/合并；合并后再按发布门禁执行生产发布和无缓存验收。
 
 # 2026-08-30 七牛私有 CDN 连通性验证与签名 URL 修复（本地完成，未发布）
 
