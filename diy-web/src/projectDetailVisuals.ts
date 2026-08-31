@@ -59,7 +59,7 @@ const FOOT_REFINEMENT_VISUALS: ProjectDetailVisualSection[] = [
   {
     image: assetPath('projects/hxy-foot-refinement-1.webp'),
     title: '细细整理，给双脚一个清爽收尾',
-    body: '温水、毛巾和木质工具按门店标准备好，轻松完成足部清洁与修整。',
+    body: '毛巾和木质工具按门店标准备好，轻松完成足部清洁与修整。',
     alt: '荷小悦人物在新中式服务台为顾客进行足部清洁与修整',
   },
 ];
