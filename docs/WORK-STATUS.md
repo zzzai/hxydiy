@@ -42,9 +42,10 @@
 
 - 首次 PR #4 云端验收失败原因为工作流环境：管理端测试命令使用 Node 22 的 `--experimental-strip-types`，工作流却固定 Node 20；后端依赖清单未安装 `pytest`，导致测试进程直接退出。
 - 已将 `.github/workflows/ci.yml` 管理端运行时升级到 Node 22，并在后端 CI 安装 `pytest` 后再执行权限与服务位专项测试。
-- 本地源码测试此前已验证管理端 121 项、后端 49 项通过；本次仅调整 CI 工具链，不改变业务逻辑。等待新的 GitHub Actions 运行结果。
+- 本地源码测试已验证管理端 121 项、后端 49 项通过；本次仅调整 CI 工具链，不改变业务逻辑。
+- GitHub Actions 运行 `33387935310` 已通过：管理端测试与构建、后端权限与服务位契约两个 job 均为 `success`。
 
-发布状态：本地完成，CI 环境修复已提交到 `codex/admin/store-position-qr` 并推送；PR #4 未合并，未发布生产。
+发布状态：本地完成，CI 已通过；修复已提交到 `codex/admin/store-position-qr` 并推送，PR #4（https://github.com/zzzai/hxydiy/pull/4）未合并，未发布生产。
 
 # 2026-08-31 管理后台 PR 自动化验收（本地完成，待 GitHub 首次运行）
 

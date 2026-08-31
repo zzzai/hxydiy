@@ -126,3 +126,4 @@
 - `.github/workflows/ci.yml` 使用 Node 22 执行管理端测试、TypeScript 检查和生产构建，匹配当前 `node --experimental-strip-types` 测试入口。
 - 后端 CI 在安装业务依赖时显式安装 `pytest`，避免云端出现 `No module named pytest` 的环境性失败。
 - 首次 CI 失败已完成根因定位；修复仅涉及工作流，不涉及业务代码和生产配置。
+- GitHub Actions 运行 `33387935310` 已通过：管理端测试与构建、后端权限与服务位契约两个 job 均成功。
