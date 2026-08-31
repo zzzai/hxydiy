@@ -1,0 +1,15 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY hxy-server/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY hxy-server/ ./
+COPY diy-web/dist/ ./diy-web/dist/
+COPY admin-react/dist/ ./admin-react/dist/
+COPY hxy-server/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8010
+CMD ["/entrypoint.sh"]

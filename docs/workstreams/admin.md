@@ -28,3 +28,21 @@
 
 - 本轮未发布生产，服务器 `current` 与生产 release 未改变。
 - 待完成数据库备份与恢复演练、Manifest 校验、线上健康检查、跨店权限穿透、断网/并发幂等和智慧宝联调后，再安排生产发布与现场验收。
+
+## CI/CD 自动化（2026-08-31，本地完成，未发布）
+
+- 新增 `AI PR Review`：使用 `pull_request_target` 只读 PR diff；高危问题请求修改，不自动批准或合并。
+- 新增 `CI`：仓库契约、敏感信息扫描、管理端/顾客端测试与构建、后端测试和发布资格检查。
+- 新增 `Deploy Production`：只接收 `main` 成功 CI，使用 `production` Environment 审批、固定 SSH 主机指纹、PostgreSQL 备份/恢复演练、Manifest 校验、原子切换和失败回滚。
+- 新增 `deploy/diy/*` 发布脚本与 compose/Dockerfile；Alembic 迁移变化默认阻断，不自动 downgrade。
+
+## 自动化验证
+
+- `python -m unittest tests/test_github_automation_contract.py`：3 passed。
+- `bash -n deploy/diy/create-release.sh deploy/diy/activate-release.sh deploy/diy/deploy-production.sh`：通过。
+- `git diff --check`：通过。
+
+## 生产状态
+
+- 本轮仅完成仓库自动化基础设施，未发布生产，未修改生产数据库或 `current`。
+- 待 monorepo 基线合并、GitHub `production` Environment 审批人和 Secrets 配置后，才可启用真实自动发布。

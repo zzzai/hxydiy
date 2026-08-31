@@ -1689,3 +1689,45 @@
 - 本地完成：以上代码和测试均在工作区完成。
 - 已发布生产：无。本轮未切换服务器 `current`，未重建生产 API 容器。
 - 待现场验收：店长/员工/技师真实账号的权限穿透、门店隔离、服务单闭环、断网恢复、并发幂等及智慧宝联调。
+# 2026-08-31 PR 自动审核与生产发布自动化（本地完成，未发布）
+
+## 本地完成
+
+- 新增 GitHub Actions：AI PR 审核、CI 验收、生产发布工作流。
+- AI 审核使用 `pull_request_target` 读取 GitHub API diff，不检出或执行不可信 PR 代码；`critical/high` 自动 `REQUEST_CHANGES`，不自动批准或合并。
+- CI 覆盖仓库契约、敏感信息扫描、管理端/顾客端测试与生产构建、后端测试及完整 monorepo 发布资格检查。
+- 新增发布脚本：PostgreSQL 备份、SHA-256 校验、临时库恢复演练、Alembic 迁移阻断、Manifest 校验、原子 `current` 切换、API/管理端/顾客端健康检查和失败回滚。
+- compose 构建上下文改为显式 `HXY_DIY_CURRENT`，避免 release 内相对路径解析成 `current/current`。
+
+## 涉及文件
+
+- `.github/workflows/ai-pr-review.yml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/deploy-production.yml`
+- `deploy/diy/Dockerfile.release`
+- `deploy/diy/docker-compose.hxy.yml`
+- `deploy/diy/create-release.sh`
+- `deploy/diy/activate-release.sh`
+- `deploy/diy/deploy-production.sh`
+- `deploy/diy/.env.example`
+- `docs/operations/github-actions-production-automation.md`
+- `tests/test_github_automation_contract.py`
+
+## 测试结果
+
+- 自动化契约测试：`3 passed / 0 failed`。
+- 三个发布脚本 `bash -n`：通过。
+- `git diff --check`：通过。
+- 尚未在真实 GitHub Runner、非生产服务器或生产 Environment 执行发布演练。
+
+## 发布状态
+
+- 本地完成：是。
+- 已发布生产：否；服务器 `current`、数据库和线上容器均未修改。
+- 生产 release：未改变，仍以服务器实际 `readlink` 结果为准。
+
+## 待完成事项
+
+- 合并完整 monorepo 基线后，在 GitHub 配置 `production` Environment Required reviewer 和 Secrets。
+- 在非生产环境演练上传、备份恢复、原子切换和失败回滚，再安排生产灰度。
+- 自动化通过后仍需管理员、店长、普通员工和技师授权账号的现场验收；自动化测试不等于营业验收。
