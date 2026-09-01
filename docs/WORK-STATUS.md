@@ -1793,7 +1793,7 @@
 
 ## 发布状态
 
-- PR #7：修改已提交到 `codex/admin/cicd-gate-hardening-main`（当前 head `fa049cc`），待 GitHub Runner 重新执行。
+- PR #7：修改已提交到 `codex/admin/cicd-gate-hardening-main`，当前 head 以远端复核记录为准。
 - 未合并 `main`，未发布生产，未修改服务器、数据库或生产 Environment。
 
 ## 待完成事项
@@ -1801,3 +1801,10 @@
 - 仓库管理员需配置有效的 `OPENAI_API_KEY`，并重新运行 AI PR Review；本地环境中的同名凭据实测为无效（401），未上传或输出。
 - 由于 `pull_request_target` 读取默认分支工作流，PR #7 的新门禁要在合并后才会生效；合并前必须由管理员完成 bootstrap 审核，不得把旧版失败检查伪装成通过。
 - 合并后需用无业务变更测试 PR 验证原生 job check 名称、精确 head SHA 和 Auto Merge 竞态行为，再启用生产发布链路。
+
+## 2026-09-01 PR #7 远端复核
+
+- 当前 head 已更新为 `824d489`，顾客端、管理端、后端和静态检查均以该 SHA 成功。
+- Trusted Gate 仍显示旧版 `Publish trusted head checks`，原因是 `pull_request_target` 在 PR #7 合并前继续读取 `main` 的旧工作流；不能将该旧失败检查视为新实现已验收。
+- AI PR Review 因仓库缺少有效 `OPENAI_API_KEY` 保持失败；本地环境中的同名凭据实测返回 401，未上传、未写入日志。
+- 通过已认证 GitHub API 复核，当前仓库 Rulesets 列表为空；main 尚未配置分支硬门禁。PR #7 不能借此直接合并绕过检查。
