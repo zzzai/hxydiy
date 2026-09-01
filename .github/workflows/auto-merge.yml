@@ -1,0 +1,100 @@
+name: Auto Merge PR
+
+on:
+  workflow_run:
+    workflows: ["AI PR Review", "Trusted PR Gate"]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: auto-merge-pr-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: Merge eligible PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge only an exact, trusted head
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            if (run.conclusion !== 'success') {
+              core.info(`Workflow ${run.name} concluded ${run.conclusion}; merge skipped.`);
+              return;
+            }
+
+            const candidates = run.pull_requests || [];
+            if (candidates.length !== 1) {
+              core.info(`Expected exactly one PR for workflow run, found ${candidates.length}; merge skipped.`);
+              return;
+            }
+            const number = candidates[0].number;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            if (pr.state !== 'open' || pr.draft || pr.base.ref !== 'main') {
+              core.info('PR is not an open, non-draft PR targeting main; merge skipped.');
+              return;
+            }
+            if (!pr.head.repo || pr.head.repo.full_name !== `${owner}/${repo}`) {
+              core.info('Fork PRs are never auto-merged; merge skipped.');
+              return;
+            }
+
+            const expectedChecks = [
+              'Static contracts',
+              'Admin tests and build',
+              'Customer tests and build',
+              'Backend tests',
+              'AI PR Review',
+              'Trusted PR Gate',
+            ];
+            const { data: checks } = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref: pr.head.sha,
+              filter: 'latest',
+              per_page: 100,
+            });
+            const latest = new Map();
+            for (const check of checks.check_runs) {
+              if (check.app?.slug === 'github-actions' && ['Trusted PR Gate', 'AI PR Review'].includes(check.workflow_name || check.name)) {
+                latest.set(check.name, check);
+              }
+            }
+            const missingOrFailed = expectedChecks.filter((name) => {
+              const check = latest.get(name);
+              return !check || check.status !== 'completed' || check.conclusion !== 'success';
+            });
+            if (missingOrFailed.length) {
+              core.info(`Required checks incomplete or failed: ${missingOrFailed.join(', ')}; merge skipped.`);
+              return;
+            }
+
+            try {
+              const result = await github.rest.pulls.merge({
+                owner,
+                repo,
+                pull_number: pr.number,
+                sha: pr.head.sha,
+                merge_method: 'squash',
+              });
+              if (!result.data.merged) {
+                core.info(`GitHub did not merge PR: ${result.data.message || 'no reason returned'}`);
+              } else {
+                core.info(`PR #${pr.number} merged at ${result.data.sha}.`);
+              }
+            } catch (error) {
+              const status = error.status;
+              if ([405, 409, 422].includes(status)) {
+                core.info(`PR changed or is not mergeable (${status}); merge skipped.`);
+                return;
+              }
+              throw error;
+            }

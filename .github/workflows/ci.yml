@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run repository contracts
+        run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: Check whitespace
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${BASE_SHA:-}" ]]; then
+            git diff --check "$BASE_SHA" "$GITHUB_SHA"
+          else
+            git diff-tree --no-commit-id --check -r "$GITHUB_SHA"
+          fi
+      - name: Scan for credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nI -E 'BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|AKIA[0-9A-Z]{16}|(QINIU_SECRET_KEY|OPENAI_API_KEY|DIY_JWT_SECRET|POSTGRES_PASSWORD)\s*[:=]\s*[A-Za-z0-9_+/=-]{12,}' -- . ':!docs/WORK-STATUS.md' ':!deploy/diy/.env.example'; then
+            echo 'Potential credential detected. Remove it from the commit and use GitHub Secrets.' >&2
+            exit 1
+          fi
+
+  admin:
+    name: Admin tests and build
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.detect.outputs.available }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        shell: bash
+        run: |
+          if [[ -f admin-react/package.json && -f admin-react/package-lock.json ]]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'admin-react source is not present on this baseline; checks will be enabled after the monorepo baseline is merged.'
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.available == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: admin-react/package-lock.json
+      - name: Install dependencies
+        if: steps.detect.outputs.available == 'true'
+        working-directory: admin-react
+        run: npm ci
+      - name: Test
+        if: steps.detect.outputs.available == 'true'
+        working-directory: admin-react
+        run: npm test
+      - name: TypeScript and production build
+        if: steps.detect.outputs.available == 'true'
+        working-directory: admin-react
+        run: npm run build
+
+  customer:
+    name: Customer tests and build
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.detect.outputs.available }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        shell: bash
+        run: |
+          if [[ -f diy-web/package.json && -f diy-web/package-lock.json ]]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'diy-web source is not present on this baseline; checks will be enabled after the monorepo baseline is merged.'
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.available == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: diy-web/package-lock.json
+      - name: Install dependencies
+        if: steps.detect.outputs.available == 'true'
+        working-directory: diy-web
+        run: npm ci
+      - name: Test
+        if: steps.detect.outputs.available == 'true'
+        working-directory: diy-web
+        run: npm test
+      - name: TypeScript and production build
+        if: steps.detect.outputs.available == 'true'
+        working-directory: diy-web
+        run: npm run build
+
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.detect.outputs.available }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        shell: bash
+        run: |
+          if [[ -f hxy-server/requirements.txt && -d hxy-server/tests ]]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'hxy-server source is not present on this baseline; checks will be enabled after the monorepo baseline is merged.'
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.detect.outputs.available == 'true'
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: hxy-server/requirements.txt
+      - name: Install dependencies
+        if: steps.detect.outputs.available == 'true'
+        working-directory: hxy-server
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Run backend tests
+        if: steps.detect.outputs.available == 'true'
+        working-directory: hxy-server
+        run: pytest -q
+
+  release-readiness:
+    name: Production release readiness
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [static, admin, customer, backend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source baseline status
+        shell: bash
+        env:
+          STATIC_RESULT: ${{ needs.static.result }}
+          ADMIN_RESULT: ${{ needs.admin.result }}
+          CUSTOMER_RESULT: ${{ needs.customer.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$STATIC_RESULT" != success || "$ADMIN_RESULT" != success || "$CUSTOMER_RESULT" != success || "$BACKEND_RESULT" != success ]]; then
+            echo 'A required CI job did not succeed.' >&2
+            exit 1
+          fi
+          if [[ ! -f admin-react/package-lock.json || ! -f diy-web/package-lock.json || ! -f hxy-server/requirements.txt || ! -d deploy/diy ]]; then
+            echo 'Full monorepo baseline has not reached main. CI is valid for documentation, but production deployment will be refused.'
+          else
+            echo 'Full monorepo source is available for the guarded production deployment workflow.'
+          fi

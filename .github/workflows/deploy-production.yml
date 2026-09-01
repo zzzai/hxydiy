@@ -1,0 +1,148 @@
+name: Deploy Production
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Commit SHA on main to deploy after CI has passed
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify eligible main commit
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.gate.outputs.should_deploy }}
+      sha: ${{ steps.gate.outputs.sha }}
+    steps:
+      - id: gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fromCi = context.eventName === 'workflow_run';
+            const run = context.payload.workflow_run;
+            const sha = fromCi ? run.head_sha : (context.payload.inputs?.commit_sha || '');
+            let shouldDeploy = Boolean(sha);
+            if (fromCi) {
+              shouldDeploy = run.conclusion === 'success' && run.head_branch === 'main';
+            }
+            if (shouldDeploy) {
+              const { data: commit } = await github.rest.repos.getCommit({ ...context.repo, ref: sha });
+              shouldDeploy = commit.sha === sha;
+            }
+            if (shouldDeploy) {
+              const requiredPaths = [
+                'admin-react/package-lock.json',
+                'diy-web/package-lock.json',
+                'hxy-server/requirements.txt',
+                'deploy/diy/deploy-production.sh',
+              ];
+              for (const path of requiredPaths) {
+                try {
+                  await github.rest.repos.getContent({ ...context.repo, ref: sha, path });
+                } catch {
+                  shouldDeploy = false;
+                  break;
+                }
+              }
+            }
+            core.setOutput('should_deploy', String(shouldDeploy));
+            core.setOutput('sha', sha || '');
+      - name: Explain skipped deployment
+        if: steps.gate.outputs.should_deploy != 'true'
+        run: echo 'No successful CI result for a main commit; production deployment is skipped.'
+
+  deploy:
+    name: Backup, rehearse, deploy and verify
+    needs: verify
+    if: needs.verify.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+          fetch-depth: 1
+      - name: Verify full release source exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f admin-react/package-lock.json
+          test -f diy-web/package-lock.json
+          test -f hxy-server/requirements.txt
+          test -x deploy/diy/deploy-production.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            admin-react/package-lock.json
+            diy-web/package-lock.json
+      - name: Build management and customer applications
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd admin-react && npm ci && npm test && npm run build)
+          (cd diy-web && npm ci && npm test && npm run build)
+      - name: Package immutable release input
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_id="github-${GITHUB_SHA::12}-${GITHUB_RUN_ID}"
+          mkdir -p release-package
+          tar --exclude='.git' --exclude='.venv' --exclude='node_modules' --exclude='__pycache__' --exclude='*.pyc' --exclude='*.pyo' --exclude='*.db' --exclude='*.db-*' --exclude='.env' --exclude='.env.*' --exclude='tests' -cf - hxy-server | tar -xf - -C release-package
+          mkdir -p release-package/admin-react release-package/diy-web
+          cp -R admin-react/dist release-package/admin-react/dist
+          cp -R diy-web/dist release-package/diy-web/dist
+          cp -R deploy release-package/deploy
+          tar -C release-package -czf "${release_id}.tar.gz" .
+          sha256sum "${release_id}.tar.gz" > "${release_id}.tar.gz.sha256"
+          printf '%s' "$release_id" > release-id.txt
+      - name: Configure pinned production host key
+        shell: bash
+        env:
+          PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$PRODUCTION_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Configure deployment key
+        shell: bash
+        env:
+          PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$PRODUCTION_SSH_PRIVATE_KEY"
+          printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Upload and run guarded release
+        shell: bash
+        env:
+          PRODUCTION_SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          PRODUCTION_SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+          PRODUCTION_ROOT: ${{ vars.PRODUCTION_ROOT || '/root/hxy-diy-20260811' }}
+        run: |
+          set -euo pipefail
+          test -n "$PRODUCTION_SSH_HOST"
+          test -n "$PRODUCTION_SSH_USER"
+          release_id=$(cat release-id.txt)
+          archive="${release_id}.tar.gz"
+          ssh -o BatchMode=yes "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" "mkdir -p '${PRODUCTION_ROOT}/incoming/${release_id}' '${PRODUCTION_ROOT}/workspaces'"
+          scp -o BatchMode=yes "$archive" "${archive}.sha256" "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}:${PRODUCTION_ROOT}/incoming/${release_id}/"
+          ssh -o BatchMode=yes "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" "set -eu; cd '${PRODUCTION_ROOT}/incoming/${release_id}'; sha256sum -c '${archive}.sha256'; rm -rf '${PRODUCTION_ROOT}/workspaces/${release_id}'; mkdir -p '${PRODUCTION_ROOT}/workspaces/${release_id}'; tar -xzf '${archive}' -C '${PRODUCTION_ROOT}/workspaces/${release_id}'; '${PRODUCTION_ROOT}/workspaces/${release_id}/deploy/diy/deploy-production.sh' '${release_id}' '${PRODUCTION_ROOT}/workspaces/${release_id}'"

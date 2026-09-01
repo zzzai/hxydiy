@@ -1689,3 +1689,89 @@
 - 本地完成：以上代码和测试均在工作区完成。
 - 已发布生产：无。本轮未切换服务器 `current`，未重建生产 API 容器。
 - 待现场验收：店长/员工/技师真实账号的权限穿透、门店隔离、服务单闭环、断网恢复、并发幂等及智慧宝联调。
+# 2026-08-31 PR 自动审核与生产发布自动化（本地完成，未发布）
+
+## 本地完成
+
+- 新增 GitHub Actions：AI PR 审核、CI 验收、生产发布工作流。
+- AI 审核使用 `pull_request_target` 读取 GitHub API diff，不检出或执行不可信 PR 代码；`critical/high` 自动 `REQUEST_CHANGES`，不自动批准或合并。
+- CI 覆盖仓库契约、敏感信息扫描、管理端/顾客端测试与生产构建、后端测试及完整 monorepo 发布资格检查。
+- 新增发布脚本：PostgreSQL 备份、SHA-256 校验、临时库恢复演练、Alembic 迁移阻断、Manifest 校验、原子 `current` 切换、API/管理端/顾客端健康检查和失败回滚。
+- compose 构建上下文改为显式 `HXY_DIY_CURRENT`，避免 release 内相对路径解析成 `current/current`。
+
+## 涉及文件
+
+- `.github/workflows/ai-pr-review.yml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/deploy-production.yml`
+- `deploy/diy/Dockerfile.release`
+- `deploy/diy/docker-compose.hxy.yml`
+- `deploy/diy/create-release.sh`
+- `deploy/diy/activate-release.sh`
+- `deploy/diy/deploy-production.sh`
+- `deploy/diy/.env.example`
+- `docs/operations/github-actions-production-automation.md`
+- `tests/test_github_automation_contract.py`
+
+## 测试结果
+
+- 自动化契约测试：`3 passed / 0 failed`。
+- 三个发布脚本 `bash -n`：通过。
+- `git diff --check`：通过。
+- 尚未在真实 GitHub Runner、非生产服务器或生产 Environment 执行发布演练。
+
+## 发布状态
+
+- 本地完成：是。
+- 已发布生产：否；服务器 `current`、数据库和线上容器均未修改。
+- 生产 release：未改变，仍以服务器实际 `readlink` 结果为准。
+
+## 待完成事项
+
+- 合并完整 monorepo 基线后，在 GitHub 配置 `production` Environment Required reviewer 和 Secrets。
+- 在非生产环境演练上传、备份恢复、原子切换和失败回滚，再安排生产灰度。
+- 自动化通过后仍需管理员、店长、普通员工和技师授权账号的现场验收；自动化测试不等于营业验收。
+
+## 2026-08-31 自动化验收补充
+
+- PR #6（`codex/admin/cicd-automation`）仍为 open，提交 `021afa7406dd82939f18641b03e55e6cbb2eb58b` 的 CI 四项必需检查已通过。
+- 针对发布脚本与 Compose 完成 Codex Security diff scan：覆盖 4 个文件，0 个可报告发现；报告位于本机临时扫描目录，未写入仓库。
+- 由于无法匿名读取 GitHub 分支保护配置，仍待仓库管理员确认 `main` 的必需检查、至少一名人工审批和禁止直接 push 规则。
+
+# 2026-09-01 PR 无人工审批自动合并基线（本地完成，未发布）
+
+## 本地完成
+
+- AI PR 审核改为写入 PR 头 SHA 的 `AI PR Review` Check Run；缺密钥、模型失败、JSON 无效或 `critical/high` 发现均失败，不再使用 `REQUEST_CHANGES`。
+- 新增默认分支可信工作流 `Trusted PR Gate`：拒绝 fork，在隔离 Runner、无 secrets、只读权限下检出 PR merge ref，运行静态契约、管理端、顾客端和后端测试/构建，并将结果写回 PR 头 SHA。
+- 新增 `Auto Merge PR`：仅同仓库、非草稿、目标为 `main` 且当前 head SHA 的所有必需检查成功时，执行精确 SHA 的 squash 合并；PR 更新或 405/409/422 只跳过。
+- 补充 GitHub Ruleset、CodeQL、Secret Scanning、Dependabot/Renovate、OSSF Scorecard 和 Merge Queue 的成熟方案基线说明。
+
+## 涉及文件
+
+- `.github/workflows/ai-pr-review.yml`
+- `.github/workflows/trusted-pr-gate.yml`
+- `.github/workflows/auto-merge.yml`
+- `tests/test_github_automation_contract.py`
+- `docs/operations/github-actions-production-automation.md`
+- `docs/workstreams/admin.md`
+- `docs/TEAM-MEMORY.md`
+
+## 测试结果
+
+- `python -m unittest tests/test_github_automation_contract.py`：7 passed / 0 failed。
+- `bash -n deploy/diy/create-release.sh deploy/diy/activate-release.sh deploy/diy/deploy-production.sh`：通过。
+- `git diff --check`：通过。
+- 尚未在真实 GitHub Runner、非生产服务器或生产 Environment 执行发布演练。
+
+## 发布状态
+
+- 本地完成：是。
+- 已发布生产：否；服务器 `current`、数据库和线上容器未修改。
+- PR #6：工作流更新在 `codex/admin/cicd-automation` 分支，待 CI 与规则配置后合并。
+
+## 待完成事项
+
+- 仓库管理员在 GitHub Rulesets 将 required approving reviews 设为 0，启用上述 required checks 和 Auto-merge；不得配置 CODEOWNERS 强制审批。
+- 合并本 PR 后，使用一个无业务变更的测试 PR 验证 AI/Trusted/Auto Merge 的实际 Check Run SHA 绑定和竞态行为。
+- 生产 `Environment` 审批、Secrets、备份恢复、Manifest、线上健康检查和门店现场验收仍按原门槛执行。

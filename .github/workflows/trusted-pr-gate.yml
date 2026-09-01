@@ -1,0 +1,228 @@
+name: Trusted PR Gate
+
+# This workflow is defined on the default branch by pull_request_target. It
+# runs the PR merge ref without exposing repository secrets to PR code.
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: trusted-pr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    name: Validate PR scope
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      allowed: ${{ steps.scope.outputs.allowed }}
+    steps:
+      - id: scope
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const allowed = Boolean(
+              pr &&
+              pr.draft === false &&
+              pr.base.ref === 'main' &&
+              pr.head.repo &&
+              pr.head.repo.full_name === `${context.repo.owner}/${context.repo.repo}`
+            );
+            core.setOutput('allowed', String(allowed));
+            if (!allowed) core.info('Only non-draft PRs from this repository are eligible.');
+
+  static:
+    name: Static contracts
+    needs: scope
+    if: needs.scope.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: none
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run contracts, whitespace and credential scan
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          test -d tests
+          python -m unittest discover -s tests -p 'test_*.py'
+          git diff --check "$BASE_SHA" HEAD
+          if git grep -nI -E 'BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|AKIA[0-9A-Z]{16}|(QINIU_SECRET_KEY|OPENAI_API_KEY|DIY_JWT_SECRET|POSTGRES_PASSWORD)\s*[:=]\s*[A-Za-z0-9_+/=-]{12,}' -- . ':!docs/WORK-STATUS.md' ':!deploy/diy/.env.example'; then
+            echo 'Potential credential detected.' >&2
+            exit 1
+          fi
+
+  admin:
+    name: Admin tests and build
+    needs: scope
+    if: needs.scope.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: none
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+      - id: detect
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e "$BASE_SHA:admin-react/package.json" 2>/dev/null; then
+            test -f admin-react/package.json
+            test -f admin-react/package-lock.json
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.available == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: admin-react/package-lock.json
+      - name: Test and production build
+        if: steps.detect.outputs.available == 'true'
+        working-directory: admin-react
+        run: npm ci && npm test && npm run build
+
+  customer:
+    name: Customer tests and build
+    needs: scope
+    if: needs.scope.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: none
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+      - id: detect
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e "$BASE_SHA:diy-web/package.json" 2>/dev/null; then
+            test -f diy-web/package.json
+            test -f diy-web/package-lock.json
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.available == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: diy-web/package-lock.json
+      - name: Test and production build
+        if: steps.detect.outputs.available == 'true'
+        working-directory: diy-web
+        run: npm ci && npm test && npm run build
+
+  backend:
+    name: Backend tests
+    needs: scope
+    if: needs.scope.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: none
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test backend
+        id: detect
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e "$BASE_SHA:hxy-server/requirements.txt" 2>/dev/null; then
+            test -f hxy-server/requirements.txt
+            test -d hxy-server/tests
+            (cd hxy-server && python -m pip install --disable-pip-version-check -r requirements.txt && pytest -q)
+          else
+            echo 'hxy-server source is not present on this baseline; treating this component as not applicable.'
+          fi
+
+  publish:
+    name: Trusted PR Gate
+    needs: [scope, static, admin, customer, backend]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Publish trusted head checks
+        uses: actions/github-script@v7
+        env:
+          ALLOWED: ${{ needs.scope.outputs.allowed }}
+          STATIC_RESULT: ${{ needs.static.result }}
+          ADMIN_RESULT: ${{ needs.admin.result }}
+          CUSTOMER_RESULT: ${{ needs.customer.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const headSha = context.payload.pull_request.head.sha;
+            const results = {
+              'Static contracts': process.env.STATIC_RESULT,
+              'Admin tests and build': process.env.ADMIN_RESULT,
+              'Customer tests and build': process.env.CUSTOMER_RESULT,
+              'Backend tests': process.env.BACKEND_RESULT,
+            };
+            const failed = process.env.ALLOWED !== 'true' || Object.values(results).some((result) => result !== 'success');
+            const upsertCheck = async (name, conclusion) => {
+              const existing = await github.rest.checks.listForRef({ owner, repo, ref: headSha, filter: 'latest', per_page: 100 });
+              const match = existing.data.check_runs.find((check) => check.name === name && check.app?.slug === 'github-actions');
+              const payload = {
+                owner,
+                repo,
+                status: 'completed',
+                conclusion,
+                completed_at: new Date().toISOString(),
+                output: { title: name, summary: conclusion === 'success' ? '可信验证通过。' : '可信验证失败，自动合并已阻断。' },
+              };
+              if (match) {
+                await github.rest.checks.update({ check_run_id: match.id, ...payload });
+              } else {
+                await github.rest.checks.create({ name, head_sha: headSha, ...payload });
+              }
+            };
+            for (const [name, result] of Object.entries(results)) {
+              await upsertCheck(name, !failed && result === 'success' ? 'success' : 'failure');
+            }
+            await upsertCheck('Trusted PR Gate', failed ? 'failure' : 'success');
+            if (failed) core.setFailed('Trusted PR gate failed or PR is outside the allowed scope.');

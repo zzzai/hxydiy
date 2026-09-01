@@ -1,0 +1,81 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hxy-diy-db
+    environment:
+      POSTGRES_USER: hxy_diy
+      POSTGRES_PASSWORD: ${DIY_POSTGRES_PASSWORD}
+      POSTGRES_DB: hxy_diy
+    volumes:
+      - hxy_diy_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hxy_diy -d hxy_diy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ${HXY_DIY_CURRENT:-../../current}
+      dockerfile: deploy/diy/Dockerfile.release
+      network: host
+    container_name: hxy-diy-api
+    environment:
+      ENVIRONMENT: production
+      MEDIA_STORAGE_BACKEND: ${MEDIA_STORAGE_BACKEND:-local}
+      MEDIA_STORAGE_ROOT: ${MEDIA_STORAGE_ROOT:-./media}
+      QINIU_ACCESS_KEY: ${QINIU_ACCESS_KEY:-}
+      QINIU_SECRET_KEY: ${QINIU_SECRET_KEY:-}
+      QINIU_BUCKET: ${QINIU_BUCKET:-diyhxy}
+      QINIU_CDN_DOMAIN: ${QINIU_CDN_DOMAIN:-https://img.hexiaoyue.com}
+      QINIU_SIGNED_URL_TTL_SECONDS: ${QINIU_SIGNED_URL_TTL_SECONDS:-600}
+      QINIU_ZONE: ${QINIU_ZONE:-}
+      DATABASE_URL: postgresql+psycopg://hxy_diy:${DIY_POSTGRES_PASSWORD}@db:5432/hxy_diy
+      JWT_SECRET: ${DIY_JWT_SECRET}
+      THIRD_PARTY_MEMBERSHIP_SYNC_KEY: ${THIRD_PARTY_MEMBERSHIP_SYNC_KEY:-}
+      SEED_ON_START: "false"
+      RUN_MIGRATIONS: "false"
+      DIY_BOOTSTRAP: ${DIY_BOOTSTRAP:-false}
+      H5_SMS_DEBUG: "false"
+      ALIYUN_SMS_ACCESS_KEY_ID: ${ALIYUN_SMS_ACCESS_KEY_ID:-}
+      ALIYUN_SMS_ACCESS_KEY_SECRET: ${ALIYUN_SMS_ACCESS_KEY_SECRET:-}
+      ALIYUN_SMS_SIGN_NAME: ${ALIYUN_SMS_SIGN_NAME:-}
+      ALIYUN_SMS_TEMPLATE_CODE: ${ALIYUN_SMS_TEMPLATE_CODE:-}
+      OCCUPANCY_SCHEDULER_ENABLED: ${DIY_OCCUPANCY_SCHEDULER_ENABLED:-false}
+      OCCUPANCY_SCHEDULER_OBSERVE_ONLY: ${DIY_OCCUPANCY_SCHEDULER_OBSERVE_ONLY:-true}
+      OCCUPANCY_SCHEDULER_INTERVAL_SECONDS: ${DIY_OCCUPANCY_SCHEDULER_INTERVAL_SECONDS:-60}
+      OCCUPANCY_CLOSING_HOUR: ${DIY_OCCUPANCY_CLOSING_HOUR:-3}
+      OCCUPANCY_TIMEZONE: ${DIY_OCCUPANCY_TIMEZONE:-Asia/Shanghai}
+      ALIYUN_PNVS_ACCESS_KEY_ID: ${ALIYUN_PNVS_ACCESS_KEY_ID:-}
+      ALIYUN_PNVS_ACCESS_KEY_SECRET: ${ALIYUN_PNVS_ACCESS_KEY_SECRET:-}
+      ALIYUN_PNVS_SCHEME_NAME: ${ALIYUN_PNVS_SCHEME_NAME:-}
+      WX_APPID: ${WX_APPID:-}
+      WX_APPSECRET: ${WX_APPSECRET:-}
+      WXPAY_MCHID: ${WXPAY_MCHID:-}
+      WXPAY_APPID: ${WXPAY_APPID:-}
+      WXPAY_APIV3_KEY: ${WXPAY_APIV3_KEY:-}
+      WXPAY_CERT_SERIAL_NO: ${WXPAY_CERT_SERIAL_NO:-}
+      WXPAY_PRIVATE_KEY_PATH: ${WXPAY_PRIVATE_KEY_PATH:-}
+      WXPAY_PUBLIC_KEY_ID: ${WXPAY_PUBLIC_KEY_ID:-}
+      WXPAY_PUBLIC_KEY_PATH: ${WXPAY_PUBLIC_KEY_PATH:-}
+      WXPAY_PLATFORM_CERT_PATH: ${WXPAY_PLATFORM_CERT_PATH:-}
+      WXPAY_NOTIFY_URL: ${WXPAY_NOTIFY_URL:-}
+    volumes:
+      - ${WXPAY_CERTS_DIR:-/root/hxy-diy-20260811/certs}:/etc/hxy/certs:ro
+    networks:
+      - default
+      - hxy_edge
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  hxy_diy_pgdata:
+    name: hxy_diy_pgdata
+
+networks:
+  hxy_edge:
+    external: true
+    name: hetang-yuese-investment_hetang-network
