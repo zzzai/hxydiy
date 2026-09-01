@@ -42,16 +42,20 @@ jobs:
               core.info('PR is not an open, non-draft PR targeting main; merge skipped.');
               return;
             }
+            if (run.head_sha !== pr.head.sha) {
+              core.info('The completed trusted workflow is not for the current PR head; merge skipped.');
+              return;
+            }
             if (!pr.head.repo || pr.head.repo.full_name !== `${owner}/${repo}`) {
               core.info('Fork PRs are never auto-merged; merge skipped.');
               return;
             }
 
             const expectedChecks = [
-              'Static contracts',
-              'Admin tests and build',
-              'Customer tests and build',
-              'Backend tests',
+              'Trusted / Static contracts',
+              'Trusted / Admin tests and build',
+              'Trusted / Customer tests and build',
+              'Trusted / Backend tests',
               'AI PR Review',
               'Trusted PR Gate',
             ];
@@ -63,9 +67,10 @@ jobs:
               per_page: 100,
             });
             const latest = new Map();
-            for (const check of checks.check_runs) {
-              if (check.app?.slug === 'github-actions' && ['Trusted PR Gate', 'AI PR Review'].includes(check.workflow_name || check.name)) {
-                latest.set(check.name, check);
+            for (const name of expectedChecks) {
+              const check = checks.check_runs.find((check) => check.name === name && check.app?.slug === 'github-actions');
+              if (check) {
+                latest.set(name, check);
               }
             }
             const missingOrFailed = expectedChecks.filter((name) => {
