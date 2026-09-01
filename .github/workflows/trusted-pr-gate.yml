@@ -41,7 +41,7 @@ jobs:
             if (!allowed) core.info('Only non-draft PRs from this repository are eligible.');
 
   static:
-    name: Trusted / Static contracts
+    name: Trusted job / Static contracts
     needs: scope
     if: needs.scope.outputs.allowed == 'true'
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
           fi
 
   admin:
-    name: Trusted / Admin tests and build
+    name: Trusted job / Admin tests and build
     needs: scope
     if: needs.scope.outputs.allowed == 'true'
     runs-on: ubuntu-latest
@@ -109,7 +109,7 @@ jobs:
         run: npm ci && npm test && npm run build
 
   customer:
-    name: Trusted / Customer tests and build
+    name: Trusted job / Customer tests and build
     needs: scope
     if: needs.scope.outputs.allowed == 'true'
     runs-on: ubuntu-latest
@@ -146,7 +146,7 @@ jobs:
         run: npm ci && npm test && npm run build
 
   backend:
-    name: Trusted / Backend tests
+    name: Trusted job / Backend tests
     needs: scope
     if: needs.scope.outputs.allowed == 'true'
     runs-on: ubuntu-latest
@@ -204,9 +204,9 @@ jobs:
               'Trusted / Backend tests': process.env.BACKEND_RESULT,
             };
             const failed = process.env.ALLOWED !== 'true' || Object.values(results).some((result) => result !== 'success');
-            const upsertCheck = async (name, conclusion) => {
-              const existing = await github.rest.checks.listForRef({ owner, repo, ref: headSha, filter: 'latest', per_page: 100 });
-              const match = existing.data.check_runs.find((check) => check.name === name && check.app?.slug === 'github-actions');
+            const publishCheck = async (name, conclusion) => {
+              // GitHub no longer permits REST updates to Actions-created checks.
+              // Create a fresh result for every run; latest check selection remains deterministic.
               const payload = {
                 owner,
                 repo,
@@ -215,14 +215,10 @@ jobs:
                 completed_at: new Date().toISOString(),
                 output: { title: name, summary: conclusion === 'success' ? '可信验证通过。' : '可信验证失败，自动合并已阻断。' },
               };
-              if (match) {
-                await github.rest.checks.update({ check_run_id: match.id, ...payload });
-              } else {
-                await github.rest.checks.create({ name, head_sha: headSha, ...payload });
-              }
+              await github.rest.checks.create({ name, head_sha: headSha, ...payload });
             };
             for (const [name, result] of Object.entries(results)) {
-              await upsertCheck(name, !failed && result === 'success' ? 'success' : 'failure');
+              await publishCheck(name, !failed && result === 'success' ? 'success' : 'failure');
             }
-            await upsertCheck('Trusted PR Gate', failed ? 'failure' : 'success');
+            await publishCheck('Trusted PR Gate', failed ? 'failure' : 'success');
             if (failed) core.setFailed('Trusted PR gate failed or PR is outside the allowed scope.');

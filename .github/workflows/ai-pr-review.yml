@@ -29,26 +29,12 @@ jobs:
             const pr = context.payload.pull_request;
             const { owner, repo } = context.repo;
             const headSha = pr.head.sha;
-            let checkRunId = null;
-
-            const writeCheck = async (conclusion, summary, text) => {
+            const writeCheck = async (headSha, conclusion, summary, text) => {
               const output = {
                 title: 'AI PR Review',
                 summary,
                 text: text || summary,
               };
-              if (checkRunId) {
-                await github.rest.checks.update({
-                  owner,
-                  repo,
-                  check_run_id: checkRunId,
-                  status: 'completed',
-                  conclusion,
-                  completed_at: new Date().toISOString(),
-                  output,
-                });
-                return;
-              }
               const created = await github.rest.checks.create({
                 owner,
                 repo,
@@ -58,21 +44,9 @@ jobs:
                 conclusion,
                 output,
               });
-              checkRunId = created.data.id;
             };
 
             try {
-              const started = await github.rest.checks.create({
-                owner,
-                repo,
-                name: 'AI PR Review',
-                head_sha: headSha,
-                status: 'in_progress',
-                started_at: new Date().toISOString(),
-                output: { title: 'AI PR Review', summary: '正在执行只读审查。' },
-              });
-              checkRunId = started.data.id;
-
               const secret = process.env.OPENAI_API_KEY;
               if (!secret) {
                 throw new Error('OPENAI_API_KEY is not configured for this repository.');
@@ -141,14 +115,14 @@ jobs:
 
               await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body });
               const conclusion = blocking.length ? 'failure' : 'success';
-              await writeCheck(conclusion, blocking.length ? '发现 critical/high 问题，自动合并已阻断。' : '未发现阻断性问题。', body);
+              await writeCheck(headSha, conclusion, blocking.length ? '发现 critical/high 问题，自动合并已阻断。' : '未发现阻断性问题。', body);
               if (blocking.length) {
                 core.setFailed('AI review found critical/high findings.');
               }
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error);
               try {
-                await writeCheck('failure', 'AI 审查未能完成，自动合并已阻断。', message);
+                await writeCheck(headSha, 'failure', 'AI 审查未能完成，自动合并已阻断。', message);
               } catch (checkError) {
                 core.error(`Unable to write AI PR Review check: ${checkError}`);
               }

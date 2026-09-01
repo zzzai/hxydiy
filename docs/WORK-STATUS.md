@@ -1775,3 +1775,28 @@
 - 仓库管理员在 GitHub Rulesets 将 required approving reviews 设为 0，启用上述 required checks 和 Auto-merge；不得配置 CODEOWNERS 强制审批。
 - 合并本 PR 后，使用一个无业务变更的测试 PR 验证 AI/Trusted/Auto Merge 的实际 Check Run SHA 绑定和竞态行为。
 - 生产 `Environment` 审批、Secrets、备份恢复、Manifest、线上健康检查和门店现场验收仍按原门槛执行。
+
+# 2026-09-01 GitHub Check Run 更新限制修复（PR #7，未合并）
+
+## 本地完成
+
+- 修复 Trusted Gate 通过 REST 更新 Actions 自有 Check Run 导致的 GitHub 403：每次运行直接创建当前 PR head SHA 的新结果检查。
+- 将 Trusted Gate 内部 job 名称与对外 required check 名称分离，内部使用 `Trusted job / ...`，对外保持 `Trusted / ...`。
+- AI PR Review 不再创建 in-progress 后再更新，审查完成或异常时直接创建一次性 `AI PR Review` Check Run；缺失/无效密钥仍失败。
+- 补充契约测试、工作流 YAML 校验和迁移说明。
+
+## 测试结果
+
+- `python -m unittest discover -s tests -p 'test_*.py'`：9 passed / 0 failed。
+- `.github/workflows/*.yml`：5 个文件 YAML 解析通过。
+- `git diff --check`：通过。
+
+## 发布状态
+
+- PR #7：修改已提交到 `codex/admin/cicd-gate-hardening-main`，待 GitHub Runner 重新执行。
+- 未合并 `main`，未发布生产，未修改服务器、数据库或生产 Environment。
+
+## 待完成事项
+
+- 仓库管理员需配置有效的 `OPENAI_API_KEY`，并重新运行 AI PR Review。
+- PR #7 合并前需确认新 Trusted Check Run 名称、精确 head SHA 和 Ruleset required checks；bootstrap 旧版检查失败不能被忽略。

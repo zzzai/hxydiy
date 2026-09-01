@@ -39,9 +39,13 @@
 
 ## 当前验收状态（2026-09-01）
 
-- PR #6（`codex/admin/cicd-automation`）当前为 open；本地契约测试与发布脚本语法检查已通过，最新 CI 四项检查已通过。
+- PR #7（`codex/admin/cicd-gate-hardening-main`）正在迁移门禁实现；本地契约测试与工作流 YAML 校验已通过，CI 的管理端、顾客端、后端和静态检查已通过。
+- GitHub Actions 自 2025 年起不允许通过 REST 更新由 Actions 创建的 Check Run；Trusted Gate 和 AI Review 均采用“每次运行创建当前 head SHA 的新结果检查”，不再调用 `checks.update`。
+- Trusted Gate 的执行 job 使用 `Trusted job / ...` 名称，对外发布的 required checks 固定为 `Trusted / ...`，避免 CI 同名检查与可信结果混淆。
+- PR #7 的 Trusted Gate 旧运行曾因默认分支仍加载旧工作流而失败；迁移提交合并后必须重新触发并确认新名称的检查真实出现。
+- AI PR Review 当前仍需仓库有效的 `OPENAI_API_KEY`；无效或缺失密钥必须保持失败，不能改为可选或伪造成功。
 - 已完成针对发布脚本和 Compose 的 Codex Security diff scan：覆盖 4 个发布文件，0 个可报告发现；该结果不替代真实 Runner、非生产服务器和生产 Environment 演练。
-- `AI PR Review`、`Trusted PR Gate` 和 `Auto Merge PR` 必须先合并到 `main`，才会作为默认分支工作流对后续 PR 生效；不会追溯触发当前 PR #6。
+- `AI PR Review`、`Trusted PR Gate` 和 `Auto Merge PR` 必须先合并到 `main`，才会作为默认分支工作流对后续 PR 生效；迁移 PR 本身需记录 bootstrap 例外，不能据此宣称门禁已完成验收。
 - 生产发布仍未执行。公网仓库无法匿名读取 Ruleset/Environment 配置，因此必须由仓库管理员在 GitHub 页面确认规则已启用。
 
 ## 必须启用的 GitHub Ruleset
