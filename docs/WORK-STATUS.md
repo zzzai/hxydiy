@@ -1689,3 +1689,33 @@
 - 本地完成：以上代码和测试均在工作区完成。
 - 已发布生产：无。本轮未切换服务器 `current`，未重建生产 API 容器。
 - 待现场验收：店长/员工/技师真实账号的权限穿透、门店隔离、服务单闭环、断网恢复、并发幂等及智慧宝联调。
+# 2026-09-01 营销 Skill 套件（本地完成，未发布）
+
+## 本地完成
+
+- 设计并安装 9 个可独立调用的本地 Skill：`customer-research`、`marketing-psychology`、`brand-positioning`、`content-strategy`、`ad-creative`、`copywriting`、`social-content`、`campaign-analytics`、`marketing-orchestrator`。
+- 总控 Skill 默认串联“消费者洞察 → 营销心理 → 品牌定位 → 内容规划 → 广告创意 → 广告文案 → 社媒适配 → 数据复盘”，已有可靠输入时允许跳过对应环节并说明原因。
+- 所有 Skill 均要求区分证据、推断、假设和建议，不编造研究、数据、效果承诺，不执行投放、公开发布或敏感数据传输。
+
+## 涉及文件
+
+- `docs/superpowers/specs/2026-09-01-marketing-skill-suite-design.md`
+- `docs/superpowers/plans/2026-09-01-marketing-skill-suite.md`
+- 本机共享 Skill 目录：`C:\Users\gaoji\.codex\skills\{customer-research,marketing-psychology,brand-positioning,content-strategy,ad-creative,copywriting,social-content,campaign-analytics,marketing-orchestrator}`
+
+## 测试结果
+
+- 9/9 个 Skill 通过 `skill-creator/scripts/quick_validate.py`。
+- 9 个 `SKILL.md` 与 `agents/openai.yaml` 均存在，未发现 `TODO`、`TBD` 或初始化脚手架残留。
+- 静态路由验收：完整活动请求进入 `marketing-orchestrator`；单一朋友圈文案请求可直接进入 `copywriting`/`social-content`，不强制完整链路。
+
+## 发布状态
+
+- 未发布生产；本任务只安装本机 Skill 和提交项目协作文档，不修改服务器、数据库或三端业务代码。
+- Skill 实体位于项目仓库外，当前 Git 提交仅包含设计、实施计划和工作状态记录。
+
+## 尚未完成事项
+
+- 尚未建立独立的跨设备 Skill 仓库；如需在其他窗口或设备共享，应将 `C:\Users\gaoji\.codex\skills` 中的 9 个目录复制到受控 skills 仓库并制定版本发布流程。
+- 营销草案在公开发布或投放前仍需用户确认、事实核验及必要的平台/法务审核。
+
