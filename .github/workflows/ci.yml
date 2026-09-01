@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nI -E 'BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|AKIA[0-9A-Z]{16}|(QINIU_SECRET_KEY|OPENAI_API_KEY|DIY_JWT_SECRET|POSTGRES_PASSWORD)\s*[:=]\s*[A-Za-z0-9_+/=-]{12,}' -- . ':!docs/WORK-STATUS.md' ':!deploy/diy/.env.example'; then
+          if git grep -nI -E 'BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|AKIA[0-9A-Z]{16}|(QINIU_SECRET_KEY|OPENAI_API_KEY|DIY_JWT_SECRET|POSTGRES_PASSWORD)\s*[:=]\s*[A-Za-z0-9_+/=-]{12,}' -- . ':!deploy/diy/.env.example'; then
             echo 'Potential credential detected. Remove it from the commit and use GitHub Secrets.' >&2
             exit 1
           fi
