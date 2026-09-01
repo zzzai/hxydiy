@@ -9,6 +9,7 @@
 # Build and dependency output
 node_modules/
 dist/
+**/tsconfig.tsbuildinfo
 coverage/
 .pytest_cache/
 __pycache__/
@@ -32,3 +33,4 @@ work/
 _build_plan/
 *.png
 *.svg
+media/

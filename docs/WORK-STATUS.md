@@ -1,4 +1,141 @@
+# 2026-08-31 服务位停用与现场二维码简化（本地完成，未发布）
+
+## 修改内容
+
+- 服务位看板新增店长专属的“停用服务位/重新启用服务位”操作；活动占用存在时服务端返回 `409 POSITION_OCCUPIED`，普通员工由认证/权限层拒绝。
+- 停用只暂停 DIY 新的扫码和共享 iPad 入口，保留服务位二维码绑定，且不调用智慧宝物理资源接口。审计记录操作者、门店、服务位、前后 `operational_status` 和原因。
+- 停用服务位若没有既有二维码，读取二维码接口返回 `409 SERVICE_POSITION_DISABLED`，避免生成无法投放的贴码。
+- 新二维码改用紧凑 v3 签名令牌，缩短二维码承载内容；已投放的 v2 二维码仍可扫码。管理端改用 1024 像素、`M` 级纠错和 4 模块静区生成二维码图片。
+
+## 涉及文件
+
+- `admin-react/src/api.ts`
+- `admin-react/src/pages/ServicePositionsPage.tsx`
+- `admin-react/src/servicePositionQr.ts`
+- `admin-react/src/servicePositions.ts`
+- `admin-react/tests/qr-management.test.ts`
+- `admin-react/tests/service-position-actions.test.ts`
+- `hxy-server/app/api/occupancies.py`
+- `hxy-server/tests/test_occupancy_api.py`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/admin.md`
+
+## 测试结果
+
+- 管理端 `npm test`：121 passed。
+- 管理端 `npx tsc -b`：通过。
+- 管理端 `npm run build`：通过；保留既有共享 chunk 体积警告。
+- 后端 `python -m pytest tests/test_admin_resource_permissions.py tests/test_occupancy_api.py -q`：45 passed，1 个既有 Starlette/httpx 弃用警告。
+
+## 发布状态
+
+- 本地完成：是，分支 `codex/admin/store-position-qr`。
+- 已发布生产：否。
+- 生产 release：未变更；未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查。
+
+## 尚未完成事项
+
+- 当前未迁移的 `staff` 登录时返回 `403 ROLE_MIGRATION_REQUIRED`，不能作为正式普通员工账号进行二维码只读验收；需单独完成角色迁移后再验证。
+- 发布后需在非营业测试服务位验证：店长停用后扫码被拒、重新启用后原二维码恢复；普通员工仅查看二维码；跨门店访问继续不可见/不可操作。
+
+# 2026-08-31 PR CI 环境修复
+
+- 首次 PR #4 云端验收失败原因为工作流环境：管理端测试命令使用 Node 22 的 `--experimental-strip-types`，工作流却固定 Node 20；后端依赖清单未安装 `pytest`，导致测试进程直接退出。
+- 已将 `.github/workflows/ci.yml` 管理端运行时升级到 Node 22，并在后端 CI 安装 `pytest` 后再执行权限与服务位专项测试。
+- 本地源码测试已验证管理端 121 项、后端 49 项通过；本次仅调整 CI 工具链，不改变业务逻辑。
+- GitHub Actions 运行 `33387935310` 已通过：管理端测试与构建、后端权限与服务位契约两个 job 均为 `success`。
+
+发布状态：本地完成，CI 已通过；修复已提交到 `codex/admin/store-position-qr` 并推送，PR #4（https://github.com/zzzai/hxydiy/pull/4）未合并，未发布生产。
+
+# 2026-08-31 管理后台 PR 自动化验收（本地完成，待 GitHub 首次运行）
+
+## 本地完成
+
+- 新增 `.github/workflows/ci.yml`，让 Pull Request 与 `main` 推送自动运行管理端测试、TypeScript 检查、生产构建和后端服务位/权限专项测试。
+- 现有 PR #4 已通过 GitHub REST API 更新标题和验收说明，不依赖本机安装 `gh`。
+- 修复二维码重生状态一致性：已替换二维码与停用服务位分别返回 `409 QR_REPLACED`、`409 SERVICE_POSITION_DISABLED`；拒绝顾客伪造内部 `bound_qr` 来源（`403 ENTRY_SOURCE_FORBIDDEN`），避免匿名占位绕过。
+- 生产入口拒绝不可撤销的旧 v1 服务位二维码（`403 QR_VERSION_EXPIRED`）；v2/v3 仍按持久化二维码记录校验，停用、重生和换绑可以立即失效。
+
+## 测试结果
+
+- 管理端：`npm test`，121 passed；`npx tsc -b` 通过；`npm run build` 通过（保留既有大 chunk 警告）。
+- 后端专项：`python -m pytest tests/test_admin_resource_permissions.py tests/test_occupancy_api.py -q`，49 passed，1 个既有 Starlette/httpx 弃用警告。
+- 本地浏览器烟测：`/admin/` 登录页渲染正常、控制台无 error/warn，密码显示/隐藏控件可用。
+
+## 发布状态
+
+- 未发布生产；服务器 `current`、数据库和 API 容器均未修改。
+- GitHub 首次 CI 需在本提交推送后由 GitHub Actions 执行；自动化验收不替代门店现场权限验收。
+
+# 2026-08-30 七牛私有 CDN 连通性验证与签名 URL 修复（本地完成，未发布）
+
+## 本地完成
+
+- 使用服务器 `/root/qiniu` 中的环境变量进行一次性真实探针，未输出或保存 AK/SK，测试对象已清理。
+- 结果：上传 HTTP 200；绑定域名匿名读取 HTTP 403（空间为私有访问）；使用七牛签名下载读取 HTTP 200；删除 HTTP 200。
+- 七牛适配器现通过 `QINIU_SIGNED_URL_TTL_SECONDS`（默认 600 秒）生成短期签名 URL，并校验有效期必须大于 0 秒。
+
+## 涉及文件
+
+- `hxy-server/app/core/config.py`
+- `hxy-server/app/services/media_storage.py`
+- `hxy-server/.env.example`
+- `hxy-server/tests/test_media_storage.py`
+
+## 测试结果
+
+- 管理端：`npm test`，109 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 警告）。
+- 后端媒体专项（服务器临时容器）：`11 passed`；存在既有 Starlette/httpx 弃用警告。
+- 七牛真实探针：上传 200、签名读取 200、删除 200。
+
+## 发布状态
+
+- 本地完成：签名 URL 代码、测试和文档已在 `codex/admin/media-upload` 分支完成并推送。
+- 已发布生产：否。生产 `current`、数据库和 API 容器未修改，未注入七牛环境变量。
+
+## 待现场验收
+
+- 需单独确认发布授权后，完成数据库备份、环境文件备份、release 构建、Manifest 校验、原子切换、API 重建和线上健康检查。
+- 发布后需用管理端授权账号验证媒体上传、签名预览、替换、软删除和门店隔离；自动化测试与七牛探针不替代门店现场营业验收。
+
 # 技师端与员工工作台工作状态
+
+# 2026-08-30 管理端商品权限与分页契约修复（本地完成，未发布）
+
+## 本地完成
+
+- 总部创建商品时保留显式目标门店；门店选择器改为服务端分页和关键词搜索，商品列表支持服务端分页、分类和状态筛选。
+- 店长商品上下架权限收紧为 `published`/`inactive`，允许从草稿或待发布首次上架，但不能恢复总部 `archived` 强制下线商品；页面同步禁用该开关并显示“总部强制下线”。
+- 总部商品更新审计显式记录目标门店；旧 `POST /products/{id}` 接受历史完整对象、忽略旧字段并保持 `{"ok": true}` 响应；旧 `staff` 角色写入返回结构化 403。
+
+## 涉及文件
+
+- `admin-react/src/core/auth/storeContext.ts`
+- `admin-react/src/pages/ProductsPage.tsx`
+- `admin-react/src/pages/products-page-model.ts`
+- `admin-react/tests/dataProvider.test.ts`
+- `admin-react/tests/products-page-model.test.ts`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_api_contracts.py`
+- `docs/TEAM-MEMORY.md`、`docs/workstreams/admin.md`
+
+## 当前验证
+
+- 管理端完整测试：114 passed。
+- 管理端 TypeScript 检查：`npx tsc -b` 通过；生产构建：Vite 成功转换 4001 个模块（保留既有大 chunk 警告）。
+- 后端商品/权限专项：`tests/test_api_contracts.py` 与 `tests/test_admin_resource_permissions.py` 合计 52 passed，1 个既有 Starlette/httpx 弃用警告。
+- 后端完整套件：531 passed、6 skipped、16 failed；失败来自既有角色迁移测试夹具、缺失 `deploy/` 基线文件、旧 Alembic 头断言和媒体迁移重复建表，未涉及本次商品改动，待后端/发布窗口另行处理。
+
+## 发布状态
+
+- 本地完成：分支 `codex/admin/catalog-management`，本轮修复已完成并准备推送 PR #3。
+- 已发布生产：否；未执行数据库迁移、生产备份、Manifest 校验、线上切换或 API 重建。
+- 生产 `current` 未改变，仍以线上服务器实际 readlink 为准。
+
+## 尚未完成事项
+
+- 后端完整套件中的 16 个既有失败需由后端/发布窗口处理。
+- PR/CI 审核、总部/店长账号现场验收和跨店权限穿透仍未完成；自动化结果不等于现场营业验收。
 
 # 2026-08-29 智慧宝后台只读审计与 DIY 对接字段基线
 
@@ -1689,89 +1826,182 @@
 - 本地完成：以上代码和测试均在工作区完成。
 - 已发布生产：无。本轮未切换服务器 `current`，未重建生产 API 容器。
 - 待现场验收：店长/员工/技师真实账号的权限穿透、门店隔离、服务单闭环、断网恢复、并发幂等及智慧宝联调。
-# 2026-08-31 PR 自动审核与生产发布自动化（本地完成，未发布）
+
+# 2026-08-30 管理后台基线复验（本地完成，未发布）
 
 ## 本地完成
 
-- 新增 GitHub Actions：AI PR 审核、CI 验收、生产发布工作流。
-- AI 审核使用 `pull_request_target` 读取 GitHub API diff，不检出或执行不可信 PR 代码；`critical/high` 自动 `REQUEST_CHANGES`，不自动批准或合并。
-- CI 覆盖仓库契约、敏感信息扫描、管理端/顾客端测试与生产构建、后端测试及完整 monorepo 发布资格检查。
-- 新增发布脚本：PostgreSQL 备份、SHA-256 校验、临时库恢复演练、Alembic 迁移阻断、Manifest 校验、原子 `current` 切换、API/管理端/顾客端健康检查和失败回滚。
-- compose 构建上下文改为显式 `HXY_DIY_CURRENT`，避免 release 内相对路径解析成 `current/current`。
-
-## 涉及文件
-
-- `.github/workflows/ai-pr-review.yml`
-- `.github/workflows/ci.yml`
-- `.github/workflows/deploy-production.yml`
-- `deploy/diy/Dockerfile.release`
-- `deploy/diy/docker-compose.hxy.yml`
-- `deploy/diy/create-release.sh`
-- `deploy/diy/activate-release.sh`
-- `deploy/diy/deploy-production.sh`
-- `deploy/diy/.env.example`
-- `docs/operations/github-actions-production-automation.md`
-- `tests/test_github_automation_contract.py`
+- 按管理端职责边界复验导航、权限前端呈现、门店隔离及 DIY 物理资源禁用契约；未修改顾客端、技师端或智慧宝物理资源逻辑。
+- 重新执行管理端测试、TypeScript 检查、生产构建及后端管理专项测试。
+- 核对服务器实际 `current` 为 `customer-profile-member-no-coupon-20260829-1`。
 
 ## 测试结果
 
-- 自动化契约测试：`3 passed / 0 failed`。
-- 三个发布脚本 `bash -n`：通过。
-- `git diff --check`：通过。
-- 尚未在真实 GitHub Runner、非生产服务器或生产 Environment 执行发布演练。
+- 管理端：`npm test`，107 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4000 modules）。
+- 后端管理/权限/目录/菜单/Alembic 组合回归：75 passed。
+- 后端全量：`525 passed, 4 failed, 7 skipped`；失败集中在旧 `staff` 临时角色登录和占用续留接口契约，当前正式角色迁移逻辑返回 `403 ROLE_MIGRATION_REQUIRED`。
 
-## 发布状态
+## 分支与发布状态
 
-- 本地完成：是。
-- 已发布生产：否；服务器 `current`、数据库和线上容器均未修改。
-- 生产 release：未改变，仍以服务器实际 `readlink` 结果为准。
+- 未创建新分支、未提交、未推送、未创建 Pull Request：仓库未配置 `origin`，不存在可用的 `origin/main`；当前工作区含其他窗口未提交改动，无法安全切分。
+- 未发布生产；服务器 `current`、数据库和 API 容器未修改。
 
-## 待完成事项
+## 待处理
 
-- 合并完整 monorepo 基线后，在 GitHub 配置 `production` Environment Required reviewer 和 Secrets。
-- 在非生产环境演练上传、备份恢复、原子切换和失败回滚，再安排生产灰度。
-- 自动化通过后仍需管理员、店长、普通员工和技师授权账号的现场验收；自动化测试不等于营业验收。
+- 后续任务应先配置可访问的 Git remote `origin`，再从 `origin/main` 创建带实际任务名的分支；本轮技师修复分支为 `codex/technician/idempotency-scope`。
+- 需单独确认 4 个旧迁移契约是更新测试还是保留兼容，不应在管理端任务中擅自恢复旧 `staff` 权限。
+- 待完成分支 CI、数据库备份、Manifest 校验、线上健康检查和门店现场权限验收。
 
-## 2026-08-31 自动化验收补充
-
-- PR #6（`codex/admin/cicd-automation`）仍为 open，提交 `021afa7406dd82939f18641b03e55e6cbb2eb58b` 的 CI 四项必需检查已通过。
-- 针对发布脚本与 Compose 完成 Codex Security diff scan：覆盖 4 个文件，0 个可报告发现；报告位于本机临时扫描目录，未写入仓库。
-- 由于无法匿名读取 GitHub 分支保护配置，仍待仓库管理员确认 `main` 的必需检查、至少一名人工审批和禁止直接 push 规则。
-
-# 2026-09-01 PR 无人工审批自动合并基线（本地完成，未发布）
+# 2026-08-30 技师服务动作幂等键作用域修复（本地完成，未发布）
 
 ## 本地完成
 
-- AI PR 审核改为写入 PR 头 SHA 的 `AI PR Review` Check Run；缺密钥、模型失败、JSON 无效或 `critical/high` 发现均失败，不再使用 `REQUEST_CHANGES`。
-- 新增默认分支可信工作流 `Trusted PR Gate`：拒绝 fork，在隔离 Runner、无 secrets、只读权限下检出 PR merge ref，运行静态契约、管理端、顾客端和后端测试/构建，并将结果写回 PR 头 SHA。
-- 新增 `Auto Merge PR`：仅同仓库、非草稿、目标为 `main` 且当前 head SHA 的所有必需检查成功时，执行精确 SHA 的 squash 合并；PR 更新或 405/409/422 只跳过。
-- 补充 GitHub Ruleset、CodeQL、Secret Scanning、Dependabot/Renovate、OSSF Scorecard 和 Merge Queue 的成熟方案基线说明。
+- 修复 `hxy-server/app/api/technician.py` 服务确认/结束接口的幂等重放边界。
+- 幂等键严格绑定服务位、动作和登录技师；跨目标、跨动作或跨技师复用统一返回 `409 IDEMPOTENCY_KEY_REUSED`，避免把首笔操作结果错误返回给另一请求。
+- 新增跨目标/跨动作回归测试，并在共享记忆中记录该 API 安全契约。
 
 ## 涉及文件
 
-- `.github/workflows/ai-pr-review.yml`
-- `.github/workflows/trusted-pr-gate.yml`
-- `.github/workflows/auto-merge.yml`
-- `tests/test_github_automation_contract.py`
-- `docs/operations/github-actions-production-automation.md`
-- `docs/workstreams/admin.md`
+- `hxy-server/app/api/technician.py`
+- `hxy-server/tests/test_technician_portal_api.py`
 - `docs/TEAM-MEMORY.md`
+- `docs/workstreams/technician.md`
 
 ## 测试结果
 
-- `python -m unittest tests/test_github_automation_contract.py`：7 passed / 0 failed。
-- `bash -n deploy/diy/create-release.sh deploy/diy/activate-release.sh deploy/diy/deploy-production.sh`：通过。
-- `git diff --check`：通过。
-- 尚未在真实 GitHub Runner、非生产服务器或生产 Environment 执行发布演练。
+- 幂等键回归：`1 passed`。
+- 技师后端专项：`21 passed, 1 warning`（既有 Starlette/httpx 弃用警告）。
+- 管理端：`npm test` 为 `107 passed`；`npm run build` 成功，保留既有大 chunk 警告。
 
 ## 发布状态
 
-- 本地完成：是。
-- 已发布生产：否；服务器 `current`、数据库和线上容器未修改。
-- PR #6：工作流更新在 `codex/admin/cicd-automation` 分支，待 CI 与规则配置后合并。
+- 未发布生产；服务器实际 current 仍为 `/root/hxy-diy-20260811/releases/customer-profile-member-no-coupon-20260829-1`。
+- 未执行数据库备份、迁移、Manifest 发布切换或线上完整链路验收。
+- 源码仓库此前未配置 Git remote `origin`；本轮 fetch 后发现远端已恢复，但同名分支已被文档仓库占用。源码提交已推送到独立分支 `codex/technician/idempotency-scope-api`，现有其他窗口未提交改动均已保留。
 
-## 待完成事项
+## 待门店现场验收
 
-- 仓库管理员在 GitHub Rulesets 将 required approving reviews 设为 0，启用上述 required checks 和 Auto-merge；不得配置 CODEOWNERS 强制审批。
-- 合并本 PR 后，使用一个无业务变更的测试 PR 验证 AI/Trusted/Auto Merge 的实际 Check Run SHA 绑定和竞态行为。
-- 生产 `Environment` 审批、Secrets、备份恢复、Manifest、线上健康检查和门店现场验收仍按原门槛执行。
+- 待授权手机完成“顾客提交 → 技师查看区位和选单 → 确认服务 → 服务结束 → 顾客画像快记保存/重试 → 审计核对”闭环。
+- 待配置源码远端后执行 CI、数据库备份、Manifest 校验、生产发布和回滚演练。
+# 2026-08-30 三端 monorepo 基线同步（本地完成，未发布）
+
+## 本地完成
+
+- 在 `origin/main` 基础上建立 `codex/admin/monorepo-bootstrap` 任务分支，将管理端 `admin-react`、顾客端 `diy-web`、后端 `hxy-server` 与共享文档统一纳入同一 GitHub monorepo。
+- 根目录可直接作为 Obsidian Vault；`docs/TEAM-MEMORY.md`、`docs/workstreams/*.md` 和 `docs/WORK-STATUS.md` 作为三端窗口共享记忆入口。
+- 清理不应入库的构建缓存和本地敏感配置；预览管理员密码改为环境变量或随机生成，不再使用固定默认密码。
+- Alembic 链测试按已跟踪迁移的实际唯一 head `20260829_tech_profile_note` 对齐。
+
+## 涉及文件
+
+- `README.md`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/admin.md`
+- `hxy-server/tests/test_task2_alembic_chain.py`
+- 三端源码与测试基线（首次 monorepo 同步）
+
+## 测试结果
+
+- 管理端：`npm test`，107 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4000 modules，保留既有共享 chunk 警告）。
+- 后端管理/权限/目录/菜单/Alembic 专项：75 passed，1 个既有 Starlette/httpx 弃用警告。
+- 敏感文件扫描未发现 `.env`、私钥、AccessKey、真实数据库文件或固定预览密码。
+
+## 分支与发布状态
+
+- 分支：`codex/admin/monorepo-bootstrap`，基于 `origin/main`；已推送到 `origin`，Pull Request 待通过 GitHub 创建入口提交。
+- 本地完成：代码、文档和测试已在 monorepo 工作树完成。
+- 已发布生产：否。未连接服务器、未修改数据库、未切换生产 `current`。
+- 生产实际 `current` 仍为 `/root/hxy-diy-20260811/releases/customer-profile-member-no-coupon-20260829-1`。
+
+## 待现场验收与后续
+
+- 待推送分支并通过 CI；完成数据库备份与恢复演练、Manifest 校验、线上健康检查后，才能安排发布。
+- 待门店授权账号现场验收管理端权限、门店隔离及三端服务闭环；自动化测试不等同营业现场验收。
+
+# 2026-08-30 管理端媒体上传（本地完成，未发布）
+
+## 本地完成
+
+- 新增 `MediaAsset` 模型、Alembic 迁移和 `/api/v1/admin/media` 上传、列表、认证预览及软删除接口。
+- 上传按门店隔离并记录审计；支持 JPG/PNG/WebP/GIF，单文件上限 5MB；总部上传需指定门店，店长不得跨店。
+- 项目、项目详情图片、商品和加项表单接入 `MediaUploadField`，移除图片地址手填入口。
+
+## 涉及文件
+
+- `hxy-server/app/api/media.py`
+- `hxy-server/app/models/media.py`
+- `hxy-server/alembic/versions/20260830_media_assets.py`
+- `admin-react/src/components/MediaUploadField.tsx`
+- `admin-react/src/api.ts`、项目/商品/加项页面及对应测试
+
+## 测试结果
+
+- 管理端：`npm test` 109 passed；`npx tsc -b` 通过；`npm run build` 成功（保留既有共享 chunk 警告）。
+- 后端媒体/管理权限/目录专项：34 passed；存在既有 Starlette/httpx 弃用警告。
+
+## 发布状态
+
+- 本地完成：代码和测试在 `codex/admin/media-upload` 分支完成。
+- 已发布生产：否。未执行生产数据库备份、迁移、OSS 配置、Manifest 校验或线上切换。
+- 待现场验收：CI/PR 审核、OSS 适配与配置、备份恢复、线上健康检查、门店权限穿透和媒体上传预览验收。
+
+# 2026-08-30 管理端商品编辑与门店上下架（本地完成，未发布）
+
+## 本地完成
+
+- 商品管理页新增总部商品编辑和新建目标门店选择；编辑表单回填分转元价格及七牛媒体，不再通过图片地址手填。
+- 店长仅显示本店商品“上架/下架”开关，不显示新建和主数据编辑入口；总部列表可查看跨店商品。
+- 修复登录员工快照的角色呈现：未绑定门店的 `admin` 保留总部角色，绑定门店的历史 `admin` 对外呈现为店长，保证总部导航和目录权限前端可用。
+- 商品更新统一使用严格 PATCH 负载，更新不携带 `store_id`；后端保留旧 POST 更新路径兼容并补充权限回归测试。
+
+## 涉及文件
+
+- `admin-react/src/pages/ProductsPage.tsx`
+- `admin-react/src/pages/products-page-model.ts`
+- `admin-react/tests/products-page-model.test.ts`
+- `hxy-server/app/api/admin.py`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_api_contracts.py`
+- `docs/TEAM-MEMORY.md`、`docs/workstreams/admin.md`
+
+## 测试结果
+
+- 管理端：`npm test`，112 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 警告）。
+- 后端商品 API、管理权限及角色快照专项：48 passed，1 个既有 Starlette/httpx 弃用警告。
+- 依赖安装审计提示 7 个 npm 漏洞（2 moderate、5 high），未执行自动升级，避免引入无关变更。
+
+## 发布状态
+
+- 本地完成：分支 `codex/admin/catalog-management`，已基于最新 `origin/main` 复核。
+- 已发布生产：否；未执行数据库迁移、生产备份、Manifest 校验、线上切换或 API 重建。
+- 待现场验收：CI/PR 审核后，使用总部管理员和店长测试账号验证商品编辑、目标门店选择、门店隔离及上下架权限；自动化测试不等同营业现场验收。
+
+# 2026-08-31 项目管理权限与分页契约收口（本地完成，未发布）
+
+## 本地完成
+
+- 管理端项目页按总部管理员和店长分别呈现权限：总部可跨门店查看、选择目标门店新建、编辑和强制下线；店长仅可在本店切换项目上架/下架。
+- 已被总部强制下线的项目在店长端锁定，不提供恢复路径；`archived` 状态明确展示为“总部强制下线”。
+- 后端项目列表支持 `category`、`status`、`page`、`page_size` 服务端筛选和准确总数，并保留未分页旧数组响应兼容。
+- 项目创建和更新审计均记录项目所属 `store_id`；店长越权编辑主数据或恢复强制下线项目仍被后端拒绝。
+
+## 涉及文件
+
+- `admin-react/src/pages/ProjectsPage.tsx`
+- `admin-react/src/pages/projects-page-model.ts`
+- `admin-react/tests/projects-page-model.test.ts`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_admin_catalog_options_api.py`
+- `docs/TEAM-MEMORY.md`、`docs/workstreams/admin.md`
+
+## 测试结果
+
+- 管理端：`npm test`，116 passed；`npx tsc -b` 通过；`npm run build` 成功（Vite 4001 modules，保留既有共享 chunk 体积警告）。
+- 后端目录与权限专项：34 passed，1 个既有 Starlette/httpx 弃用警告。
+- 本任务工作树缺少锁定的开发依赖，已执行 `npm ci --ignore-scripts` 恢复；npm 审计仍提示 7 个既有漏洞（2 moderate、5 high），未做超出本轮范围的自动升级。
+
+## 发布状态
+
+- 本地完成：是，分支 `codex/admin/project-management`。
+- 已发布生产：否。本轮未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查；生产 release 未改变。
+- 待现场验收：Pull Request/CI 审核通过后，以总部管理员、店长真实账号验证跨店列表、目标门店选择、本店上下架、强制下线不可恢复及审计记录；自动化测试不等同真实门店营业验收。
