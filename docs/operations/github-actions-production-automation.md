@@ -5,8 +5,8 @@
 ## 自动化链路
 
 1. `AI PR Review` 由 `pull_request_target` 触发，只通过 GitHub API 读取 PR 标题、描述和 diff，不 checkout、不执行 PR 分支代码；敏感路径跳过、凭据模式脱敏。
-2. AI 结果写入 PR 头 SHA 的 `AI PR Review` Check Run：缺密钥、请求失败、JSON 无效或发现 `critical/high` 均为失败；其他结果为成功并发表评论。AI 不自动批准。
-3. `Trusted PR Gate` 由默认分支上的 `pull_request_target` 定义，拒绝 fork PR，仅在隔离 Runner、无 secrets、只读权限下检出 PR merge ref，运行静态契约、管理端、顾客端和后端验证，并把结果写回 PR 头 SHA。
+2. AI 审查 job 直接命名为 `AI PR Review`，其原生 job check 绑定当前 PR 头 SHA：缺密钥、请求失败、JSON 无效或发现 `critical/high` 均为失败；其他结果为成功并发表评论。AI 不自动批准。
+3. `Trusted PR Gate` 由默认分支上的 `pull_request_target` 定义，拒绝 fork PR，仅在隔离 Runner、无 secrets、只读权限下检出 PR merge ref，运行静态契约、管理端、顾客端和后端验证；四个验证 job 直接产生 `Trusted / ...` 原生 job checks，汇总 job 只校验依赖结果。
 4. `Auto Merge PR` 由 `workflow_run` 监听 AI 与可信门禁，仅接受同仓库、非草稿、目标为 `main` 且触发 run 与当前 head SHA 一致、全部必需检查成功的 PR，调用带精确 `sha` 的 squash merge。检查未完成、PR 更新、fork 或 GitHub 返回 405/409/422 时只跳过，不强行覆盖。
 5. `CI` 仍在 PR 和 `main` push 上运行，作为开发反馈和发布前回归；生产自动合并不把 PR 自定义的 CI 定义当作唯一信任根。
 6. `Deploy Production` 没有手工 SHA 发布入口，只接收 `main` 上名为 `CI` 且结论为成功的 workflow run，并绑定 GitHub `production` Environment。环境审批通过后，构建 release、固定 SSH 主机指纹、上传到服务器，再由远端脚本执行备份、恢复演练、Manifest 校验、原子切换和健康检查。
@@ -40,7 +40,7 @@
 ## 当前验收状态（2026-09-01）
 
 - PR #7（`codex/admin/cicd-gate-hardening-main`）正在迁移门禁实现；本地契约测试与工作流 YAML 校验已通过，CI 的管理端、顾客端、后端和静态检查已通过。
-- GitHub Actions 自 2025 年起不允许通过 REST 更新由 Actions 创建的 Check Run；Trusted Gate 和 AI Review 均采用“每次运行创建当前 head SHA 的新结果检查”，不再调用 `checks.update`。
+- GitHub Actions 自 2025 年起不允许通过 REST 更新由 Actions 创建的 Check Run；Trusted Gate 和 AI Review 均改用原生 job checks，不调用 `checks.create/update`。
 - Trusted Gate 的执行 job 直接使用 `Trusted / ...` 名称，required checks 采用 GitHub Actions 原生 job checks，避免通过 REST API 创建或更新 Check Run 导致权限和状态漂移。
 - PR #7 的 Trusted Gate 旧运行曾因默认分支仍加载旧工作流而失败；迁移提交合并后必须重新触发并确认新名称的检查真实出现。
 - AI PR Review 当前仍需仓库有效的 `OPENAI_API_KEY`；无效或缺失密钥必须保持失败，不能改为可选或伪造成功。
