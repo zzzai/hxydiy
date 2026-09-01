@@ -1775,3 +1775,36 @@
 - 仓库管理员在 GitHub Rulesets 将 required approving reviews 设为 0，启用上述 required checks 和 Auto-merge；不得配置 CODEOWNERS 强制审批。
 - 合并本 PR 后，使用一个无业务变更的测试 PR 验证 AI/Trusted/Auto Merge 的实际 Check Run SHA 绑定和竞态行为。
 - 生产 `Environment` 审批、Secrets、备份恢复、Manifest、线上健康检查和门店现场验收仍按原门槛执行。
+
+# 2026-09-01 GitHub Check Run 更新限制修复（PR #7，未合并）
+
+## 本地完成
+
+- 修复 Trusted Gate 通过 REST 更新 Actions 自有 Check Run 导致的 GitHub 403：四个验证 job 直接命名为 `Trusted / ...`，required checks 使用 GitHub Actions 原生 job checks。
+- Trusted PR Gate 汇总 job 只校验依赖 job 结果，不再调用 REST Check Run API，避免权限和重复状态问题。
+- AI PR Review 直接使用同名原生 job check；缺失/无效密钥、模型失败、JSON 无效或 `critical/high` 发现均失败。
+- 补充契约测试、工作流 YAML 校验和迁移说明。
+
+## 测试结果
+
+- `python -m unittest discover -s tests -p 'test_*.py'`：9 passed / 0 failed。
+- `.github/workflows/*.yml`：5 个文件 YAML 解析通过。
+- `git diff --check`：通过。
+
+## 发布状态
+
+- PR #7：修改已提交到 `codex/admin/cicd-gate-hardening-main`，当前 head 以远端复核记录为准。
+- 未合并 `main`，未发布生产，未修改服务器、数据库或生产 Environment。
+
+## 待完成事项
+
+- 仓库管理员需配置有效的 `OPENAI_API_KEY`，并重新运行 AI PR Review；本地环境中的同名凭据实测为无效（401），未上传或输出。
+- 由于 `pull_request_target` 读取默认分支工作流，PR #7 的新门禁要在合并后才会生效；合并前必须由管理员完成 bootstrap 审核，不得把旧版失败检查伪装成通过。
+- 合并后需用无业务变更测试 PR 验证原生 job check 名称、精确 head SHA 和 Auto Merge 竞态行为，再启用生产发布链路。
+
+## 2026-09-01 PR #7 远端复核
+
+- 当前 head 已更新为 `ed39a89`，顾客端、管理端、后端和静态检查均以该 SHA 成功。
+- Trusted Gate 仍显示旧版 `Publish trusted head checks`，原因是 `pull_request_target` 在 PR #7 合并前继续读取 `main` 的旧工作流；不能将该旧失败检查视为新实现已验收。
+- AI PR Review 因仓库缺少有效 `OPENAI_API_KEY` 保持失败；本地环境中的同名凭据实测返回 401，未上传、未写入日志。
+- 通过已认证 GitHub API 复核，当前仓库 Rulesets 列表为空；main 尚未配置分支硬门禁。PR #7 不能借此直接合并绕过检查。

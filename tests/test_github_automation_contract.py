@@ -22,12 +22,9 @@ class GitHubAutomationContractTests(unittest.TestCase):
 
         self.assertIn("pull_request_target:", content)
         self.assertIn("pull-requests: write", content)
-        self.assertIn("checks: write", content)
         self.assertIn("OPENAI_API_KEY", content)
-        self.assertIn("github.rest.checks.create", content)
-        self.assertIn("github.rest.checks.update", content)
         self.assertIn("AI PR Review", content)
-        self.assertIn("blocking.length ? 'failure' : 'success'", content)
+        self.assertIn("name: AI PR Review", content)
         self.assertNotIn("actions/checkout", content)
         self.assertNotIn("event: APPROVE", content)
         self.assertNotIn("REQUEST_CHANGES", content)
@@ -40,7 +37,14 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("branches: [main]", content)
         self.assertIn("github.event.workflow_run", content)
         self.assertIn("pr.head.sha", content)
+        self.assertIn("run.head_sha !== pr.head.sha", content)
         self.assertIn("github.rest.checks.listForRef", content)
+        self.assertIn("check.name === name", content)
+        self.assertNotIn("check.workflow_name || check.name", content)
+        self.assertIn("Trusted / Static contracts", content)
+        self.assertIn("Trusted / Admin tests and build", content)
+        self.assertIn("Trusted / Customer tests and build", content)
+        self.assertIn("Trusted / Backend tests", content)
         self.assertIn("Trusted PR Gate", content)
         self.assertIn("AI PR Review", content)
         self.assertIn("pr.head.repo.full_name !== `${owner}/${repo}`", content)
@@ -48,23 +52,27 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("sha: pr.head.sha", content)
         self.assertIn("merge_method: 'squash'", content)
 
-    def test_trusted_gate_runs_pr_code_without_secrets_and_writes_a_head_check(self):
+    def test_trusted_gate_runs_pr_code_without_secrets_and_uses_native_job_checks(self):
         content = workflow("trusted-pr-gate.yml")
 
         self.assertIn("pull_request_target:", content)
-        self.assertIn("checks: write", content)
         self.assertIn("permissions:", content)
         self.assertIn("contents: read", content)
         self.assertIn("pull-requests: read", content)
         self.assertIn("persist-credentials: false", content)
         self.assertIn("refs/pull/${{ github.event.pull_request.number }}/merge", content)
-        self.assertIn("github.rest.checks.create", content)
-        self.assertIn("github.rest.checks.update", content)
+        self.assertIn("name: Trusted / Static contracts", content)
+        self.assertIn("name: Trusted / Admin tests and build", content)
+        self.assertIn("name: Trusted / Customer tests and build", content)
+        self.assertIn("name: Trusted / Backend tests", content)
+        self.assertNotIn("github.rest.checks.create", content)
+        self.assertNotIn("name: Static contracts", content)
+        self.assertNotIn("name: Admin tests and build", content)
+        self.assertNotIn("name: Customer tests and build", content)
+        self.assertNotIn("name: Backend tests", content)
         self.assertIn("name: Trusted PR Gate", content)
-        self.assertIn("context.payload.pull_request.head.sha", content)
         self.assertIn("core.setFailed", content)
         self.assertIn("needs: [scope, static, admin, customer, backend]", content)
-        self.assertIn("permissions:\n      contents: read\n      checks: write", content)
         self.assertIn("permissions:\n      contents: read\n      checks: none", content)
 
     def test_production_workflow_requires_environment_gate_and_pinned_host_identity(self):
@@ -76,6 +84,20 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("PRODUCTION_SSH_KNOWN_HOSTS", content)
         self.assertIn("deploy-production.sh", content)
         self.assertIn("concurrency:", content)
+        self.assertNotIn("workflow_dispatch:", content)
+
+    def test_production_workflow_only_accepts_successful_ci_on_main(self):
+        content = workflow("deploy-production.yml")
+
+        self.assertIn("run.conclusion === 'success'", content)
+        self.assertIn("run.head_branch === 'main'", content)
+        self.assertIn("run.head_sha", content)
+        self.assertNotIn("context.payload.inputs", content)
+
+    def test_credential_scans_include_work_status(self):
+        for name in ("ci.yml", "trusted-pr-gate.yml"):
+            content = workflow(name)
+            self.assertNotIn(":!docs/WORK-STATUS.md", content)
 
     def test_ci_fetches_the_pr_base_before_comparing_whitespace(self):
         content = workflow("ci.yml")

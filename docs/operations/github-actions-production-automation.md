@@ -5,11 +5,11 @@
 ## 自动化链路
 
 1. `AI PR Review` 由 `pull_request_target` 触发，只通过 GitHub API 读取 PR 标题、描述和 diff，不 checkout、不执行 PR 分支代码；敏感路径跳过、凭据模式脱敏。
-2. AI 结果写入 PR 头 SHA 的 `AI PR Review` Check Run：缺密钥、请求失败、JSON 无效或发现 `critical/high` 均为失败；其他结果为成功并发表评论。AI 不自动批准。
-3. `Trusted PR Gate` 由默认分支上的 `pull_request_target` 定义，拒绝 fork PR，仅在隔离 Runner、无 secrets、只读权限下检出 PR merge ref，运行静态契约、管理端、顾客端和后端验证，并把结果写回 PR 头 SHA。
-4. `Auto Merge PR` 由 `workflow_run` 监听 AI 与可信门禁，仅接受同仓库、非草稿、目标为 `main` 且当前 head SHA 上全部必需检查成功的 PR，调用带精确 `sha` 的 squash merge。检查未完成、PR 更新、fork 或 GitHub 返回 405/409/422 时只跳过，不强行覆盖。
+2. AI 审查 job 直接命名为 `AI PR Review`，其原生 job check 绑定当前 PR 头 SHA：缺密钥、请求失败、JSON 无效或发现 `critical/high` 均为失败；其他结果为成功并发表评论。AI 不自动批准。
+3. `Trusted PR Gate` 由默认分支上的 `pull_request_target` 定义，拒绝 fork PR，仅在隔离 Runner、无 secrets、只读权限下检出 PR merge ref，运行静态契约、管理端、顾客端和后端验证；四个验证 job 直接产生 `Trusted / ...` 原生 job checks，汇总 job 只校验依赖结果。
+4. `Auto Merge PR` 由 `workflow_run` 监听 AI 与可信门禁，仅接受同仓库、非草稿、目标为 `main` 且触发 run 与当前 head SHA 一致、全部必需检查成功的 PR，调用带精确 `sha` 的 squash merge。检查未完成、PR 更新、fork 或 GitHub 返回 405/409/422 时只跳过，不强行覆盖。
 5. `CI` 仍在 PR 和 `main` push 上运行，作为开发反馈和发布前回归；生产自动合并不把 PR 自定义的 CI 定义当作唯一信任根。
-6. `Deploy Production` 只接收 `main` 上成功的 CI 运行，并绑定 GitHub `production` Environment。环境审批通过后，构建 release、固定 SSH 主机指纹、上传到服务器，再由远端脚本执行备份、恢复演练、Manifest 校验、原子切换和健康检查。
+6. `Deploy Production` 没有手工 SHA 发布入口，只接收 `main` 上名为 `CI` 且结论为成功的 workflow run，并绑定 GitHub `production` Environment。环境审批通过后，构建 release、固定 SSH 主机指纹、上传到服务器，再由远端脚本执行备份、恢复演练、Manifest 校验、原子切换和健康检查。
 
 ## GitHub 配置
 
@@ -37,11 +37,15 @@
 - 管理端、顾客端测试和 TypeScript/生产构建通过；后端专项测试通过。
 - 发布脚本会比较新旧 Alembic 文件列表。检测到迁移变化时自动阻断，不会自动 downgrade；迁移必须走单独审批、备份和恢复方案。
 
-## 当前验收状态（2026-08-31）
+## 当前验收状态（2026-09-01）
 
-- PR #6（`codex/admin/cicd-automation`）当前为 open；本地契约测试与发布脚本语法检查已通过，最新 CI 四项检查已通过。
+- PR #7（`codex/admin/cicd-gate-hardening-main`）正在迁移门禁实现；本地契约测试与工作流 YAML 校验已通过，CI 的管理端、顾客端、后端和静态检查已通过。
+- GitHub Actions 自 2025 年起不允许通过 REST 更新由 Actions 创建的 Check Run；Trusted Gate 和 AI Review 均改用原生 job checks，不调用 `checks.create/update`。
+- Trusted Gate 的执行 job 直接使用 `Trusted / ...` 名称，required checks 采用 GitHub Actions 原生 job checks，避免通过 REST API 创建或更新 Check Run 导致权限和状态漂移。
+- PR #7 的 Trusted Gate 旧运行曾因默认分支仍加载旧工作流而失败；迁移提交合并后必须重新触发并确认新名称的检查真实出现。
+- AI PR Review 当前仍需仓库有效的 `OPENAI_API_KEY`；无效或缺失密钥必须保持失败，不能改为可选或伪造成功。
 - 已完成针对发布脚本和 Compose 的 Codex Security diff scan：覆盖 4 个发布文件，0 个可报告发现；该结果不替代真实 Runner、非生产服务器和生产 Environment 演练。
-- `AI PR Review`、`Trusted PR Gate` 和 `Auto Merge PR` 必须先合并到 `main`，才会作为默认分支工作流对后续 PR 生效；不会追溯触发当前 PR #6。
+- `AI PR Review`、`Trusted PR Gate` 和 `Auto Merge PR` 必须先合并到 `main`，才会作为默认分支工作流对后续 PR 生效；迁移 PR 本身需记录 bootstrap 例外，不能据此宣称门禁已完成验收。
 - 生产发布仍未执行。公网仓库无法匿名读取 Ruleset/Environment 配置，因此必须由仓库管理员在 GitHub 页面确认规则已启用。
 
 ## 必须启用的 GitHub Ruleset
@@ -49,7 +53,7 @@
 在 `Settings → Rules → Rulesets` 为 `main` 设置：
 
 - 必须通过 Pull Request，禁止直接 push；
-- 必须通过 `Trusted PR Gate / Static contracts`、`Trusted PR Gate / Admin tests and build`、`Trusted PR Gate / Customer tests and build`、`Trusted PR Gate / Backend tests`、`Trusted PR Gate / Trusted PR Gate` 和 `AI PR Review`；
+- 必须通过 `Trusted / Static contracts`、`Trusted / Admin tests and build`、`Trusted / Customer tests and build`、`Trusted / Backend tests`、`Trusted PR Gate` 和 `AI PR Review`；这些是 Check Run 的实际名称，不要按 GitHub 页面显示的 workflow 分组名称填写；
 - 将 required approving reviews 设为 `0`，不配置 CODEOWNERS 强制审批；
 - 启用“分支必须最新后才能合并”和线性/合并队列（仓库规模扩大后优先启用 Merge queue）；
 - 允许 GitHub Auto-merge。自动合并工作流仍会再次按当前 head SHA 校验，Ruleset 是最终硬门禁。
