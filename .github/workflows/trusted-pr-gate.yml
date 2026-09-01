@@ -41,7 +41,7 @@ jobs:
             if (!allowed) core.info('Only non-draft PRs from this repository are eligible.');
 
   static:
-    name: Trusted job / Static contracts
+    name: Trusted / Static contracts
     needs: scope
     if: needs.scope.outputs.allowed == 'true'
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
           fi
 
   admin:
-    name: Trusted job / Admin tests and build
+    name: Trusted / Admin tests and build
     needs: scope
     if: needs.scope.outputs.allowed == 'true'
     runs-on: ubuntu-latest
@@ -109,7 +109,7 @@ jobs:
         run: npm ci && npm test && npm run build
 
   customer:
-    name: Trusted job / Customer tests and build
+    name: Trusted / Customer tests and build
     needs: scope
     if: needs.scope.outputs.allowed == 'true'
     runs-on: ubuntu-latest
@@ -146,7 +146,7 @@ jobs:
         run: npm ci && npm test && npm run build
 
   backend:
-    name: Trusted job / Backend tests
+    name: Trusted / Backend tests
     needs: scope
     if: needs.scope.outputs.allowed == 'true'
     runs-on: ubuntu-latest
@@ -183,9 +183,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: write
     steps:
-      - name: Publish trusted head checks
+      - name: Validate required trusted jobs
         uses: actions/github-script@v7
         env:
           ALLOWED: ${{ needs.scope.outputs.allowed }}
@@ -195,30 +194,11 @@ jobs:
           BACKEND_RESULT: ${{ needs.backend.result }}
         with:
           script: |
-            const { owner, repo } = context.repo;
-            const headSha = context.payload.pull_request.head.sha;
             const results = {
-              'Trusted / Static contracts': process.env.STATIC_RESULT,
-              'Trusted / Admin tests and build': process.env.ADMIN_RESULT,
-              'Trusted / Customer tests and build': process.env.CUSTOMER_RESULT,
-              'Trusted / Backend tests': process.env.BACKEND_RESULT,
+              static: process.env.STATIC_RESULT,
+              admin: process.env.ADMIN_RESULT,
+              customer: process.env.CUSTOMER_RESULT,
+              backend: process.env.BACKEND_RESULT,
             };
             const failed = process.env.ALLOWED !== 'true' || Object.values(results).some((result) => result !== 'success');
-            const publishCheck = async (name, conclusion) => {
-              // GitHub no longer permits REST updates to Actions-created checks.
-              // Create a fresh result for every run; latest check selection remains deterministic.
-              const payload = {
-                owner,
-                repo,
-                status: 'completed',
-                conclusion,
-                completed_at: new Date().toISOString(),
-                output: { title: name, summary: conclusion === 'success' ? '可信验证通过。' : '可信验证失败，自动合并已阻断。' },
-              };
-              await github.rest.checks.create({ name, head_sha: headSha, ...payload });
-            };
-            for (const [name, result] of Object.entries(results)) {
-              await publishCheck(name, !failed && result === 'success' ? 'success' : 'failure');
-            }
-            await publishCheck('Trusted PR Gate', failed ? 'failure' : 'success');
             if (failed) core.setFailed('Trusted PR gate failed or PR is outside the allowed scope.');

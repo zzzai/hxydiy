@@ -41,7 +41,7 @@
 
 - PR #7（`codex/admin/cicd-gate-hardening-main`）正在迁移门禁实现；本地契约测试与工作流 YAML 校验已通过，CI 的管理端、顾客端、后端和静态检查已通过。
 - GitHub Actions 自 2025 年起不允许通过 REST 更新由 Actions 创建的 Check Run；Trusted Gate 和 AI Review 均采用“每次运行创建当前 head SHA 的新结果检查”，不再调用 `checks.update`。
-- Trusted Gate 的执行 job 使用 `Trusted job / ...` 名称，对外发布的 required checks 固定为 `Trusted / ...`，避免 CI 同名检查与可信结果混淆。
+- Trusted Gate 的执行 job 直接使用 `Trusted / ...` 名称，required checks 采用 GitHub Actions 原生 job checks，避免通过 REST API 创建或更新 Check Run 导致权限和状态漂移。
 - PR #7 的 Trusted Gate 旧运行曾因默认分支仍加载旧工作流而失败；迁移提交合并后必须重新触发并确认新名称的检查真实出现。
 - AI PR Review 当前仍需仓库有效的 `OPENAI_API_KEY`；无效或缺失密钥必须保持失败，不能改为可选或伪造成功。
 - 已完成针对发布脚本和 Compose 的 Codex Security diff scan：覆盖 4 个发布文件，0 个可报告发现；该结果不替代真实 Runner、非生产服务器和生产 Environment 演练。

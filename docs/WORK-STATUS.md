@@ -1781,7 +1781,7 @@
 ## 本地完成
 
 - 修复 Trusted Gate 通过 REST 更新 Actions 自有 Check Run 导致的 GitHub 403：每次运行直接创建当前 PR head SHA 的新结果检查。
-- 将 Trusted Gate 内部 job 名称与对外 required check 名称分离，内部使用 `Trusted job / ...`，对外保持 `Trusted / ...`。
+- 将 Trusted Gate 的四个验证 job 直接命名为 `Trusted / ...`，并使用 GitHub Actions 原生 job checks，避免 REST Check Run 创建/更新权限失败。
 - AI PR Review 不再创建 in-progress 后再更新，审查完成或异常时直接创建一次性 `AI PR Review` Check Run；缺失/无效密钥仍失败。
 - 补充契约测试、工作流 YAML 校验和迁移说明。
 
