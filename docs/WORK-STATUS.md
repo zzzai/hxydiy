@@ -1804,7 +1804,7 @@
 
 ## 2026-09-01 PR #7 远端复核
 
-- 当前 head 已更新为 `824d489`，顾客端、管理端、后端和静态检查均以该 SHA 成功。
+- 当前 head 已更新为 `ed39a89`，顾客端、管理端、后端和静态检查均以该 SHA 成功。
 - Trusted Gate 仍显示旧版 `Publish trusted head checks`，原因是 `pull_request_target` 在 PR #7 合并前继续读取 `main` 的旧工作流；不能将该旧失败检查视为新实现已验收。
 - AI PR Review 因仓库缺少有效 `OPENAI_API_KEY` 保持失败；本地环境中的同名凭据实测返回 401，未上传、未写入日志。
 - 通过已认证 GitHub API 复核，当前仓库 Rulesets 列表为空；main 尚未配置分支硬门禁。PR #7 不能借此直接合并绕过检查。
