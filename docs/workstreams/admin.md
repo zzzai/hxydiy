@@ -29,23 +29,24 @@
 - 本轮未发布生产，服务器 `current` 与生产 release 未改变。
 - 待完成数据库备份与恢复演练、Manifest 校验、线上健康检查、跨店权限穿透、断网/并发幂等和智慧宝联调后，再安排生产发布与现场验收。
 
-## CI/CD 自动化（2026-08-31，本地完成，未发布）
+## CI/CD 自动化（2026-09-01，本地完成，未发布）
 
-- 新增 `AI PR Review`：使用 `pull_request_target` 只读 PR diff；高危问题请求修改，不自动批准或合并。
-- 新增 `CI`：仓库契约、敏感信息扫描、管理端/顾客端测试与构建、后端测试和发布资格检查。
-- 新增 `Deploy Production`：只接收 `main` 成功 CI，使用 `production` Environment 审批、固定 SSH 主机指纹、PostgreSQL 备份/恢复演练、Manifest 校验、原子切换和失败回滚。
-- 新增 `deploy/diy/*` 发布脚本与 compose/Dockerfile；Alembic 迁移变化默认阻断，不自动 downgrade。
+- `AI PR Review` 改为 PR 头 SHA 的必需 Check Run：模型异常、凭据缺失、JSON 无效和 `critical/high` 均失败，不再提交 `REQUEST_CHANGES`，不自动批准。
+- 新增 `Trusted PR Gate`：默认分支工作流拒绝 fork，在无 secrets、只读权限和隔离 Runner 中检出 PR merge ref，运行静态契约、管理端、顾客端和后端验证，并将结果写回 PR 头 SHA。
+- 新增 `Auto Merge PR`：只处理同仓库、非草稿、目标 `main` 且当前 head SHA 的全部必需检查成功的 PR，使用精确 SHA squash 合并；PR 更新或 GitHub 409/422 时跳过。
+- `CI` 继续提供 PR 开发反馈和 `main` 发布前回归；`Deploy Production` 继续绑定 `production` Environment，生产审批不因 PR 自动合并而取消。
+- 发布脚本与 compose/Dockerfile 保持 PostgreSQL 备份/恢复演练、Manifest、原子切换、健康检查、失败回滚和 Alembic 迁移阻断。
 
 ## 自动化验证
 
-- `python -m unittest tests/test_github_automation_contract.py`：5 passed。
+- `python -m unittest tests/test_github_automation_contract.py`：7 passed。
 - `bash -n deploy/diy/create-release.sh deploy/diy/activate-release.sh deploy/diy/deploy-production.sh`：通过。
 - `git diff --check`：通过。
-- PR #6 分支 CI：Static contracts、Admin tests and build、Customer tests and build、Backend tests 全部通过。
+- PR #6 分支 CI：Static contracts、Admin tests and build、Customer tests and build、Backend tests 全部通过；新增可信门禁和自动合并工作流待合并到 `main` 后才会对后续 PR 生效。
 - Codex Security diff scan（发布脚本/Compose）：4 个文件、0 个可报告发现；未执行真实生产发布。
 
 ## 生产状态
 
 - 本轮仅完成仓库自动化基础设施，未发布生产，未修改生产数据库或 `current`。
-- 待 monorepo 基线合并、GitHub `production` Environment 审批人和 Secrets 配置后，才可启用真实自动发布。
-- GitHub 主分支尚未加载 `AI PR Review` 工作流；合并本 PR 后才会对后续 PR 生效，当前 PR 不会追溯触发。
+- 待 monorepo 基线合并、GitHub Ruleset required checks 配置、`production` Environment 审批人和 Secrets 配置后，才可启用真实自动合并/发布。
+- GitHub 主分支尚未加载 `AI PR Review`、`Trusted PR Gate` 和 `Auto Merge PR`；合并本 PR 后才会对后续 PR 生效，当前 PR 不会追溯触发。

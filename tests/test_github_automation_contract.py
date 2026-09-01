@@ -17,15 +17,55 @@ def workflow(name: str) -> str:
 
 
 class GitHubAutomationContractTests(unittest.TestCase):
-    def test_ai_review_is_isolated_from_untrusted_pr_code_and_never_auto_approves(self):
+    def test_ai_review_is_an_isolated_required_check_and_never_auto_approves(self):
         content = workflow("ai-pr-review.yml")
 
         self.assertIn("pull_request_target:", content)
         self.assertIn("pull-requests: write", content)
+        self.assertIn("checks: write", content)
         self.assertIn("OPENAI_API_KEY", content)
-        self.assertIn("REQUEST_CHANGES", content)
+        self.assertIn("github.rest.checks.create", content)
+        self.assertIn("github.rest.checks.update", content)
+        self.assertIn("AI PR Review", content)
+        self.assertIn("blocking.length ? 'failure' : 'success'", content)
         self.assertNotIn("actions/checkout", content)
         self.assertNotIn("event: APPROVE", content)
+        self.assertNotIn("REQUEST_CHANGES", content)
+
+    def test_auto_merge_requires_all_checks_for_the_exact_head_sha(self):
+        content = workflow("auto-merge.yml")
+
+        self.assertIn("workflow_run:", content)
+        self.assertIn('workflows: ["AI PR Review", "Trusted PR Gate"]', content)
+        self.assertIn("branches: [main]", content)
+        self.assertIn("github.event.workflow_run", content)
+        self.assertIn("pr.head.sha", content)
+        self.assertIn("github.rest.checks.listForRef", content)
+        self.assertIn("Trusted PR Gate", content)
+        self.assertIn("AI PR Review", content)
+        self.assertIn("pr.head.repo.full_name !== `${owner}/${repo}`", content)
+        self.assertIn("github.rest.pulls.merge", content)
+        self.assertIn("sha: pr.head.sha", content)
+        self.assertIn("merge_method: 'squash'", content)
+
+    def test_trusted_gate_runs_pr_code_without_secrets_and_writes_a_head_check(self):
+        content = workflow("trusted-pr-gate.yml")
+
+        self.assertIn("pull_request_target:", content)
+        self.assertIn("checks: write", content)
+        self.assertIn("permissions:", content)
+        self.assertIn("contents: read", content)
+        self.assertIn("pull-requests: read", content)
+        self.assertIn("persist-credentials: false", content)
+        self.assertIn("refs/pull/${{ github.event.pull_request.number }}/merge", content)
+        self.assertIn("github.rest.checks.create", content)
+        self.assertIn("github.rest.checks.update", content)
+        self.assertIn("name: Trusted PR Gate", content)
+        self.assertIn("context.payload.pull_request.head.sha", content)
+        self.assertIn("core.setFailed", content)
+        self.assertIn("needs: [scope, static, admin, customer, backend]", content)
+        self.assertIn("permissions:\n      contents: read\n      checks: write", content)
+        self.assertIn("permissions:\n      contents: read\n      checks: none", content)
 
     def test_production_workflow_requires_environment_gate_and_pinned_host_identity(self):
         content = workflow("deploy-production.yml")

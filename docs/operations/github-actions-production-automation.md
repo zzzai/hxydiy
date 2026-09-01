@@ -4,10 +4,12 @@
 
 ## 自动化链路
 
-1. `AI PR Review` 由 `pull_request_target` 触发，只通过 GitHub API 读取 PR 标题、描述和 diff，不 checkout、不执行 PR 分支代码。
-2. AI 返回结构化 findings；`critical/high` 以 `REQUEST_CHANGES` 阻断，其他结果只发表评论。AI 永不自动批准、永不自动合并。
-3. `CI` 在 PR 和 `main` push 上运行仓库契约、敏感信息扫描、管理端/顾客端测试与生产构建、后端测试。缺少完整三端源码时只报告 baseline 未就绪，不把文档仓库误判成可发布产品。
-4. `Deploy Production` 只接收 `main` 上成功的 CI 运行，并绑定 GitHub `production` Environment。环境审批通过后，构建 release、固定 SSH 主机指纹、上传到服务器，再由远端脚本执行备份、恢复演练、Manifest 校验、原子切换和健康检查。
+1. `AI PR Review` 由 `pull_request_target` 触发，只通过 GitHub API 读取 PR 标题、描述和 diff，不 checkout、不执行 PR 分支代码；敏感路径跳过、凭据模式脱敏。
+2. AI 结果写入 PR 头 SHA 的 `AI PR Review` Check Run：缺密钥、请求失败、JSON 无效或发现 `critical/high` 均为失败；其他结果为成功并发表评论。AI 不自动批准。
+3. `Trusted PR Gate` 由默认分支上的 `pull_request_target` 定义，拒绝 fork PR，仅在隔离 Runner、无 secrets、只读权限下检出 PR merge ref，运行静态契约、管理端、顾客端和后端验证，并把结果写回 PR 头 SHA。
+4. `Auto Merge PR` 由 `workflow_run` 监听 AI 与可信门禁，仅接受同仓库、非草稿、目标为 `main` 且当前 head SHA 上全部必需检查成功的 PR，调用带精确 `sha` 的 squash merge。检查未完成、PR 更新、fork 或 GitHub 返回 405/409/422 时只跳过，不强行覆盖。
+5. `CI` 仍在 PR 和 `main` push 上运行，作为开发反馈和发布前回归；生产自动合并不把 PR 自定义的 CI 定义当作唯一信任根。
+6. `Deploy Production` 只接收 `main` 上成功的 CI 运行，并绑定 GitHub `production` Environment。环境审批通过后，构建 release、固定 SSH 主机指纹、上传到服务器，再由远端脚本执行备份、恢复演练、Manifest 校验、原子切换和健康检查。
 
 ## GitHub 配置
 
@@ -15,7 +17,7 @@
 
 - `OPENAI_API_KEY`：AI 审核密钥；只用于 `AI PR Review`。
 
-在仓库 Settings → Environments → `production` 中配置至少一名 Required reviewer，并添加以下 Environment Secrets：
+在仓库 Settings → Environments → `production` 中配置至少一名 Required reviewer，并添加以下 Environment Secrets。该审批只保护生产发布，不参与 PR 合并；用户已授权取消 PR 人工审核，但未授权取消生产环境保护：
 
 - `PRODUCTION_SSH_HOST`：生产服务器地址。
 - `PRODUCTION_SSH_USER`：生产 SSH 用户。
@@ -37,20 +39,29 @@
 
 ## 当前验收状态（2026-08-31）
 
-- PR #6（`codex/admin/cicd-automation`）当前为 open，提交 `021afa7406dd82939f18641b03e55e6cbb2eb58b` 的 CI 已通过：Static contracts、Admin tests and build、Customer tests and build、Backend tests。
-- 已完成针对本 PR 发布脚本和 Compose 的 Codex Security diff scan：覆盖 4 个发布文件，0 个可报告发现；该结果是合并前参考，不替代人工审批和非生产演练。
-- GitHub 主分支目前只识别 `CI` 工作流；`AI PR Review` 文件必须先合并到 `main`，才会对之后新建或更新的 PR 触发。它不会追溯触发当前 PR #6。
-- 生产发布仍未执行。公网仓库无法匿名读取分支保护配置，因此必须由仓库管理员在 GitHub 页面确认规则已启用。
+- PR #6（`codex/admin/cicd-automation`）当前为 open；本地契约测试与发布脚本语法检查已通过，最新 CI 四项检查已通过。
+- 已完成针对发布脚本和 Compose 的 Codex Security diff scan：覆盖 4 个发布文件，0 个可报告发现；该结果不替代真实 Runner、非生产服务器和生产 Environment 演练。
+- `AI PR Review`、`Trusted PR Gate` 和 `Auto Merge PR` 必须先合并到 `main`，才会作为默认分支工作流对后续 PR 生效；不会追溯触发当前 PR #6。
+- 生产发布仍未执行。公网仓库无法匿名读取 Ruleset/Environment 配置，因此必须由仓库管理员在 GitHub 页面确认规则已启用。
 
-## 必须启用的分支保护
+## 必须启用的 GitHub Ruleset
 
-在 `Settings → Branches → main` 设置：
+在 `Settings → Rules → Rulesets` 为 `main` 设置：
 
 - 必须通过 Pull Request，禁止直接 push；
-- 必须通过 `CI / Static contracts`、`CI / Admin tests and build`、`CI / Customer tests and build`、`CI / Backend tests`；
-- 要求至少 1 名人工审批，并启用“新提交需重新审批”；
-- 启用“分支必须最新后才能合并”；
-- 不启用自动合并。AI 审核使用 `REQUEST_CHANGES` 阻断高危发现，但不代替人工审批。
+- 必须通过 `Trusted PR Gate / Static contracts`、`Trusted PR Gate / Admin tests and build`、`Trusted PR Gate / Customer tests and build`、`Trusted PR Gate / Backend tests`、`Trusted PR Gate / Trusted PR Gate` 和 `AI PR Review`；
+- 将 required approving reviews 设为 `0`，不配置 CODEOWNERS 强制审批；
+- 启用“分支必须最新后才能合并”和线性/合并队列（仓库规模扩大后优先启用 Merge queue）；
+- 允许 GitHub Auto-merge。自动合并工作流仍会再次按当前 head SHA 校验，Ruleset 是最终硬门禁。
+
+## 成熟方案对照与采用基线
+
+- GitHub Rulesets + Required status checks：作为不可绕过的合并硬门禁；required approving reviews 设为 0，满足“无人工 PR 审核”。
+- Trusted PR Gate：借鉴 GitHub `pull_request_target` 的默认分支信任模型，隔离 Runner 运行 PR merge ref，不给 secrets 和写权限。
+- AI PR Review：只做结构化风险检测和可追溯评论，失败即 Check Run failure；不授予批准权限，不替代测试、SAST 和依赖审计。
+- CodeQL、GitHub Secret Scanning/Push Protection、Dependabot 或 Renovate、OSSF Scorecard：建议在完整 monorepo 合并后作为独立 required checks 增加。
+- GitHub Auto-merge 先采用仓库内受控 `workflow_run` 实现；门店数量和并发 PR 增长后迁移到 Merge queue，继续保留精确 SHA 校验。
+- 生产发布沿用 GitHub Environment、OIDC/短期凭证（当前 SSH 专用密钥为过渡方案）、备份恢复演练、Manifest、健康检查和自动回滚。PR 无人工审核不等于生产环境取消保护。
 
 ## 远端脚本保证
 
