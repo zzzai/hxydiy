@@ -1812,6 +1812,49 @@
 - 针对发布脚本与 Compose 完成 Codex Security diff scan：覆盖 4 个文件，0 个可报告发现；报告位于本机临时扫描目录，未写入仓库。
 - 由于无法匿名读取 GitHub 分支保护配置，仍待仓库管理员确认 `main` 的必需检查、至少一名人工审批和禁止直接 push 规则。
 
+# 2026-09-02 技师账户与服务状态展示收口（本地完成，已推送，待 PR）
+
+## 本地完成
+
+- 技师移动端“我的”页分别展示 Staff 登录账号状态与 Technician 服务状态，避免将账号启用误判为在岗。
+- 保持技师服务确认、服务结束和顾客服务参考快记的角色、门店、状态、幂等和审计校验；房间多活动占用仍仅展示“待核对”，不暴露顾客选单且不可操作。
+- 未加入派单、接单、认领、智慧宝物理资源控制或跨门店写入。
+
+## 涉及文件
+
+- `hxy-server/app/api/technician.py`
+- `hxy-server/app/api/technician_admin.py`
+- `hxy-server/tests/test_technician_portal_api.py`
+- `hxy-server/tests/test_technician_account_lifecycle.py`
+- `admin-react/src/technician/TechnicianTodayPage.tsx`
+- `admin-react/src/technician/TechnicianMePage.tsx`
+- `admin-react/src/technician/technicianMobile.ts`
+- `admin-react/src/technician/technician-mobile.css`
+- `admin-react/tests/technician-workspace.test.ts`
+- `admin-react/tests/technician-mobile.test.ts`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/technician.md`
+
+## 测试结果
+
+- 技师后端专项：`33 passed / 0 failed`。
+- 管理端测试：`109 passed / 0 failed`；`npx tsc -b` 与管理端生产构建均通过。
+- 顾客端回归：`153 passed / 0 failed / 1 skipped`；顾客端生产构建通过。
+- 本分支相对 `origin/main` 的 `git diff --check` 通过。
+
+## 发布状态
+
+- 本地完成：是。技师代码已推送至 `codex/technician/profile-account-status`。
+- PR 检查通过：否，PR 尚未创建。
+- 已自动合并到 main：否。
+- 已发布生产：否；本轮未访问或修改服务器、数据库和生产 release。
+- 待现场验收：授权测试账号在手机上验证“顾客提交 → 看板同步 → 确认服务 → 服务结束 → 快记保存/重试 → 审计”闭环，以及断网重试、并发幂等、离职/请假拦截和智慧宝职责边界。
+
+## 待完成事项
+
+- 创建目标为 `main` 的非 Draft PR，等待 Static contracts、Admin tests and build、Customer tests and build、Backend tests、AI PR Review、Trusted PR Gate 六项检查和自动 Squash 合并。
+- main 合并后，按发布流程执行数据库备份、Manifest 校验、生产健康检查和门店手机现场验收；自动化测试不等于营业验收。
+
 # 2026-09-01 PR 无人工审批自动合并基线（本地完成，未发布）
 
 ## 本地完成

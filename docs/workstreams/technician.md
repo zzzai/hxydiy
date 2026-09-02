@@ -112,7 +112,7 @@
 - 使用授权测试账号在手机上验证“顾客提交 → 看板同步 → 确认服务 → 服务结束 → 快记保存/重试 → 审计”完整链路。
 - 验证断网重试、并发幂等、离职/请假拦截，以及智慧宝继续负责开房、离位、清洁和物理资源释放。
 
-## 2026-09-02 技师账户与服务状态展示收口（本地完成，待 PR）
+## 2026-09-02 技师账户与服务状态展示收口（本地完成，已推送，待 PR）
 
 ### 修改内容
 
@@ -130,10 +130,12 @@
 
 - 管理端测试：`109 passed / 0 failed`。
 - 技师后端专项：`33 passed / 0 failed`。
-- `npx tsc -b`、`npm run build` 均通过。
+- 顾客端回归：`153 passed / 0 failed / 1 skipped`；顾客端生产构建通过。
+- 管理端 `npx tsc -b`、`npm run build` 均通过；本分支相对 `origin/main` 的 `git diff --check` 通过。
+- 技师代码提交已推送至 `codex/technician/profile-account-status`；尚未创建 PR。
 - 尚未发布生产；本轮未访问或修改服务器、数据库或生产 release。
-- `git fetch origin --prune` 已恢复成功；待本地提交后推送 `codex/technician/profile-account-status` 并创建 PR。
 
 ### 待门店现场验收
 
 - 用已启用且服务状态分别为“空闲”“服务中”“休息”的授权测试账号确认状态显示与实际账号生命周期一致。
+- 待 GitHub 六项检查和自动 Squash 合并完成后，才可进入数据库备份、Manifest 校验、生产健康检查和门店手机验收。
