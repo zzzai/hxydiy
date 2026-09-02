@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { TECHNICIAN_MOBILE_ROUTES, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
+import { TECHNICIAN_MOBILE_ROUTES, technicianAccountStatusLabel, technicianEmploymentStatusLabel, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
 
 test('移动技师端只暴露三栏业务路由', () => {
   assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/history', '/technician/me']);
@@ -11,6 +11,15 @@ test('技师状态使用现场可理解文案', () => {
   assert.equal(technicianStatusLabel('waiting_service'), '待确认');
   assert.equal(technicianStatusLabel('in_service'), '服务中');
   assert.equal(technicianStatusLabel('post_service_present'), '已完成');
+});
+
+test('账号状态与服务状态分别映射，避免将 active 误显示为在岗', () => {
+  assert.equal(technicianAccountStatusLabel('active'), '已启用');
+  assert.equal(technicianAccountStatusLabel('disabled'), '已停用');
+  assert.equal(technicianAccountStatusLabel('resigned'), '已离职');
+  assert.equal(technicianEmploymentStatusLabel('available'), '空闲');
+  assert.equal(technicianEmploymentStatusLabel('busy'), '服务中');
+  assert.equal(technicianEmploymentStatusLabel('off'), '休息');
 });
 
 test('服务状态只显示允许的主操作', () => {

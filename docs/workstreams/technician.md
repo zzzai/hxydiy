@@ -111,3 +111,29 @@
 
 - 使用授权测试账号在手机上验证“顾客提交 → 看板同步 → 确认服务 → 服务结束 → 快记保存/重试 → 审计”完整链路。
 - 验证断网重试、并发幂等、离职/请假拦截，以及智慧宝继续负责开房、离位、清洁和物理资源释放。
+
+## 2026-09-02 技师账户与服务状态展示收口（本地完成，待 PR）
+
+### 修改内容
+
+- 技师“我的”页明确区分 Staff 登录账号状态与 Technician 服务状态，不再将账号 `active` 误显示为“在岗”。
+- 账号状态显示为已启用、已停用、已离职或待激活；服务状态显示为空闲、服务中、休息、暂停服务或已离职。
+- 补充专项回归测试，确保两套状态映射独立，保持 Staff 与 Technician 的对象边界。
+
+### 涉及文件
+
+- `admin-react/src/technician/TechnicianMePage.tsx`
+- `admin-react/src/technician/technicianMobile.ts`
+- `admin-react/tests/technician-mobile.test.ts`
+
+### 测试与发布
+
+- 管理端测试：`109 passed / 0 failed`。
+- 技师后端专项：`33 passed / 0 failed`。
+- `npx tsc -b`、`npm run build` 均通过。
+- 尚未发布生产；本轮未访问或修改服务器、数据库或生产 release。
+- `git fetch origin --prune` 已恢复成功；待本地提交后推送 `codex/technician/profile-account-status` 并创建 PR。
+
+### 待门店现场验收
+
+- 用已启用且服务状态分别为“空闲”“服务中”“休息”的授权测试账号确认状态显示与实际账号生命周期一致。

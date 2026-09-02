@@ -1,5 +1,39 @@
 # 技师端与员工工作台工作状态
 
+# 2026-09-02 技师账户与服务状态展示收口（本地完成，待 PR）
+
+## 本地完成
+
+- 技师移动端“我的”页将 Staff 登录账号状态与 Technician 服务状态分别展示，避免把 `active` 账号状态误作“在岗”。
+- 账号状态使用“已启用、已停用、已离职、待激活”；服务状态使用“空闲、服务中、休息、暂停服务、已离职”。
+- 新增前端专项回归，确认两套映射独立。
+
+## 涉及文件
+
+- `admin-react/src/technician/TechnicianMePage.tsx`
+- `admin-react/src/technician/technicianMobile.ts`
+- `admin-react/tests/technician-mobile.test.ts`
+- `docs/workstreams/technician.md`
+
+## 测试结果
+
+- 管理端测试：`109 passed / 0 failed`。
+- 技师后端专项：`33 passed / 0 failed`。
+- `npx tsc -b`：通过；`npm run build`：通过。
+
+## 发布状态
+
+- 本地完成：是。
+- PR 检查：尚未创建；`git fetch origin --prune` 已恢复成功，待本地提交后推送分支与创建 PR。
+- 已发布生产：否；服务器 `current`、数据库和线上容器均未修改。
+- 生产 release：未改变，仍须以服务器实际 `current` 为准。
+
+## 尚未完成事项
+
+- 网络恢复后重新 fetch，核对最新 `origin/main`，再推送 `codex/technician/profile-account-status` 并创建目标为 `main` 的非 Draft PR。
+- 等待六项 GitHub 门禁成功与自动 Squash 合并；合并前不部署生产。
+- 使用授权手机确认账号状态与服务状态在门店实际操作中的显示，并回归“登录 → 查看任务 → 确认服务 → 服务结束 → 服务参考快记 → 审计”闭环。
+
 # 2026-09-02 技师工作台可靠性加固（本地完成，待 PR）
 
 ## 本地完成

@@ -1,5 +1,15 @@
 export const TECHNICIAN_MOBILE_ROUTES = ['/technician/today', '/technician/history', '/technician/me'] as const;
 
+/** Staff 登录账号状态（与 Technician 服务状态分开呈现）。 */
+export function technicianAccountStatusLabel(status: string | undefined | null): string {
+  return ({ active: '已启用', disabled: '已停用', resigned: '已离职', pending: '待激活' } as Record<string, string>)[status || ''] || '未知';
+}
+
+/** Technician 当前服务资格状态。 */
+export function technicianEmploymentStatusLabel(status: string | undefined | null): string {
+  return ({ available: '空闲', busy: '服务中', off: '休息', resigned: '已离职', suspended: '暂停服务' } as Record<string, string>)[status || ''] || '未知';
+}
+
 export function technicianStatusLabel(status: string): string {
   return ({ available: '空闲', waiting_service: '待确认', in_service: '服务中', post_service_present: '已完成', conflict: '待核对' } as Record<string, string>)[status] || '处理中';
 }
