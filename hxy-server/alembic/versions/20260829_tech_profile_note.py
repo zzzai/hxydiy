@@ -47,4 +47,3 @@ def downgrade() -> None:
         op.drop_column("customer_profile_records", "idempotency_key")
     if "source" in columns:
         op.drop_column("customer_profile_records", "source")
-

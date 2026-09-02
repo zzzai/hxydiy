@@ -165,4 +165,3 @@ Add a dated entry separating local completion, production publication (if any), 
 - [ ] **Step 4: Final review**
 
 Check reduced-motion behavior, keyboard focus, price semantics, and no accidental changes outside顾客端源码.
-

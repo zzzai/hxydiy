@@ -7,4 +7,3 @@ export default function TechnicianHistoryPage() {
     <ServiceOrderList defaultStatus="history" pageSize={20} />
   </div>;
 }
-

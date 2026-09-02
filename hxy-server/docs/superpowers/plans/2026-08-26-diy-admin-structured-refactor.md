@@ -162,5 +162,3 @@
 - 响应式菜单、店长/技师差异、17 个服务位和单店隐藏 stores 有 Task 6 覆盖。
 - 测试、备份恢复、Manifest、health check、生产 current 和现场验收有 Task 7 覆盖。
 
-
-

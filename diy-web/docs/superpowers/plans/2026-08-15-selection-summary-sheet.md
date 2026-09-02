@@ -128,7 +128,6 @@ Expected: 所有前端测试 PASS。
 
 Run: `npx tsc --noEmit`
 Expected: exit 0。
-
 ### Task 3: 移动端布局与真实交互验收
 
 **Files:**

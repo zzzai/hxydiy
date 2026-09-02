@@ -41,4 +41,3 @@ class ProfileRecordCreate(BaseModel):
     @classmethod
     def validate_service_note(cls, value: str) -> str:
         return _reject_health_claim(value)
-

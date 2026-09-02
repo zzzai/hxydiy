@@ -35,4 +35,3 @@ export default function ProfileRecordForm({ customerId, open, onClose, onSaved }
     </Form>
   </Modal>;
 }
-
