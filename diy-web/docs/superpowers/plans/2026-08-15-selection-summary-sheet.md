@@ -162,7 +162,6 @@ Expected: 所有前端测试 PASS。
 
 Run: `npx tsc --noEmit`
 Expected: exit 0。
-
 Run: `npm run build`
 Expected: exit 0。
 
