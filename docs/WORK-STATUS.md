@@ -1,5 +1,45 @@
 # 技师端与员工工作台工作状态
 
+# 2026-09-02 技师工作台可靠性加固（本地完成，待 PR）
+
+## 本地完成
+
+- 技师移动工作台仅对 `available`、`busy` 技师开放，`/technician/me` 分离 Staff 与 Technician 状态。
+- 确认服务、服务结束、顾客画像快记的幂等键绑定技师、服务位、动作和请求体；跨目标复用返回 `409 IDEMPOTENCY_KEY_REUSED`，并发唯一约束异常安全处理。
+- 多活动房间聚合为“待核对”，不暴露顾客选单并禁止确认；服务响应标明 DIY 服务状态、只读资源状态及 `resource_control: external_read_only`。
+- 离职/请假审批前阻止存在未结束 DIY 服务；移动端新增冲突状态色、文案和提示抽屉。
+
+## 涉及文件
+
+- `hxy-server/app/api/technician.py`
+- `hxy-server/app/api/technician_admin.py`
+- `hxy-server/tests/test_technician_portal_api.py`
+- `hxy-server/tests/test_technician_account_lifecycle.py`
+- `admin-react/src/technician/TechnicianTodayPage.tsx`
+- `admin-react/src/technician/technicianMobile.ts`
+- `admin-react/src/technician/technician-mobile.css`
+- `admin-react/tests/technician-workspace.test.ts`
+- `docs/TEAM-MEMORY.md`
+
+## 测试结果
+
+- 技师后端专项：`25 passed / 0 failed`。
+- 管理端测试：`108 passed / 0 failed`。
+- `npx tsc -b`：通过；`npm run build`：通过；`git diff --check`：通过（仅换行符提示）。
+
+## 发布状态
+
+- 本地完成：是。
+- PR 检查：尚未创建 PR。
+- 已发布生产：否；服务器 current 与数据库未修改。
+- 服务器只读核验 current：`/root/hxy-diy-20260811/releases/customer-selection-sheet-20260901-2`，API 与 DB 容器运行正常。
+
+## 尚未完成事项
+
+- 推送 `codex/technician/reliability-hardening` 并创建目标为 `main` 的非 Draft PR。
+- 等待 Static contracts、Admin tests and build、Customer tests and build、Backend tests、AI PR Review、Trusted PR Gate 六项检查；失败需读取日志修复后重跑。
+- 合并后按备份、Manifest、迁移演练、健康检查和授权手机现场验收门槛发布生产。
+
 # 2026-08-29 智慧宝后台只读审计与 DIY 对接字段基线
 
 ## 本地完成

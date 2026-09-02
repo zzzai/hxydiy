@@ -79,3 +79,35 @@
 
 - 使用授权测试账号完成顾客提交后看板同步、确认服务、服务结束、快记保存/失败重试及审计闭环。
 - 自动化测试不替代真实手机、断网和并发场景验收。
+
+## 2026-09-02 技师工作台可靠性加固（本地完成，待 PR）
+
+### 修改内容
+
+- 仅允许 `available`、`busy` 技师进入移动工作台，并在 `/technician/me` 中分别返回 Staff 与 Technician 状态。
+- 确认服务、服务结束和画像保存的幂等键绑定技师、服务位、动作及请求体；复用到其他目标时返回 `409 IDEMPOTENCY_KEY_REUSED`，并对并发唯一性异常做安全兜底。
+- 房间出现多个活动占用时聚合为“待核对”，不暴露顾客选单且禁止确认服务；响应补充 DIY 服务状态、只读资源状态和 `resource_control: external_read_only`。
+- 技师离职/请假审批前校验未结束 DIY 服务，移动端增加冲突状态颜色、提示文案与说明抽屉。
+
+### 涉及文件
+
+- `hxy-server/app/api/technician.py`
+- `hxy-server/app/api/technician_admin.py`
+- `hxy-server/tests/test_technician_portal_api.py`
+- `hxy-server/tests/test_technician_account_lifecycle.py`
+- `admin-react/src/technician/TechnicianTodayPage.tsx`
+- `admin-react/src/technician/technicianMobile.ts`
+- `admin-react/src/technician/technician-mobile.css`
+- `admin-react/tests/technician-workspace.test.ts`
+- `docs/TEAM-MEMORY.md`
+
+### 测试与发布
+
+- 技师后端专项：`25 passed`；管理端测试：`108 passed`。
+- `npx tsc -b` 与 `npm run build` 均通过；`git diff --check` 通过（仅换行符提示）。
+- 尚未发布生产；当前分支为 `codex/technician/reliability-hardening`，待创建 PR 并通过六项 GitHub 检查后合并。
+
+### 待门店现场验收
+
+- 使用授权测试账号在手机上验证“顾客提交 → 看板同步 → 确认服务 → 服务结束 → 快记保存/重试 → 审计”完整链路。
+- 验证断网重试、并发幂等、离职/请假拦截，以及智慧宝继续负责开房、离位、清洁和物理资源释放。
