@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Image, Space, Upload } from 'antd';
+import { App, Button, Image, Popconfirm, Space, Upload } from 'antd';
 import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { client, deleteMedia, uploadMedia } from '../api';
@@ -17,15 +17,22 @@ export default function MediaUploadField({ value, onChange, purpose = 'general' 
   const url = typeof value === 'string' ? value : value?.url;
   const mediaId = typeof value === 'object' ? value?.id : Number(url?.match(/\/media\/(\d+)\//)?.[1]) || undefined;
   useEffect(() => {
+    let objectUrl: string | undefined;
     if (!url || url.startsWith('data:') || url.startsWith('blob:') || /^https?:\/\//.test(url)) {
       setPreviewUrl(url);
-      return;
+      return () => undefined;
     }
     let active = true;
     client.get(url, { responseType: 'blob' }).then((response) => {
-      if (active) setPreviewUrl(URL.createObjectURL(response.data));
+      if (active) {
+        objectUrl = URL.createObjectURL(response.data);
+        setPreviewUrl(objectUrl);
+      }
     }).catch(() => { if (active) setPreviewUrl(undefined); });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [url]);
   const props: UploadProps = {
     accept: 'image/jpeg,image/png,image/webp,image/gif',
@@ -61,7 +68,7 @@ export default function MediaUploadField({ value, onChange, purpose = 'general' 
     {previewUrl && <Image src={previewUrl} width={120} height={90} style={{ objectFit: 'cover' }} />}
     <Space>
       <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading}>{url ? '替换图片' : '上传图片'}</Button></Upload>
-      {mediaId && <Button danger type="text" icon={<DeleteOutlined />} onClick={async () => { await deleteMedia(mediaId); onChange?.(''); message.success('图片已删除'); }}>删除</Button>}
+      {mediaId && <Popconfirm title="确定删除这张图片吗？" description="删除后不会影响已保存的历史快照。" okText="删除" cancelText="取消" onConfirm={async () => { await deleteMedia(mediaId); onChange?.(''); setPreviewUrl(undefined); message.success('图片已删除'); }}><Button danger type="text" icon={<DeleteOutlined />}>删除</Button></Popconfirm>}
     </Space>
   </Space>;
 }
