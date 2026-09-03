@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import {
   App, Button, Descriptions, Empty, Form, Input, InputNumber, Modal, Popconfirm,
-  Segmented, Select, Space, Spin, Table, Tag,
+  Segmented, Select, Space, Spin, Table, Tag, Typography,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, PlusOutlined, ReloadOutlined, SettingOutlined, StopOutlined } from '@ant-design/icons';
 import {
-  createRoom, deleteRoom, getRooms, getRoomStats, getStaff,
+  createRoom, deleteRoom, getRooms, getRoomStats, getStaff, updateServicePositionOperationalStatus,
 } from '../api';
 import { canManageConfiguration } from '../auth';
-import { roomConfigurationReducer } from '../rooms';
+import { getRoomOperationalAction, roomConfigurationReducer } from '../rooms';
 
 type Room = {
   id: number;
@@ -21,6 +21,7 @@ type Room = {
   used_count?: number;
   current_tech?: string;
   status: string;
+  operational_status?: string | null;
   parent_room_id?: number | null;
   is_space_container?: boolean;
   is_service_position?: boolean;
@@ -165,8 +166,9 @@ function RoomList() {
           { title: '层级', width: 130, render: (_: unknown, room: Room) => room.is_space_container ? <Tag color="blue">空间容器 · {room.bed_count || 0} 张床</Tag> : <Tag color="green">实际服务位</Tag> },
           { title: '容量', dataIndex: 'capacity', width: 80, render: (value: number) => `${value || 1} 人` },
           { title: '状态', dataIndex: 'status', width: 100, render: (value: string) => <Tag color={STATUS_META[value]?.tag}>{STATUS_META[value]?.label || value}</Tag> },
-          ...(canManage ? [{ title: '操作', width: 160, render: (_: unknown, room: Room) => (
+          ...(canManage ? [{ title: '操作', width: 250, render: (_: unknown, room: Room) => (
             <Space>
+              <RoomOperationalToggle room={room} onChanged={load} />
               <Popconfirm title="确认删除这个房间？" onConfirm={async () => { await deleteRoom(room.id); message.success('已删除'); await load(); }}>
                 <Button size="small" danger type="link">删除</Button>
               </Popconfirm>
@@ -272,7 +274,10 @@ function RoomConfiguration({ roomId, roomSummary, onChanged }: { roomId: number;
           </div>
           <div className="page-kicker">{room.code} · {GROUP_META.find(group => group.key === room.room_group)?.label || '其他区域'} · {room.floor || '未设楼层'}</div>
         </div>
-        {canManage && <span style={{ color: '#84938f', fontSize: 12 }}>仅用于查看和房态配置</span>}
+        {canManage && <Space>
+          <RoomOperationalToggle room={room} onChanged={onChanged} />
+          <span style={{ color: '#84938f', fontSize: 12 }}>仅用于查看和房态配置</span>
+        </Space>}
       </div>
       <div className="room-configuration-section">房态信息</div>
       <Descriptions column={1} size="small" items={[
@@ -282,6 +287,53 @@ function RoomConfiguration({ roomId, roomSummary, onChanged }: { roomId: number;
       ]} />
     </div>
   );
+}
+
+function RoomOperationalToggle({ room, onChanged }: { room: Room; onChanged: () => void }) {
+  const { message, modal } = App.useApp();
+  const [busy, setBusy] = useState(false);
+  const action = getRoomOperationalAction(room);
+  if (room.is_service_position === false || room.is_space_container === true) return null;
+  if (!action) {
+    return room.operational_status === 'active' && room.status !== 'available'
+      ? <Typography.Text type="secondary" style={{ fontSize: 12 }}>有活动占用</Typography.Text>
+      : null;
+  }
+  const disabling = action === 'disable';
+  const nextStatus = disabling ? 'inactive' : 'active';
+  const run = () => {
+    modal.confirm({
+      title: `${disabling ? '停用' : '重新启用'}${room.name}？`,
+      content: disabling
+        ? '停用后将拒绝新的顾客扫码和共享 iPad 入口；不会操作智慧宝的沙发、房间或清洁状态。'
+        : '重新启用后将恢复顾客扫码和共享 iPad 入口；不会操作智慧宝的物理资源。',
+      okText: disabling ? '确认停用' : '确认启用',
+      okButtonProps: disabling ? { danger: true } : undefined,
+      cancelText: '返回',
+      onOk: async () => {
+        setBusy(true);
+        try {
+          await updateServicePositionOperationalStatus(
+            room.id,
+            nextStatus,
+            disabling ? '房间配置页停用服务位' : '房间配置页重新启用服务位',
+          );
+          message.success(disabling ? '服务位已停用' : '服务位已重新启用');
+          onChanged();
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  };
+  return <Button
+    size="small"
+    type={disabling ? 'link' : 'link'}
+    danger={disabling}
+    icon={disabling ? <StopOutlined /> : <CheckCircleOutlined />}
+    loading={busy}
+    onClick={run}
+  >{disabling ? '停用服务位' : '重新启用服务位'}</Button>;
 }
 
 export default function RoomsPage() {

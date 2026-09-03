@@ -174,6 +174,13 @@ export function occupancyStatusMeta(status: OccupancyStatus | string): Occupancy
   };
 }
 
+export function getServicePositionDisplayStatus(
+  occupancyStatus: OccupancyStatus | string,
+  operationalStatus: string | null | undefined,
+): OccupancyStatus | string {
+  return operationalStatus === 'inactive' ? 'unavailable' : occupancyStatus;
+}
+
 export function getPositionActions(
   status: OccupancyStatus | string,
   role: PositionRole,
@@ -254,14 +261,15 @@ export function waitingReleaseMeta(
   return { level: 'normal', label: '等待开始服务', dueAt: new Date(dueMs).toISOString(), remainingMs };
 }
 
-export function countPositionStates(positions: Array<Pick<ServicePosition, 'state'>>) {
+export function countPositionStates(positions: Array<Pick<ServicePosition, 'state'> & Partial<Pick<ServicePosition, 'operational_status'>>>) {
   return positions.reduce((counts, position) => {
-    if (position.state === 'available') counts.available += 1;
-    else if (position.state === 'held') counts.held += 1;
-    else if (position.state === 'waiting_service') counts.waiting_service += 1;
-    else if (position.state === 'in_service') counts.in_service += 1;
-    else if (position.state === 'post_service_present' || position.state === 'cleaning') counts.attention += 1;
-    else if (position.state === 'unavailable') counts.unavailable += 1;
+    const displayStatus = getServicePositionDisplayStatus(position.state, position.operational_status);
+    if (displayStatus === 'available') counts.available += 1;
+    else if (displayStatus === 'held') counts.held += 1;
+    else if (displayStatus === 'waiting_service') counts.waiting_service += 1;
+    else if (displayStatus === 'in_service') counts.in_service += 1;
+    else if (displayStatus === 'post_service_present' || displayStatus === 'cleaning') counts.attention += 1;
+    else if (displayStatus === 'unavailable') counts.unavailable += 1;
     return counts;
   }, { available: 0, held: 0, waiting_service: 0, in_service: 0, attention: 0, unavailable: 0 });
 }

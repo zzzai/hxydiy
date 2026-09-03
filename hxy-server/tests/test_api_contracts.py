@@ -605,6 +605,7 @@ class AdminV2ContractTests(unittest.TestCase):
         response = self.client.get("/api/v1/admin/v2/rooms")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([room["code"] for room in response.json()["items"]], ["R-01"])
+        self.assertEqual(response.json()["items"][0]["operational_status"], "active")
 
     def test_store_staff_cannot_select_another_store_in_query(self):
         response = self.client.get(

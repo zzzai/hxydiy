@@ -127,3 +127,17 @@
 - 后端 CI 在安装业务依赖时显式安装 `pytest`，避免云端出现 `No module named pytest` 的环境性失败。
 - 首次 CI 失败已完成根因定位；修复仅涉及工作流，不涉及业务代码和生产配置。
 - GitHub Actions 运行 `33387935310` 已通过：管理端测试与构建、后端权限与服务位契约两个 job 均成功。
+
+## 2026-09-01 服务位看板运营状态收口（本地完成，未发布）
+
+- 服务位看板和房间配置统一读取 `operational_status`；停用服务位显示为“已停用”，不再计入“可用”统计，也不显示“可接待”状态。
+- 房间列表 API 返回 `operational_status`，房间配置页沿用既有服务位运营状态命令；停用/重新启用仍仅限店长或总部管理员，且活动占用时禁止操作。
+- 该状态只影响 DIY 扫码和共享入口，不操作智慧宝物理资源；顾客端、技师端业务未修改。
+
+涉及文件：`admin-react/src/pages/RoomsPage.tsx`、`admin-react/src/pages/ServicePositionsPage.tsx`、`admin-react/src/rooms.ts`、`admin-react/src/servicePositions.ts`、对应测试、`hxy-server/app/api/admin_v2.py`。
+
+验证：管理端 `npm test` 124 passed，`npx tsc -b` 通过，`npm run build` 通过；后端服务位 40 passed、权限 9 passed。`tests/test_api_contracts.py` 仍有 2 个历史契约失败：分页函数直调的 FastAPI `Query` 默认值兼容问题，以及旧测试要求店长修改为 `candidate`，均未纳入本轮服务位改动。
+
+发布状态：本地完成，未发布生产，未执行数据库备份、Manifest 校验、服务器 `current` 切换或线上健康检查。
+
+待现场验收：发布后在非营业服务位验证店长停用/启用、扫码拒绝与恢复；确认普通员工无运营状态操作入口，并完成跨店隔离和智慧宝只读边界验收。

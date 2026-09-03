@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   buildKioskUrl,
   countPositionStates,
+  getServicePositionDisplayStatus,
   getServicePositionOperationalAction,
   getForceReleaseTargets,
   getPositionActions,
@@ -152,7 +153,7 @@ test('服务位状态使用门店可理解的中文名称', () => {
 
 test('服务位看板按现场状态统计，不把停用位算作可用', () => {
   const counts = countPositionStates([
-    { state: 'available' },
+    { state: 'available', operational_status: 'inactive' },
     { state: 'available' },
     { state: 'held' },
     { state: 'waiting_service' },
@@ -162,13 +163,18 @@ test('服务位看板按现场状态统计，不把停用位算作可用', () =>
     { state: 'unavailable' },
   ]);
   assert.deepEqual(counts, {
-    available: 2,
+    available: 1,
     held: 1,
     waiting_service: 1,
     in_service: 1,
     attention: 2,
-    unavailable: 1,
+    unavailable: 2,
   });
+});
+
+test('停用服务位在看板上统一显示为已停用，而非可接待', () => {
+  assert.equal(getServicePositionDisplayStatus('available', 'inactive'), 'unavailable');
+  assert.equal(getServicePositionDisplayStatus('in_service', 'active'), 'in_service');
 });
 
 test('空闲服务位可由店长停用，已停用服务位可重新启用，活动占用不能改配置', () => {

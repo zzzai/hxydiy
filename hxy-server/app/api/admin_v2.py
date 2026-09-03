@@ -997,6 +997,7 @@ def list_rooms(
         "room_group": r.room_group, "used_count": r.used_count,
         "current_tech": r.current_tech,
         "status": r.status, "note": r.note, "sort_order": r.sort_order,
+        "operational_status": r.operational_status,
         "parent_room_id": r.parent_room_id,
         "is_space_container": r.is_space_container,
         "is_service_position": r.is_service_position,

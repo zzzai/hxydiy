@@ -2005,3 +2005,41 @@
 - 本地完成：是，分支 `codex/admin/project-management`。
 - 已发布生产：否。本轮未执行数据库迁移、备份、Manifest 校验、服务器 `current` 切换或线上健康检查；生产 release 未改变。
 - 待现场验收：Pull Request/CI 审核通过后，以总部管理员、店长真实账号验证跨店列表、目标门店选择、本店上下架、强制下线不可恢复及审计记录；自动化测试不等同真实门店营业验收。
+# 2026-09-01 服务位运营状态看板（本地完成，未发布）
+
+## 修改内容
+
+- 看板将停用服务位统一显示为“已停用”，并从可用数量中排除。
+- 房间配置页和房间列表接入服务位 `operational_status`，店长/总部管理员可对无活动占用服务位停用或重新启用；普通员工无操作入口。
+- 停用仍只阻止 DIY 新扫码和共享入口，不触发智慧宝物理资源动作。
+
+## 涉及文件
+
+- `admin-react/src/pages/RoomsPage.tsx`
+- `admin-react/src/pages/ServicePositionsPage.tsx`
+- `admin-react/src/rooms.ts`
+- `admin-react/src/servicePositions.ts`
+- `admin-react/tests/rooms.test.ts`
+- `admin-react/tests/service-position-actions.test.ts`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_api_contracts.py`
+- `docs/TEAM-MEMORY.md`
+
+## 测试结果
+
+- 管理端 `npm test`：124 passed。
+- 管理端 `npx tsc -b`：通过。
+- 管理端 `npm run build`：通过，保留既有共享 chunk 体积警告。
+- 后端服务位专项：40 passed；权限专项：9 passed。
+- 后端 API 契约存在 2 个历史失败，详见 `docs/workstreams/admin.md`，未作为本轮生产通过依据。
+
+## 发布状态
+
+- 本地完成：是。
+- 已发布生产：否；未执行备份、Manifest 校验、生产切换或线上健康检查。
+- 生产 release：未变更。
+
+## 尚未完成事项
+
+- 推送任务分支并创建 PR，等待 CI。
+- 发布前完成数据库备份、Manifest、线上健康检查和权限穿透；发布后进行非营业现场验收。

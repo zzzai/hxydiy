@@ -47,6 +47,7 @@ import {
   POSITION_ACTION_LABELS,
   buildKioskUrl,
   countPositionStates,
+  getServicePositionDisplayStatus,
   getPositionActions,
   getServicePositionOperationalAction,
   occupancyStatusMeta,
@@ -87,7 +88,8 @@ function elapsedText(value: string | null | undefined, now: number, future = fal
 }
 
 function PositionTile({ position, now, onClick }: { position: ServicePosition; now: number; onClick: () => void }) {
-  const meta = occupancyStatusMeta(position.state);
+  const displayStatus = getServicePositionDisplayStatus(position.state, position.operational_status);
+  const meta = occupancyStatusMeta(displayStatus);
   const occupancy = position.occupancy;
   const overrun = position.state === 'in_service' && occupancy?.expected_end_at
     && new Date(occupancy.expected_end_at).getTime() < now;
@@ -103,7 +105,9 @@ function PositionTile({ position, now, onClick }: { position: ServicePosition; n
       : waiting?.level === 'warning'
         ? '等待较久'
         : null;
-  const statusLabel = overrun ? '服务超时·有人' : expiring ? '占位即将到期' : waitingLabel || meta.label;
+  const statusLabel = position.operational_status !== 'active'
+    ? '已停用'
+    : overrun ? '服务超时·有人' : expiring ? '占位即将到期' : waitingLabel || meta.label;
   const timing = position.state === 'held'
     ? elapsedText(occupancy?.hold_expires_at, now, true)
     : waiting?.dueAt && waiting.level !== 'confirmed'
