@@ -66,6 +66,19 @@
 - 本轮未发布生产，服务器 `current` 与生产 release 未改变。
 - 待完成数据库备份与恢复演练、Manifest 校验、线上健康检查、跨店权限穿透、断网/并发幂等和智慧宝联调后，再安排生产发布与现场验收。
 
+## 2026-09-03 服务位停用统计修复（本地完成，未发布）
+
+- 修复服务位统计将停用服务位误计入“空闲”的问题，新增“已停用”数量并在管理端房态看板展示。
+- 兼容 FastAPI `Query` 默认值的项目列表分页参数，更新店长项目上下架权限回归覆盖。
+
+涉及文件：`hxy-server/app/api/admin_v2.py`、`hxy-server/tests/test_api_contracts.py`、`admin-react/src/pages/RoomsPage.tsx`、`admin-react/tests/rooms.test.ts`。
+
+验证：管理端 `npm test -- --run` 125 passed；`npx tsc -b` 通过；`npm run build` 成功（保留既有大 chunk 警告）；后端管理专项 93 passed，1 个既有 Starlette/httpx 弃用警告；`git diff --check` 通过。
+
+发布状态：本地完成，未发布生产，未执行数据库备份、Manifest 校验、线上切换或健康检查；生产 release 未改变。
+
+待现场验收：发布后由店长验证非营业服务位停用/启用、扫码拒绝与恢复；普通员工确认无运营状态操作入口，并完成门店隔离与智慧宝只读边界验收。
+
 ## 2026-08-30 媒体上传能力（本地完成，未发布）
 
 - 新增门店隔离媒体元数据与上传/列表/受控预览/软删除 API；限制图片类型为 JPG、PNG、WebP、GIF，单文件最大 5MB。

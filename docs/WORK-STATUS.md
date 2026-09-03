@@ -2043,3 +2043,30 @@
 
 - 推送任务分支并创建 PR，等待 CI。
 - 发布前完成数据库备份、Manifest、线上健康检查和权限穿透；发布后进行非营业现场验收。
+# 2026-09-03 服务位停用统计修复
+
+## 本地完成
+
+- 修复管理端房态看板停用服务位统计错误：停用数量单独展示，不再计入空闲数量。
+- 兼容项目列表分页参数的 FastAPI `Query` 默认值，并补充店长项目上下架回归覆盖。
+
+## 涉及文件
+
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_api_contracts.py`
+- `admin-react/src/pages/RoomsPage.tsx`
+- `admin-react/tests/rooms.test.ts`
+
+## 测试结果
+
+- 管理端：`npm test -- --run`，125 passed。
+- TypeScript：`npx tsc -b` 通过。
+- 生产构建：`npm run build` 成功；保留既有共享 chunk 体积警告。
+- 后端管理专项：93 passed，1 个既有 Starlette/httpx 弃用警告。
+- `git diff --check`：通过。
+
+## 发布状态
+
+- 本地完成：是，分支 `codex/admin/service-position-operational-status`。
+- 已发布生产：否；未执行数据库备份、Manifest 校验、生产切换或线上健康检查，生产 release 未改变。
+- 待现场验收：发布后验证店长停用/启用、扫码行为、普通员工只读、门店隔离及智慧宝只读边界。
