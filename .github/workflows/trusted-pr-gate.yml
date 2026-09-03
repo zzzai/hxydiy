@@ -65,7 +65,7 @@ jobs:
           set -euo pipefail
           test -d tests
           python -m unittest discover -s tests -p 'test_*.py'
-          git diff --check "$BASE_SHA" HEAD
+          git diff-tree --no-commit-id --check -r HEAD
           if git grep -nI -E 'BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|AKIA[0-9A-Z]{16}|(QINIU_SECRET_KEY|OPENAI_API_KEY|DIY_JWT_SECRET|POSTGRES_PASSWORD)\s*[:=]\s*[A-Za-z0-9_+/=-]{12,}' -- . ':!docs/WORK-STATUS.md' ':!deploy/diy/.env.example'; then
             echo 'Potential credential detected.' >&2
             exit 1

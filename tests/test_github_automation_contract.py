@@ -36,13 +36,13 @@ class GitHubAutomationContractTests(unittest.TestCase):
         content = workflow("auto-merge.yml")
 
         self.assertIn("workflow_run:", content)
-        self.assertIn('workflows: ["AI PR Review", "Trusted PR Gate"]', content)
+        self.assertIn('workflows: ["Trusted PR Gate"]', content)
         self.assertIn("branches: [main]", content)
         self.assertIn("github.event.workflow_run", content)
         self.assertIn("pr.head.sha", content)
         self.assertIn("github.rest.checks.listForRef", content)
         self.assertIn("Trusted PR Gate", content)
-        self.assertIn("AI PR Review", content)
+        self.assertNotIn("'AI PR Review',", content)
         self.assertIn("pr.head.repo.full_name !== `${owner}/${repo}`", content)
         self.assertIn("github.rest.pulls.merge", content)
         self.assertIn("sha: pr.head.sha", content)
@@ -81,7 +81,7 @@ class GitHubAutomationContractTests(unittest.TestCase):
         content = workflow("ci.yml")
 
         self.assertIn("fetch-depth: 0", content)
-        self.assertIn('git diff --check "$BASE_SHA" "$GITHUB_SHA"', content)
+        self.assertIn('git diff-tree --no-commit-id --check -r "$GITHUB_SHA"', content)
 
     def test_remote_release_script_backs_up_verifies_and_rolls_back(self):
         script = (REPO_ROOT / "deploy" / "diy" / "deploy-production.sh").read_text(encoding="utf-8")

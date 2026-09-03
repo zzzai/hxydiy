@@ -2,7 +2,7 @@ name: Auto Merge PR
 
 on:
   workflow_run:
-    workflows: ["AI PR Review", "Trusted PR Gate"]
+    workflows: ["Trusted PR Gate"]
     branches: [main]
     types: [completed]
 
@@ -52,7 +52,6 @@ jobs:
               'Admin tests and build',
               'Customer tests and build',
               'Backend tests',
-              'AI PR Review',
               'Trusted PR Gate',
             ];
             const { data: checks } = await github.rest.checks.listForRef({
@@ -64,7 +63,7 @@ jobs:
             });
             const latest = new Map();
             for (const check of checks.check_runs) {
-              if (check.app?.slug === 'github-actions' && ['Trusted PR Gate', 'AI PR Review'].includes(check.workflow_name || check.name)) {
+              if (check.app?.slug === 'github-actions') {
                 latest.set(check.name, check);
               }
             }
