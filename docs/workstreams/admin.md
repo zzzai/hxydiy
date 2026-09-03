@@ -2,6 +2,15 @@
 
 更新时间：2026-08-31
 
+## 2026-09-03 媒体编辑稳定地址与删除确认（本地完成，未发布）
+
+- 媒体上传接口返回稳定的受控内容地址 `/api/v1/admin/media/{id}/content`，不再把七牛私有 CDN 的短期签名 URL 写入商品/项目主数据；访问时由服务端重新生成签名跳转。
+- 管理端媒体控件增加删除二次确认，删除后立即清理预览状态，并在替换/切换图片时释放 Blob URL，避免长期编辑页面内存泄漏。
+
+涉及文件：`hxy-server/app/api/media.py`、`hxy-server/tests/test_admin_media_api.py`、`admin-react/src/components/MediaUploadField.tsx`、`admin-react/tests/media-upload.test.ts`。
+
+验证：待本轮测试完成后补充结果。未发布生产，未执行数据库备份、Manifest 校验、服务器切换或线上健康检查。
+
 ## 负责范围
 
 - 店长、总部管理员、普通员工工作台。

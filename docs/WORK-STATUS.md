@@ -2103,3 +2103,34 @@
 - 本地完成：是。
 - 已发布生产：否；无数据库迁移、无服务器切换、无线上健康检查。
 - 生产 release：未变更。
+
+# 2026-09-03 商品/项目媒体编辑稳定化
+
+## 本地完成
+
+- 商品/项目媒体主数据改存稳定受控内容地址，七牛私有签名 URL 改为访问时临时生成。
+- 媒体删除增加二次确认，预览切换主动释放 Blob URL，降低误删和长期编辑内存泄漏风险。
+
+## 涉及文件
+
+- `admin-react/src/components/MediaUploadField.tsx`
+- `admin-react/tests/media-upload.test.ts`
+- `hxy-server/app/api/media.py`
+- `hxy-server/tests/test_admin_media_api.py`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/admin.md`
+
+## 测试结果
+
+- 管理端 `npm test`：125 passed。
+- TypeScript：`npm run build` 内置 `tsc -b` 通过。
+- 管理端生产构建：成功；保留既有共享 chunk 体积警告。
+- 后端媒体、目录选项、资源权限及门店隔离专项：48 passed，1 个既有 Starlette/httpx 弃用警告。
+- `git diff --check`：通过。
+
+## 发布状态
+
+- 本地完成：是，分支 `codex/admin/catalog-media-editor`。
+- 已发布生产：否；未执行数据库备份、Manifest 校验、生产切换或线上健康检查。
+- 生产 release：未变更。
+- 待 PR/CI 与现场验收：验证七牛真实上传、预览、替换、删除及店长/员工门店隔离边界。

@@ -63,7 +63,8 @@ def _storage_or_http():
 
 
 def _view(media: MediaAsset, storage=None) -> dict:
-    public_url = storage.url(media.object_key) if storage else None
+    # 主数据只保存稳定的受控 API 地址。七牛私有 CDN 的签名 URL 会过期，
+    # 不能把临时地址写入商品/项目，否则编辑后图片会在 TTL 到期后失效。
     return {
         "id": media.id,
         "store_id": media.store_id,
@@ -72,7 +73,7 @@ def _view(media: MediaAsset, storage=None) -> dict:
         "media_type": media.media_type,
         "size_bytes": media.size_bytes,
         "purpose": media.purpose,
-        "url": public_url or f"/api/v1/admin/media/{media.id}/content",
+        "url": f"/api/v1/admin/media/{media.id}/content",
         "created_at": media.created_at.isoformat() if media.created_at else None,
     }
 

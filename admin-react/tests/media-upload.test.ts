@@ -19,5 +19,7 @@ test('媒体上传控件调用门店隔离的上传 API 并支持删除', () => 
   const component = source('components/MediaUploadField.tsx');
   assert.match(component, /uploadMedia\(/);
   assert.match(component, /deleteMedia\(/);
+  assert.match(component, /Popconfirm/);
+  assert.match(component, /URL\.revokeObjectURL/);
   assert.match(source('api.ts'), /client\.post\('\/admin\/media'/);
 });

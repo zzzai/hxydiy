@@ -83,6 +83,7 @@ class AdminMediaApiTests(unittest.TestCase):
         self.assertEqual(body["original_name"], "cover.png")
         self.assertEqual(body["purpose"], "project_cover")
         self.assertTrue(body["url"].startswith("/api/v1/admin/media/"))
+        self.assertEqual(body["url"], f"/api/v1/admin/media/{body['id']}/content")
         with self.SessionLocal() as db:
             audit = db.scalar(select(AuditLog).where(AuditLog.entity_type == "media", AuditLog.action == "media_upload"))
             self.assertIsNotNone(audit)
@@ -145,7 +146,7 @@ class AdminMediaApiTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 201, response.text)
             body = response.json()
-            self.assertEqual(body["url"], f"https://img.hexiaoyue.com/{storage.put_calls[0][0]}")
+            self.assertEqual(body["url"], f"/api/v1/admin/media/{body['id']}/content")
             self.client.delete(f"/api/v1/admin/media/{body['id']}", headers=self._headers(self.manager_id))
         self.assertEqual(len(storage.put_calls), 1)
         self.assertEqual(storage.delete_calls, [storage.put_calls[0][0]])

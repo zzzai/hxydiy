@@ -40,6 +40,8 @@
 
 ## 最近决策
 
+| 2026-09-03 | 媒体主数据只保存 `/api/v1/admin/media/{id}/content` 稳定受控地址；七牛私有 CDN 签名 URL 仅在访问时临时生成，避免商品/项目图片因 TTL 到期失效 | 管理端、后端媒体 API |
+
 | 日期 | 决策 | 影响范围 |
 |---|---|---|
 | 2026-09-01 | PR 不要求人工审批：采用 GitHub Ruleset 必需检查、默认分支可信 PR 门禁、AI 风险 Check Run 与精确 SHA 自动 squash 合并；生产 Environment 审批继续保留 | 全仓库协作、发布 |
