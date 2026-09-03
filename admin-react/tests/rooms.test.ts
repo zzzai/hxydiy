@@ -35,3 +35,9 @@ test('房间配置页提供服务位停用和重新启用入口', () => {
   assert.match(source, /重新启用服务位/);
   assert.match(source, /operational_status/);
 });
+
+test('房态看板展示已停用统计而不是把停用位算作空闲', () => {
+  const source = readFileSync(new URL('../src/pages/RoomsPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /label: '已停用'/);
+  assert.match(source, /stats\.inactive/);
+});

@@ -101,6 +101,7 @@ function RoomList() {
     { label: '空闲', value: stats.available || 0 },
     { label: '服务中', value: (stats.occupied || 0) + (stats.in_service || 0) },
     { label: '待结账', value: stats.pending_checkout || 0 },
+    { label: '已停用', value: stats.inactive || 0 },
     { label: '需处理', value: (stats.cleaning || 0) + (stats.inspection || 0) + (stats.maintenance || 0) },
   ];
 

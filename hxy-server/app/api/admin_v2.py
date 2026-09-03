@@ -1218,6 +1218,12 @@ def list_projects_admin(
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
 ):
+    # FastAPI 注入时这些参数是原始值；部分契约测试会直接调用路由函数，
+    # 此时默认值仍是 Query 对象，需要先还原为 None/实际默认值。
+    if not isinstance(page, (int, type(None))):
+        page = getattr(page, "default", None)
+    if not isinstance(page_size, (int, type(None))):
+        page_size = getattr(page_size, "default", None)
     staff = _current_staff(authorization, db)
     q = select(Project)
     if not _is_headquarters_admin(staff):
@@ -2976,14 +2982,17 @@ def room_stats(db: Session = Depends(get_db), authorization: str | None = Header
     from app.models.operations import Room
     from sqlalchemy import func
     rows = db.execute(
-        select(Room.status, func.count(Room.id))
+        select(Room.status, Room.operational_status, func.count(Room.id))
         .where(Room.store_id == store_id, Room.is_service_position.is_(True))
-        .group_by(Room.status)
+        .group_by(Room.status, Room.operational_status)
     ).all()
     stats = {status: 0 for status in VALID_ROOM_STATUSES}
+    stats["inactive"] = 0
     stats["total"] = 0
-    for status, cnt in rows:
-        if status in stats:
+    for status, operational_status, cnt in rows:
+        if operational_status == "inactive":
+            stats["inactive"] += cnt
+        elif status in stats:
             stats[status] = cnt
         stats["total"] += cnt
     # 待结账金额（从 orders 表）

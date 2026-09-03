@@ -294,6 +294,33 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertEqual(room["used_count"], 1)
         self.assertEqual(room["current_tech"], "王师傅")
 
+    def test_room_stats_excludes_inactive_positions_from_available(self):
+        with self.SessionLocal() as db:
+            room = Room(
+                store_id=1,
+                code="INACTIVE-STATS-01",
+                name="停用统计测试位",
+                room_type="sofa",
+                room_group="sofa",
+                is_service_position=True,
+                customer_selectable=True,
+                status="available",
+                operational_status="inactive",
+            )
+            db.add(room)
+            db.commit()
+            room_id = room.id
+        try:
+            response = self.client.get("/api/v1/admin/v2/rooms/stats")
+            self.assertEqual(response.status_code, 200, response.text)
+            stats = response.json()
+            self.assertGreaterEqual(stats["inactive"], 1)
+            self.assertGreaterEqual(stats["total"], stats["available"] + stats["inactive"])
+        finally:
+            with self.SessionLocal() as db:
+                db.query(Room).filter(Room.id == room_id).delete()
+                db.commit()
+
     def test_room_container_can_own_independent_bed_positions(self):
         container = self.client.post(
             "/api/v1/admin/v2/rooms",
@@ -438,7 +465,7 @@ class AdminV2ContractTests(unittest.TestCase):
 
         allowed = self.client.patch(
             "/api/v1/admin/v2/projects/1",
-            json={"publication_status": "candidate"},
+            json={"publication_status": "inactive"},
         )
         self.assertEqual(allowed.status_code, 200, allowed.text)
 
