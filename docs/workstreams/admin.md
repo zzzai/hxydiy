@@ -166,3 +166,15 @@
 验证：`git diff --check` 通过；待推送后由 GitHub Actions 对 PR #10 重新运行工作流验证。未发布生产，未执行数据库变更或生产操作。
 
 补充优化：静态合同的空白检查改为仅检查提交自身的 diff，避免历史分支文件末尾空白阻断新 PR；同步更新 Trusted PR Gate 与合同测试。
+# 管理端工作流
+
+## 2026-09-03 普通员工只读角色收口（本地完成，未发布）
+
+- 后端允许门店绑定的 `staff` 账号正常登录并返回正式 `role=staff`。
+- 未绑定门店的 manager/technician/staff 登录返回结构化 `STORE_BINDING_REQUIRED`。
+- 保留技师账号必须绑定技师档案的校验；普通员工不进入技师移动端。
+- 更新角色迁移脚本：仅将带技师绑定的旧 `staff` 转为 technician，未绑定 staff 保留为只读员工。
+
+验证：后端专项测试在源码工作区虚拟环境中通过（57 passed）；本任务分支环境缺少 pytest，仅完成 Python compileall 检查。
+
+发布：未发布生产，待管理端全量测试、TypeScript、生产构建及服务器发布前检查。

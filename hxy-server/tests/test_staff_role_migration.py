@@ -36,13 +36,14 @@ def test_migration_maps_admin_to_manager_and_bound_staff_to_technician():
     assert rows == ["manager", "technician"]
 
 
-def test_migration_rejects_unbound_staff():
+def test_migration_retains_unbound_staff_as_read_only_employee():
     engine = _db()
     with engine.begin() as conn:
         conn.execute(text("INSERT INTO staff(id,username,role,technician_id) VALUES (1,'orphan','staff',NULL)"))
     module = _migration_module()
-    with pytest.raises(RuntimeError, match="orphan"):
-        module.normalize_roles(engine.connect())
+    module.normalize_roles(engine.connect())
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT role FROM staff WHERE username='orphan'")).scalar_one() == "staff"
 
 
 def test_migration_unique_technician_binding_is_enforced():
@@ -61,9 +62,8 @@ def test_legacy_audit_role_value_is_not_rewritten():
         assert conn.execute(text("SELECT detail FROM audit_logs WHERE id=1")).scalar_one() == '{"role":"admin"}'
 
 
-def test_unbound_legacy_staff_never_leaks_staff_as_a_public_role():
-    with pytest.raises(ValueError):
-        normalize_staff_role("staff")
+def test_unbound_staff_is_a_formal_read_only_public_role():
+    assert normalize_staff_role("staff") == "staff"
 
 
 def test_unknown_role_is_rejected_instead_of_falling_back():

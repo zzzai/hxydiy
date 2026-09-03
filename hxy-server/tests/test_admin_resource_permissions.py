@@ -53,6 +53,7 @@ class AdminResourcePermissionTests(unittest.TestCase):
             db.flush()
             db.add_all([
                 Staff(username="legacy-unbound", password_hash=hash_password("pass"), name="旧员工", role="staff", store_id=store.id, status="active"),
+                Staff(username="storeless-staff", password_hash=hash_password("pass"), name="未绑定门店员工", role="staff", store_id=None, status="active"),
                 Staff(username="tech-unbound", password_hash=hash_password("pass"), name="未绑定技师", role="technician", store_id=store.id, status="active"),
             ])
             db.flush()
@@ -132,10 +133,11 @@ class AdminResourcePermissionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 410)
         self.assertEqual(response.json()["detail"]["code"], "DIY_PHYSICAL_RESOURCE_FORBIDDEN")
 
-    def test_login_rejects_unbound_legacy_staff(self):
+    def test_store_bound_staff_can_login_as_read_only_role(self):
         response = self.client.post("/api/v1/admin/login", json={"username": "legacy-unbound", "password": "pass"})
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"]["code"], "ROLE_MIGRATION_REQUIRED")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["staff"]["role"], "staff")
+        self.assertEqual(response.json()["staff"]["store_id"], 1)
 
     def test_login_rejects_unknown_role(self):
         response = self.client.post("/api/v1/admin/login", json={"username": "unknown-role", "password": "pass"})
@@ -146,6 +148,11 @@ class AdminResourcePermissionTests(unittest.TestCase):
         response = self.client.post("/api/v1/admin/login", json={"username": "tech-unbound", "password": "pass"})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"]["code"], "TECHNICIAN_BINDING_REQUIRED")
+
+    def test_login_rejects_staff_without_store_binding(self):
+        response = self.client.post("/api/v1/admin/login", json={"username": "storeless-staff", "password": "pass"})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["code"], "STORE_BINDING_REQUIRED")
 
     def test_require_admin_rejects_legacy_role_with_structured_forbidden(self):
         """旧角色即使绕过登录层直达 endpoint helper，也不能冒泡成 500。"""
