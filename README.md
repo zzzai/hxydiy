@@ -18,12 +18,19 @@
 git pull --rebase origin main
 ```
 
-完成一个可验证的小任务后提交自己的文档：
+完成一个可验证的小任务后，在自己的任务分支提交并推送：
 
 ```powershell
 git add docs
 git commit -m "docs: update customer workstream"
-git push origin main
+git push -u origin codex/<端>/<任务名>
+```
+
+通过 GitHub Pull Request 合并到 `main`，不要从任何工作窗口直接推送 `main`。合并前先同步：
+
+```powershell
+git fetch origin
+git rebase origin/main
 ```
 
 不要提交密码、验证码、私钥、AccessKey、真实顾客敏感信息、构建产物或测试截图。
