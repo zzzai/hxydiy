@@ -19,7 +19,7 @@ jobs:
     if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Read-only AI review and required check
+      - name: Read-only AI review (optional)
         uses: actions/github-script@v7
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -75,7 +75,9 @@ jobs:
 
               const secret = process.env.OPENAI_API_KEY;
               if (!secret) {
-                throw new Error('OPENAI_API_KEY is not configured for this repository.');
+                await writeCheck('skipped', '未配置 OPENAI_API_KEY，跳过云端 AI 审查；自动合并不依赖此检查。', '本仓库采用本机 AI 审查，GitHub Actions 不读取本机配置，也不上传任何凭据。');
+                core.info('OPENAI_API_KEY is not configured; optional AI review skipped.');
+                return;
               }
 
               const files = await github.paginate(github.rest.pulls.listFiles, {

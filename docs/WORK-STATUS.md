@@ -2070,4 +2070,30 @@
 - 本地完成：是，分支 `codex/admin/service-position-operational-status`。
 - 已发布生产：否；未执行数据库备份、Manifest 校验、生产切换或线上健康检查，生产 release 未改变。
 - 待现场验收：发布后验证店长停用/启用、扫码行为、普通员工只读、门店隔离及智慧宝只读边界。
-- 分支已推送；当前尚无开放 PR，未产生 CI 结果。
+- 分支已推送；PR #10 已创建，CI 首轮中管理端和后端测试通过，但云端 AI 审查因未配置 `OPENAI_API_KEY` 被阻断。
+
+# 2026-09-03 PR 自动化：本机 AI 审查模式
+
+## 本地完成
+
+- 将 GitHub 云端 AI 审查调整为可选：仓库未配置 `OPENAI_API_KEY` 时写入“已跳过”检查并成功结束。
+- 自动合并门禁移除 `AI PR Review`，继续要求可信 PR 门禁及静态合同、管理端、顾客端、后端测试成功。
+- 不读取、不上传、不提交本机 Codex/AI 凭据；本机 AI 审核不取代 CI 或现场验收。
+
+## 涉及文件
+
+- `.github/workflows/ai-pr-review.yml`
+- `.github/workflows/auto-merge.yml`
+- `docs/workstreams/admin.md`
+- `docs/WORK-STATUS.md`
+
+## 测试结果
+
+- `git diff --check`：通过。
+- 待推送到 PR #10 后由 GitHub Actions 重新执行工作流；此前静态合同检查失败原因仍需单独从 CI 日志定位。
+
+## 发布状态
+
+- 本地完成：是。
+- 已发布生产：否；无数据库迁移、无服务器切换、无线上健康检查。
+- 生产 release：未变更。
