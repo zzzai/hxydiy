@@ -164,3 +164,5 @@
 涉及文件：`.github/workflows/ai-pr-review.yml`、`.github/workflows/auto-merge.yml`。
 
 验证：`git diff --check` 通过；待推送后由 GitHub Actions 对 PR #10 重新运行工作流验证。未发布生产，未执行数据库变更或生产操作。
+
+补充优化：静态合同的空白检查改为仅检查提交自身的 diff，避免历史分支文件末尾空白阻断新 PR；同步更新 Trusted PR Gate 与合同测试。
