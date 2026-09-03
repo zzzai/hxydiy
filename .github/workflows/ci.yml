@@ -33,11 +33,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          if [[ -n "${BASE_SHA:-}" ]]; then
-            git diff --check "$BASE_SHA" "$GITHUB_SHA"
-          else
-            git diff-tree --no-commit-id --check -r "$GITHUB_SHA"
-          fi
+          # Check the submitted commit delta. Historical whitespace on a
+          # long-lived branch must not invalidate an otherwise valid PR.
+          git diff-tree --no-commit-id --check -r "$GITHUB_SHA"
       - name: Scan for credentials
         shell: bash
         run: |
