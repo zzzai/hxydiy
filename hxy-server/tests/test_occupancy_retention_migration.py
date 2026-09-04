@@ -19,7 +19,7 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
         project_root = Path(__file__).resolve().parents[1]
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():
-            if table.name == "service_position_qrs":
+            if table.name in {"service_position_qrs", "media_assets"}:
                 continue
             copied = table.to_metadata(previous_metadata)
             if copied.name == "position_occupancies" and "retained_until" in copied.c:
