@@ -43,6 +43,7 @@
 
 | 日期 | 决策 | 影响范围 |
 |---|---|---|
+| 2026-09-04 | 加项管理采用 `PATCH /api/v1/admin/v2/addons/{id}`，保留同路径 POST 兼容；总部可跨门店维护主数据，店长仅能对本店在 `published` / `inactive` 间切换，普通员工无目录权限，跨店单项写入对店长返回 404。加项 `parent_project_id`、`duration_min`、`member_price_cents` 可显式 `null` 清空；`summary`、`image_url`、`store_price_cents`、`publication_status` 不接受 `null`，简介与图片清空使用空字符串。会员价不得高于门店价，前后端均校验。 | 管理端、后端目录契约 |
 | 2026-09-01 | PR 不要求人工审批：采用 GitHub Ruleset 必需检查、默认分支可信 PR 门禁、AI 风险 Check Run 与精确 SHA 自动 squash 合并；生产 Environment 审批继续保留 | 全仓库协作、发布 |
 | 2026-08-29 | 技师首页显示全部 8 个沙发和 7 个房间，并按状态使用不同颜色 | 技师端 |
 | 2026-08-29 | 技师移动端保留三栏：今日服务、服务记录、我的 | 技师端 |
