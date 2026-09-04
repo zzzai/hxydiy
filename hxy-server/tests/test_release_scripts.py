@@ -159,14 +159,16 @@ class ReleaseScriptTests(unittest.TestCase):
             (workspace / "diy-web/dist/index.html").write_text("customer-v1", encoding="utf-8")
             (workspace / "admin-react/dist/index.html").write_text("staff-v1", encoding="utf-8")
             environment = {**os.environ, "HXY_DIY_RELEASE_ROOT": str(release_root)}
+            copied_create = workspace / "deploy/diy/create-release.sh"
+            copied_activate = workspace / "deploy/diy/activate-release.sh"
 
-            subprocess.run(shell_command(CREATE, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
-            subprocess.run(shell_command(ACTIVATE, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            subprocess.run(shell_command(copied_create, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            subprocess.run(shell_command(copied_activate, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
             (workspace / "diy-web/dist/index.html").write_text("customer-v2", encoding="utf-8")
             (workspace / "admin-react/dist/index.html").write_text("staff-v2", encoding="utf-8")
-            subprocess.run(shell_command(CREATE, "release-v2"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
-            subprocess.run(shell_command(ACTIVATE, "release-v2"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
-            rolled_back = subprocess.run(shell_command(ACTIVATE, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            subprocess.run(shell_command(copied_create, "release-v2"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            subprocess.run(shell_command(copied_activate, "release-v2"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            rolled_back = subprocess.run(shell_command(copied_activate, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
 
             self.assertEqual(Path(rolled_back.stdout.strip()), release_root / "releases/release-v1")
             if os.name == "posix":
