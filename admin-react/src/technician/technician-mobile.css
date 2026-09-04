@@ -25,6 +25,7 @@
 .technician-position-tile.tone-waiting { border-color: #f2bd55; background: #fff8e8; box-shadow: 0 5px 18px rgba(181,116,0,.10); }
 .technician-position-tile.tone-serving { border-color: #78cda5; background: #edf9f2; box-shadow: 0 5px 18px rgba(21,115,79,.10); }
 .technician-position-tile.tone-finished { border-color: #a8c5dc; background: #f0f6fb; box-shadow: 0 5px 18px rgba(47,107,148,.08); }
+.technician-position-tile.tone-conflict { border-color: #e49a8e; background: #fff2f0; box-shadow: 0 5px 18px rgba(164,53,36,.10); }
 .technician-position-tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
 .technician-position-tile-top strong { font-size: 17px; line-height: 1.2; }
 .technician-position-tile .ant-tag { margin: 0; flex: 0 0 auto; font-size: 11px; }
@@ -35,6 +36,7 @@
 .technician-position-tile.tone-waiting .technician-position-count, .technician-position-tile.tone-waiting .technician-position-tile-action { color: #af6900; }
 .technician-position-tile.tone-serving .technician-position-count, .technician-position-tile.tone-serving .technician-position-tile-action { color: #15734f; }
 .technician-position-tile.tone-finished .technician-position-count, .technician-position-tile.tone-finished .technician-position-tile-action { color: #2f6b94; }
+.technician-position-tile.tone-conflict .technician-position-count, .technician-position-tile.tone-conflict .technician-position-tile-action { color: #b44230; }
 .technician-order-drawer { padding-bottom: env(safe-area-inset-bottom); }
 .technician-order-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 4px 0 14px; }
 .technician-order-drawer-head h2 { margin: 3px 0 0; font-size: 23px; }

@@ -1,5 +1,27 @@
 # 技师端工作流
 
+## 2026-09-04 PR #9 干净替代收口（本地完成，未发布）
+
+### 修改内容
+
+- 从最新 `origin/main` 创建独立分支 `codex/technician/pr9-clean-replacement`，没有复用带未提交改动的旧 PR worktree。
+- 技师门户仅允许服务状态为 `available` 或 `busy` 的关联技师进入，并在 `/technician/me` 分开返回 Staff 账号状态与 Technician 服务状态。
+- 同一房间出现多个活动占用时返回脱敏冲突摘要，服务端拒绝直接确认/结束请求；前端展示“待核对”，不暴露顾客选单和操作按钮。
+- 幂等重放增加请求体哈希校验，并处理并发唯一键竞争；动作响应明确 DIY 服务状态与智慧宝资源只读边界。
+- 技师存在本人确认但未结束的 DIY 服务时，店长不能审批请假或办理离职。
+
+### 测试与发布
+
+- TDD RED：后端新增回归初始 `7 failed / 18 passed`；前端新增回归初始 `2 failed / 119 passed`。
+- GREEN：技师/画像后端专项 `40 passed`；管理端全量 `127 passed`；`npx tsc --noEmit`、`npm run build`、`git diff --check` 通过。
+- 未发布生产；未修改数据库、服务器或生产 `current`。
+
+### 风险和待现场验收
+
+- PR #9 旧 head `44abbc3` 相对当前 main 包含 71 个文件的回退/删除型差异，不能安全合并；本分支用于创建干净替代 PR。
+- 需使用脱敏测试订单在 390×844 真机完成提交、确认、结束、快记、重复提交、断网重试与审计闭环。
+- 生产实时 `current` 为 `customer-detail-long-image-fit-20260904-2`，该 release 未发现 `MANIFEST.sha256`，发布完整性证据缺失。
+
 ## 负责范围
 
 - 技师登录、首次激活、密码重置、停用、离职和返聘。

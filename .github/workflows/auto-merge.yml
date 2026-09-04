@@ -2,7 +2,7 @@ name: Auto Merge PR
 
 on:
   workflow_run:
-    workflows: ["Trusted PR Gate"]
+    workflows: ["AI PR Review", "Trusted PR Gate"]
     branches: [main]
     types: [completed]
 
@@ -52,6 +52,7 @@ jobs:
               'Admin tests and build',
               'Customer tests and build',
               'Backend tests',
+              'AI PR Review',
               'Trusted PR Gate',
             ];
             const { data: checks } = await github.rest.checks.listForRef({

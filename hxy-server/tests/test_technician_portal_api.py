@@ -120,6 +120,40 @@ class TestTechnicianPortalApi:
         assert leave.status_code == 200, leave.text
         assert leave.json()["status"] == "submitted"
 
+    def test_off_or_unknown_technician_cannot_access_portal(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-off", password_hash=hash_password("tech-pass"), name="休假技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            db.add(staff)
+            db.commit()
+            staff_id = staff.id
+            db.get(Technician, self.technician_id).status = "off"
+            db.commit()
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/me", headers=headers)
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "TECHNICIAN_ACCOUNT_UNAVAILABLE"
+
+        with self.SessionLocal() as db:
+            db.get(Technician, self.technician_id).status = "unknown"
+            db.commit()
+        response = self.client.get("/api/v1/technician/tasks", headers=headers)
+        assert response.status_code == 401
+
+    def test_technician_me_exposes_staff_account_status_separately(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-status-contract", password_hash=hash_password("tech-pass"), name="状态技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            db.add(staff)
+            db.commit()
+            staff_id = staff.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/me", headers=headers)
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["staff"]["status"] == "active"
+        assert payload["technician"]["status"] == "available"
+
     def test_admin_approves_leave_and_can_resign_technician(self):
         with self.SessionLocal() as db:
             staff = Staff(
@@ -175,6 +209,9 @@ class TestTechnicianPortalApi:
         confirmed = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/confirm", headers=headers, json={"idempotency_key": "confirm-1"})
         assert confirmed.status_code == 200, confirmed.text
         assert confirmed.json()["status"] == "in_service"
+        assert confirmed.json()["service_status"] == "in_service"
+        assert confirmed.json()["resource_status"] == "occupied"
+        assert confirmed.json()["resource_control"] == "external_read_only"
         replay = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/confirm", headers=headers, json={"idempotency_key": "confirm-1"})
         assert replay.status_code == 200
         finished = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/finish", headers=headers, json={"idempotency_key": "finish-1"})
@@ -290,6 +327,25 @@ class TestTechnicianPortalApi:
         with self.SessionLocal() as db:
             assert db.get(PositionOccupancy, first_id).status == "in_service"
             assert db.get(PositionOccupancy, second_id).status == "waiting_service"
+
+    def test_technician_idempotency_key_reused_with_different_body_is_rejected(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-idempotency-body", password_hash=hash_password("tech-pass"), name="幂等正文技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            session = SelectionSession(id="tech-idempotency-body-session", access_token_hash="hash", store_id=self.store_id, status="submitted")
+            room = Room(store_id=self.store_id, code="IDEMPOTENCY-BODY", name="正文幂等位", room_type="sofa", status="occupied")
+            db.add_all([staff, session, room])
+            db.flush()
+            occupancy = PositionOccupancy(store_id=self.store_id, room_id=room.id, active_room_id=room.id, selection_session_id=session.id, active_session_id=session.id, status="waiting_service")
+            db.add(occupancy)
+            db.commit()
+            staff_id, occupancy_id = staff.id, occupancy.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        first = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/confirm", headers=headers, json={"idempotency_key": "tech-body-reuse", "note": "首次备注"})
+        assert first.status_code == 200, first.text
+        replay = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/confirm", headers=headers, json={"idempotency_key": "tech-body-reuse", "note": "修改后的备注"})
+        assert replay.status_code == 409, replay.text
+        assert replay.json()["detail"]["code"] == "IDEMPOTENCY_KEY_REUSED"
 
     def test_technician_profile_authorization_uses_finished_occupancy_entity(self):
         """画像权限必须按本人完成的占用实体关联，而不能依赖脆弱的 JSON 会话字段。"""
@@ -420,3 +476,58 @@ class TestTechnicianPortalApi:
         assert items[0]["room_type"] == "room"
         assert items[0]["occupancy_id"] == occupancy_id
         assert items[0]["items"][0]["name"] == "荷小推"
+
+    def test_technician_tasks_expose_room_conflict_instead_of_hiding_an_order(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-room-conflict", password_hash=hash_password("tech-pass"), name="冲突看板技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            room = Room(store_id=self.store_id, code="ROOM-CONFLICT", name="冲突房间", room_type="room", status="occupied", is_service_position=False, is_space_container=True, operational_status="active")
+            bed_a = Room(store_id=self.store_id, code="BED-CONFLICT-A", name="冲突房间 A", room_type="bed", status="occupied", is_service_position=True, is_space_container=False, operational_status="active")
+            bed_b = Room(store_id=self.store_id, code="BED-CONFLICT-B", name="冲突房间 B", room_type="bed", status="occupied", is_service_position=True, is_space_container=False, operational_status="active")
+            first_session = SelectionSession(id="tech-room-conflict-a", access_token_hash="hash-a", store_id=self.store_id, status="submitted", items=[{"name": "肩颈", "quantity": 1}])
+            second_session = SelectionSession(id="tech-room-conflict-b", access_token_hash="hash-b", store_id=self.store_id, status="submitted", items=[{"name": "腰臀", "quantity": 1}])
+            db.add_all([staff, room, bed_a, bed_b, first_session, second_session])
+            db.flush()
+            bed_a.parent_room_id = room.id
+            bed_b.parent_room_id = room.id
+            db.add_all([
+                PositionOccupancy(store_id=self.store_id, room_id=bed_a.id, active_room_id=bed_a.id, selection_session_id=first_session.id, active_session_id=first_session.id, status="waiting_service"),
+                PositionOccupancy(store_id=self.store_id, room_id=bed_b.id, active_room_id=bed_b.id, selection_session_id=second_session.id, active_session_id=second_session.id, status="in_service"),
+            ])
+            db.commit()
+            staff_id = staff.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/tasks", headers=headers)
+        assert response.status_code == 200, response.text
+        item = next(item for item in response.json()["items"] if item["room_name"] == "冲突房间")
+        assert item["occupancy_status"] == "conflict"
+        assert item["conflict"] is True
+        assert item["conflict_count"] == 2
+        assert item["occupancy_id"] is None
+        assert item["items"] == []
+        assert "occupancies" not in item
+
+    def test_technician_cannot_operate_an_occupancy_in_a_conflicted_room(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-room-conflict-action", password_hash=hash_password("tech-pass"), name="冲突操作技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            room = Room(store_id=self.store_id, code="ROOM-CONFLICT-ACTION", name="冲突操作房间", room_type="room", status="occupied", is_service_position=False, is_space_container=True, operational_status="active")
+            bed_a = Room(store_id=self.store_id, code="BED-CONFLICT-ACTION-A", name="冲突操作房间 A", room_type="bed", status="occupied", is_service_position=True, is_space_container=False, operational_status="active")
+            bed_b = Room(store_id=self.store_id, code="BED-CONFLICT-ACTION-B", name="冲突操作房间 B", room_type="bed", status="occupied", is_service_position=True, is_space_container=False, operational_status="active")
+            first_session = SelectionSession(id="tech-room-conflict-action-a", access_token_hash="hash-a", store_id=self.store_id, status="submitted")
+            second_session = SelectionSession(id="tech-room-conflict-action-b", access_token_hash="hash-b", store_id=self.store_id, status="submitted")
+            db.add_all([staff, room, bed_a, bed_b, first_session, second_session])
+            db.flush()
+            bed_a.parent_room_id = room.id
+            bed_b.parent_room_id = room.id
+            first = PositionOccupancy(store_id=self.store_id, room_id=bed_a.id, active_room_id=bed_a.id, selection_session_id=first_session.id, active_session_id=first_session.id, status="waiting_service")
+            second = PositionOccupancy(store_id=self.store_id, room_id=bed_b.id, active_room_id=bed_b.id, selection_session_id=second_session.id, active_session_id=second_session.id, status="waiting_service")
+            db.add_all([first, second])
+            db.commit()
+            staff_id, first_id = staff.id, first.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.post(f"/api/v1/technician/occupancies/{first_id}/confirm", headers=headers, json={"idempotency_key": "conflict-room-action"})
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["code"] == "POSITION_OCCUPANCY_CONFLICT"
+        with self.SessionLocal() as db:
+            assert db.get(PositionOccupancy, first_id).status == "waiting_service"

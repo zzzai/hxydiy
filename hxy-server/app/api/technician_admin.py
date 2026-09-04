@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff, _staff_store_id, hash_password, normalize_staff_role
 from app.db.session import get_db
-from app.models import AuditLog, Staff
+from app.models import AuditLog, PositionOccupancy, Staff
 from app.models.operations import Technician
 from app.models.service import ServiceAssignment
 from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
@@ -59,6 +59,16 @@ def _owned_technician(db: Session, admin: Staff, tech_id: int) -> Technician:
     if not technician or technician.store_id != admin.store_id:
         raise HTTPException(status_code=404, detail="技师不存在")
     return technician
+
+
+def _active_service_occupancy(db: Session, admin: Staff, technician: Technician) -> PositionOccupancy | None:
+    staff = db.scalar(select(Staff).where(Staff.technician_id == technician.id))
+    if not staff:
+        return None
+    entity_ids = [int(entity_id) for entity_id in db.scalars(select(AuditLog.entity_id).where(AuditLog.store_id == admin.store_id, AuditLog.actor_type == "staff", AuditLog.actor_id == str(staff.id), AuditLog.action == "technician_confirm_service", AuditLog.entity_type == "position_occupancy")).all() if str(entity_id).isdigit()]
+    if not entity_ids:
+        return None
+    return db.scalar(select(PositionOccupancy).where(PositionOccupancy.store_id == admin.store_id, PositionOccupancy.id.in_(entity_ids), PositionOccupancy.status == "in_service").with_for_update())
 
 
 def _invalidate_invite(db: Session, technician_id: int) -> None:
@@ -211,6 +221,8 @@ def approve_leave_request(request_id: int, body: dict | None = None, authorizati
     technician = db.get(Technician, request.technician_id)
     if not technician or technician.status == "resigned":
         raise HTTPException(status_code=409, detail="技师当前不可审批请假")
+    if _active_service_occupancy(db, admin, technician):
+        raise HTTPException(status_code=409, detail={"code": "TECHNICIAN_ACTIVE_SERVICE", "message": "存在未结束的 DIY 服务，请完成服务交接后再审批"})
     request.status = "approved"
     request.reviewed_by_staff_id = admin.id
     request.reviewed_at = datetime.now(timezone.utc)
@@ -235,6 +247,8 @@ def resign_technician(tech_id: int, body: dict | None = None, authorization: str
     active = db.scalar(select(ServiceAssignment).where(ServiceAssignment.store_id == admin.store_id, ServiceAssignment.technician_id == technician.id, ServiceAssignment.status.in_(("assigned", "ready", "in_service"))))
     if active:
         raise HTTPException(status_code=409, detail="存在进行中或待服务任务，完成交接后才能离职")
+    if _active_service_occupancy(db, admin, technician):
+        raise HTTPException(status_code=409, detail={"code": "TECHNICIAN_ACTIVE_SERVICE", "message": "存在未结束的 DIY 服务，请完成服务交接后再离职"})
     technician.status = "resigned"
     staff = db.scalar(select(Staff).where(Staff.technician_id == technician.id))
     if staff:

@@ -100,6 +100,42 @@
 
 # 技师端与员工工作台工作状态
 
+## 2026-09-04 技师端 PR #9 干净替代收口（本地完成，待 PR）
+
+### 本地完成
+
+- 旧 PR #9 当前仍为 Open，head `44abbc3`；其 `Static contracts`、`Trusted PR Gate`、`AI PR Review` 失败，管理端、顾客端和后端测试成功。
+- 根因不是单一空白字符：旧分支从过早的恢复基线展开，相对当前 `origin/main` 包含 71 个文件、771 行新增与 2760 行删除，并会回退媒体和管理端后续能力。
+- 在最新 `origin/main` (`a97c768`) 上创建 `codex/technician/pr9-clean-replacement`，仅重建技师服务可靠性与账号/服务状态分离，不包含旧 PR 的基线恢复提交。
+- 新增并通过账号资格、账号/服务状态契约、请求体幂等、房间多占用冲突、服务动作资源只读语义、请假/离职活动服务保护和前端冲突展示回归。
+
+### 验证结果
+
+- 后端指定技师/画像专项：`40 passed / 0 failed`（有 1 条既有 Starlette/httpx 弃用警告）。
+- 管理端全量：`127 passed / 0 failed`。
+- TypeScript `npx tsc --noEmit`：通过。
+- 管理端生产构建：通过（4001 modules；存在既有大 chunk 警告）。
+- `git diff --check`：通过。
+- `npm install` 报告 8 个依赖审计项（3 moderate、5 high），本轮未执行可能引入破坏性升级的 `npm audit fix --force`。
+
+### PR 状态
+
+- GitHub 当前没有 Ruleset；仓库 Auto Merge 关闭，Allow merge commits / squash / rebase 均开启。
+- 干净替代分支待提交、推送并创建目标为 `main` 的非 Draft PR；旧 PR #9 未关闭、未强推、未重跑失败检查。
+
+### 生产状态
+
+- 2026-09-04 SSH 只读核验 `current`：`/root/hxy-diy-20260811/releases/customer-detail-long-image-fit-20260904-2`。
+- 当前 release 未找到 `MANIFEST.sha256`，无法完成逐文件 Manifest 校验；此事实与旧文档记录冲突。
+- `/api/v1/health` 返回 `status: ok`；顾客端、管理端、技师端 HTTPS 均为 200；数据库健康，API 与 Nginx 容器运行中。
+- 本轮未发布、未迁移、未备份、未切换 `current`。
+
+### 待现场验收与风险
+
+- 没有新建安全脱敏订单，写入闭环未完成；不得用真实顾客或营业订单代替。
+- 需在 390×844 真机覆盖弱网/断网、重复点击、跨门店、非本人服务、非法状态、刷新后快记与审计核对。
+- 合并前需等待新 PR 六项检查；Ruleset、Auto Merge 与生产 Manifest 缺失均是发布阻断项。
+
 # 2026-08-30 管理端商品权限与分页契约修复（本地完成，未发布）
 
 ## 本地完成

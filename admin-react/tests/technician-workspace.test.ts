@@ -37,6 +37,14 @@ test('移动技师首页按沙发和房间区位展示全部服务位并使用�
   assert.doesNotMatch(source, /filter\(\(task: any\) => task\.occupancy_status !== 'available'\)/);
 });
 
+test('移动技师首页将同一房间的多活动占用显式显示为待核对冲突', () => {
+  const todaySource = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  const mobileSource = readFileSync(new URL('../src/technician/technicianMobile.ts', import.meta.url), 'utf8');
+  assert.match(todaySource, /conflict_count/);
+  assert.match(todaySource, /selectedOrder\.conflict/);
+  assert.match(mobileSource, /conflict/);
+});
+
 test('移动技师画像提交完成服务关联和画像字段', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /createCustomerProfileRecord/);

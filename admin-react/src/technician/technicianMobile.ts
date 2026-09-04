@@ -1,13 +1,22 @@
 export const TECHNICIAN_MOBILE_ROUTES = ['/technician/today', '/technician/history', '/technician/me'] as const;
 
-export function technicianStatusLabel(status: string): string {
-  return ({ available: '空闲', waiting_service: '待确认', in_service: '服务中', post_service_present: '已完成' } as Record<string, string>)[status] || '处理中';
+export function technicianAccountStatusLabel(status: string | undefined | null): string {
+  return ({ active: '已启用', disabled: '已停用', resigned: '已离职', pending: '待激活' } as Record<string, string>)[status || ''] || '未知';
 }
 
-export function technicianPositionTone(status: string): 'idle' | 'waiting' | 'serving' | 'finished' {
+export function technicianEmploymentStatusLabel(status: string | undefined | null): string {
+  return ({ available: '空闲', busy: '服务中', off: '休息', resigned: '已离职', suspended: '暂停服务' } as Record<string, string>)[status || ''] || '未知';
+}
+
+export function technicianStatusLabel(status: string): string {
+  return ({ available: '空闲', waiting_service: '待确认', in_service: '服务中', post_service_present: '已完成', conflict: '待核对' } as Record<string, string>)[status] || '处理中';
+}
+
+export function technicianPositionTone(status: string): 'idle' | 'waiting' | 'serving' | 'finished' | 'conflict' {
   if (status === 'waiting_service') return 'waiting';
   if (status === 'in_service') return 'serving';
   if (status === 'post_service_present') return 'finished';
+  if (status === 'conflict') return 'conflict';
   return 'idle';
 }
 
