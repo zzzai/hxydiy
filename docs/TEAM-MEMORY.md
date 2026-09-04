@@ -24,6 +24,7 @@
 
 - 生产服务器：`root@115.190.245.14`。
 - 生产部署根目录：`/root/hxy-diy-20260811`。
+- 2026-09-04 SSH 只读核验服务器 `current` 为 `customer-detail-long-image-fit-20260904-2`；该 release 未找到 `MANIFEST.sha256`，不得沿用旧 release 或旧 Manifest 记录推断当前完整性状态。
 - 2026-08-31 只读核对的服务器 `current`：`technician-profile-contract-20260830-1`。
 - 技师移动端入口：`https://diy.hexiaoyue.com/technician/`。
 - 生产发布前必须完成测试、构建、数据库备份、Manifest 校验、原子切换和健康检查。
