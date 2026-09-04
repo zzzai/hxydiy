@@ -75,6 +75,24 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                             copied.foreign_key_constraints.discard(constraint)
                             copied.constraints.discard(constraint)
                     copied._columns.remove(follow_up_column)
+            if copied.name == "customer_profile_records":
+                for index in list(copied.indexes):
+                    if index.name in {
+                        "ix_customer_profile_store_user_confirmed_created",
+                        "ix_customer_profile_store_technician_created",
+                    }:
+                        copied.indexes.discard(index)
+                for column_name in (
+                    "schema_version",
+                    "taxonomy_version",
+                    "customer_confirmed",
+                    "confirmed_at",
+                ):
+                    service_reference_column = copied.c[column_name]
+                    for index in list(copied.indexes):
+                        if service_reference_column.name in index.columns:
+                            copied.indexes.discard(index)
+                    copied._columns.remove(service_reference_column)
 
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "occupancy-retention.db"
