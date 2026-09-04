@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, Order, PositionOccupancy, SelectionSession, Staff, Store, User, Project, PriceBook
+from app.models import AuditLog, CustomerProfileRecord, Order, PositionOccupancy, SelectionSession, Staff, Store, User, Project, PriceBook
 from app.models.operations import Room, Technician
 from app.models.service import ServiceAssignment, ServiceOrder, Visit
 
@@ -153,6 +153,87 @@ class TestTechnicianPortalApi:
         payload = response.json()
         assert payload["staff"]["status"] == "active"
         assert payload["technician"]["status"] == "available"
+
+    def test_service_reference_returns_latest_safe_confirmed_record_and_audits_view(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-reference", password_hash=hash_password("tech-pass"), name="参考技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            user = User(openid="tech-reference-user", nickname="不应出现在摘要")
+            session = SelectionSession(id="tech-reference-session", access_token_hash="hash", store_id=self.store_id, status="submitted")
+            room = Room(store_id=self.store_id, code="REFERENCE-ROOM", name="参考服务位", status="occupied")
+            db.add_all([staff, user, session, room]); db.flush(); session.customer_id = user.id
+            occupancy = PositionOccupancy(store_id=self.store_id, room_id=room.id, selection_session_id=session.id, active_room_id=room.id, active_session_id=session.id, status="waiting_service")
+            db.add(occupancy); db.flush()
+            unconfirmed = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=False, profile={"customer_reported": {"focus_areas": ["feet"]}})
+            old = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["neck_shoulder"], "quote": "私密原话"}}, note="内部备注")
+            db.add_all([unconfirmed, old]); db.flush()
+            current = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), correction_of_id=old.id, profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["neck_shoulder", "legs"], "avoid_areas": ["abdomen"], "force_preference": "medium", "temperature_preference": "lower", "quote": "不得返回"}, "technician_observed": {"service_feedback": "better_after_adjustment"}, "next_visit": {"plan": "repeat_current"}}, note="不得返回")
+            db.add(current); db.flush()
+            same_service = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, selection_session_id=session.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["feet"]}})
+            db.add(same_service); db.commit()
+            staff_id, occupancy_id = staff.id, occupancy.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get(f"/api/v1/technician/occupancies/{occupancy_id}/service-reference", headers=headers)
+
+        assert response.status_code == 200, response.text
+        record = response.json()["record"]
+        assert record["focus_areas"] == ["肩颈", "腿部"]
+        assert record["avoid_areas"] == ["腹部"]
+        assert record["force_preference"] == "适中"
+        assert record["temperature_preference"] == "偏低"
+        assert record["service_feedback"] == "调整后更合适"
+        assert record["next_visit_plan"] == "延续本次"
+        assert "confirmed_at" not in record
+        assert "quote" not in response.text and "note" not in response.text and "nickname" not in response.text
+        with self.SessionLocal() as db:
+            audit = db.scalar(select(AuditLog).where(AuditLog.action == "technician_view_service_reference"))
+            assert audit is not None
+            assert audit.entity_id == str(occupancy_id)
+            assert audit.detail["source_record_id"] == current.id
+
+    def test_service_reference_empty_does_not_audit_and_released_is_unavailable(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-reference-empty", password_hash=hash_password("tech-pass"), name="空参考技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            user = User(openid="tech-reference-empty-user")
+            session = SelectionSession(id="tech-reference-empty-session", access_token_hash="hash", store_id=self.store_id, status="submitted")
+            room = Room(store_id=self.store_id, code="REFERENCE-EMPTY", name="空参考服务位", status="occupied")
+            db.add_all([staff, user, session, room]); db.flush(); session.customer_id = user.id
+            occupancy = PositionOccupancy(store_id=self.store_id, room_id=room.id, selection_session_id=session.id, active_room_id=room.id, active_session_id=session.id, status="in_service")
+            db.add(occupancy); db.commit(); staff_id, occupancy_id = staff.id, occupancy.id
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+
+        empty = self.client.get(f"/api/v1/technician/occupancies/{occupancy_id}/service-reference", headers=headers)
+        assert empty.status_code == 200, empty.text
+        assert empty.json()["record"] is None
+        with self.SessionLocal() as db:
+            assert db.scalar(select(AuditLog).where(AuditLog.action == "technician_view_service_reference")) is None
+            db.get(SelectionSession, "tech-reference-empty-session").status = "cancelled"
+            db.commit()
+        cancelled = self.client.get(f"/api/v1/technician/occupancies/{occupancy_id}/service-reference", headers=headers)
+        assert cancelled.status_code == 409, cancelled.text
+        assert cancelled.json()["detail"]["code"] == "SERVICE_REFERENCE_UNAVAILABLE"
+        with self.SessionLocal() as db:
+            occupancy = db.get(PositionOccupancy, occupancy_id)
+            db.get(SelectionSession, "tech-reference-empty-session").status = "submitted"
+            occupancy.status = "released"
+            occupancy.active_room_id = None
+            occupancy.active_session_id = None
+            db.commit()
+
+        released = self.client.get(f"/api/v1/technician/occupancies/{occupancy_id}/service-reference", headers=headers)
+        assert released.status_code == 409, released.text
+        assert released.json()["detail"]["code"] == "SERVICE_REFERENCE_UNAVAILABLE"
+
+        with self.SessionLocal() as db:
+            other_store = Store(store_code="reference-other-store", name="其他门店", address="其他地址")
+            db.add(other_store); db.flush()
+            other_session = SelectionSession(id="reference-other-session", access_token_hash="other-hash", store_id=other_store.id, status="submitted")
+            other_room = Room(store_id=other_store.id, code="REFERENCE-OTHER", name="其他服务位", status="occupied")
+            db.add_all([other_session, other_room]); db.flush()
+            other_occupancy = PositionOccupancy(store_id=other_store.id, room_id=other_room.id, selection_session_id=other_session.id, active_room_id=other_room.id, active_session_id=other_session.id, status="waiting_service")
+            db.add(other_occupancy); db.commit(); other_occupancy_id = other_occupancy.id
+        cross_store = self.client.get(f"/api/v1/technician/occupancies/{other_occupancy_id}/service-reference", headers=headers)
+        assert cross_store.status_code == 404
 
     def test_admin_approves_leave_and_can_resign_technician(self):
         with self.SessionLocal() as db:

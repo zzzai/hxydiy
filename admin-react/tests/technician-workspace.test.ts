@@ -45,21 +45,37 @@ test('移动技师首页将同一房间的多活动占用显式显示为待核�
   assert.match(mobileSource, /conflict/);
 });
 
-test('移动技师画像提交完成服务关联和画像字段', () => {
+test('移动技师服务参考提交完成服务关联和 v2 字段', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /createCustomerProfileRecord/);
   assert.match(source, /selection_session_id/);
-  assert.match(source, /profile:/);
-  assert.match(source, /signals:/);
+  assert.match(source, /buildServiceReferencePayload/);
+  assert.match(source, /customerConfirmed/);
 });
 
-test('移动技师快记在首屏展示结构化基础信息并防止重复保存', () => {
+test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
-  for (const field of ['age_range', 'gender', 'body_type', 'occupation']) assert.match(source, new RegExp(`name=\\"${field}\\"`));
-  assert.match(source, /source/);
+  for (const field of ['age_range', 'gender', 'body_type', 'occupation']) assert.doesNotMatch(source, new RegExp(field));
+  for (const field of ['focusAreas', 'avoidAreas', 'forcePreference', 'temperaturePreference', 'serviceFeedback', 'nextVisitPlan']) assert.match(source, new RegExp(field));
+  assert.match(source, /name="focusAreas"/);
+  assert.match(source, /name="avoidAreas"/);
+  assert.match(source, /maxLength=\{100\}/);
+  assert.match(source, /customerConfirmed: false/);
   assert.match(source, /saving/);
   assert.match(source, /disabled=\{saving\}/);
   assert.match(source, /暂不记录/);
+  assert.match(source, /lastPayloadSignature/);
+  assert.match(source, /JSON\.stringify/);
+});
+
+test('活动顾客服务单显式打开安全服务参考摘要', () => {
+  const today = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  const drawer = readFileSync(new URL('../src/technician/TechnicianServiceReferenceDrawer.tsx', import.meta.url), 'utf8');
+  assert.match(today, /查看上次服务参考/);
+  assert.match(today, /TechnicianServiceReferenceDrawer/);
+  assert.match(drawer, /getTechnicianServiceReference/);
+  assert.match(drawer, /请本次服务前再次确认/);
+  for (const sensitive of ['quote', 'note', 'phone', 'age_range', 'gender', 'occupation']) assert.doesNotMatch(drawer, new RegExp(sensitive));
 });
 
 test('画像写入请求附带幂等键', () => {

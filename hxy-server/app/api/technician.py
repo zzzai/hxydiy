@@ -5,13 +5,13 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff, create_staff_token, hash_password, normalize_staff_role
 from app.db.session import get_db
-from app.models import AuditLog, PositionOccupancy, SelectionSession, Staff
+from app.models import AuditLog, CustomerProfileRecord, PositionOccupancy, SelectionSession, Staff
 from app.models.operations import Room, Technician
 from app.models.catalog import Addon, Project
 from app.models.service import StateTransition
@@ -171,6 +171,101 @@ def _technician_occupancy(db: Session, occupancy_id: int, technician: Technician
     if not occupancy or occupancy.store_id != technician.store_id or not session or session.store_id != technician.store_id:
         raise HTTPException(status_code=404, detail="服务任务不存在")
     return occupancy
+
+
+SERVICE_REFERENCE_LABELS = {
+    "areas": {
+        "neck_shoulder": "肩颈", "waist_hip": "腰臀", "legs": "腿部",
+        "abdomen": "腹部", "feet": "足部", "full_relaxation": "整体放松",
+    },
+    "force": {"gentle": "轻柔", "medium": "适中", "strong": "偏强"},
+    "temperature": {"lower": "偏低", "medium": "适中", "higher": "偏高"},
+    "feedback": {
+        "suitable": "本次合适", "better_after_adjustment": "调整后更合适",
+        "adjust_next_time": "下次需调整",
+    },
+    "next_visit": {"repeat_current": "延续本次", "confirm_on_arrival": "到店再确认"},
+}
+
+
+@router.get("/occupancies/{occupancy_id}/service-reference")
+def get_service_reference(
+    occupancy_id: int,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff, technician = current_technician(authorization, db)
+    occupancy = _technician_occupancy(db, occupancy_id, technician)
+    if (
+        occupancy.status not in {"waiting_service", "in_service", "post_service_present"}
+        or occupancy.active_room_id != occupancy.room_id
+        or occupancy.active_session_id != occupancy.selection_session_id
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "SERVICE_REFERENCE_UNAVAILABLE", "message": "当前服务位已不再活动"},
+        )
+    session = db.get(SelectionSession, occupancy.selection_session_id)
+    if not session or session.status not in {"submitted", "confirmed"}:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "SERVICE_REFERENCE_UNAVAILABLE", "message": "当前选单已不再活动"},
+        )
+    if session.customer_id is None:
+        return {"record": None, "message": "暂无顾客确认的历史服务参考，请现场询问"}
+
+    superseded_ids = select(CustomerProfileRecord.correction_of_id).where(
+        CustomerProfileRecord.store_id == technician.store_id,
+        CustomerProfileRecord.user_id == session.customer_id,
+        CustomerProfileRecord.correction_of_id.is_not(None),
+    )
+    record = db.scalar(
+        select(CustomerProfileRecord).where(
+            CustomerProfileRecord.store_id == technician.store_id,
+            CustomerProfileRecord.user_id == session.customer_id,
+            CustomerProfileRecord.schema_version == 2,
+            CustomerProfileRecord.taxonomy_version == "service_reference_v1",
+            CustomerProfileRecord.customer_confirmed.is_(True),
+            CustomerProfileRecord.id.not_in(superseded_ids),
+            or_(
+                CustomerProfileRecord.selection_session_id.is_(None),
+                CustomerProfileRecord.selection_session_id != session.id,
+            ),
+        ).order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc()).limit(1)
+    )
+    if record is None:
+        return {"record": None, "message": "暂无顾客确认的历史服务参考，请现场询问"}
+
+    profile = record.profile or {}
+    reported = profile.get("customer_reported") or {}
+    observed = profile.get("technician_observed") or {}
+    next_visit = profile.get("next_visit") or {}
+    area_labels = SERVICE_REFERENCE_LABELS["areas"]
+    safe_record = {
+        "focus_areas": [area_labels[code] for code in reported.get("focus_areas", []) if code in area_labels],
+        "avoid_areas": [area_labels[code] for code in reported.get("avoid_areas", []) if code in area_labels],
+        "force_preference": SERVICE_REFERENCE_LABELS["force"].get(reported.get("force_preference")),
+        "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(reported.get("temperature_preference")),
+        "service_feedback": SERVICE_REFERENCE_LABELS["feedback"].get(observed.get("service_feedback")),
+        "next_visit_plan": SERVICE_REFERENCE_LABELS["next_visit"].get(next_visit.get("plan")),
+        "recorded_date": record.created_at.date().isoformat() if record.created_at else None,
+        "prompt": "请本次服务前再次确认",
+    }
+    db.add(AuditLog(
+        actor_type="staff",
+        actor_id=str(staff.id),
+        store_id=technician.store_id,
+        action="technician_view_service_reference",
+        entity_type="position_occupancy",
+        entity_id=str(occupancy.id),
+        detail={
+            "customer_id": session.customer_id,
+            "technician_id": technician.id,
+            "source_record_id": record.id,
+        },
+    ))
+    db.commit()
+    return {"record": safe_record, "message": "上次已确认服务参考"}
 
 
 def _reject_conflicted_room_action(db: Session, occupancy: PositionOccupancy) -> None:
