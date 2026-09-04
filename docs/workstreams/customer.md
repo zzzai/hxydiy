@@ -19,6 +19,13 @@
 - 负责人：顾客端窗口
 - 开始前读取：`PROJECT-CONTEXT-20260826.md`、`TEAM-MEMORY.md`、`WORK-STATUS.md`
 
+## 2026-09-04 顾客端源码纳入统一 GitHub 单仓库
+
+- 已按用户确认将顾客端源码纳入统一仓库 `https://github.com/zzzai/hxydiy.git` 的 `diy-web/` 目录，不建立独立仓库。
+- 已从 WorkBuddy 工作副本同步顾客端源码、测试、资源与配置到任务分支 `codex/customer/git-sync`，并推送到 GitHub；原 WorkBuddy 目录未覆盖、未删除。
+- 本地验证：`npm run build` 通过；顾客端测试 `162 passed / 0 failed / 1 skipped`；`git diff --check` 通过。
+- 当前状态：已推送分支，待按仓库规则创建并评审 PR；未合并 `main`，未发布生产，未执行数据库迁移。
+
 ## 跨端变更规则
 
 涉及 API 字段、价格、服务状态、服务位绑定或提交契约时，先在 `TEAM-MEMORY.md` 登记影响，再修改代码；完成后在本文件记录测试结果和交接事项。
