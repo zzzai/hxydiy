@@ -1,7 +1,9 @@
 # 服务参考标签契约 v1
 
-状态：生产使用中  
-数据结构版本：`schema_version=2`  
+状态：生产使用中
+
+数据结构版本：`schema_version=2`
+
 标签体系版本：`taxonomy_version=service_reference_v1`
 
 ## 数据职责
