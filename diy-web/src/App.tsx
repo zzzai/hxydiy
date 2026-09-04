@@ -98,6 +98,11 @@ import {
   calculatePreviewPricing,
   displayPayableTotal,
   resolveMemberTotalCents,
+  customerProjectHighlights,
+  customerProjectSummaryTags,
+  customerProjectPurchaseTags,
+  customerProjectDisplayTagGroups,
+  customerProjectSummaryText,
   displayProjectName,
   featuredProjects,
   formatMoney,
@@ -106,8 +111,6 @@ import {
   priceGuidance,
   projectListPricePresentation,
   projectImage,
-  projectTagLabel,
-  projectCatalogBadge,
   requiresStaffKioskBinding,
   replaceTea,
   shouldClearDeviceSessionAfterSubmit,
@@ -1484,16 +1487,18 @@ export default function App() {
                   {sectionProjects.map((project) => {
                     const selected = selectedProjectIds.includes(project.id);
                     const displayName = displayProjectName(project);
+                    const { highlights, summary: summaryTags, purchase: purchaseTags } = customerProjectDisplayTagGroups(project);
                     return (
                       <motion.article whileTap={{ scale: 0.985 }} className={`project-card mini-project-row ${selected ? 'selected' : ''}`} key={project.id} onClick={() => openProjectDetail(project)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectDetail(project); } }} role="button" tabIndex={0}>
                         <div className="project-photo"><img src={projectImage(project)} alt="" loading="lazy" decoding="async" />{project.code === 'hxy-xiaoqi-90' && <span className="signature-badge">招牌</span>}</div>
                         <div className="project-copy">
                           <div className="project-title-row"><h3>{displayName}</h3>{project.duration_min && <span>{project.duration_min}分钟</span>}</div>
-                          <p>{project.summary}</p>
-                          <div className="project-badges">
-                            {(project.tags || []).map((tag) => projectTagLabel(tag)).filter(Boolean).slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}
-                            {project.category !== 'small' && <span className="diy">{projectCatalogBadge(project)}</span>}
-                          </div>
+                          <p>{customerProjectSummaryText(project)}</p>
+                          {(highlights.length > 0 || summaryTags.length > 0 || purchaseTags.length > 0) && <div className="project-badge-groups" aria-label="项目标签">
+                            {highlights.length > 0 && <div className="project-badges project-badges-highlight" aria-label="项目特色">{highlights.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                            {summaryTags.length > 0 && <div className="project-badges project-badges-summary" aria-label="项目简介">{summaryTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                            {purchaseTags.length > 0 && <div className="project-badges project-badges-purchase" aria-label="选购规则">{purchaseTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                          </div>}
                           <ProjectPrice project={project} auth={customerAuth?.user || null} />
                           {projectPreferences[project.id]?.length > 0 && <div className="preference-line">{projectPreferences[project.id].join(' · ')}</div>}
                         </div>
@@ -1509,7 +1514,7 @@ export default function App() {
                   <div className="project-copy">
                     <div className="project-title-row"><h3>{displayProjectName(localProject)}</h3><span>{localProject.duration_min || 30}分钟/项</span></div>
                     <p>肩颈、腰臀、腿部、腹部、足部，按需灵活选择。</p>
-                    <div className="project-badges"><span>按部位计价</span><span className="diy">可多选</span></div>
+                    {customerProjectPurchaseTags(localProject).length > 0 && <div className="project-badges project-badges-purchase" aria-label="选购规则">{customerProjectPurchaseTags(localProject).map((tag) => <span key={tag}>{tag}</span>)}</div>}
                     <ProjectPrice project={localProject} auth={customerAuth?.user || null} />
                     {localParts.length > 0 && <div className="preference-line">已选：{localParts.join(' · ')}</div>}
                   </div>

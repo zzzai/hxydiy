@@ -19,9 +19,16 @@ import {
   detailBasePriceComparison,
   projectCatalogBadge,
   projectTagLabel,
+  customerProjectTags,
+  customerProjectPurchaseTags,
+  customerProjectHighlights,
+  customerProjectSummaryTags,
+  customerProjectTagGroups,
+  customerProjectDisplayTagGroups,
   supportsFootBathBundle,
   CATALOG_SECTIONS,
   displayProjectName,
+  customerProjectSummaryText,
   projectListPricePresentation,
   projectImage,
   mergeSubmittedSelectionItems,
@@ -87,8 +94,15 @@ test('顾客端分类导航保留六个品牌分类并将局部调理并入养�
 });
 
 test('两个 SPA 使用可区分的顾客名称', () => {
-  assert.equal(displayProjectName(project({ id: 60, code: 'hxy-spa-60', category: 'care', name: '精油SPA' })), '舒享精油 SPA');
-  assert.equal(displayProjectName(project({ id: 90, code: 'hxy-spa-90', category: 'care', name: '精油SPA' })), '深享精油 SPA');
+  assert.equal(displayProjectName(project({ id: 60, code: 'hxy-spa-60', category: 'care', name: '精油SPA' })), '60分钟精油SPA');
+  assert.equal(displayProjectName(project({ id: 90, code: 'hxy-spa-90', category: 'care', name: '精油SPA' })), '90分钟精油SPA');
+});
+
+test('项目摘要为空时仍生成顾客可读文案，足部精修明确为脚底', () => {
+  const foot = project({ id: 14, code: 'hxy-foot-refine-1', category: 'small', name: '足部精修', summary: '', duration_min: null });
+  assert.equal(customerProjectSummaryText(foot), '现煮草本泡脚+脚底精修');
+  assert.doesNotMatch(customerProjectSummaryText(foot), /脚趾精修/);
+  assert.equal(customerProjectSummaryText(project({ id: 60, code: 'hxy-spa-60', category: 'care', name: '精油SPA', summary: '自定义摘要' })), '自定义摘要');
 });
 
 test('局部推拿使用最新菜单中的顾客名称', () => {
@@ -210,8 +224,80 @@ test('养生小项使用顾客易懂的服务标签，不显示内部分类词',
   assert.equal(isDetailOnlyProject(small), false);
   assert.equal(projectTagLabel('小项'), '');
   assert.equal(projectTagLabel('按次'), '单次服务');
-  assert.equal(projectTagLabel('可按需加选'), '');
+  assert.equal(projectTagLabel('可自由搭配'), '可自由搭配');
+  assert.equal(projectTagLabel('可按需加选'), '可按需加选');
   assert.equal(projectTagLabel('利润款'), '');
+});
+
+test('顾客端统一小项和局部推拿项目标签', () => {
+  assert.deepEqual(customerProjectTags({ category: 'small', code: 'hxy-caier-30', tags: ['利润款', '可自由搭配'] }), ['单次服务', '可自由搭配']);
+  assert.deepEqual(customerProjectTags({ category: 'small', code: 'hxy-foot-refine-1', tags: [] }), ['单次服务']);
+  assert.deepEqual(customerProjectTags({ category: 'local-strength', code: 'hxy-jubu-30', tags: ['小项'] }), ['按部位计价', '可多选']);
+  assert.deepEqual(customerProjectTags({ category: 'balance', code: 'hxy-tuina-70', tags: ['  ', '可按需加选', '按次', '按次'] }), ['单次服务', '可按需加选']);
+});
+
+test('无标签项目按名称自动补充顾客特色和简介标签，且三组不重复', () => {
+  const footRefine = project({ id: 14, code: 'hxy-foot-refine-1', category: 'small', name: '足部精修', tags: [], summary: '', duration_min: null });
+  assert.deepEqual(customerProjectHighlights(footRefine), ['现煮草本', '脚底精修']);
+  assert.deepEqual(customerProjectDisplayTagGroups(footRefine), {
+    highlights: ['脚底精修'],
+    summary: [],
+    purchase: ['单次服务'],
+  });
+  assert.deepEqual(customerProjectSummaryTags(footRefine), ['泡脚+足部修整']);
+  const groups = customerProjectTagGroups(footRefine);
+  assert.deepEqual(groups.purchase, ['单次服务']);
+  const all = [...groups.highlights, ...groups.summary, ...groups.purchase];
+  assert.equal(new Set(all).size, all.length);
+  assert.ok(!all.some((tag) => ['小项', '利润款', '基础款', '主力款', '舒享款', '加强项'].includes(tag)));
+});
+
+test('未知小项也能根据项目名称和时长生成稳定顾客标签', () => {
+  const item = project({ id: 99, code: 'custom-care', category: 'small', name: '肩颈放松护理', summary: '针对肩颈紧绷的舒缓护理', tags: [], duration_min: 25 });
+  assert.deepEqual(customerProjectHighlights(item), ['肩颈放松护理']);
+  assert.deepEqual(customerProjectSummaryTags(item), ['25分钟服务']);
+});
+
+test('人工配置标签优先于自动兜底，选购规则与特色简介职责分离', () => {
+  const item = project({ id: 100, code: 'custom-ear', category: 'small', name: '采耳', summary: '', tags: ['可自由搭配', '按次', '按次'] });
+  const groups = customerProjectTagGroups(item);
+  assert.deepEqual(groups.highlights, ['耳部清洁', '耳部按摩']);
+    assert.deepEqual(groups.summary, ['30分钟服务']);
+  assert.deepEqual(groups.purchase, ['单次服务', '可自由搭配']);
+});
+
+test('普通项目的选购规则只保留规则词，并为无标签项目补充稳定兜底', () => {
+  const regular = project({
+    id: 101,
+    code: 'custom-spa',
+    category: 'care',
+    name: '精油 SPA',
+    summary: '精油护理与头部放松',
+    tags: ['精油护理', '现熬草本', '可按需加选', '利润款'],
+  });
+  const groups = customerProjectTagGroups(regular);
+  assert.deepEqual(groups.highlights, ['精油护理']);
+  assert.deepEqual(groups.purchase, ['单次服务', '可按需加选']);
+  assert.ok(!groups.purchase.some((tag) => ['精油护理', '现熬草本', '利润款'].includes(tag)));
+
+  const untagged = project({ id: 102, code: 'custom-bath', category: 'bath', name: '草本沐足', summary: '', tags: [] });
+  assert.deepEqual(customerProjectPurchaseTags(untagged), ['单次服务']);
+});
+
+test('所有顾客标签组不重复，且选购兜底不展示后台经营词', () => {
+  const item = project({
+    id: 103,
+    code: 'custom-care-2',
+    category: 'care',
+    name: '精油 SPA',
+    summary: '精油护理',
+    tags: ['精油护理', '单次', '利润款', '单次服务'],
+  });
+  const groups = customerProjectTagGroups(item);
+  const all = [...groups.highlights, ...groups.summary, ...groups.purchase];
+  assert.equal(new Set(all).size, all.length);
+  assert.deepEqual(groups.purchase, ['单次服务']);
+  assert.ok(!all.some((tag) => ['小项', '利润款', '基础款', '主力款', '舒享款', '加强项'].includes(tag)));
 });
 
 test('历史误分类为 balance 的套盒编码 hxy-taoke-60 仍识别为固定套盒', () => {

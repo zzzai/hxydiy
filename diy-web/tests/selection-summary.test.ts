@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -27,6 +28,16 @@ test('已提交返回项目菜单时使用空白选购草稿', () => {
     localParts: [],
     tea: null,
   });
+});
+
+test('选购清单采用紧凑购物车结构，减免不占用独立大卡片空间', () => {
+  const sheet = fs.readFileSync(new URL('../src/components/SelectionSummarySheet.tsx', import.meta.url), 'utf8');
+  const styles = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.match(sheet, /selection-sheet-scroll/);
+  assert.match(sheet, /selection-sheet-promotion/);
+  assert.match(styles, /\.selection-summary-sheet[^{]*\{[\s\S]*max-height: min\(72dvh/);
+  assert.match(styles, /\.selection-sheet-promotion[^{]*\{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\) auto/);
+  assert.match(styles, /\.selection-sheet-group \{ padding: 8px 0/);
 });
 
 function project(partial: Partial<Project> & Pick<Project, 'id' | 'code' | 'category' | 'name'>): Project {

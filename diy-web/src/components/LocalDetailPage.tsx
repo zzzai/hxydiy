@@ -1,7 +1,7 @@
 import { ArrowLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, displayProjectName, effectivePrice, effectivePriceLabel, formatMoney, priceOf, projectImage, type Project } from '../domain';
+ import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, customerProjectTagGroups, displayProjectName, effectivePrice, effectivePriceLabel, formatMoney, priceOf, projectImage, type Project } from '../domain';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
 
@@ -35,6 +35,7 @@ export default function LocalDetailPage({ open, project, selectedParts, position
     setDraft((current) => current.includes(part) ? current.filter((item) => item !== part) : [...current, part]);
   };
   const activeProfile = LOCAL_DETAIL_PROFILES[focusedPart as keyof typeof LOCAL_DETAIL_PROFILES];
+  const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
 
   return (
     <motion.div data-motion="detail" {...detailMotion} className="project-detail-page mini-detail-page local-preference-page" role="dialog" aria-modal="true" aria-labelledby="local-detail-title">
@@ -48,8 +49,13 @@ export default function LocalDetailPage({ open, project, selectedParts, position
         <img className="mini-detail-hero" src={projectImage(project)} alt="局部推拿服务" />
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="local-detail-title">{focusedPart}调理</h1></div>
-          <div className="mini-detail-tags"><span>{activeProfile.focus}</span><span>{project.duration_min || 30}分钟/项</span><span>按部位计价</span></div>
+          <div className="mini-detail-tags"><span>{activeProfile.focus}</span><span>{project.duration_min || 30}分钟/项</span></div>
           <p>{activeProfile.description}</p>
+          {(projectHighlights.length > 0 || projectSummaryTags.length > 0 || projectPurchaseTags.length > 0) && <div className="customer-tag-groups" aria-label="项目标签">
+            {projectHighlights.length > 0 && <div className="customer-tag-group customer-tag-group-highlight"><strong>项目特色</strong><div>{projectHighlights.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
+            {projectSummaryTags.length > 0 && <div className="customer-tag-group customer-tag-group-summary"><strong>项目简介</strong><div>{projectSummaryTags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
+            {projectPurchaseTags.length > 0 && <div className="customer-tag-group customer-tag-group-purchase"><strong>选购规则</strong><div>{projectPurchaseTags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
+          </div>}
           <div className="mini-detail-price"><strong>{formatMoney(effectivePrice(project, isMember))}</strong><del>{isMember ? '门店价' : '会员价'} {formatMoney(priceOf(project, isMember ? 'store' : 'member'))}</del><em>{effectivePriceLabel(isMember)} · 每个部位</em></div>
           {!isMember && <small className="price-identity-hint">到店办理年度权益卡，本项目可享会员价 {formatMoney(priceOf(project, 'member'))}</small>}
         </section>

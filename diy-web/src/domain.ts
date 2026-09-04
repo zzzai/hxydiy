@@ -185,8 +185,8 @@ export const CATALOG_SECTIONS = [
 ] as const;
 
 export function displayProjectName(project: Pick<Project, 'code' | 'name'>): string {
-  if (project.code === 'hxy-spa-60') return '舒享精油 SPA';
-  if (project.code === 'hxy-spa-90') return '深享精油 SPA';
+  if (project.code === 'hxy-spa-60') return '60分钟精油SPA';
+  if (project.code === 'hxy-spa-90') return '90分钟精油SPA';
   return project.name;
 }
 
@@ -367,11 +367,215 @@ export function projectCatalogBadge(project: Pick<Project, 'category' | 'code'>)
   return project.category === 'small' ? '特色服务' : '可加选服务';
 }
 
-/** 将后台标签转成顾客能直接理解的说法；内部分类标签不在顾客端重复展示。 */
+/** 将项目标签转成顾客能直接理解的说法；只过滤经营内部词。 */
 export function projectTagLabel(tag: string): string {
-  if (['小项', '可自由搭配', '可按需加选', '利润款'].includes(tag.trim())) return '';
-  if (tag === '按次') return '单次服务';
-  return tag;
+  const normalized = String(tag ?? '').trim();
+  if (!normalized || ['小项', '利润款', '基础款', '主力款', '舒享款', '加强项'].includes(normalized)) return '';
+  if (normalized === '草本现煮') return '现煮草本';
+  if (['按次', '单次'].includes(normalized)) return '单次服务';
+  return normalized;
+}
+
+type CustomerProjectTagInput = Pick<Project, 'code' | 'category' | 'tags'> & Partial<Pick<Project, 'name' | 'summary' | 'duration_min'>>;
+
+/** 顾客端项目标签统一入口，屏蔽经营内部分类词和历史写法。 */
+export function customerProjectTags(project: CustomerProjectTagInput): string[] {
+  return customerProjectPurchaseTags(project);
+}
+
+const CUSTOMER_PURCHASE_TAGS = new Set([
+  '单次服务',
+  '可自由搭配',
+  '可按需加选',
+  '按部位计价',
+  '可多选',
+  '套盒服务',
+  '可搭配局部加强',
+]);
+
+function uniqueCustomerTags(tags: string[]): string[] {
+  return [...new Set(tags.map(projectTagLabel).filter(Boolean))];
+}
+
+/** 顾客可见的选购规则标签：只回答“怎么买”，与项目特色、简介分开。 */
+export function customerProjectPurchaseTags(project: CustomerProjectTagInput): string[] {
+  if (project.category === 'local-strength' || project.code === 'hxy-jubu-30') {
+    return ['按部位计价', '可多选'];
+  }
+  // 后台 tags 同时承载服务特色和经营标记；这里仅接收顾客能据此完成选择的规则词。
+  const configuredRules = uniqueCustomerTags(project.tags || []).filter((label) => CUSTOMER_PURCHASE_TAGS.has(label));
+  const fallbackRules = isDetailOnlyProject(project)
+    ? ['套盒服务']
+    : project.code === 'hxy-qiqing-30'
+      ? ['单次服务', '可搭配局部加强']
+      : ['单次服务'];
+  return uniqueCustomerTags([...fallbackRules, ...configuredRules]);
+}
+
+/** 顾客可见的项目特色：只描述服务内容，不暴露后台经营分类。 */
+const CUSTOMER_PROJECT_HIGHLIGHTS: Record<string, string[]> = {
+  'hxy-qiqing-30': ['现煮草本', '五行茶饮'],
+  'hxy-xiangxiang-60': ['现熬草本', '泡脚按摩'],
+  'hxy-xiaoqi-90': ['现熬草本', '全身按摩'],
+  'hxy-nvshen-60': ['现煮草本', '足部养护', '足膜润足'],
+  'hxy-tuina-70': ['全身推拿', '草本热敷'],
+  'hxy-spa-60': ['精油护理', '头部按摩', '经络梳'],
+  'hxy-spa-90': ['精油护理', '头部按摩', '经络梳'],
+  'hxy-taoke-60': ['活络油护理', '工具调理', '草本热敷'],
+  'hxy-caier-30': ['耳部清洁', '耳部按摩'],
+  'hxy-baguan-1': ['竹罐护理', '草本膏贴'],
+  'hxy-guasha-1': ['刮痧护理', '草本膏贴'],
+  'hxy-head-30': ['头面耳按摩', '经络梳', '眼罩/眼贴'],
+  'hxy-jubu-30': ['局部推拿'],
+  'hxy-foot-refine-1': ['现煮草本', '脚底精修'],
+};
+
+/** 顾客可见的简介标签：用短语概括时长或组合方式，完整说明仍以 summary 为准。 */
+const CUSTOMER_PROJECT_SUMMARY_TAGS: Record<string, string[]> = {
+  'hxy-qiqing-30': ['体质检测+泡脚'],
+  'hxy-xiangxiang-60': ['60分钟组合'],
+  'hxy-xiaoqi-90': ['90分钟组合'],
+  'hxy-tuina-70': ['70分钟组合'],
+  'hxy-spa-60': ['45+15分钟分段服务'],
+  'hxy-spa-90': ['75+15分钟分段服务'],
+  'hxy-taoke-60': ['10次/套'],
+  'hxy-caier-30': ['30分钟'],
+  'hxy-head-30': ['30分钟'],
+  'hxy-jubu-30': ['任选一个部位'],
+  'hxy-foot-refine-1': ['泡脚+足部修整'],
+};
+
+export type CustomerProjectTagGroups = {
+  highlights: string[];
+  summary: string[];
+  purchase: string[];
+};
+
+function fallbackProjectHighlights(project: CustomerProjectTagInput): string[] {
+  const name = String(project.name || '').trim();
+  const summary = String(project.summary || '').trim();
+  if (!name) {
+    if (/足部|脚部|脚底/.test(summary)) return ['足部护理'];
+    if (/采耳|耳部/.test(summary)) return ['耳部清洁'];
+    if (/头疗|头部|头面/.test(summary)) return ['头部放松'];
+    if (/拔罐/.test(summary)) return ['拔罐护理'];
+    if (/刮痧/.test(summary)) return ['刮痧护理'];
+    if (/推拿|调理/.test(summary)) return ['身体调理'];
+    if (/泡脚|沐足/.test(summary)) return ['草本泡脚'];
+    if (/SPA|精油/i.test(summary)) return ['精油护理'];
+    if (project.category === 'small') return ['特色护理'];
+    if (project.category === 'kit') return ['组合服务'];
+    return ['放松调理'];
+  }
+  if (/足部精修/.test(name)) return ['足部精修', '脚部护理'];
+  if (/采耳/.test(name)) return ['耳部清洁', '耳部按摩'];
+  if (/头疗|头部/.test(name)) return ['头部放松', '头面护理'];
+  if (/拔罐/.test(name)) return ['拔罐护理'];
+  if (/刮痧/.test(name)) return ['刮痧护理'];
+  if (/推拿|调理/.test(name)) return ['身体调理'];
+  if (/泡脚|沐足/.test(name)) return ['草本泡脚'];
+  if (/SPA|精油/.test(name)) return ['精油护理'];
+  if (project.category === 'small') return [name];
+  return ['放松调理'];
+}
+
+function fallbackProjectSummaryTags(project: CustomerProjectTagInput): string[] {
+  const summary = String(project.summary || '').trim();
+  const name = String(project.name || '').trim();
+  const text = `${name} ${summary}`;
+  const duration = Number(project.duration_min || 0);
+  if (duration > 0) return [`${duration}分钟服务`];
+  if (/组合/.test(summary)) return ['组合服务'];
+  if (/足部精修/.test(text)) return ['脚底精修'];
+  if (/采耳/.test(text)) return ['耳部放松'];
+  if (/头疗|头部/.test(text)) return ['头部护理'];
+  if (/拔罐/.test(text)) return ['单次护理'];
+  if (/刮痧/.test(text)) return ['单次护理'];
+  if (/推拿|调理/.test(text)) return ['按需调理'];
+  if (/泡脚|沐足/.test(text)) return ['草本放松'];
+  if (/SPA|精油/i.test(text)) return ['分段护理'];
+  if (/局部|部位/.test(summary) || project.category === 'local-strength') return ['局部护理'];
+  if (project.category === 'small') return ['单次服务'];
+  return summary ? ['到店服务'] : [];
+}
+
+/** 三类标签统一去重，避免同一概念在不同职责组重复出现。 */
+export function customerProjectTagGroups(project: CustomerProjectTagInput): CustomerProjectTagGroups {
+  const used = new Set<string>();
+  const takeUnique = (values: string[]) => values.filter((value) => {
+    const label = projectTagLabel(value);
+    if (!label || used.has(label)) return false;
+    used.add(label);
+    return true;
+  });
+  return {
+    highlights: takeUnique(customerProjectHighlights(project)),
+    summary: takeUnique(customerProjectSummaryTags(project)),
+    purchase: takeUnique(customerProjectPurchaseTags(project)),
+  };
+}
+
+/** 列表最多显示 3 个标签，优先突出服务特色，再补充组合或选购方式。 */
+export function customerProjectDisplayTagGroups(project: CustomerProjectTagInput): CustomerProjectTagGroups {
+  const groups = customerProjectTagGroups(project);
+  // 足部精修的完整服务内容已经放在卡片简介中，列表只保留顾客做决定所需的两个标签，避免重复堆叠。
+  if (project.code === 'hxy-foot-refine-1') {
+    return {
+      highlights: ['脚底精修'],
+      summary: [],
+      purchase: ['单次服务'],
+    };
+  }
+  let remaining = 3;
+  const take = (values: string[], max: number) => {
+    const result = values.slice(0, Math.min(max, remaining));
+    remaining -= result.length;
+    return result;
+  };
+  const highlights = take(groups.highlights, 2);
+  const summary = take(groups.summary, 1);
+  const purchase = take(groups.purchase, 1);
+  return { highlights, summary, purchase };
+}
+
+export function customerProjectHighlights(project: CustomerProjectTagInput): string[] {
+  return [...(CUSTOMER_PROJECT_HIGHLIGHTS[project.code] || fallbackProjectHighlights(project))];
+}
+
+export function customerProjectSummaryTags(project: CustomerProjectTagInput): string[] {
+  return [...(CUSTOMER_PROJECT_SUMMARY_TAGS[project.code] || fallbackProjectSummaryTags(project))];
+}
+
+/** 顾客端项目摘要统一入口：后端摘要为空时提供稳定、可读且不暴露经营内部信息的兜底文案。 */
+export function customerProjectSummaryText(project: CustomerProjectTagInput): string {
+  const configured = String(project.summary || '').trim();
+  if (configured) return configured;
+  const name = String(project.name || '').trim();
+  const byCode: Record<string, string> = {
+    'hxy-qiqing-30': '体质检测+现煮草本泡脚+养生茶饮',
+    'hxy-xiangxiang-60': '养生茶饮+现煮草本泡脚+肩颈按摩+刮脚搓盐',
+    'hxy-xiaoqi-90': '招牌草本泡脚按摩+草本热敷',
+    'hxy-nvshen-60': '养生茶饮+现煮草本泡脚+足部养护',
+    'hxy-tuina-70': '全身推拿按摩+草木热敷+养生茶饮',
+    'hxy-spa-60': '清脚+高端精油SPA+头部按摩+养生茶饮',
+    'hxy-spa-90': '清脚+高端精油SPA+头部按摩+养生茶饮',
+    'hxy-taoke-60': '痛症调理：活络油+工具+热敷，10次/套',
+    'hxy-caier-30': '耳部清洁+耳部按摩',
+    'hxy-head-30': '头部轻养按摩+经络梳+眼罩/眼贴',
+    'hxy-jubu-30': '肩颈、腰臀、腿部、腹部、足部任选其一',
+    'hxy-foot-refine-1': '现煮草本泡脚+脚底精修',
+    'hxy-baguan-1': '拔竹罐+草本功效膏贴',
+    'hxy-guasha-1': '刮痧+草本功效膏贴',
+  };
+  if (byCode[project.code]) return byCode[project.code];
+  if (name) return name + (project.duration_min ? ` · ${project.duration_min}分钟服务` : ' · 到店服务');
+  return project.duration_min ? `${project.duration_min}分钟服务` : '到店服务';
+}
+
+/** 三类标签按“特色 → 简介 → 选购”顺序合并，供列表控制展示数量。 */
+export function customerProjectDisplayTags(project: CustomerProjectTagInput): string[] {
+  const groups = customerProjectTagGroups(project);
+  return [...groups.highlights, ...groups.summary, ...groups.purchase];
 }
 
 export function diyAddOnProjects(projects: Project[]): Project[] {
@@ -602,7 +806,7 @@ export function projectImage(project: Project): string {
 const GENERATED_PROJECT_ASSETS = new Set([
   'hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-tuina-70', 'hxy-spa-60', 'hxy-spa-90',
   'hxy-taoke-60', 'hxy-caier-30', 'hxy-baguan-1', 'hxy-guasha-1', 'hxy-head-30', 'hxy-jubu-30',
-  'hxy-foot-refine-1',
+  'hxy-foot-refine-1', 'hxy-nvshen-60',
 ]);
 
 export function generatedProjectAsset(code: string): string | null {
