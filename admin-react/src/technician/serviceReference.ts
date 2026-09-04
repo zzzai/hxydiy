@@ -73,7 +73,6 @@ export interface TechnicianServiceReferenceRecord {
   temperature_preference: string | null;
   service_feedback: string | null;
   next_visit_plan: string | null;
-  confirmed_at: string | null;
   recorded_date: string | null;
   prompt: string;
 }

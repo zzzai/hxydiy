@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -206,7 +206,12 @@ def get_service_reference(
             detail={"code": "SERVICE_REFERENCE_UNAVAILABLE", "message": "当前服务位已不再活动"},
         )
     session = db.get(SelectionSession, occupancy.selection_session_id)
-    if not session or session.customer_id is None:
+    if not session or session.status not in {"submitted", "confirmed"}:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "SERVICE_REFERENCE_UNAVAILABLE", "message": "当前选单已不再活动"},
+        )
+    if session.customer_id is None:
         return {"record": None, "message": "暂无顾客确认的历史服务参考，请现场询问"}
 
     superseded_ids = select(CustomerProfileRecord.correction_of_id).where(
@@ -222,6 +227,10 @@ def get_service_reference(
             CustomerProfileRecord.taxonomy_version == "service_reference_v1",
             CustomerProfileRecord.customer_confirmed.is_(True),
             CustomerProfileRecord.id.not_in(superseded_ids),
+            or_(
+                CustomerProfileRecord.selection_session_id.is_(None),
+                CustomerProfileRecord.selection_session_id != session.id,
+            ),
         ).order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc()).limit(1)
     )
     if record is None:
@@ -239,7 +248,6 @@ def get_service_reference(
         "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(reported.get("temperature_preference")),
         "service_feedback": SERVICE_REFERENCE_LABELS["feedback"].get(observed.get("service_feedback")),
         "next_visit_plan": SERVICE_REFERENCE_LABELS["next_visit"].get(next_visit.get("plan")),
-        "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
         "recorded_date": record.created_at.date().isoformat() if record.created_at else None,
         "prompt": "请本次服务前再次确认",
     }

@@ -6,6 +6,8 @@
 from datetime import UTC, datetime, timezone
 import hashlib
 import json
+import re
+import unicodedata
 import uuid
 from typing import Literal
 
@@ -1958,6 +1960,21 @@ PROFILE_PRESET_SIGNALS = {
 }
 PROFILE_FORCE_SIGNALS = {"偏好轻柔力度", "偏好中等力度", "偏好强力力度"}
 PROFILE_FORBIDDEN_WORDS = ("确诊", "诊断", "疾病", "治疗", "治愈", "疗效", "癌", "处方")
+PROFILE_PRIVATE_WORDS = ("微信", "手机号", "电话", "座机", "联系方式", "qq", "消费能力", "有钱", "贫穷", "性格", "人格")
+PROFILE_EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+PROFILE_MOBILE_PATTERN = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
+PROFILE_LANDLINE_PATTERN = re.compile(r"(?<!\d)0\d{9,11}(?!\d)")
+
+
+def _contains_private_profile_content(text: str) -> bool:
+    normalized = unicodedata.normalize("NFKC", text)
+    compact = re.sub(r"[\s\-()（）]", "", normalized)
+    return (
+        any(word in normalized.lower() for word in PROFILE_PRIVATE_WORDS)
+        or bool(PROFILE_EMAIL_PATTERN.search(normalized))
+        or bool(PROFILE_MOBILE_PATTERN.search(compact))
+        or bool(PROFILE_LANDLINE_PATTERN.search(compact))
+    )
 
 ServiceArea = Literal["neck_shoulder", "waist_hip", "legs", "abdomen", "feet", "full_relaxation"]
 AvoidArea = Literal["neck_shoulder", "waist_hip", "legs", "abdomen", "feet"]
@@ -1989,6 +2006,8 @@ class ServiceReferenceCustomerReported(BaseModel):
         text = value.strip()
         if any(word in text for word in PROFILE_FORBIDDEN_WORDS):
             raise ValueError("服务参考仅支持非医疗描述，请勿填写诊断或治疗结论")
+        if _contains_private_profile_content(text):
+            raise ValueError("顾客原话请勿填写联系方式、消费能力或人格评价")
         return text
 
 
@@ -2405,6 +2424,8 @@ def create_customer_profile_record(
     if is_bound_technician:
         if not body.selection_session_id:
             raise HTTPException(status_code=403, detail="技师画像记录必须关联已完成服务")
+    if body.schema_version == 2 and not body.selection_session_id:
+        raise HTTPException(status_code=422, detail="v2 服务参考必须关联已完成服务")
     _require_store_user(db, body.user_id, staff)
     if not _profile_payload(body) and not body.signals and not body.note:
         raise HTTPException(status_code=422, detail="请至少记录一项服务参考")

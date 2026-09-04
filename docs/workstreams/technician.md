@@ -11,7 +11,7 @@
 
 ### 验证与发布
 
-- 后端相关回归：40 passed；Alembic 仅有一个 head：`20260904_service_reference_v2`。
+- 后端相关回归：43 passed；Alembic 仅有一个 head：`20260904_service_reference_v2`。
 - 管理端全量测试：137 passed；TypeScript 与 Vite 生产构建通过，仅保留既有大 chunk 提示。
 - 当前仅本地分支完成，尚未合并或发布生产；发布前仍需数据库备份、迁移、健康检查和授权测试位验收。
 

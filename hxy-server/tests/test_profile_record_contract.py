@@ -178,3 +178,22 @@ class TestProfileRecordContract:
             ))
             assert audit is not None
             assert audit.actor_id == self.manager_staff_id.__str__()
+
+    def test_manager_cannot_create_confirmed_v2_reference_without_completed_service(self):
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            headers={**self.manager_headers, "Idempotency-Key": "manager-v2-no-service-001"},
+            json={
+                "user_id": self.own_user_id,
+                "schema_version": 2,
+                "taxonomy_version": "service_reference_v1",
+                "customer_confirmed": True,
+                "profile": {
+                    "schema_version": 2,
+                    "taxonomy_version": "service_reference_v1",
+                    "customer_reported": {"focus_areas": ["neck_shoulder"]},
+                },
+            },
+        )
+
+        assert response.status_code == 422, response.text

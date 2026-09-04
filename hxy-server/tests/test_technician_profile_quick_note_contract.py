@@ -201,6 +201,22 @@ class TestTechnicianProfileQuickNoteContract:
             )
             assert response.status_code == 422, response.text
 
+    def test_v2_quote_rejects_contact_consumption_and_personality_content(self):
+        quotes = [
+            "手机号13812345678", "联系 138 1234 5678", "座机 010-12345678",
+            "QQ 123456789", "微信号 abc123", "邮箱 guest@example.com",
+            "消费能力很强", "性格比较安静",
+        ]
+        for index, quote in enumerate(quotes):
+            payload = self._v2_payload()
+            payload["profile"]["customer_reported"]["quote"] = quote
+            response = self.client.post(
+                "/api/v1/admin/v2/customer-profile-records",
+                headers={**self.headers, "Idempotency-Key": f"quick-note-v2-private-{index:03d}"},
+                json=payload,
+            )
+            assert response.status_code == 422, response.text
+
     def test_technician_cannot_read_unrelated_same_store_profile_history(self):
         response = self.client.get(
             f"/api/v1/admin/v2/users/{self.other_user_id}/customer-profile-records",

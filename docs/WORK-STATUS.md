@@ -9,7 +9,7 @@
 
 ## 验证与发布状态
 
-- 后端相关测试 40 passed；Alembic 单 head 为 `20260904_service_reference_v2`。
+- 后端相关测试 43 passed；Alembic 单 head 为 `20260904_service_reference_v2`。
 - 管理端全量测试 137 passed；`npm run build` 成功，仅有既有大 chunk 提示。
 - 分支：`codex/technician/quick-profile-summary`；尚未合并、尚未发布生产。
 - 上线前必须完成数据库备份、迁移检查、生产健康检查，并用授权测试服务位验证保存、幂等、摘要脱敏、释放后不可读及审计。

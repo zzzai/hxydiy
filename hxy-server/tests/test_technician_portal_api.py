@@ -167,7 +167,9 @@ class TestTechnicianPortalApi:
             old = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["neck_shoulder"], "quote": "私密原话"}}, note="内部备注")
             db.add_all([unconfirmed, old]); db.flush()
             current = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), correction_of_id=old.id, profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["neck_shoulder", "legs"], "avoid_areas": ["abdomen"], "force_preference": "medium", "temperature_preference": "lower", "quote": "不得返回"}, "technician_observed": {"service_feedback": "better_after_adjustment"}, "next_visit": {"plan": "repeat_current"}}, note="不得返回")
-            db.add(current); db.commit()
+            db.add(current); db.flush()
+            same_service = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, selection_session_id=session.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["feet"]}})
+            db.add(same_service); db.commit()
             staff_id, occupancy_id = staff.id, occupancy.id
 
         headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
@@ -181,6 +183,7 @@ class TestTechnicianPortalApi:
         assert record["temperature_preference"] == "偏低"
         assert record["service_feedback"] == "调整后更合适"
         assert record["next_visit_plan"] == "延续本次"
+        assert "confirmed_at" not in record
         assert "quote" not in response.text and "note" not in response.text and "nickname" not in response.text
         with self.SessionLocal() as db:
             audit = db.scalar(select(AuditLog).where(AuditLog.action == "technician_view_service_reference"))
@@ -204,7 +207,14 @@ class TestTechnicianPortalApi:
         assert empty.json()["record"] is None
         with self.SessionLocal() as db:
             assert db.scalar(select(AuditLog).where(AuditLog.action == "technician_view_service_reference")) is None
+            db.get(SelectionSession, "tech-reference-empty-session").status = "cancelled"
+            db.commit()
+        cancelled = self.client.get(f"/api/v1/technician/occupancies/{occupancy_id}/service-reference", headers=headers)
+        assert cancelled.status_code == 409, cancelled.text
+        assert cancelled.json()["detail"]["code"] == "SERVICE_REFERENCE_UNAVAILABLE"
+        with self.SessionLocal() as db:
             occupancy = db.get(PositionOccupancy, occupancy_id)
+            db.get(SelectionSession, "tech-reference-empty-session").status = "submitted"
             occupancy.status = "released"
             occupancy.active_room_id = None
             occupancy.active_session_id = None

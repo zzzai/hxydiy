@@ -57,11 +57,15 @@ test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   for (const field of ['age_range', 'gender', 'body_type', 'occupation']) assert.doesNotMatch(source, new RegExp(field));
   for (const field of ['focusAreas', 'avoidAreas', 'forcePreference', 'temperaturePreference', 'serviceFeedback', 'nextVisitPlan']) assert.match(source, new RegExp(field));
+  assert.match(source, /name="focusAreas"/);
+  assert.match(source, /name="avoidAreas"/);
   assert.match(source, /maxLength=\{100\}/);
   assert.match(source, /customerConfirmed: false/);
   assert.match(source, /saving/);
   assert.match(source, /disabled=\{saving\}/);
   assert.match(source, /暂不记录/);
+  assert.match(source, /lastPayloadSignature/);
+  assert.match(source, /JSON\.stringify/);
 });
 
 test('活动顾客服务单显式打开安全服务参考摘要', () => {

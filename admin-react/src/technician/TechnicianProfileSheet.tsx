@@ -8,16 +8,25 @@ function makeIdempotencyKey() {
   return globalThis.crypto?.randomUUID?.() || `profile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function CheckableField({ value = [], onChange, options }: { value?: string[]; onChange?: (value: string[]) => void; options: ReadonlyArray<{ label: string; value: string }> }) {
+  return <div className="technician-tag-list">{options.map((option) => {
+    const checked = value.includes(option.value);
+    return <Tag.CheckableTag key={option.value} checked={checked} onChange={(next) => onChange?.(next ? [...value, option.value] : value.filter((item) => item !== option.value))}>{option.label}</Tag.CheckableTag>;
+  })}</div>;
+}
+
 export default function TechnicianProfileSheet({ task, onClose, onSaved }: { task: any; onClose: () => void; onSaved: () => void }) {
   const [form] = Form.useForm<ServiceReferenceInput>();
   const { message } = App.useApp();
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const idempotencyKey = useRef(makeIdempotencyKey());
+  const lastPayloadSignature = useRef<string | null>(null);
 
   useEffect(() => {
     form.resetFields();
     idempotencyKey.current = makeIdempotencyKey();
+    lastPayloadSignature.current = null;
     setSaveFailed(false);
   }, [form, task]);
 
@@ -30,8 +39,14 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
     }
     setSaving(true);
     setSaveFailed(false);
+    const payload = buildServiceReferencePayload(customerId, task.selection_session_id, values);
+    const payloadSignature = JSON.stringify(payload);
+    if (lastPayloadSignature.current !== null && lastPayloadSignature.current !== payloadSignature) {
+      idempotencyKey.current = makeIdempotencyKey();
+    }
+    lastPayloadSignature.current = payloadSignature;
     try {
-      await createCustomerProfileRecord(buildServiceReferencePayload(customerId, task.selection_session_id, values), idempotencyKey.current);
+      await createCustomerProfileRecord(payload, idempotencyKey.current);
       message.success('服务参考已记录');
       onSaved();
     } catch {
@@ -42,10 +57,6 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
     }
   };
 
-  const toggleValue = (field: 'focusAreas' | 'avoidAreas', value: string, checked: boolean) => {
-    const current = (form.getFieldValue(field) || []) as string[];
-    form.setFieldValue(field, checked ? [...current, value] : current.filter((item) => item !== value));
-  };
   const summary = (task?.items || []).map(technicianOrderItemLabel).filter(Boolean).join('、') || '顾客暂未填写项目';
   const position = task?.room_name || task?.room_code || task?.position_name || '当前服务位';
 
@@ -59,12 +70,8 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
       <Typography.Paragraph type="secondary">点选即可，建议当面复述确认；仅作到店服务参考。</Typography.Paragraph>
     </div>
     <Form form={form} layout="vertical" onFinish={save} initialValues={{ focusAreas: [], avoidAreas: [], customerConfirmed: false }}>
-      <Form.Item label="本次重点" shouldUpdate={(before, after) => before.focusAreas !== after.focusAreas}>
-        {() => <div className="technician-tag-list">{SERVICE_REFERENCE_OPTIONS.focusAreas.map((option) => <Tag.CheckableTag key={option.value} checked={(form.getFieldValue('focusAreas') || []).includes(option.value)} onChange={(checked) => toggleValue('focusAreas', option.value, checked)}>{option.label}</Tag.CheckableTag>)}</div>}
-      </Form.Item>
-      <Form.Item label="避开或谨慎" shouldUpdate={(before, after) => before.avoidAreas !== after.avoidAreas}>
-        {() => <div className="technician-tag-list">{SERVICE_REFERENCE_OPTIONS.avoidAreas.map((option) => <Tag.CheckableTag key={option.value} checked={(form.getFieldValue('avoidAreas') || []).includes(option.value)} onChange={(checked) => toggleValue('avoidAreas', option.value, checked)}>{option.label}</Tag.CheckableTag>)}</div>}
-      </Form.Item>
+      <Form.Item name="focusAreas" label="本次重点"><CheckableField options={SERVICE_REFERENCE_OPTIONS.focusAreas} /></Form.Item>
+      <Form.Item name="avoidAreas" label="避开或谨慎"><CheckableField options={SERVICE_REFERENCE_OPTIONS.avoidAreas} /></Form.Item>
       <Form.Item name="forcePreference" label="力度偏好"><Radio.Group optionType="button" buttonStyle="solid" options={SERVICE_REFERENCE_OPTIONS.force} /></Form.Item>
       <Form.Item name="temperaturePreference" label="温度偏好"><Radio.Group optionType="button" buttonStyle="solid" options={SERVICE_REFERENCE_OPTIONS.temperature} /></Form.Item>
       <Form.Item name="serviceFeedback" label="服务反馈"><Radio.Group optionType="button" buttonStyle="solid" options={SERVICE_REFERENCE_OPTIONS.feedback} /></Form.Item>
