@@ -57,7 +57,7 @@
 .technician-profile-hero h1 { margin: 0 0 5px; font-size: 22px; }
 .technician-profile-hero p { margin: 0; color: #b9d3c8; }
 .technician-tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.technician-tag-list .ant-tag { min-height: 36px; display: inline-flex; align-items: center; margin: 0; padding: 0 13px; border-radius: 18px; }
+.technician-tag-list .ant-tag { min-height: 40px; display: inline-flex; align-items: center; margin: 0; padding: 0 13px; border-radius: 20px; }
 .technician-profile-context { display: grid; gap: 6px; margin-bottom: 14px; padding: 12px; background: #f1f7f4; border: 1px solid #dce9e2; border-radius: 10px; }
 .technician-profile-context > div { display: flex; align-items: center; gap: 8px; }
 .technician-profile-context .ant-typography { margin: 0; }
@@ -73,4 +73,5 @@
 .technician-login-brand h2 { margin: 0 !important; color: #0d2f29; }
 .technician-login-brand .ant-typography { margin: 0; }
 .technician-primary-button { min-height: 48px; border-radius: 10px; }
+.technician-reference-state, .technician-reference-card { display: grid; gap: 16px; }
 @media (min-width: 768px) { .technician-mobile-app { width: 430px; min-height: 100vh; margin: 0 auto; box-shadow: 0 0 0 1px #dce8e2, 0 10px 50px rgba(21,65,55,.08); } .technician-mobile-tabbar { right: calc(50% - 215px); left: calc(50% - 215px); } }

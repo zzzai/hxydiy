@@ -11,6 +11,14 @@ from app.models.operations import Technician
 
 
 class TestProfileRecordContract:
+    def test_model_exposes_service_reference_version_and_confirmation_fields(self):
+        table = CustomerProfileRecord.__table__
+
+        assert table.c.schema_version.default.arg == 1
+        assert table.c.taxonomy_version.nullable is True
+        assert table.c.customer_confirmed.default.arg is False
+        assert table.c.confirmed_at.nullable is True
+
     def setup_method(self):
         self.engine = create_engine(
             "sqlite://",

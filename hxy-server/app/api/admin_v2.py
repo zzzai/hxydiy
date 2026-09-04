@@ -1959,6 +1959,73 @@ PROFILE_PRESET_SIGNALS = {
 PROFILE_FORCE_SIGNALS = {"偏好轻柔力度", "偏好中等力度", "偏好强力力度"}
 PROFILE_FORBIDDEN_WORDS = ("确诊", "诊断", "疾病", "治疗", "治愈", "疗效", "癌", "处方")
 
+ServiceArea = Literal["neck_shoulder", "waist_hip", "legs", "abdomen", "feet", "full_relaxation"]
+AvoidArea = Literal["neck_shoulder", "waist_hip", "legs", "abdomen", "feet"]
+
+
+def _reject_duplicate_codes(value: list[str]) -> list[str]:
+    if len(value) != len(set(value)):
+        raise ValueError("服务参考选项不能重复")
+    return value
+
+
+class ServiceReferenceCustomerReported(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    focus_areas: list[ServiceArea] = Field(default_factory=list, max_length=6)
+    avoid_areas: list[AvoidArea] = Field(default_factory=list, max_length=5)
+    force_preference: Literal["gentle", "medium", "strong"] | None = None
+    temperature_preference: Literal["lower", "medium", "higher"] | None = None
+    quote: str = Field(default="", max_length=100)
+
+    @field_validator("focus_areas", "avoid_areas")
+    @classmethod
+    def validate_unique_areas(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
+
+    @field_validator("quote")
+    @classmethod
+    def validate_quote(cls, value: str) -> str:
+        text = value.strip()
+        if any(word in text for word in PROFILE_FORBIDDEN_WORDS):
+            raise ValueError("服务参考仅支持非医疗描述，请勿填写诊断或治疗结论")
+        return text
+
+
+class ServiceReferenceTechnicianObserved(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    service_feedback: Literal["suitable", "better_after_adjustment", "adjust_next_time"] | None = None
+
+
+class ServiceReferenceNextVisit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    plan: Literal["repeat_current", "confirm_on_arrival"] | None = None
+
+
+class ServiceReferenceProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[2]
+    taxonomy_version: Literal["service_reference_v1"]
+    customer_reported: ServiceReferenceCustomerReported = Field(default_factory=ServiceReferenceCustomerReported)
+    technician_observed: ServiceReferenceTechnicianObserved = Field(default_factory=ServiceReferenceTechnicianObserved)
+    next_visit: ServiceReferenceNextVisit = Field(default_factory=ServiceReferenceNextVisit)
+
+    def storage_payload(self) -> dict:
+        return self.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+
+    def has_content(self) -> bool:
+        reported = self.customer_reported
+        return bool(
+            reported.focus_areas
+            or reported.avoid_areas
+            or reported.force_preference
+            or reported.temperature_preference
+            or reported.quote
+            or self.technician_observed.service_feedback
+            or self.next_visit.plan
+        )
+
 
 class CustomerProfileRecordIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -1967,7 +2034,10 @@ class CustomerProfileRecordIn(BaseModel):
     selection_session_id: str | None = None
     technician_id: int | None = None
     source: Literal["customer_statement", "service_observation", "both"] = "customer_statement"
-    profile: dict[str, StrictStr] = Field(default_factory=dict)
+    schema_version: Literal[1, 2] = 1
+    taxonomy_version: Literal["service_reference_v1"] | None = None
+    customer_confirmed: StrictBool = False
+    profile: dict[str, StrictStr] | ServiceReferenceProfile = Field(default_factory=dict)
     signals: list[str] = Field(default_factory=list, max_length=30)
     note: str = Field(default="", max_length=500)
     correction_of_id: int | None = None
@@ -1975,7 +2045,9 @@ class CustomerProfileRecordIn(BaseModel):
 
     @field_validator("profile")
     @classmethod
-    def validate_profile(cls, value: dict[str, str]) -> dict[str, str]:
+    def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile) -> dict[str, str] | ServiceReferenceProfile:
+        if isinstance(value, ServiceReferenceProfile):
+            return value
         unknown_fields = set(value) - set(PROFILE_FIELD_OPTIONS)
         if unknown_fields:
             raise ValueError("画像基础信息包含不支持的字段")
@@ -2014,6 +2086,22 @@ class CustomerProfileRecordIn(BaseModel):
         if any(word in text for word in PROFILE_FORBIDDEN_WORDS):
             raise ValueError("画像记录仅支持非医疗描述，请勿填写诊断或治疗结论")
         return text
+
+    @model_validator(mode="after")
+    def validate_service_reference_version(self):
+        if self.schema_version == 2:
+            if self.taxonomy_version != "service_reference_v1" or not isinstance(self.profile, ServiceReferenceProfile):
+                raise ValueError("v2 服务参考必须使用 service_reference_v1 结构")
+            if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
+                raise ValueError("服务参考内外版本必须一致")
+            if self.signals or self.note:
+                raise ValueError("v2 服务参考不能混用旧版标签或备注")
+            if not self.profile.has_content():
+                raise ValueError("请至少记录一项服务参考")
+            self.source = "both" if self.customer_confirmed else "service_observation"
+        elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, ServiceReferenceProfile):
+            raise ValueError("旧版画像不能携带 v2 服务参考元数据")
+        return self
 
 @router.post("/tags")
 def create_tag(body: TagIn, db: Session = Depends(get_db),
@@ -2084,6 +2172,10 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
         "created_by_staff_id": record.created_by_staff_id,
         "created_by_name": creator.name if creator else "",
         "source": record.source or "customer_statement",
+        "schema_version": record.schema_version or 1,
+        "taxonomy_version": record.taxonomy_version,
+        "customer_confirmed": bool(record.customer_confirmed),
+        "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
         "profile": record.profile or {},
         "signals": record.signals or [],
         "note": record.note,
@@ -2095,13 +2187,22 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
     }
 
 
+def _profile_payload(body: CustomerProfileRecordIn) -> dict:
+    if isinstance(body.profile, ServiceReferenceProfile):
+        return body.profile.storage_payload()
+    return body.profile
+
+
 def _profile_request_fingerprint(body: CustomerProfileRecordIn, technician_id: int | None) -> str:
     payload = {
         "user_id": body.user_id,
         "selection_session_id": body.selection_session_id,
         "technician_id": technician_id,
         "source": body.source,
-        "profile": body.profile,
+        "schema_version": body.schema_version,
+        "taxonomy_version": body.taxonomy_version,
+        "customer_confirmed": body.customer_confirmed,
+        "profile": _profile_payload(body),
         "signals": body.signals,
         "note": body.note,
         "correction_of_id": body.correction_of_id,
@@ -2116,6 +2217,9 @@ def _same_profile_request(record: CustomerProfileRecord, body: CustomerProfileRe
         "selection_session_id": record.selection_session_id,
         "technician_id": record.technician_id,
         "source": record.source or "customer_statement",
+        "schema_version": record.schema_version or 1,
+        "taxonomy_version": record.taxonomy_version,
+        "customer_confirmed": bool(record.customer_confirmed),
         "profile": record.profile or {},
         "signals": record.signals or [],
         "note": record.note or "",
@@ -2293,7 +2397,7 @@ def create_customer_profile_record(
         raise HTTPException(status_code=403, detail="当前账号无权新增画像记录")
     idempotency_key = _require_profile_idempotency_key(idempotency_key)
     is_bound_technician = role == "technician" and bool(staff.technician_id)
-    if is_bound_technician and "source" not in body.model_fields_set:
+    if is_bound_technician and body.schema_version == 1 and "source" not in body.model_fields_set:
         raise HTTPException(status_code=422, detail="技师记录必须明确选择记录来源")
     if is_bound_technician and (body.technician_id is not None or body.correction_of_id is not None):
         raise HTTPException(status_code=403, detail="技师不能代填他人画像或更正历史记录")
@@ -2302,7 +2406,7 @@ def create_customer_profile_record(
         if not body.selection_session_id:
             raise HTTPException(status_code=403, detail="技师画像记录必须关联已完成服务")
     _require_store_user(db, body.user_id, staff)
-    if not body.profile and not body.signals and not body.note:
+    if not _profile_payload(body) and not body.signals and not body.note:
         raise HTTPException(status_code=422, detail="请至少记录一项服务参考")
     unsupported_signals = [signal for signal in body.signals if signal not in PROFILE_PRESET_SIGNALS and not db.scalar(select(CustomerTag.id).where(
         CustomerTag.store_id == store_id,
@@ -2362,12 +2466,16 @@ def create_customer_profile_record(
         selection_session_id=body.selection_session_id,
         technician_id=technician_id,
         created_by_staff_id=staff.id,
-        profile=body.profile,
+        profile=_profile_payload(body),
         signals=body.signals,
         note=body.note,
         correction_of_id=body.correction_of_id,
         correction_reason=body.correction_reason.strip(),
         source=body.source,
+        schema_version=body.schema_version,
+        taxonomy_version=body.taxonomy_version,
+        customer_confirmed=body.customer_confirmed,
+        confirmed_at=datetime.now(timezone.utc) if body.customer_confirmed else None,
         idempotency_key=idempotency_key,
     )
     db.add(record)
