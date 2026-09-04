@@ -92,6 +92,9 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("-r requirements-dev.txt", ci)
         self.assertIn("npm ci && npm run build && npm test", trusted)
         self.assertIn("-r requirements-dev.txt", trusted)
+        self.assertIn("python -m pytest -q", ci)
+        self.assertIn("python -m pytest -q", trusted)
+        self.assertGreaterEqual(trusted.count("fetch-depth: 0"), 4)
 
     def test_remote_release_script_backs_up_verifies_and_rolls_back(self):
         script = (REPO_ROOT / "deploy" / "diy" / "deploy-production.sh").read_text(encoding="utf-8")

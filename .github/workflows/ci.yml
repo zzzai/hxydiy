@@ -146,7 +146,7 @@ jobs:
       - name: Run backend tests
         if: steps.detect.outputs.available == 'true'
         working-directory: hxy-server
-        run: pytest -q
+        run: python -m pytest -q
 
   release-readiness:
     name: Production release readiness
