@@ -83,6 +83,15 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", content)
         self.assertIn('git diff-tree --no-commit-id --check -r "$GITHUB_SHA"', content)
 
+    def test_ci_builds_customer_assets_before_asset_tests_and_installs_backend_test_dependencies(self):
+        ci = workflow("ci.yml")
+        trusted = workflow("trusted-pr-gate.yml")
+
+        self.assertLess(ci.index("working-directory: diy-web\n        run: npm run build"), ci.index("working-directory: diy-web\n        run: npm test"))
+        self.assertIn("-r requirements-dev.txt", ci)
+        self.assertIn("npm ci && npm run build && npm test", trusted)
+        self.assertIn("-r requirements-dev.txt", trusted)
+
     def test_remote_release_script_backs_up_verifies_and_rolls_back(self):
         script = (REPO_ROOT / "deploy" / "diy" / "deploy-production.sh").read_text(encoding="utf-8")
 

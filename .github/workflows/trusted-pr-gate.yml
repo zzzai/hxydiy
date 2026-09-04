@@ -143,7 +143,7 @@ jobs:
       - name: Test and production build
         if: steps.detect.outputs.available == 'true'
         working-directory: diy-web
-        run: npm ci && npm test && npm run build
+        run: npm ci && npm run build && npm test
 
   backend:
     name: Backend tests
@@ -171,7 +171,7 @@ jobs:
           if git cat-file -e "$BASE_SHA:hxy-server/requirements.txt" 2>/dev/null; then
             test -f hxy-server/requirements.txt
             test -d hxy-server/tests
-            (cd hxy-server && python -m pip install --disable-pip-version-check -r requirements.txt && pytest -q)
+            (cd hxy-server && python -m pip install --disable-pip-version-check -r requirements-dev.txt && pytest -q)
           else
             echo 'hxy-server source is not present on this baseline; treating this component as not applicable.'
           fi
