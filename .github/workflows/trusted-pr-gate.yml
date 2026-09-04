@@ -177,7 +177,7 @@ jobs:
           fi
 
   publish:
-    name: Trusted PR Gate
+    name: Publish trusted result
     needs: [scope, static, admin, customer, backend]
     if: always()
     runs-on: ubuntu-latest
@@ -204,25 +204,20 @@ jobs:
               'Backend tests': process.env.BACKEND_RESULT,
             };
             const failed = process.env.ALLOWED !== 'true' || Object.values(results).some((result) => result !== 'success');
-            const upsertCheck = async (name, conclusion) => {
-              const existing = await github.rest.checks.listForRef({ owner, repo, ref: headSha, filter: 'latest', per_page: 100 });
-              const match = existing.data.check_runs.find((check) => check.name === name && check.app?.slug === 'github-actions');
-              const payload = {
-                owner,
-                repo,
-                status: 'completed',
-                conclusion,
-                completed_at: new Date().toISOString(),
-                output: { title: name, summary: conclusion === 'success' ? '可信验证通过。' : '可信验证失败，自动合并已阻断。' },
-              };
-              if (match) {
-                await github.rest.checks.update({ check_run_id: match.id, ...payload });
-              } else {
-                await github.rest.checks.create({ name, head_sha: headSha, ...payload });
-              }
-            };
-            for (const [name, result] of Object.entries(results)) {
-              await upsertCheck(name, !failed && result === 'success' ? 'success' : 'failure');
-            }
-            await upsertCheck('Trusted PR Gate', failed ? 'failure' : 'success');
+            const details = Object.entries(results)
+              .map(([name, result]) => `- ${name}: ${result}`)
+              .join('\n');
+            await github.rest.checks.create({
+              owner,
+              repo,
+              name: 'Trusted PR Gate',
+              head_sha: headSha,
+              status: 'completed',
+              conclusion: failed ? 'failure' : 'success',
+              completed_at: new Date().toISOString(),
+              output: {
+                title: 'Trusted PR Gate',
+                summary: failed ? `可信验证失败，自动合并已阻断。\n\n${details}` : `可信验证通过。\n\n${details}`,
+              },
+            });
             if (failed) core.setFailed('Trusted PR gate failed or PR is outside the allowed scope.');
