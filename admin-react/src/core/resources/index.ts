@@ -6,5 +6,6 @@ export const resources = {
   stores: 'admin/v2/stores',
   projects: 'admin/v2/projects',
   products: 'admin/v2/products',
+  addons: 'admin/v2/addons',
   technicians: 'admin/v2/technicians',
 } as const;

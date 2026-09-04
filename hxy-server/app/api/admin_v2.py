@@ -44,7 +44,7 @@ router = APIRouter(prefix="/admin/v2", tags=["admin-v2"])
 
 def _require_admin(staff: Staff):
     try:
-        normalized_role = normalize_staff_role(staff.role, staff.technician_id)
+        normalized_role = normalize_staff_role(getattr(staff, "role", None), getattr(staff, "technician_id", None))
     except (AttributeError, ValueError, TypeError):
         # 登录层通常会先拦截旧/非法角色，但 endpoint helper 也必须独立保持
         # 结构化鉴权失败，避免测试 mock、内部调用或未来中间件绕过时冒泡成 500。
@@ -95,7 +95,7 @@ def _require_catalog_write(
     if _is_headquarters_admin(staff):
         return
     try:
-        normalized_role = normalize_staff_role(staff.role, staff.technician_id)
+        normalized_role = normalize_staff_role(getattr(staff, "role", None), getattr(staff, "technician_id", None))
     except (AttributeError, TypeError, ValueError):
         normalized_role = None
     allowed_statuses = store_allowed_publication_statuses or {"published", "inactive"}
@@ -1592,9 +1592,19 @@ class AddonPatchIn(BaseModel):
     can_attach_to_parent: bool | None = None
     publication_status: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_null_for_non_nullable_fields(cls, data):
+        if isinstance(data, dict):
+            non_nullable = {"summary", "image_url", "store_price_cents", "publication_status"}
+            invalid = sorted(field for field in non_nullable if field in data and data[field] is None)
+            if invalid:
+                raise ValueError(f"{', '.join(invalid)} 不允许为 null")
+        return data
+
 
 def _validate_addon_payload(db: Session, body: AddonIn, store_id: int) -> None:
-    if body.publication_status not in {"draft", "candidate", "published", "archived"}:
+    if body.publication_status not in {"draft", "candidate", "published", "inactive", "archived"}:
         raise HTTPException(status_code=400, detail="加项发布状态无效")
     if body.parent_project_id is not None:
         project = db.get(Project, body.parent_project_id)
@@ -1606,15 +1616,12 @@ def _validate_addon_payload(db: Session, body: AddonIn, store_id: int) -> None:
         raise HTTPException(status_code=400, detail="免费选项不能配置会员价格或金额")
     if body.member_price_enabled and body.member_price_cents is None:
         raise HTTPException(status_code=400, detail="启用会员价时必须填写会员价")
+    if body.member_price_enabled and body.member_price_cents > body.store_price_cents:
+        raise HTTPException(status_code=400, detail="会员价不能高于门店价")
 
 
 def _addon_view(addon: Addon) -> dict:
     store_price = int(addon.store_price_cents if addon.store_price_cents is not None else addon.price_cents)
-    member_price = int(
-        addon.member_price_cents
-        if addon.member_price_enabled and addon.member_price_cents is not None
-        else store_price
-    )
     return {
         "id": addon.id,
         "store_id": addon.store_id,
@@ -1627,7 +1634,7 @@ def _addon_view(addon: Addon) -> dict:
         "display_order": addon.display_order,
         "chargeable": addon.chargeable,
         "store_price_cents": store_price,
-        "member_price_cents": member_price,
+        "member_price_cents": addon.member_price_cents,
         "member_price_enabled": addon.member_price_enabled,
         "independently_sellable": addon.independently_sellable,
         "can_attach_to_parent": addon.can_attach_to_parent,
@@ -1640,18 +1647,39 @@ def list_addons_admin(
     store_id: int | None = Query(None),
     status: str | None = Query(None),
     parent_project_id: int | None = Query(None),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=100),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
-) -> list[dict]:
+):
     staff = _current_staff(authorization, db)
     _require_admin(staff)
-    scoped_store_id = _scoped_store_id(staff, store_id)
-    stmt = select(Addon).where(Addon.store_id == scoped_store_id)
+    stmt = select(Addon)
+    if not _is_headquarters_admin(staff):
+        scoped_store_id = _scoped_store_id(staff, store_id)
+        stmt = stmt.where(Addon.store_id == scoped_store_id)
+    elif store_id is not None:
+        stmt = stmt.where(Addon.store_id == store_id)
     if status:
         stmt = stmt.where(Addon.publication_status == status)
     if parent_project_id is not None:
         stmt = stmt.where(Addon.parent_project_id == parent_project_id)
-    return [_addon_view(addon) for addon in db.scalars(stmt.order_by(Addon.display_order, Addon.id))]
+    if page is None and page_size is None:
+        return [_addon_view(addon) for addon in db.scalars(stmt.order_by(Addon.display_order, Addon.id))]
+    resolved_page = page or 1
+    resolved_page_size = page_size or 50
+    total = db.scalar(select(sa_func.count()).select_from(stmt.subquery())) or 0
+    addons = db.scalars(
+        stmt.order_by(Addon.display_order, Addon.id)
+        .offset((resolved_page - 1) * resolved_page_size)
+        .limit(resolved_page_size)
+    ).all()
+    return {
+        "items": [_addon_view(addon) for addon in addons],
+        "total": total,
+        "page": resolved_page,
+        "page_size": resolved_page_size,
+    }
 
 
 @router.post("/addons")
@@ -1679,33 +1707,41 @@ def create_addon(body: AddonIn, db: Session = Depends(get_db), authorization: st
 
 
 @router.post("/addons/{addon_id}")
+@router.patch("/addons/{addon_id}")
 def update_addon(addon_id: int, body: AddonPatchIn, db: Session = Depends(get_db), authorization: str | None = Header(None)) -> dict:
     staff = _current_staff(authorization, db)
-    _require_catalog_master_admin(staff)
     addon = db.get(Addon, addon_id) if _is_headquarters_admin(staff) else _require_owned(
         db.get(Addon, addon_id), staff, "加项不存在"
     )
     if not addon:
         raise HTTPException(status_code=404, detail="加项不存在")
+    patch_values = body.model_dump(exclude_unset=True)
+    fields = set(patch_values)
+    _require_catalog_write(
+        staff,
+        fields,
+        publication_status=body.publication_status,
+        current_publication_status=addon.publication_status,
+    )
     current = _addon_view(addon)
     merged = AddonIn(
         store_id=addon.store_id,
-        code=body.code if body.code is not None else addon.code,
-        name=body.name if body.name is not None else addon.name,
-        parent_project_id=body.parent_project_id if body.parent_project_id is not None else addon.parent_project_id,
-        duration_min=body.duration_min if body.duration_min is not None else addon.duration_min,
-        summary=body.summary if body.summary is not None else addon.summary,
-        image_url=body.image_url if body.image_url is not None else addon.image_url,
-        display_order=body.display_order if body.display_order is not None else addon.display_order,
-        chargeable=body.chargeable if body.chargeable is not None else addon.chargeable,
-        store_price_cents=body.store_price_cents if body.store_price_cents is not None else current["store_price_cents"],
-        member_price_cents=body.member_price_cents if body.member_price_cents is not None else (
+        code=patch_values["code"] if "code" in patch_values else addon.code,
+        name=patch_values["name"] if "name" in patch_values else addon.name,
+        parent_project_id=patch_values["parent_project_id"] if "parent_project_id" in patch_values else addon.parent_project_id,
+        duration_min=patch_values["duration_min"] if "duration_min" in patch_values else addon.duration_min,
+        summary=patch_values["summary"] if "summary" in patch_values and patch_values["summary"] is not None else addon.summary,
+        image_url=patch_values["image_url"] if "image_url" in patch_values and patch_values["image_url"] is not None else addon.image_url,
+        display_order=patch_values["display_order"] if "display_order" in patch_values else addon.display_order,
+        chargeable=patch_values["chargeable"] if "chargeable" in patch_values else addon.chargeable,
+        store_price_cents=patch_values["store_price_cents"] if "store_price_cents" in patch_values and patch_values["store_price_cents"] is not None else current["store_price_cents"],
+        member_price_cents=patch_values["member_price_cents"] if "member_price_cents" in patch_values else (
             addon.member_price_cents if addon.member_price_enabled else None
         ),
-        member_price_enabled=body.member_price_enabled if body.member_price_enabled is not None else addon.member_price_enabled,
-        independently_sellable=body.independently_sellable if body.independently_sellable is not None else addon.independently_sellable,
-        can_attach_to_parent=body.can_attach_to_parent if body.can_attach_to_parent is not None else addon.can_attach_to_parent,
-        publication_status=body.publication_status if body.publication_status is not None else addon.publication_status,
+        member_price_enabled=patch_values["member_price_enabled"] if "member_price_enabled" in patch_values else addon.member_price_enabled,
+        independently_sellable=patch_values["independently_sellable"] if "independently_sellable" in patch_values else addon.independently_sellable,
+        can_attach_to_parent=patch_values["can_attach_to_parent"] if "can_attach_to_parent" in patch_values else addon.can_attach_to_parent,
+        publication_status=patch_values["publication_status"] if "publication_status" in patch_values and patch_values["publication_status"] is not None else addon.publication_status,
     )
     duplicate = db.scalar(select(Addon).where(Addon.code == merged.code, Addon.id != addon.id))
     if duplicate:

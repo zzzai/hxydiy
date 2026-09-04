@@ -13,6 +13,7 @@ export function addonFormPayload(form: AddonForm & Record<string, unknown>) {
   const memberPriceEnabled = chargeable && form.member_price_enabled === true;
   return {
     ...form,
+    parent_project_id: form.parent_project_id == null ? null : form.parent_project_id,
     chargeable,
     store_price_cents: chargeable ? storePrice : 0,
     member_price_cents: memberPriceEnabled ? toCents(form.member_price) : null,

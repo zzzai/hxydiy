@@ -1,3 +1,47 @@
+# 2026-09-04 管理端加项管理权限与 CRUD（本地完成，未发布）
+
+## 修改内容
+
+- 加项页面接入 ProComponents 与 Refine 统一数据访问，支持总部创建、编辑、强制下线及目标门店选择；店长仅可操作本店上下架；图片改用媒体上传。
+- 新增 `PATCH /api/v1/admin/v2/addons/{id}` 并保留兼容 POST；补齐总部跨店、店长跨店 404、主数据 403、状态转换、普通员工拒绝和门店数据隔离。
+- 加项列表支持服务端分页。显式 `null` 仅允许清空 `parent_project_id`、`duration_min`、`member_price_cents`；非空/必填字段传 `null` 返回 422。
+- 修复审查发现的分页总数丢失、总部媒体上传缺少门店、关联项目无法清空及 API 可绕过会员价上限四项问题。
+
+## 涉及文件
+
+- `admin-react/src/core/resources/index.ts`
+- `admin-react/src/pages/AddonsPage.tsx`
+- `admin-react/src/pages/addon-page-model.ts`
+- `admin-react/tests/addon-page-model.test.ts`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_admin_addon_permissions.py`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/admin.md`
+- `docs/WORK-STATUS.md`
+
+## 测试结果
+
+- TDD RED：后端接口测试最初 2 项失败，分别证明显式 `null` 被静默保留、总部列表被错误要求绑定门店；分页测试最初 1 项失败，证明接口忽略分页。
+- 专项 GREEN：`python -m pytest tests/test_admin_addon_permissions.py -q`，9 passed，1 个既有 Starlette/httpx 弃用警告。
+- 管理端测试：`npm test -- --run`，131 passed。
+- TypeScript：`npx tsc -b` 通过。
+- 生产构建：`npm run build` 成功，Vite 转换 4002 个模块；仅有既有大 chunk 警告。
+- `git diff --check`：通过。
+
+## 状态与生产核验
+
+- 本地完成：是，代码、文档与要求的本地验证均已完成。
+- 版本控制：任务分支 `codex/admin/addon-management`；提交、推送和 PR 结果以本轮最终汇报及 GitHub 实际状态为准。
+- 已发布生产：否；本轮不得描述为生产可用。
+- 2026-09-04 只读核验当前生产 release：`customer-detail-long-image-fit-20260904-2`；API 容器运行，`/api/v1/health` 返回 HTTP 200。
+- 本轮未执行数据库备份、Manifest 校验、生产构建上传、`current` 切换、生产权限穿透写测试或回滚验证。
+
+## 尚未完成与待现场验收
+
+- 尚需完成 PR 的 GitHub CI 门禁。
+- 发布前仍需数据库备份、Manifest、线上健康检查、权限穿透、跨店隔离和回滚验证。
+- 发布后使用真实授权的总部、店长及已迁移普通员工账号验收目录可见性、目标门店创建、上下架、强制下线不可恢复、媒体访问和跨店隔离。
+
 # 2026-08-31 服务位停用与现场二维码简化（本地完成，未发布）
 
 ## 修改内容
