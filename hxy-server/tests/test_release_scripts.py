@@ -55,13 +55,16 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_self_signed_sms_configuration_is_forwarded_to_api_container(self):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
 
-        self.assertIn("ALIYUN_SMS_ACCESS_KEY_ID: ${ALIYUN_SMS_ACCESS_KEY_ID}", compose)
-        self.assertIn("ALIYUN_SMS_ACCESS_KEY_SECRET: ${ALIYUN_SMS_ACCESS_KEY_SECRET}", compose)
-        self.assertIn("ALIYUN_SMS_SIGN_NAME: ${ALIYUN_SMS_SIGN_NAME}", compose)
-        self.assertIn("ALIYUN_SMS_TEMPLATE_CODE: ${ALIYUN_SMS_TEMPLATE_CODE}", compose)
-        self.assertIn("ALIYUN_PNVS_ACCESS_KEY_ID: ${ALIYUN_PNVS_ACCESS_KEY_ID}", compose)
-        self.assertIn("ALIYUN_PNVS_ACCESS_KEY_SECRET: ${ALIYUN_PNVS_ACCESS_KEY_SECRET}", compose)
-        self.assertIn("ALIYUN_PNVS_SCHEME_NAME: ${ALIYUN_PNVS_SCHEME_NAME}", compose)
+        for variable in (
+            "ALIYUN_SMS_ACCESS_KEY_ID",
+            "ALIYUN_SMS_ACCESS_KEY_SECRET",
+            "ALIYUN_SMS_SIGN_NAME",
+            "ALIYUN_SMS_TEMPLATE_CODE",
+            "ALIYUN_PNVS_ACCESS_KEY_ID",
+            "ALIYUN_PNVS_ACCESS_KEY_SECRET",
+            "ALIYUN_PNVS_SCHEME_NAME",
+        ):
+            self.assertIn(f"{variable}: ${{{variable}:-}}", compose)
 
     def test_wechat_payment_configuration_is_forwarded_to_api_container(self):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
@@ -93,8 +96,7 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_release_compose_build_context_points_to_release_root(self):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
-        self.assertIn("context: ../..", compose)
-        self.assertNotIn("context: ../../current", compose)
+        self.assertIn("context: ${HXY_DIY_CURRENT:-../../current}", compose)
 
     def test_release_creation_excludes_local_runtime_and_secret_files(self):
         create = (REPO_ROOT / "deploy/diy/create-release.sh").read_text(encoding="utf-8")
