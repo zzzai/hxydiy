@@ -1,3 +1,11 @@
+# 2026-09-05 技师快速服务参考与共享记忆收口（已发布业务功能）
+
+- 技师快速服务参考 PR #15 已 squash 合并，主干功能提交 `bf0bddf`；生产 release 为 `main-bf0bddf-20260905-1`，API 镜像为 `hxy-diy-api:bf0bddf`。
+- 数据库已从 `20260830_media_assets` 迁移到 `20260904_service_reference_v2`；发布前备份 `pre-main-bf0bddf-20260905-001822.dump`，SHA-256 `9fa62d8422394d078e770978c28de25e40decc4b11734fdb34df383ada297371`，隔离恢复演练通过。
+- 公网 `/`、`/admin/`、`/technician/` 和 `/api/v1/health` 均返回 HTTP 200；API 容器运行中、重启次数 0，近期未发现异常日志；Release Manifest 逐文件校验通过。
+- 新版使用 `schema_version=2`、`taxonomy_version=service_reference_v1`，保留稳定编码、顾客确认、服务关联、门店隔离、幂等、审计和隐私限制。
+- 本次共享记忆收口只修改文档和静态合同测试，不再次发布生产；后续三个窗口从 `docs/CURRENT-STATE.md` 和本端 workstream 开始读取。
+
 # 2026-09-04 后端全量测试基线收口（本地完成，未发布）
 
 - 校正旧 `staff` 测试账号夹具，改用规范的店长或已绑定技师角色；生产认证与权限逻辑未修改，旧测试账号仍不允许登录。

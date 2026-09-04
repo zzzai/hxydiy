@@ -40,8 +40,27 @@ class ProjectMemoryContractTests(unittest.TestCase):
 
     def test_team_memory_uses_the_versioned_service_reference_contract(self):
         memory = read("docs/TEAM-MEMORY.md")
+        contract = read("docs/contracts/service-reference-v1.md")
         self.assertIn("service_reference_v1", memory)
         self.assertNotIn("第一屏填写年龄段、性别、体型、职业场景", memory)
+        for code in ("neck_shoulder", "gentle", "higher", "adjust_next_time", "repeat_current"):
+            self.assertIn(code, contract)
+        self.assertIn("不得自动转换为普通运营标签", contract)
+
+    def test_each_window_has_a_bounded_workstream_and_prompt(self):
+        prompts = read("docs/AI-WINDOW-PROMPTS.md")
+        for name in ("customer", "admin", "technician"):
+            self.assertTrue((REPO_ROOT / f"docs/workstreams/{name}.md").is_file())
+        for heading in ("顾客端窗口", "管理端窗口", "技师端窗口"):
+            self.assertIn(heading, prompts)
+        self.assertIn("git fetch origin", prompts)
+        self.assertIn("docs/CURRENT-STATE.md", prompts)
+
+    def test_root_instructions_require_shared_memory_updates(self):
+        instructions = read("AGENTS.md")
+        self.assertIn("docs/CONTEXT-MANIFEST.md", instructions)
+        self.assertIn("跨端契约", instructions)
+        self.assertIn("同一个 PR", instructions)
 
 
 if __name__ == "__main__":
