@@ -15,7 +15,7 @@
 
 ## 当前任务
 
-- 状态：待领取
+- 状态：足部精修素材已推送，PR #5 待审核/合并
 - 负责人：顾客端窗口
 - 开始前读取：`PROJECT-CONTEXT-20260826.md`、`TEAM-MEMORY.md`、`WORK-STATUS.md`
 
@@ -29,3 +29,12 @@
 - 顾客端生产构建必须通过。
 - 会员、非会员、匿名三种身份均需验证。
 - 线上发布必须记录 release、Manifest、健康检查和待现场验收项。
+
+## 2026-08-31 足部精修素材同步提交
+
+- 顾客端分支：`codex/customer/source-baseline`。
+- 本地提交：`2222d99 feat(customer): update foot refinement assets`。
+- 变更范围：足部精修主图、详情长图、详情文案及素材格式/构建一致性回归测试；未修改后端、技师端或管理端。
+- 本地验证：`npm ci`、`npm test`（153 passed / 0 failed / 0 skipped）、`HXY_PRODUCTION_SMOKE=1 npm test`（153 passed / 0 failed / 0 skipped）、`npm run build`、`git diff --check` 均通过。
+- 推送状态：`codex/customer/source-baseline` 已推送到 GitHub；已创建 [PR #5](https://github.com/zzzai/hxydiy/pull/5)，目标基线为 `codex/technician/profile-record-admin-closure`。
+- 发布状态：未发布生产；当前线上仍以既有 `customer-foot-refine-illustration-20260830-1` 为准。

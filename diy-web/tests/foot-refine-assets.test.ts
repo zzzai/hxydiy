@@ -30,7 +30,20 @@ test('足部精修主图和详情图同时存在于源码素材与生产构建�
 
   for (const asset of [mainAsset, detailAsset]) {
     assert.ok(asset, '足部精修详情必须配置图片');
-    assert.equal(fs.existsSync(path.join(projectRoot, 'public', asset)), true, `public 缺少 ${asset}`);
-    assert.equal(fs.existsSync(path.join(projectRoot, 'dist', asset)), true, `dist 缺少 ${asset}`);
+    const sourcePath = path.join(projectRoot, 'public', asset);
+    const builtPath = path.join(projectRoot, 'dist', asset);
+    assert.equal(fs.existsSync(sourcePath), true, `public 缺少 ${asset}`);
+    assert.equal(fs.existsSync(builtPath), true, `dist 缺少 ${asset}`);
+    const sourceBytes = fs.readFileSync(sourcePath);
+    const builtBytes = fs.readFileSync(builtPath);
+    for (const [location, bytes] of [['public', sourceBytes], ['dist', builtBytes]] as const) {
+      assert.equal(bytes.subarray(0, 4).toString('ascii'), 'RIFF', `${location}/${asset} 不是 RIFF 图片`);
+      assert.equal(bytes.subarray(8, 12).toString('ascii'), 'WEBP', `${location}/${asset} 不是 WebP 图片`);
+    }
+    assert.deepEqual(builtBytes, sourceBytes, `dist/${asset} 与 public 源素材不一致，请重新构建`);
   }
+
+  const mainBytes = fs.readFileSync(path.join(projectRoot, 'public', mainAsset));
+  const detailBytes = fs.readFileSync(path.join(projectRoot, 'public', detailAsset));
+  assert.notDeepEqual(mainBytes, detailBytes, '菜单主图和详情长图不能复用同一张图片');
 });
