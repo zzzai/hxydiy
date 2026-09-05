@@ -1,31 +1,31 @@
 # hxy-diy 当前状态
 
-更新时间：2026-09-05 00:30（Asia/Shanghai）
+更新时间：2026-09-05 11:12（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
 
 - 服务器部署根目录：`/root/hxy-diy-20260811`
-- Release：`main-bf0bddf-20260905-1`
-- 对应主干功能提交：`bf0bddf`（PR #15）
-- API 镜像：`hxy-diy-api:bf0bddf`
+- Release：`manual-2c3793ea3b95-20260905-1`
+- 对应主干提交：`2c3793e`（顾客端业务 PR #18、发布流水线 PR #19）
+- API 镜像：`hxy-diy-api:2c3793e`，镜像 ID `sha256:9742cd63e0ae4f1ecdc7c8862d4dc6f4fe36d7469808a2c1121aa9daf084b15b`
 - Alembic head：`20260904_service_reference_v2`
-- 数据库备份：`pre-main-bf0bddf-20260905-001822.dump`
-- 备份 SHA-256：`9fa62d8422394d078e770978c28de25e40decc4b11734fdb34df383ada297371`
+- 数据库备份：`pre-manual-2c3793ea3b95-20260905-1-20260905T025134Z.dump`
+- 备份 SHA-256：`e81964a2fc53455650de9cca6e88ee11ba722695e06607132078661af7e04156`
 - 备份恢复演练：通过
 - 公网 `/`、`/admin/`、`/technician/`、`/api/v1/health`：HTTP 200
-- API 容器：运行中，发布验收时重启次数为 0，近期无异常日志
-- Release Manifest：逐文件校验通过
+- API 与数据库容器：运行中，发布验收时重启次数均为 0，数据库健康
+- Release Manifest：逐文件校验通过；Manifest SHA-256 `2ad2123696c2e5166e837c524b2a8635053793e9097a9fae1865933f7be44c7f`
 
-`origin/main` 当前包含 PR #16 的测试基线修复；该提交只调整测试，不改变上述生产业务代码。
+顾客端入口加载 `index-BB45yxbT.js` 与 `index-C5IUvO1n.css`；本次未执行数据库迁移。
 
 ## 三端当前状态
 
 ### 顾客端
 
 - 正式入口：`https://diy.hexiaoyue.com/`
-- 当前生产构建运行正常；本次服务参考发布未改变顾客端交互。
+- 已发布服务结束后重新进入空白选购、匿名多次提交整单门店价、浏览器匿名身份自愈、底部会员价和固定高度选购抽屉修复。
 - 顾客端不直接管理技师服务参考标签；未来如增加顾客确认入口，必须复用后端版本化标签契约。
 
 ### 管理端
