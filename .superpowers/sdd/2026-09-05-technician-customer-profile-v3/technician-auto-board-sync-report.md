@@ -44,3 +44,19 @@ git diff --check                                                            # pa
 - 本地：前端测试、构建和 diff 检查已通过。
 - 推送 / PR / 合并 / 生产 / 门店验收：均未执行。
 - 门店仍需用授权测试账号验证：顾客提交项目后，技师已打开的看板在最多 3 秒内出现待服务订单；从后台回到页面时立即刷新；订单抽屉保持可用。
+
+## 复审补充：可见性与慢网竞态（2026-09-05）
+
+复审指出原定时器即使页面隐藏也会发起请求，且慢网下连续 3 秒定时触发可能重叠，旧响应有覆盖较新看板的风险。本次最小修复：
+
+- `refresh` 在 `document.visibilityState !== 'visible'` 时直接返回；`visibilitychange` 恢复到可见状态仍立即补拉，焦点刷新同样复用此可见性门禁。
+- 使用 `activeLoads` 阻止任何在途请求期间启动新的后台轮询；手动操作可发起更新请求，但 `latestLoadRequest` 只允许最新请求更新 `me`、`tasks`、错误和 loading 状态，较旧响应不会覆盖看板。
+- 后台路径继续不切换 loading、不清空 `tasks`，且不修改 `selectedOrder`。
+
+### 复审 TDD 与验证
+
+- RED：先新增“隐藏页面不轮询、可见后立即补拉”和“跳过在途自动刷新、只接受最新响应”的两项测试；专项结果为 `2 failed / 14 passed`，缺少可见性门禁和并发保护。
+- GREEN：专项 `node --experimental-strip-types --test tests/technician-workspace.test.ts` 为 `16 passed / 0 failed`。
+- 全量 `npm test`：`157 passed / 0 failed`。
+- `npm run build` 与 `git diff --check`：通过；构建仅有既有大 chunk 警告。
+- 提交：`84cc4c4`（`fix(technician): guard board auto refresh`）。
