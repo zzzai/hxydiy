@@ -34,9 +34,9 @@ class ProjectMemoryContractTests(unittest.TestCase):
 
     def test_current_state_matches_verified_production(self):
         current = read("docs/CURRENT-STATE.md")
-        self.assertIn("manual-8912faf-20260905-3", current)
-        self.assertIn("sha256:35ded3c7399903c6c24e87ffede235764d458e498454bf7d63bfd845c411cc0a", current)
-        self.assertIn("0485249be920962cc0f55c38fe78c2492d55278117ddb8bc05938ad7de8f19c8", current)
+        self.assertIn("manual-1f10b35-20260905-4", current)
+        self.assertIn("sha256:84361fb787de0ddf9b29ed96dd56ff6a7073aea5356197f83e0670b41a3be9e2", current)
+        self.assertIn("cebde564f166c3e33c563110ab41d549fe3abf5430485280aaa10ea4bcf537a4", current)
         self.assertIn("20260904_service_reference_v2", current)
 
     def test_team_memory_uses_the_versioned_service_reference_contract(self):
