@@ -3,6 +3,7 @@ import { App, Button, Card, Collapse, Descriptions, Drawer, Empty, Input, Segmen
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
 import { approveSelectionChangeRequest, cancelSelectionSession, confirmSelectionSession, getCustomerProfileRecords, getSelectionChangeRequests, getSelectionSessions, rejectSelectionChangeRequest } from '../api';
 import { canApproveSelectionChange, canRejectSelectionChange, selectionChangeItemSummary } from '../selectionChanges';
+import { buildServiceReferenceDisplay } from '../serviceReferenceDisplay';
 
 const STATUS: Record<string, { label: string; color: string }> = {
   submitted: { label: '待确认', color: 'processing' }, confirmed: { label: '已确认', color: 'success' },
@@ -11,38 +12,6 @@ const STATUS: Record<string, { label: string; color: string }> = {
 const sourceLabel = (source: string) => source === 'tablet' ? '门店平板' : source === 'mini_program' ? '顾客手机' : source || '门店端';
 const itemSummary = (items: any[]) => (items || []).map((item) => `${item.name || `项目 ${item.project_id}`}${item.quantity > 1 ? ` ×${item.quantity}` : ''}`).join('、') || '未填写项目';
 const dateText = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-';
-const V3_LABELS: Record<string, string> = {
-  '18_24': '18-24岁', '25_34': '25-34岁', '35_44': '35-44岁', '45_54': '45-54岁', '55_64': '55-64岁', '65_plus': '65岁以上',
-  slim: '偏瘦', balanced: '平衡', sturdy: '偏壮', shorter: '偏矮', average: '一般', taller: '偏高',
-  desk_work: '久坐办公', standing_work: '久站服务', frequent_driving: '经常驾驶', physical_labor: '体力劳动', family_care: '照护家庭', freelance: '自由职业', retired: '退休', other: '其他',
-  good: '良好', poor: '较差', long_term_condition: '顾客提及长期身体情况', recent_discomfort_recovery: '顾客提及近期不适或恢复情况', skin_sensitivity: '顾客提及皮肤敏感或接触偏好', medication_mentioned: '顾客提及正在用药', pregnancy_postpartum: '顾客提及孕期或产后阶段', other_reconfirm: '其他需再次确认的情况',
-  neck_shoulder: '肩颈', waist_hip: '腰臀', legs: '腿部', abdomen: '腹部', feet: '足部', full_relaxation: '整体放松', gentle: '轻柔', medium: '适中', strong: '偏强', lower: '偏低', higher: '偏高',
-  quick: '较快放松', gradual: '逐渐放松', tense: '始终较紧张', suitable: '本次合适', better_after_adjustment: '调整后更合适', adjust_next_time: '下次需调整', repeat_current: '延续本次', confirm_on_arrival: '到店再确认',
-  price: '价格', quality: '品质', environment: '环境', efficiency: '效率', fixed_technician: '固定技师', fixed_time: '固定时段', value: '实惠优先', experience: '体验优先', unexpressed: '未表达',
-};
-const labeled = (value: unknown) => Array.isArray(value) ? value.map(item => V3_LABELS[String(item)] || String(item)).join('、') : value ? V3_LABELS[String(value)] || String(value) : '';
-const fieldLabeled = (field: string, value: unknown) => {
-  if (field === '身高区间' && value === 'average') return '适中';
-  if (field === '体型' && value === 'balanced') return '匀称';
-  return labeled(value);
-};
-const v3Summary = (record: any) => {
-  const reported = record.profile?.customer_reported || {};
-  const personal = reported.personal_context || {};
-  const work = reported.work_lifestyle || {};
-  const related = reported.service_related_context || {};
-  const consumption = reported.communication_consumption || {};
-  const observed = record.profile?.technician_observed || {};
-  const rows = [
-    ['个人概况', [['年龄段', personal.age_band], ['体型', personal.build], ['身高区间', personal.height_band]]],
-    ['工作与生活', [['职业场景', work.occupation_contexts], ['睡眠自述', work.sleep_quality]]],
-    ['服务相关情况', [['需再次确认', related.contexts]]],
-    ['服务偏好', [['本次重点', reported.focus_areas], ['避开或谨慎', reported.avoid_areas], ['力度', reported.force_preference], ['温度', reported.temperature_preference]]],
-    ['本次反应', [['放松过程', observed.session_response?.relaxation], ['服务反馈', observed.service_feedback]]],
-    ['下次与沟通', [['下次建议', record.profile?.next_visit?.plan], ['决策关注', consumption.decision_priorities], ['预算倾向', consumption.budget_preference]]],
-  ] as const;
-  return rows.map(([title, values]) => ({ title, values: values.filter(([, value]) => Array.isArray(value) ? value.length : Boolean(value)) })).filter(row => row.values.length);
-};
 
 export default function SelectionSessionsPage() {
   const { message, modal } = App.useApp();
@@ -142,12 +111,13 @@ export default function SelectionSessionsPage() {
       {selected.customer && <Card size="small" title="服务参考（只读）">
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>仅作到店服务参考，不构成医疗建议；结构化记录不会转为普通运营标签。</Typography.Paragraph>
         {profileRecords.length ? profileRecords.slice(0, 5).map((record: any) => {
-          const isV3 = record.schema_version === 3 && record.taxonomy_version === 'service_reference_v2';
+          const display = buildServiceReferenceDisplay(record);
+          const isStructured = Boolean(display.version);
           return <div key={record.id} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
-            {isV3 ? <>
-              <Space wrap size={[4, 4]}><Tag color="green">v3 · service_reference_v2</Tag><Tag color={record.customer_confirmed ? 'success' : 'default'}>{record.customer_confirmed ? '顾客已确认' : '本次观察，未确认'}</Tag></Space>
-              {v3Summary(record).map(group => <div key={group.title} style={{ marginTop: 8 }}><Typography.Text strong>{group.title}</Typography.Text><Descriptions column={1} size="small" items={group.values.map(([label, value]) => ({ label, children: fieldLabeled(label, value) }))} /></div>)}
-              {record.profile?.customer_reported?.service_related_context?.quote && <Collapse size="small" ghost items={[{ key: 'quote', label: '查看相关情况原话（服务前须再次确认）', children: <Typography.Paragraph>{record.profile.customer_reported.service_related_context.quote}</Typography.Paragraph> }]} />}
+            {isStructured ? <>
+              <Space wrap size={[4, 4]}><Tag color="green">{display.version}</Tag><Tag color={record.customer_confirmed ? 'success' : 'default'}>{record.customer_confirmed ? '顾客已确认' : '本次观察，未确认'}</Tag></Space>
+              {display.groups.map(group => <div key={group.title} style={{ marginTop: 8 }}><Typography.Text strong>{group.title}</Typography.Text><Descriptions column={1} size="small" items={group.items.map(item => ({ label: item.label, children: item.value }))} /></div>)}
+              {display.collapsedQuote && <Collapse size="small" ghost items={[{ key: 'quote', label: '查看相关情况原话（服务前须再次确认）', children: <Typography.Paragraph>{display.collapsedQuote}</Typography.Paragraph> }]} />}
             </> : <><Space wrap size={[4, 4]}>{Object.values(record.profile || {}).filter(value => typeof value === 'string' && value).map((value: any) => <Tag key={String(value)} color="blue">{String(value)}</Tag>)}{(record.signals || []).map((signal: string) => <Tag key={signal}>{signal}</Tag>)}</Space>{record.note && <Typography.Paragraph style={{ margin: '4px 0 0' }}>{record.note}</Typography.Paragraph>}</>}
             <Typography.Text type="secondary" style={{ display: 'block', marginTop: 6 }}>{dateText(record.created_at)} · {record.created_by_name || '技师'} · 来源：{record.source || '-'}{record.customer_confirmed && record.confirmed_at ? ` · 确认于 ${dateText(record.confirmed_at)}` : ''}</Typography.Text>
           </div>;

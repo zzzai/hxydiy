@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { dataProvider } from '../src/core/dataProvider/index.ts';
 import { resources } from '../src/core/resources/index.ts';
+import { buildServiceReferenceDisplay } from '../src/serviceReferenceDisplay.ts';
 
 
 test('技师服务单通过严格的只读资源端点加载', async () => {
@@ -88,10 +89,46 @@ test('画像写入请求附带幂等键', () => {
 
 test('管理端将 v3 服务参考显示为结构化摘要而非普通运营标签', () => {
   const source = readFileSync(new URL('../src/pages/SelectionSessionsPage.tsx', import.meta.url), 'utf8');
-  assert.match(source, /schema_version/);
-  assert.match(source, /service_reference_v2/);
+  assert.match(source, /buildServiceReferenceDisplay/);
   assert.match(source, /customer_confirmed/);
   assert.match(source, /confirmed_at/);
   assert.doesNotMatch(source, /addUserTag\(/);
   assert.doesNotMatch(source, /createCustomerProfileRecord/);
+  assert.doesNotMatch(source, /addUserTag|searchIndex|algorithmFeature/);
+});
+
+test('管理端以白名单结构化展示 v3 且原话保持默认折叠', () => {
+  const display = buildServiceReferenceDisplay({
+    schema_version: 3, taxonomy_version: 'service_reference_v2', customer_confirmed: true,
+    profile: {
+      customer_reported: { personal_context: { build: 'balanced' }, service_related_context: { contexts: ['medication_mentioned'], quote: '顾客自述正在用药' } },
+      technician_observed: { session_response: { relaxation: 'quick' } }, next_visit: { plan: 'confirm_on_arrival' },
+    },
+  });
+  assert.equal(display.version, 'v3 · service_reference_v2');
+  assert.deepEqual(display.groups, [
+    { title: '个人概况', items: [{ label: '体型', value: '匀称' }] },
+    { title: '服务相关情况', items: [{ label: '需再次确认', value: '顾客提及正在用药' }] },
+    { title: '本次反应', items: [{ label: '放松过程', value: '较快' }] },
+    { title: '下次与沟通', items: [{ label: '下次建议', value: '到店再确认' }] },
+  ]);
+  assert.equal(display.collapsedQuote, '顾客自述正在用药');
+  assert.doesNotMatch(JSON.stringify(display.groups), /顾客自述正在用药/);
+});
+
+test('管理端兼容 v2 嵌套服务参考而不退化为空摘要', () => {
+  const display = buildServiceReferenceDisplay({
+    schema_version: 2, taxonomy_version: 'service_reference_v1', customer_confirmed: false,
+    profile: {
+      customer_reported: { focus_areas: ['neck_shoulder'], avoid_areas: ['abdomen'], force_preference: 'medium', temperature_preference: 'higher', quote: '顾客希望避开腹部' },
+      technician_observed: { service_feedback: 'better_after_adjustment' }, next_visit: { plan: 'repeat_current' },
+    },
+  });
+  assert.equal(display.version, 'v2 · service_reference_v1');
+  assert.deepEqual(display.groups, [
+    { title: '服务偏好', items: [{ label: '本次重点', value: '肩颈' }, { label: '避开或谨慎', value: '腹部' }, { label: '力度', value: '适中' }, { label: '温度', value: '偏高' }] },
+    { title: '本次反应', items: [{ label: '服务反馈', value: '调整后更合适' }] },
+    { title: '下次与沟通', items: [{ label: '下次建议', value: '延续本次' }] },
+  ]);
+  assert.equal(display.collapsedQuote, '顾客希望避开腹部');
 });
