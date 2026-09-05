@@ -671,9 +671,13 @@ export default function App() {
 
   const returnToProjectListAfterSubmit = async () => {
     const currentStatus = serviceStatus?.occupancy_status ?? occupancy?.status;
+    // 返回浏览不依赖服务位释放或网络；旧订单继续保留用于查看和评价。
+    startFreshSelectionDraft();
+    persistCurrent(session, occupancy, position, positionCode, true);
+    setBoot('ready');
     if (currentStatus === 'post_service_present' || currentStatus === 'cleaning' || currentStatus === 'released') {
-      setBoot('loading');
-      setBootMessage('正在准备新的选购');
+      // 服务状态可能先于服务位地图返回，不能让旧 in_service 快照开放历史订单编辑。
+      if (occupancy) setOccupancy({ ...occupancy, status: currentStatus });
       try {
         const map = await getServicePositionMap(query.storeId, session?.id, accessToken || undefined);
         setPositions(map.positions);
@@ -683,19 +687,15 @@ export default function App() {
           hasActiveOccupancy: Boolean(current?.occupancy),
         })) {
           clearRecord(query.storeId, positionCode);
-          startFreshSelectionDraft();
           await enterPosition(positionCode);
           return;
         }
+        flash('可以先浏览项目；再次选购请等待服务位释放，或联系前台');
       } catch {
-        // 继续展示原服务结果，避免网络异常时误清除仍需评价的旧会话。
+        flash('暂时无法确认服务位，可先浏览项目，联网后重试');
       }
-      setBoot('submitted');
       return;
     }
-    startFreshSelectionDraft();
-    persistCurrent(session, occupancy, position, positionCode, true);
-    setBoot('ready');
   };
 
   const loadMap = async (nextSession = session, token = accessToken) => {
@@ -726,6 +726,7 @@ export default function App() {
       });
       setAccessToken(entry.access_token);
       setSession(entry.session);
+      setServiceStatus(null);
       setOccupancy(entry.occupancy);
       setPosition(entry.position);
       setPositionCode(code);
