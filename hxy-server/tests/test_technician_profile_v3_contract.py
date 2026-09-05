@@ -170,4 +170,32 @@ class TestTechnicianProfileV3Contract:
         assert body["schema_version"] == 3
         assert body["taxonomy_version"] == "service_reference_v2"
         assert "desk_work" in body["groups"]["occupation_contexts"]
-        assert body["groups"]["body_context"]["height_band"]["average"] == "适中"
+        assert body["groups"]["personal_context"]["height_band"]["average"] == "适中"
+
+    def test_taxonomy_codes_submit_at_their_published_model_paths(self):
+        taxonomy = self.client.get(
+            "/api/v1/technician/service-reference-taxonomy",
+            headers=self.technician_headers,
+        ).json()["groups"]
+
+        payloads = []
+        for code in taxonomy["personal_context"]["height_band"]:
+            payload = self.v3_payload()
+            payload["profile"]["customer_reported"]["personal_context"] = {"height_band": code}
+            payloads.append(payload)
+        for code in taxonomy["occupation_contexts"]:
+            payload = self.v3_payload()
+            payload["profile"]["customer_reported"]["work_lifestyle"] = {"occupation_contexts": [code]}
+            payloads.append(payload)
+        for code in taxonomy["session_response"]["relaxation"]:
+            payload = self.v3_payload()
+            payload["profile"]["technician_observed"] = {"session_response": {"relaxation": code}}
+            payloads.append(payload)
+
+        for index, payload in enumerate(payloads):
+            response = self.client.post(
+                "/api/v1/admin/v2/customer-profile-records",
+                json=payload,
+                headers={**self.technician_headers, "Idempotency-Key": f"v3-taxonomy-path-{index:03d}"},
+            )
+            assert response.status_code == 200, response.text

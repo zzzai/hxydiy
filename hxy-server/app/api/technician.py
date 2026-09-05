@@ -193,8 +193,8 @@ SERVICE_REFERENCE_V2_TAXONOMY = {
     "personal_context": {
         "age_band": {"25_34": "25-34岁"},
         "build": {"balanced": "匀称"},
+        "height_band": {"shorter": "偏矮", "average": "适中", "taller": "偏高"},
     },
-    "body_context": {"height_band": {"shorter": "偏矮", "average": "适中", "taller": "偏高"}},
     "work_lifestyle": {"sleep_quality": {"average": "一般"}},
     "service_related_context": {"contexts": {"medication_mentioned": "顾客提及正在用药"}},
     "session_response": {"relaxation": {"quick": "较快", "gradual": "逐渐", "tense": "始终较紧张"}},
