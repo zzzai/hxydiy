@@ -3,15 +3,15 @@ import json
 import secrets
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff, create_staff_token, hash_password, normalize_staff_role
 from app.db.session import get_db
-from app.models import AuditLog, CustomerProfileRecord, PositionOccupancy, SelectionSession, Staff
+from app.models import AuditLog, CustomerProfileRecord, PositionOccupancy, SelectionSession, Staff, User
 from app.models.operations import Room, Technician
 from app.models.catalog import Addon, Project
 from app.models.service import StateTransition
@@ -380,6 +380,25 @@ def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str |
             )
         return replay.result_snapshot
     _reject_conflicted_room_action(db, occupancy)
+    if action == "confirm":
+        if occupancy.serviced_by_technician_id is None:
+            occupancy.serviced_by_technician_id = technician.id
+        elif occupancy.serviced_by_technician_id != technician.id:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "TECHNICIAN_SERVICE_OWNER_MISMATCH",
+                    "message": "该服务已由其他技师确认",
+                },
+            )
+    elif action == "finish" and occupancy.serviced_by_technician_id != technician.id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "TECHNICIAN_SERVICE_OWNER_MISMATCH",
+                "message": "仅实际确认服务的技师可以结束服务",
+            },
+        )
     before = occupancy.status
     _occupancy_action(db, occupancy, action)
     room = db.get(Room, occupancy.room_id)
@@ -405,6 +424,140 @@ def confirm_service(occupancy_id: int, body: ActionIn, authorization: str | None
 @router.post("/occupancies/{occupancy_id}/finish")
 def finish_service(occupancy_id: int, body: ActionIn, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
     return _action(occupancy_id, "finish", body, authorization, db)
+
+
+def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | None:
+    if record is None:
+        return None
+    profile = record.profile or {}
+    if record.schema_version == 2 and record.taxonomy_version == "service_reference_v1":
+        reported = profile.get("customer_reported") or {}
+        observed = profile.get("technician_observed") or {}
+        next_visit = profile.get("next_visit") or {}
+        area_labels = SERVICE_REFERENCE_LABELS["areas"]
+        return {
+            "schema_version": 2,
+            "taxonomy_version": "service_reference_v1",
+            "focus_areas": [
+                area_labels[code]
+                for code in reported.get("focus_areas", [])
+                if code in area_labels
+            ],
+            "avoid_areas": [
+                area_labels[code]
+                for code in reported.get("avoid_areas", [])
+                if code in area_labels
+            ],
+            "force_preference": SERVICE_REFERENCE_LABELS["force"].get(
+                reported.get("force_preference")
+            ),
+            "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(
+                reported.get("temperature_preference")
+            ),
+            "service_feedback": SERVICE_REFERENCE_LABELS["feedback"].get(
+                observed.get("service_feedback")
+            ),
+            "next_visit_plan": SERVICE_REFERENCE_LABELS["next_visit"].get(
+                next_visit.get("plan")
+            ),
+        }
+    if record.schema_version == 3 and record.taxonomy_version == "service_reference_v2":
+        reported = profile.get("customer_reported") or {}
+        lifestyle = reported.get("work_lifestyle") or {}
+        observed = profile.get("technician_observed") or {}
+        response = observed.get("session_response") or {}
+        return {
+            "schema_version": 3,
+            "taxonomy_version": "service_reference_v2",
+            "occupation_contexts": [
+                SERVICE_REFERENCE_V2_TAXONOMY["occupation_contexts"][code]
+                for code in lifestyle.get("occupation_contexts", [])
+                if code in SERVICE_REFERENCE_V2_TAXONOMY["occupation_contexts"]
+            ],
+            "relaxation": SERVICE_REFERENCE_V2_TAXONOMY["session_response"]["relaxation"].get(
+                response.get("relaxation")
+            ),
+        }
+    return None
+
+
+@router.get("/service-history")
+def service_history(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    profile_status: str = Query(default="all"),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _, technician = current_technician(authorization, db)
+    if profile_status not in {"all", "confirmed", "pending"}:
+        raise HTTPException(status_code=422, detail="画像状态筛选值不合法")
+
+    confirmed_profile = exists().where(
+        CustomerProfileRecord.store_id == PositionOccupancy.store_id,
+        CustomerProfileRecord.selection_session_id == PositionOccupancy.selection_session_id,
+        CustomerProfileRecord.technician_id == PositionOccupancy.serviced_by_technician_id,
+        CustomerProfileRecord.schema_version.in_((2, 3)),
+        CustomerProfileRecord.customer_confirmed.is_(True),
+    )
+    conditions = [
+        PositionOccupancy.store_id == technician.store_id,
+        PositionOccupancy.serviced_by_technician_id == technician.id,
+        PositionOccupancy.actual_service_end_at.is_not(None),
+    ]
+    if profile_status == "confirmed":
+        conditions.append(confirmed_profile)
+    elif profile_status == "pending":
+        conditions.append(~confirmed_profile)
+
+    total = db.scalar(select(func.count(PositionOccupancy.id)).where(*conditions)) or 0
+    rows = db.execute(
+        select(PositionOccupancy, SelectionSession, Room, User)
+        .join(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
+        .join(Room, Room.id == PositionOccupancy.room_id)
+        .outerjoin(User, User.id == SelectionSession.customer_id)
+        .where(*conditions)
+        .order_by(PositionOccupancy.actual_service_end_at.desc(), PositionOccupancy.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    items = []
+    for occupancy, session, room, customer in rows:
+        record = db.scalar(
+            select(CustomerProfileRecord)
+            .where(
+                CustomerProfileRecord.store_id == technician.store_id,
+                CustomerProfileRecord.selection_session_id == session.id,
+                CustomerProfileRecord.technician_id == technician.id,
+                CustomerProfileRecord.schema_version.in_((2, 3)),
+                CustomerProfileRecord.customer_confirmed.is_(True),
+            )
+            .order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc())
+            .limit(1)
+        )
+        project_names = []
+        for selection_item in session.items or []:
+            name = selection_item.get("name")
+            if isinstance(name, str) and name.strip() and name.strip() not in project_names:
+                project_names.append(name.strip())
+        duration_minutes = None
+        if occupancy.actual_start_at and occupancy.actual_service_end_at:
+            duration_minutes = max(
+                0,
+                int((occupancy.actual_service_end_at - occupancy.actual_start_at).total_seconds() // 60),
+            )
+        items.append({
+            "occupancy_id": occupancy.id,
+            "completed_at": occupancy.actual_service_end_at,
+            "duration_minutes": duration_minutes,
+            "profile_status": "confirmed" if record else "pending",
+            "customer": {"display_name": f"顾客 #{customer.id}"} if customer else {"display_name": "匿名顾客"},
+            "projects": project_names,
+            "service_position": room.name,
+            "profile_summary": _history_profile_summary(record),
+        })
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.post("/leave-requests")
