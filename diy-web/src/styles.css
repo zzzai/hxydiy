@@ -1291,7 +1291,7 @@ h1, h2, h3, p { margin-top: 0; }
 .mini-detail-card, .mini-config-card { margin: 10px 14px 0; border: 0; border-radius: 14px; background: #fff; }
 .mini-detail-summary-card { position: relative; z-index: 2; margin-top: -24px; padding: 18px; border-radius: 16px; box-shadow: 0 -6px 18px rgba(18, 61, 50, 0.06); }
 .mini-detail-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.mini-detail-title-row h1 { margin: 0; color: #1d2a25; font-size: 20px; font-weight: 700; }
+.mini-detail-title-row h1 { margin: 0; color: #1d2a25; font-size: 20px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
 .mini-detail-title-row svg { flex: none; color: #32ab89; }
 .mini-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .mini-detail-tags span { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 5px; color: #176856; background: #eef8f3; font-size: 9px; font-weight: 600; }
@@ -1299,16 +1299,18 @@ h1, h2, h3, p { margin-top: 0; }
 .mini-detail-section-label { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 18px 14px 0; padding: 0 2px; color: #1d2a25; }
 .mini-detail-section-label strong { font-size: 15px; }
 .mini-detail-section-label span { color: var(--muted); font-size: 9px; }
-.mini-detail-price { display: flex; align-items: baseline; gap: 8px; margin-top: 13px; }
-.mini-detail-price strong { color: #176856; font-size: 25px; }
+.mini-detail-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-top: 16px; }
+.detail-price-primary { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.detail-price-label { color: #52665e; font-size: 12px; }
+.mini-detail-price strong { color: #176856; font-size: 26px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .mini-detail-page.member-active .mini-detail-price strong { color: #9a7220; }
-.mini-detail-price del { color: var(--price-reference); font-size: 10px; }
-.mini-detail-price .member-reference-price { color: #9a7220; font-size: 10px; }
-.mini-detail-price em { margin-left: auto; padding: 4px 8px; border-radius: 8px; color: #176856; background: #eef8f3; font-size: 9px; font-style: normal; font-weight: 700; }
-.mini-detail-summary-card > .detail-intro-copy { margin-top: 10px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
-.mini-detail-summary-card > .detail-intro-facts { margin-top: 7px; font-size: 11px; }
-.detail-intro-highlights + .detail-intro-copy { margin-top: 0; }
-.mini-detail-summary-card .mini-detail-price { flex-wrap: wrap; row-gap: 5px; }
+.mini-detail-price del { color: #66736d; font-size: 12px; white-space: nowrap; }
+.mini-detail-price .member-reference-price { color: #856019; font-size: 12px; white-space: nowrap; }
+.detail-price-unit { color: #52665e; font-size: 12px; white-space: nowrap; }
+.mini-detail-summary-card > .detail-intro-copy { margin-top: 12px; color: #52665e; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.mini-detail-summary-card > .detail-intro-facts { margin-top: 8px; color: #52665e; font-size: 12px; }
+.mini-detail-summary-card > .detail-intro-highlights { margin: 8px 0 0; gap: 6px; }
+.detail-intro-highlights span { font-size: 11px; font-weight: 500; }
 .detail-additions-heading { flex-wrap: wrap; }
 .price-identity-hint { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .mini-seat-reminder { display: flex; align-items: center; gap: 8px; margin: 10px 14px 0; padding: 10px 14px; border-radius: 10px; color: #66736d; background: #fff; font-size: 10px; }
@@ -1372,9 +1374,9 @@ h1, h2, h3, p { margin-top: 0; }
 }
 .tea-detail-hero img { width: 100%; height: 100%; object-fit: cover; animation: detailImageIn 180ms ease-out; }
 @keyframes detailImageIn { from { opacity: .5; } to { opacity: 1; } }
-.tea-free-price { display: flex; align-items: baseline; gap: 8px; margin-top: 14px; }
+.tea-free-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-top: 16px; }
 .tea-free-price strong { color: #176856; font-size: 18px; }
-.tea-free-price span { color: var(--muted); font-size: 10px; }
+.tea-free-price span { color: #52665e; font-size: 12px; }
 .tea-flavor-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tea-flavor-grid > button {
   position: relative;

@@ -5,10 +5,10 @@ export default function DetailPrice({ current, comparison, isMember, unit }: {
 }) {
   const samePrice = current === comparison;
   return <div className="mini-detail-price">
-    <strong>{formatMoney(current)}</strong>
+    <span className="detail-price-primary"><span className="detail-price-label">{samePrice ? '门店价 / 会员价' : isMember ? '会员价' : '门店价'}</span><strong>{formatMoney(current)}</strong></span>
     {!samePrice && (isMember
       ? <del>门店价 {formatMoney(comparison)}</del>
       : <span className="member-reference-price">会员价 {formatMoney(comparison)}</span>)}
-    <em>{samePrice ? '门店价 / 会员价' : isMember ? '会员价' : '门店价'}{unit && ` · ${unit}`}</em>
+    {unit && <span className="detail-price-unit">{unit}</span>}
   </div>;
 }
