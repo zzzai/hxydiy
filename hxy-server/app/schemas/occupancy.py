@@ -13,6 +13,7 @@ class EntrySessionIn(BaseModel):
     source: EntrySource = "personal_qr"
     device_label: str = Field(default="", max_length=64)
     entry_token: str | None = Field(default=None, min_length=16, max_length=512)
+    start_new_after_service: bool = False
 
 
 class KioskSessionIn(BaseModel):
