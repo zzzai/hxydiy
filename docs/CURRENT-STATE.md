@@ -1,24 +1,26 @@
 # hxy-diy 当前状态
 
-更新时间：2026-09-05 14:10（Asia/Shanghai）
+更新时间：2026-09-05 15:10（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
 
 - 服务器部署根目录：`/root/hxy-diy-20260811`
-- Release：`manual-1f10b35-20260905-4`
-- 对应主干提交：`1f10b35`（顾客端二级页价格分组与介绍排版 PR #25）
-- API 镜像 ID：`sha256:84361fb787de0ddf9b29ed96dd56ff6a7073aea5356197f83e0670b41a3be9e2`
+- Release：`github-0dbb1efad621-33951155821`
+- 对应主干提交：`0dbb1ef`（自动发布与 CI 提效 PR #27，业务 UI 未变）
+- API 镜像 ID：`sha256:a222d36d26fec6282924de2975021f12b06e663fbc341399b7649fd0d68e5e76`
 - Alembic head：`20260904_service_reference_v2`
-- 数据库备份：`pre-manual-1f10b35-20260905-4-20260905T060906Z.dump`
-- 备份 SHA-256：`0b67b4e6a361d812c5791bdf7879f0f986c09a6aba5a732d9e2444ec46879bbc`
+- 数据库备份：`pre-github-0dbb1efad621-33951155821-20260905T070721Z.dump`
+- 备份 SHA-256：`42c62fe7f4b56b4f3d7f48d89531a64024f3d1895fd6f9f22a927c59af85984f`
 - 备份恢复演练：通过
 - 公网 `/`、`/admin/`、`/technician/`、`/api/v1/health`：HTTP 200
 - API 与数据库容器：运行中，发布验收时重启次数均为 0，数据库健康
-- Release Manifest：逐文件校验通过；Manifest SHA-256 `cebde564f166c3e33c563110ab41d549fe3abf5430485280aaa10ea4bcf537a4`
+- Release Manifest：逐文件校验通过；Manifest SHA-256 `688956168d8ac93dfb837050826a10db7de5bdc249833a5651986a89898ad73e`
 
 顾客端入口加载 `index-BUW-BRvJ.js` 与 `index-Cu0pxEgk.css`；本次未执行数据库迁移。
+
+自动发布已通过专用受限密钥执行，复用当前 main CI 产物；纯文档变更保留静态门禁，不构建三端应用、不发布。发布脚本和说明见 `docs/customer-release-fast-path.md`。
 
 ## 三端当前状态
 
