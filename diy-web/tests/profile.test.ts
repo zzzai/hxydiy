@@ -8,6 +8,8 @@ import {
   formatDateTime,
   maskedPhone,
   membershipSavingCents,
+  membershipState,
+  recordFilter,
   orderStatusLabel,
   selectionStatusLabel,
   selectionDisplayAmount,
@@ -19,11 +21,29 @@ test('手机号中间四位脱敏', () => {
   assert.equal(maskedPhone(''), '');
 });
 
-test('会员累计节省按门店价与会员价差额计算', () => {
+test('会员累计节省只统计已完成服务的历史门店价与会员价差额', () => {
   assert.equal(membershipSavingCents([
-    { store_total_cents: 33600, member_total_cents: 23600 },
-    { store_total_cents: 3990, member_total_cents: 3990 },
+    { service_completed_at: '2026-09-01T10:00:00Z', store_total_cents: 33600, member_total_cents: 23600 },
+    { service_completed_at: null, store_total_cents: 9900, member_total_cents: 6900 },
+    { service_completed_at: '2026-09-02T10:00:00Z', store_total_cents: 3990, member_total_cents: 3990 },
   ]), 10000);
+});
+
+test('会员有效期映射为有效、临期和过期状态', () => {
+  assert.deepEqual(membershipState('2026-10-20T00:00:00Z', new Date('2026-09-05T00:00:00Z')), { kind: 'active', daysLeft: 45 });
+  assert.deepEqual(membershipState('2026-09-20T00:00:00Z', new Date('2026-09-05T00:00:00Z')), { kind: 'expiring', daysLeft: 15 });
+  assert.deepEqual(membershipState('2026-09-04T00:00:00Z', new Date('2026-09-05T00:00:00Z')), { kind: 'expired', daysLeft: 0 });
+});
+
+test('到店记录可按待评价和服务状态筛选', () => {
+  const records = [
+    { id: 'a', can_evaluate: true, evaluated: false, occupancy_status: 'post_service_present' },
+    { id: 'b', can_evaluate: true, evaluated: true, occupancy_status: 'post_service_present' },
+    { id: 'c', can_evaluate: false, evaluated: false, occupancy_status: 'in_service' },
+  ];
+  assert.deepEqual(recordFilter(records, 'pending-feedback').map((item) => item.id), ['a']);
+  assert.deepEqual(recordFilter(records, 'in-service').map((item) => item.id), ['c']);
+  assert.deepEqual(recordFilter(records, 'completed').map((item) => item.id), ['a', 'b']);
 });
 
 test('订单状态映射为顾客可读文案', () => {

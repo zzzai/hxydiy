@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import create_access_token
+from app.core.customer_auth import current_customer_id
 from app.db.session import get_db
 from app.models import CouponTemplate, CustomerVerificationCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
 from app.models.service import Visit
@@ -172,6 +173,7 @@ def h5_login(
     else:
         user.phone = phone
     user.last_login_at = now
+    user.customer_login_version = int(user.customer_login_version or 1) + 1
     if selection_session:
         session = selection_session
         if session.status in {"draft", "submitted", "confirmed"}:
@@ -206,7 +208,7 @@ def h5_login(
                 refresh_session_pricing(db, session)
     db.commit()
     db.refresh(user)
-    return LoginResponse(token=create_access_token(str(user.id), openid), user=UserOut.model_validate(user))
+    return LoginResponse(token=create_access_token(str(user.id), openid, user.customer_login_version), user=UserOut.model_validate(user))
 
 
 @router.get("/h5/me", response_model=UserOut)
@@ -215,7 +217,7 @@ def h5_current_user(
     db: Session = Depends(get_db),
 ) -> UserOut:
     """刷新 H5 登录用户快照，确保后台刚开通的会员身份即时同步到顾客端。"""
-    user = db.get(User, _current_user_id(authorization, db))
+    user = db.get(User, current_customer_id(authorization, db))
     if user is None:
         raise HTTPException(status_code=401, detail="登录已失效，请重新登录")
     return UserOut.model_validate(user)

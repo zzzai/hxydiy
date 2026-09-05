@@ -39,6 +39,7 @@ class User(Base):
     inviter_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # 邀请人（裂变）
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    customer_login_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
 
 class Store(Base):

@@ -37,6 +37,7 @@ test('本地身份只在登录令牌仍有效时展示为已登录', () => {
 });
 
 test('账号接口返回 401 时进入重新验证，不把请先登录当普通错误展示', () => {
+  assert.equal(authFailureAction({ status: 401, code: 'SESSION_REPLACED' }), 'session-replaced');
   assert.equal(authFailureAction({ status: 401 }), 'reauthenticate');
   assert.equal(authFailureAction({ status: 500 }), 'show-error');
   assert.equal(authFailureAction(new Error('网络异常')), 'show-error');

@@ -62,6 +62,13 @@ class SelectionCreateOut(BaseModel):
     access_token: str
 
 
+class MySelectionRecordOut(SelectionSessionOut):
+    occupancy_status: str | None = None
+    service_completed_at: datetime | None = None
+    can_evaluate: bool = False
+    evaluated: bool = False
+
+
 class MySelectionSessionsOut(BaseModel):
-    items: list[SelectionSessionOut]
+    items: list[MySelectionRecordOut]
     total: int

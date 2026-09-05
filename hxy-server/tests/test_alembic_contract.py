@@ -91,6 +91,7 @@ class AlembicContractTests(unittest.TestCase):
                 continue
             copied = table.to_metadata(previous_metadata)
             if copied.name == "users":
+                copied._columns.remove(copied.c.customer_login_version)
                 membership_store_column = copied.c.membership_store_id
                 for index in list(copied.indexes):
                     if membership_store_column.name in index.columns:
@@ -249,6 +250,7 @@ class AlembicContractTests(unittest.TestCase):
                     for column_name in (
                         "annual_membership_cycle_id",
                         "membership_store_id",
+                        "customer_login_version",
                     ):
                         column = copied.c[column_name]
                         for index in list(copied.indexes):

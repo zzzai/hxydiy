@@ -22,6 +22,8 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
             if table.name in {"service_position_qrs", "media_assets"}:
                 continue
             copied = table.to_metadata(previous_metadata)
+            if copied.name == "users" and "customer_login_version" in copied.c:
+                copied._columns.remove(copied.c.customer_login_version)
             if copied.name == "position_occupancies" and "retained_until" in copied.c:
                 retained_until = copied.c.retained_until
                 for index in list(copied.indexes):

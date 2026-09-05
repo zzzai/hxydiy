@@ -235,6 +235,25 @@ class H5AuthApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/auth/h5/me").status_code, 401)
         self.assertEqual(self.client.get("/api/v1/auth/h5/me", headers={"Authorization": "Bearer invalid"}).status_code, 401)
 
+    def test_second_phone_login_invalidates_first_device_token(self):
+        phone = "13200132000"
+        first_code = self.send_code(phone)["debug_code"]
+        first = self.client.post("/api/v1/auth/h5/login", json={"phone": phone, "code": first_code})
+        self.assertEqual(first.status_code, 200, first.text)
+        with self.SessionLocal() as db:
+            latest = db.scalar(select(CustomerVerificationCode).where(CustomerVerificationCode.phone == phone).order_by(CustomerVerificationCode.sent_at.desc()))
+            latest.sent_at = latest.sent_at.replace(year=2020)
+            db.commit()
+        second_code = self.send_code(phone)["debug_code"]
+        second = self.client.post("/api/v1/auth/h5/login", json={"phone": phone, "code": second_code})
+        self.assertEqual(second.status_code, 200, second.text)
+
+        replaced = self.client.get("/api/v1/auth/h5/me", headers={"Authorization": f"Bearer {first.json()['token']}"})
+        self.assertEqual(replaced.status_code, 401)
+        self.assertEqual(replaced.json()["detail"]["code"], "SESSION_REPLACED")
+        current = self.client.get("/api/v1/auth/h5/me", headers={"Authorization": f"Bearer {second.json()['token']}"})
+        self.assertEqual(current.status_code, 200, current.text)
+
 
 if __name__ == "__main__":
     unittest.main()
