@@ -106,6 +106,19 @@ class AlembicContractTests(unittest.TestCase):
                         copied.foreign_key_constraints.discard(constraint)
                         copied.constraints.discard(constraint)
                 copied._columns.remove(membership_store_column)
+            if copied.name == "position_occupancies":
+                owner_column = copied.c.serviced_by_technician_id
+                for index in list(copied.indexes):
+                    if owner_column.name in index.columns:
+                        copied.indexes.discard(index)
+                for constraint in list(copied.foreign_key_constraints):
+                    if any(foreign_key.parent is owner_column for foreign_key in constraint.elements):
+                        for foreign_key in constraint.elements:
+                            foreign_key.parent.foreign_keys.discard(foreign_key)
+                            copied.foreign_keys.discard(foreign_key)
+                        copied.foreign_key_constraints.discard(constraint)
+                        copied.constraints.discard(constraint)
+                copied._columns.remove(owner_column)
             if copied.name == "rooms":
                 for column_name in (
                     "parent_room_id",
@@ -266,6 +279,18 @@ class AlembicContractTests(unittest.TestCase):
                                 copied.constraints.discard(constraint)
                         copied._columns.remove(column)
                 if copied.name == "position_occupancies":
+                    owner_column = copied.c.serviced_by_technician_id
+                    for index in list(copied.indexes):
+                        if owner_column.name in index.columns:
+                            copied.indexes.discard(index)
+                    for constraint in list(copied.foreign_key_constraints):
+                        if any(foreign_key.parent is owner_column for foreign_key in constraint.elements):
+                            for foreign_key in constraint.elements:
+                                foreign_key.parent.foreign_keys.discard(foreign_key)
+                                copied.foreign_keys.discard(foreign_key)
+                            copied.foreign_key_constraints.discard(constraint)
+                            copied.constraints.discard(constraint)
+                    copied._columns.remove(owner_column)
                     retained_until_column = copied.c.retained_until
                     for index in list(copied.indexes):
                         if retained_until_column.name in index.columns:
