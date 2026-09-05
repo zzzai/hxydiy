@@ -73,7 +73,7 @@ import SeatMapDialog from './components/SeatMapDialog';
 import TeaDetailPage from './components/TeaDetailPage';
 import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision } from './selectionFlow';
 import { isEdgeSwipeBack, shouldReturnToProjectListFromSubmittedScreen } from './swipeBack';
-import { shouldHydrateStoredSelection } from './submittedSelectionRestore';
+import { shouldHydrateStoredSelection, shouldRestartStoredEntry } from './submittedSelectionRestore';
 import { createDiyPageTracking } from './pageTracking';
 import {
   activePromotion,
@@ -98,6 +98,12 @@ import {
   calculatePreviewPricing,
   displayPayableTotal,
   resolveMemberTotalCents,
+  resolveStoreTotalCents,
+  customerProjectHighlights,
+  customerProjectSummaryTags,
+  customerProjectPurchaseTags,
+  customerProjectDisplayTagGroups,
+  customerProjectSummaryText,
   displayProjectName,
   featuredProjects,
   formatMoney,
@@ -106,8 +112,6 @@ import {
   priceGuidance,
   projectListPricePresentation,
   projectImage,
-  projectTagLabel,
-  projectCatalogBadge,
   requiresStaffKioskBinding,
   replaceTea,
   shouldClearDeviceSessionAfterSubmit,
@@ -375,10 +379,13 @@ export default function App() {
     session?.pricing_snapshot,
     session?.member_total_cents,
   );
-  const rawServerPayableTotal = Number(session?.pricing_snapshot?.payable_total_cents);
+  const snapshotStoreTotalCents = resolveStoreTotalCents(
+    session?.pricing_snapshot,
+    session?.store_total_cents,
+  );
   const serverPayableTotal = appliedPriceType === 'member'
     ? snapshotMemberTotalCents
-    : rawServerPayableTotal;
+    : snapshotStoreTotalCents;
   const payableTotal = displayPayableTotal({
     readOnly,
     serverTotalCents: Number.isFinite(serverPayableTotal) ? serverPayableTotal : null,
@@ -390,7 +397,7 @@ export default function App() {
     ? snapshotMemberTotalCents
     : preview.memberTotalCents;
   const storeTotalCents = readOnly
-    ? Number(session?.pricing_snapshot?.store_total_cents ?? session?.store_total_cents)
+    ? snapshotStoreTotalCents
     : preview.storeTotalCents;
   const alignedMemberTotalCents = savingHint?.kind === 'member' && Number.isFinite(savingHint.estimated_saving_cents)
     ? Math.max(0, payableTotal - Number(savingHint.estimated_saving_cents))
@@ -662,7 +669,30 @@ export default function App() {
     });
   };
 
-  const returnToProjectListAfterSubmit = () => {
+  const returnToProjectListAfterSubmit = async () => {
+    const currentStatus = serviceStatus?.occupancy_status ?? occupancy?.status;
+    if (currentStatus === 'post_service_present' || currentStatus === 'cleaning' || currentStatus === 'released') {
+      setBoot('loading');
+      setBootMessage('正在准备新的选购');
+      try {
+        const map = await getServicePositionMap(query.storeId, session?.id, accessToken || undefined);
+        setPositions(map.positions);
+        const current = resolveRequestedPosition(map.positions, resolveActivePositionCode(positionCode, query.positionCode));
+        if (shouldRestartStoredEntry({
+          requestedPositionFound: Boolean(current),
+          hasActiveOccupancy: Boolean(current?.occupancy),
+        })) {
+          clearRecord(query.storeId, positionCode);
+          startFreshSelectionDraft();
+          await enterPosition(positionCode);
+          return;
+        }
+      } catch {
+        // 继续展示原服务结果，避免网络异常时误清除仍需评价的旧会话。
+      }
+      setBoot('submitted');
+      return;
+    }
     startFreshSelectionDraft();
     persistCurrent(session, occupancy, position, positionCode, true);
     setBoot('ready');
@@ -833,6 +863,14 @@ export default function App() {
         const map = await getServicePositionMap(query.storeId, restoredSession.id, record.accessToken);
         setPositions(map.positions);
         const current = resolveRequestedPosition(map.positions, query.positionCode || record.positionCode);
+        if (shouldRestartStoredEntry({
+          requestedPositionFound: Boolean(current),
+          hasActiveOccupancy: Boolean(current?.occupancy),
+        })) {
+          clearRecord(query.storeId, query.positionCode);
+          await enterPosition(query.positionCode);
+          return;
+        }
         if (record.position.type === 'sofa' && !current) {
           clearRecord(query.storeId, query.positionCode);
           await enterPosition(query.positionCode);
@@ -1484,16 +1522,18 @@ export default function App() {
                   {sectionProjects.map((project) => {
                     const selected = selectedProjectIds.includes(project.id);
                     const displayName = displayProjectName(project);
+                    const { highlights, summary: summaryTags, purchase: purchaseTags } = customerProjectDisplayTagGroups(project);
                     return (
                       <motion.article whileTap={{ scale: 0.985 }} className={`project-card mini-project-row ${selected ? 'selected' : ''}`} key={project.id} onClick={() => openProjectDetail(project)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectDetail(project); } }} role="button" tabIndex={0}>
                         <div className="project-photo"><img src={projectImage(project)} alt="" loading="lazy" decoding="async" />{project.code === 'hxy-xiaoqi-90' && <span className="signature-badge">招牌</span>}</div>
                         <div className="project-copy">
                           <div className="project-title-row"><h3>{displayName}</h3>{project.duration_min && <span>{project.duration_min}分钟</span>}</div>
-                          <p>{project.summary}</p>
-                          <div className="project-badges">
-                            {(project.tags || []).map((tag) => projectTagLabel(tag)).filter(Boolean).slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}
-                            {project.category !== 'small' && <span className="diy">{projectCatalogBadge(project)}</span>}
-                          </div>
+                          <p>{customerProjectSummaryText(project)}</p>
+                          {(highlights.length > 0 || summaryTags.length > 0 || purchaseTags.length > 0) && <div className="project-badge-groups" aria-label="项目标签">
+                            {highlights.length > 0 && <div className="project-badges project-badges-highlight" aria-label="项目特色">{highlights.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                            {summaryTags.length > 0 && <div className="project-badges project-badges-summary" aria-label="项目简介">{summaryTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                            {purchaseTags.length > 0 && <div className="project-badges project-badges-purchase" aria-label="选购规则">{purchaseTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
+                          </div>}
                           <ProjectPrice project={project} auth={customerAuth?.user || null} />
                           {projectPreferences[project.id]?.length > 0 && <div className="preference-line">{projectPreferences[project.id].join(' · ')}</div>}
                         </div>
@@ -1509,7 +1549,7 @@ export default function App() {
                   <div className="project-copy">
                     <div className="project-title-row"><h3>{displayProjectName(localProject)}</h3><span>{localProject.duration_min || 30}分钟/项</span></div>
                     <p>肩颈、腰臀、腿部、腹部、足部，按需灵活选择。</p>
-                    <div className="project-badges"><span>按部位计价</span><span className="diy">可多选</span></div>
+                    {customerProjectPurchaseTags(localProject).length > 0 && <div className="project-badges project-badges-purchase" aria-label="选购规则">{customerProjectPurchaseTags(localProject).map((tag) => <span key={tag}>{tag}</span>)}</div>}
                     <ProjectPrice project={localProject} auth={customerAuth?.user || null} />
                     {localParts.length > 0 && <div className="preference-line">已选：{localParts.join(' · ')}</div>}
                   </div>
@@ -1529,7 +1569,7 @@ export default function App() {
           <span className="selection-bag"><ShoppingBag size={27} /><span className="selection-count">{selectedCount}</span></span>
           <span className="selection-price-copy">
             <span className="selection-summary-total"><small>{saving ? '正在更新' : '预计合计'}</small><strong>{formatMoney(payableTotal)}</strong></span>
-            <span className="selection-summary-meta">{isMember ? <>{priceDisplay.originalHint && <del>{priceDisplay.originalHint}</del>}{priceDisplay.realizedSavingCents > 0 && <b>已优惠 {formatMoney(priceDisplay.realizedSavingCents)}</b>}{!priceDisplay.realizedSavingCents && <span>已按会员价计算</span>}</> : priceDisplay.memberHint ? <><span>办年卡享 {priceDisplay.memberHint.replace('会员价 ', '')}</span>{priceDisplay.savingCents > 0 && <b>可省 {formatMoney(priceDisplay.savingCents)}</b>}</> : <span>{priceDisplay.primaryLabel} · 查看清单</span>}</span>
+            <span className="selection-summary-meta">{isMember ? <>{priceDisplay.originalHint && <del>{priceDisplay.originalHint}</del>}{priceDisplay.realizedSavingCents > 0 && <b>已优惠 {formatMoney(priceDisplay.realizedSavingCents)}</b>}{!priceDisplay.realizedSavingCents && <span>已按会员价计算</span>}</> : priceDisplay.memberHint ? <><span className="selection-summary-member-price">{priceDisplay.memberHint}</span>{priceDisplay.savingCents > 0 && <b>可省 {formatMoney(priceDisplay.savingCents)}</b>}</> : <span>{priceDisplay.primaryLabel} · 查看清单</span>}</span>
           </span>
         </button>
         <button className="submit-button" type="button" disabled={readOnly || submitting || !online} onClick={submit}>

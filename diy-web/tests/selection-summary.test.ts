@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -27,6 +28,29 @@ test('已提交返回项目菜单时使用空白选购草稿', () => {
     localParts: [],
     tea: null,
   });
+});
+
+test('选购清单采用紧凑购物车结构，减免不占用独立大卡片空间', () => {
+  const sheet = fs.readFileSync(new URL('../src/components/SelectionSummarySheet.tsx', import.meta.url), 'utf8');
+  const styles = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.match(sheet, /selection-sheet-scroll/);
+  assert.match(sheet, /selection-sheet-promotion/);
+  assert.match(styles, /\.selection-summary-sheet[^{]*\{[\s\S]*\n\s+height: min\(72dvh/);
+  assert.match(styles, /\.selection-sheet-promotion[^{]*\{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\) auto/);
+  assert.match(styles, /\.selection-sheet-group \{ padding: 8px 0/);
+});
+
+test('底部选购栏明确展示会员价，不再用极小的办卡提示替代价格', () => {
+  const app = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const styles = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.match(app, /className="selection-summary-member-price">\{priceDisplay\.memberHint\}/);
+  assert.doesNotMatch(app, /<span>办年卡享 \{priceDisplay\.memberHint\.replace/);
+  assert.match(styles, /\.selection-summary-member-price \{[^}]*font-size: 11px/);
+});
+
+test('选购清单在手机上保持美团式固定大抽屉高度，不随三项内容收缩', () => {
+  const styles = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /\.selection-summary-sheet[^{]*\{[\s\S]*?\n\s+height: min\(72dvh, 640px\);/);
 });
 
 function project(partial: Partial<Project> & Pick<Project, 'id' | 'code' | 'category' | 'name'>): Project {

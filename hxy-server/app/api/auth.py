@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.session import get_db
-from app.models import BrowserInstance, CouponTemplate, CustomerVerificationCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
+from app.models import CouponTemplate, CustomerVerificationCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
 from app.models.service import Visit
 from app.schemas.auth import (
     BindPhoneRequest, H5LoginRequest, H5SendCodeRequest, H5SendCodeResponse,
@@ -184,9 +184,9 @@ def h5_login(
                         SelectionSession.customer_id == previous_customer_id,
                         SelectionSession.status.in_(["draft", "submitted", "confirmed"]),
                     ).update({"customer_id": user.id}, synchronize_session=False)
-                    db.query(BrowserInstance).filter(BrowserInstance.customer_id == previous_customer_id).update(
-                        {"customer_id": user.id}, synchronize_session=False
-                    )
+                    # 浏览器 Cookie 只代表匿名浏览器实例，不能永久升级为手机号身份。
+                    # 历史选单等业务记录可以合并到账号；后续新选单仍应默认匿名，
+                    # 仅在顾客端携带登录令牌时显式绑定本次选单。
                     db.query(ServiceFeedback).filter(ServiceFeedback.customer_id == previous_customer_id).update(
                         {"customer_id": user.id}, synchronize_session=False
                     )

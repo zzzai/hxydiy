@@ -243,6 +243,33 @@ class SelectionClosureV2Tests(unittest.TestCase):
             self.assertEqual(session.status, "submitted")
             self.assertEqual(session.items[0]["diy_preferences"], ["肩颈"])
 
+    def test_anonymous_repeated_submission_recalculates_full_store_total_from_current_items(self):
+        session_id, token = self.create_session()
+        first = self.client.post(
+            f"/api/v1/selection-sessions/{session_id}/revisions",
+            headers={"X-Selection-Token": token, "Idempotency-Key": "anonymous-total-one"},
+            json={"items": [{"project_id": self.project_id}]},
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(first.json()["snapshot"]["pricing"]["store_total_cents"], 3990)
+        self.assertEqual(first.json()["snapshot"]["pricing"]["payable_total_cents"], 3990)
+
+        second = self.client.post(
+            f"/api/v1/selection-sessions/{session_id}/revisions",
+            headers={"X-Selection-Token": token, "Idempotency-Key": "anonymous-total-two"},
+            json={"items": [{"project_id": self.project_id, "quantity": 2}]},
+        )
+        self.assertEqual(second.status_code, 200, second.text)
+        pricing = second.json()["snapshot"]["pricing"]
+        self.assertEqual(pricing["applied_price_type"], "store")
+        self.assertEqual(pricing["store_subtotal_cents"], 7980)
+        self.assertEqual(pricing["store_total_cents"], 7980)
+        self.assertEqual(pricing["payable_total_cents"], 7980)
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, session_id)
+            self.assertEqual(session.store_total_cents, 7980)
+            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 7980)
+
     def test_quote_falls_back_to_claimable_coupon_hint_when_member_price_is_equal(self):
         session_id, token = self.create_session()
         with self.SessionLocal() as db:

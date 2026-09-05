@@ -57,10 +57,19 @@ const SPA_60_VISUALS: ProjectDetailVisualSection[] = [
 
 const FOOT_REFINEMENT_VISUALS: ProjectDetailVisualSection[] = [
   {
-    image: assetPath('projects/hxy-foot-refinement-1.webp'),
+    image: assetPath('projects/hxy-foot-refine-1-detail.webp'),
     title: '细细整理，给双脚一个清爽收尾',
-    body: '温水、毛巾和木质工具按门店标准备好，轻松完成足部清洁与修整。',
+    body: '毛巾和木质工具按门店标准备好，轻松完成足部清洁与修整。',
     alt: '荷小悦人物在新中式服务台为顾客进行足部清洁与修整',
+  },
+];
+
+const GODDESS_FOOT_CARE_VISUALS: ProjectDetailVisualSection[] = [
+  {
+    image: assetPath('projects/hxy-nvshen-60-detail.webp'),
+    title: '从泡脚开始，慢慢照顾双脚',
+    body: '现煮草本泡脚、舒缓按摩与足部养护连贯进行，再以足膜和润足收尾，让整个人在温热与香气里放松下来。',
+    alt: '荷小悦 IP 在新中式空间为顾客提供草本足护与足膜润足服务',
   },
 ];
 
@@ -69,6 +78,7 @@ export function projectDetailVisuals(code: string): ProjectDetailVisualSection[]
   if (code === 'hxy-xiaoqi-90') return SIGNATURE_FOOTBATH_VISUALS;
   if (code === 'hxy-spa-60') return SPA_60_VISUALS;
   if (code === 'hxy-foot-refine-1') return FOOT_REFINEMENT_VISUALS;
+  if (code === 'hxy-nvshen-60') return GODDESS_FOOT_CARE_VISUALS;
   const copy: Record<string, [string, string, string]> = {
     'hxy-qiqing-30': ['一桶草本，先让双脚暖起来', '从温热草本开始，按需要选泡脚液和手法力度。', '泡好之后，服务完成统一线下结算。'],
     'hxy-xiangxiang-60': ['先暖足，再慢慢放松', '给双脚和小腿留出完整时间，按需要自由搭配。', '不赶步骤，按门店最终确认清单服务。'],

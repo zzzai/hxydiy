@@ -166,6 +166,17 @@ def _browser_customer(db: Session, request: Request | None) -> tuple[int, str, b
     if token:
         browser = db.scalar(select(BrowserInstance).where(BrowserInstance.token_hash == _hash_token(token)))
         if browser:
+            customer = db.get(User, browser.customer_id)
+            if not customer or not customer.openid.startswith("anon_"):
+                # 兼容并自愈历史数据：旧登录流程曾把长期浏览器 Cookie 改绑到手机号账号，
+                # 导致退出登录后创建的新选单仍按会员价计算。轮换回独立匿名身份，
+                # 不影响已经归档到账号下的历史选单。
+                anonymous = User(openid=f"anon_{uuid.uuid4().hex}")
+                db.add(anonymous)
+                db.flush()
+                browser.customer_id = anonymous.id
+                browser.last_seen_at = utcnow()
+                return anonymous.id, token, False
             browser.last_seen_at = utcnow()
             return browser.customer_id, token, True
     token = secrets.token_urlsafe(32)

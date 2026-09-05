@@ -326,6 +326,49 @@ class OccupancyApiTests(unittest.TestCase):
             db.query(User).filter(User.openid.like("anon_%")).delete()
             db.commit()
 
+    def test_legacy_browser_cookie_bound_to_phone_member_rotates_back_to_anonymous_identity(self):
+        self.release_if_active("sofa-06")
+        browser = TestClient(app)
+        first = browser.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr", "device_label": "测试手机",
+        })
+        self.assertEqual(first.status_code, 200, first.text)
+        with self.SessionLocal() as db:
+            first_session = db.get(SelectionSession, first.json()["session"]["id"])
+            browser_instance = db.scalar(select(BrowserInstance).where(BrowserInstance.customer_id == first_session.customer_id))
+            member = User(openid="legacy_browser_member", phone="13900139000", is_member=True)
+            db.add(member)
+            db.flush()
+            browser_instance.customer_id = member.id
+            db.commit()
+            member_id = member.id
+
+        self.release_if_active("sofa-06")
+        second = browser.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr", "device_label": "测试手机",
+        })
+        self.assertEqual(second.status_code, 200, second.text)
+        with self.SessionLocal() as db:
+            second_session = db.get(SelectionSession, second.json()["session"]["id"])
+            anonymous = db.get(User, second_session.customer_id)
+            self.assertNotEqual(second_session.customer_id, member_id)
+            self.assertTrue(anonymous.openid.startswith("anon_"))
+            browser_instance = db.scalar(select(BrowserInstance).where(BrowserInstance.customer_id == anonymous.id))
+            self.assertIsNotNone(browser_instance)
+
+        submitted = browser.post(
+            f"/api/v1/selection-sessions/{second.json()['session']['id']}/revisions",
+            headers={
+                "X-Selection-Token": second.json()["access_token"],
+                "Idempotency-Key": "legacy-browser-anonymous-price",
+            },
+            json={"items": [{"project_id": self.foot_id}]},
+        )
+        self.assertEqual(submitted.status_code, 200, submitted.text)
+        self.assertEqual(submitted.json()["snapshot"]["pricing"]["applied_price_type"], "store")
+        browser.close()
+        self.release_if_active("sofa-06")
+
     def test_same_browser_can_resume_its_own_position_after_legacy_flow_reserves_the_room(self):
         self.release_if_active("sofa-06")
         browser = TestClient(app)

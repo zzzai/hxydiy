@@ -41,6 +41,11 @@ import {
   detailPriceComparison,
   displayProjectName,
   projectImage,
+  customerProjectHighlights,
+  customerProjectSummaryTags,
+  customerProjectPurchaseTags,
+  customerProjectTagGroups,
+  customerProjectSummaryText,
   type Addon,
   type Project,
 } from '../domain';
@@ -211,6 +216,7 @@ export default function ProjectDetailPage({
   const basePrices = detailBasePriceComparison(project, isMember);
   const configuredPrices = detailPriceComparison(preview, isMember);
   const detailVisualSections = projectDetailVisuals(project.code);
+  const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
 
   return (
     <motion.div data-motion="detail" {...detailMotion} className={`project-detail-page mini-detail-page ${isMember ? 'member-active' : ''}`} role="dialog" aria-modal="true" aria-labelledby="project-detail-title">
@@ -229,7 +235,12 @@ export default function ProjectDetailPage({
             {project.duration_min && <span><Clock3 size={11} />{project.duration_min}分钟</span>}
             <span>价格透明</span>
           </div>
-          <p>{project.summary}</p>
+          <p>{customerProjectSummaryText(project)}</p>
+          {(projectHighlights.length > 0 || projectSummaryTags.length > 0 || projectPurchaseTags.length > 0) && <div className="customer-tag-groups" aria-label="项目标签">
+            {projectHighlights.length > 0 && <div className="customer-tag-group customer-tag-group-highlight"><strong>项目特色</strong><div>{projectHighlights.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
+            {projectSummaryTags.length > 0 && <div className="customer-tag-group customer-tag-group-summary"><strong>项目简介</strong><div>{projectSummaryTags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
+            {projectPurchaseTags.length > 0 && <div className="customer-tag-group customer-tag-group-purchase"><strong>选购规则</strong><div>{projectPurchaseTags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
+          </div>}
           <div className="mini-detail-price"><strong>{formatMoney(basePrices.currentCents)}</strong>{isMember ? <del>{basePrices.comparisonLabel} {formatMoney(basePrices.comparisonCents)}</del> : <span className="member-reference-price">会员价 {formatMoney(basePrices.comparisonCents)}</span>}<em>{basePrices.currentLabel}</em></div>
           {!isMember && <small className="price-identity-hint">到店办理年度权益卡，本项目可享会员价 {formatMoney(basePrices.comparisonCents)}</small>}
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
