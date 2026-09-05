@@ -94,6 +94,12 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("COPY diy-web/dist/ ./diy-web/dist/", dockerfile)
         self.assertIn("COPY admin-react/dist/ ./admin-react/dist/", dockerfile)
 
+    def test_release_dockerfile_uses_configurable_aliyun_pypi_mirror(self):
+        dockerfile = (REPO_ROOT / "deploy/diy/Dockerfile.release").read_text(encoding="utf-8")
+
+        self.assertIn("ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/", dockerfile)
+        self.assertIn('pip install --no-cache-dir --index-url "$PIP_INDEX_URL" -r requirements.txt', dockerfile)
+
     def test_release_compose_build_context_points_to_release_root(self):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
         self.assertIn("context: ${HXY_DIY_CURRENT:-../../current}", compose)
