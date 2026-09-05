@@ -177,6 +177,27 @@ class TestTechnicianServiceHistoryApi:
             assert occupancy.serviced_by_technician_id == self.tech_a_id
             assert occupancy.actual_service_end_at is not None
 
+    def test_confirm_rejects_when_another_technician_claimed_owner_first(self):
+        # Simulate a competing writer having won before this request's
+        # conditional NULL-only ownership update; the losing branch must not
+        # overwrite the owner.
+        with self.SessionLocal() as db:
+            occupancy = db.get(PositionOccupancy, self.occupancy_id)
+            occupancy.serviced_by_technician_id = self.tech_b_id
+            db.commit()
+
+        rejected = self.client.post(
+            f"/api/v1/technician/occupancies/{self.occupancy_id}/confirm",
+            json={"idempotency_key": "history-owner-race-a"},
+            headers=self.tech_a_headers,
+        )
+
+        assert rejected.status_code == 409, rejected.text
+        assert rejected.json()["detail"]["code"] == "TECHNICIAN_SERVICE_OWNER_MISMATCH"
+        with self.SessionLocal() as db:
+            occupancy = db.get(PositionOccupancy, self.occupancy_id)
+            assert occupancy.serviced_by_technician_id == self.tech_b_id
+
     def test_history_returns_only_whitelisted_service_and_confirmed_profile_fields(self):
         self.client.post(
             f"/api/v1/technician/occupancies/{self.occupancy_id}/confirm",
@@ -290,8 +311,8 @@ def test_legacy_backfill_only_assigns_a_unique_audited_technician():
             connection.execute(text("INSERT INTO stores(id) VALUES (1)"))
             connection.execute(text("INSERT INTO technicians(id, store_id) VALUES (11, 1), (12, 1)"))
             connection.execute(text("INSERT INTO staff(id, store_id, technician_id) VALUES (21, 1, 11), (22, 1, 12)"))
-            connection.execute(text("INSERT INTO position_occupancies(id, store_id, actual_service_end_at) VALUES (31, 1, CURRENT_TIMESTAMP), (32, 1, CURRENT_TIMESTAMP), (33, 1, CURRENT_TIMESTAMP)"))
-            connection.execute(text("INSERT INTO audit_logs(id, actor_type, actor_id, store_id, action, entity_type, entity_id) VALUES (1, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '31'), (2, 'staff', '21', 1, 'technician_finish_service', 'position_occupancy', '31'), (3, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '32'), (4, 'staff', '22', 1, 'technician_finish_service', 'position_occupancy', '32')"))
+            connection.execute(text("INSERT INTO position_occupancies(id, store_id, actual_service_end_at) VALUES (31, 1, CURRENT_TIMESTAMP), (32, 1, CURRENT_TIMESTAMP), (33, 1, CURRENT_TIMESTAMP), (34, 1, CURRENT_TIMESTAMP)"))
+            connection.execute(text("INSERT INTO audit_logs(id, actor_type, actor_id, store_id, action, entity_type, entity_id) VALUES (1, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '31'), (2, 'staff', '21', 1, 'technician_finish_service', 'position_occupancy', '31'), (3, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '32'), (4, 'staff', '22', 1, 'technician_finish_service', 'position_occupancy', '32'), (5, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '34'), (6, 'staff', '999', 1, 'technician_finish_service', 'position_occupancy', '34')"))
         engine.dispose()
 
         env = os.environ.copy()
@@ -324,4 +345,4 @@ def test_legacy_backfill_only_assigns_a_unique_audited_technician():
                 "SELECT id, serviced_by_technician_id FROM position_occupancies ORDER BY id"
             )).tuples().all())
         engine.dispose()
-        assert rows == {31: 11, 32: None, 33: None}
+        assert rows == {31: 11, 32: None, 33: None, 34: None}

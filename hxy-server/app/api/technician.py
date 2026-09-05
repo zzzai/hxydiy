@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -381,9 +381,23 @@ def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str |
         return replay.result_snapshot
     _reject_conflicted_room_action(db, occupancy)
     if action == "confirm":
-        if occupancy.serviced_by_technician_id is None:
+        owner_claim = db.execute(
+            update(PositionOccupancy)
+            .where(
+                PositionOccupancy.id == occupancy.id,
+                PositionOccupancy.store_id == technician.store_id,
+                PositionOccupancy.serviced_by_technician_id.is_(None),
+            )
+            .values(serviced_by_technician_id=technician.id)
+            .execution_options(synchronize_session=False)
+        )
+        if owner_claim.rowcount:
             occupancy.serviced_by_technician_id = technician.id
-        elif occupancy.serviced_by_technician_id != technician.id:
+        else:
+            # The conditional update is the concurrency boundary. Refresh before
+            # deciding whether this is the same technician's idempotent action.
+            db.refresh(occupancy)
+        if occupancy.serviced_by_technician_id != technician.id:
             raise HTTPException(
                 status_code=409,
                 detail={
