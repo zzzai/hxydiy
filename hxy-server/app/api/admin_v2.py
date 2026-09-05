@@ -2159,6 +2159,16 @@ class ServiceReferenceV3Profile(BaseModel):
     def storage_payload(self) -> dict:
         return self.model_dump(mode="json", exclude_unset=True, exclude_none=True)
 
+    def has_content(self) -> bool:
+        def populated(value) -> bool:
+            if isinstance(value, dict):
+                return any(populated(child) for child in value.values())
+            if isinstance(value, list):
+                return any(populated(child) for child in value)
+            return isinstance(value, str) and bool(value.strip())
+
+        return populated(self.model_dump(exclude={"schema_version", "taxonomy_version"}))
+
 
 class CustomerProfileRecordIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -2239,6 +2249,8 @@ class CustomerProfileRecordIn(BaseModel):
                 raise ValueError("服务参考内外版本必须一致")
             if self.signals or self.note:
                 raise ValueError("v3 服务参考不能混用旧版标签或备注")
+            if not self.profile.has_content():
+                raise ValueError("请至少记录一项服务参考")
             self.source = "both" if self.customer_confirmed else "service_observation"
         elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile)):
             raise ValueError("旧版画像不能携带 v2 服务参考元数据")
@@ -2536,6 +2548,10 @@ def create_customer_profile_record(
     role = normalize_staff_role(staff.role, staff.technician_id)
     if role not in {"technician", "manager"}:
         raise HTTPException(status_code=403, detail="当前账号无权新增画像记录")
+    if body.schema_version == 3 and role != "technician":
+        raise HTTPException(status_code=403, detail="管理端仅可读取 v3 服务参考")
+    if body.schema_version == 3 and not body.selection_session_id:
+        raise HTTPException(status_code=422, detail="v3 服务参考必须关联已完成服务")
     idempotency_key = _require_profile_idempotency_key(idempotency_key)
     is_bound_technician = role == "technician" and bool(staff.technician_id)
     if is_bound_technician and body.schema_version == 1 and "source" not in body.model_fields_set:
@@ -2601,6 +2617,8 @@ def create_customer_profile_record(
         ))
         if not original:
             raise HTTPException(status_code=404, detail="原画像记录不存在")
+        if original.schema_version == 3:
+            raise HTTPException(status_code=403, detail="管理端不能更正 v3 服务参考")
         if not body.correction_reason.strip():
             raise HTTPException(status_code=422, detail="更正记录需要填写原因")
     record = CustomerProfileRecord(

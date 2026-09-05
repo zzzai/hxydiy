@@ -116,6 +116,13 @@ test('管理端以白名单结构化展示 v3 且原话保持默认折叠', () =
   assert.doesNotMatch(JSON.stringify(display.groups), /顾客自述正在用药/);
 });
 
+test('管理端隐藏未知或非字符串稳定编码，不展示原始敏感内容', () => {
+  const display = buildServiceReferenceDisplay({ schema_version: 3, taxonomy_version: 'service_reference_v2', profile: {
+    customer_reported: { force_preference: '13800000000', focus_areas: ['neck_shoulder', { phone: '13800000000' }, '原始敏感值'], communication_consumption: { budget_preference: 'constructor' } },
+  } });
+  assert.deepEqual(display.groups, [{ title: '服务偏好', items: [{ label: '本次重点', value: '肩颈' }] }]);
+});
+
 test('管理端兼容 v2 嵌套服务参考而不退化为空摘要', () => {
   const display = buildServiceReferenceDisplay({
     schema_version: 2, taxonomy_version: 'service_reference_v1', customer_confirmed: false,

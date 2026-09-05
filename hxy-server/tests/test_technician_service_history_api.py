@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import CustomerProfileRecord, PositionOccupancy, SelectionSession, Staff, Store, User
+from app.models import AuditLog, CustomerProfileRecord, PositionOccupancy, SelectionSession, Staff, Store, User
 from app.models.operations import Room, Technician
 
 
@@ -118,6 +118,50 @@ class TestTechnicianServiceHistoryApi:
     def _override_get_db(self):
         with self.SessionLocal() as db:
             yield db
+
+    def test_ongoing_legacy_service_resolves_unique_audit_owner_and_finishes(self):
+        with self.SessionLocal() as db:
+            db.get(PositionOccupancy, self.occupancy_id).status = "in_service"
+            db.add(AuditLog(store_id=self.store_id, actor_type="staff", actor_id=str(self.staff_a_id), action="technician_confirm_service", entity_type="position_occupancy", entity_id=str(self.occupancy_id)))
+            db.commit()
+        other = self.client.post(f"/api/v1/technician/occupancies/{self.occupancy_id}/confirm", json={"idempotency_key": "legacy-other-confirm"}, headers=self.tech_b_headers)
+        assert other.status_code == 409, other.text
+        original = self.client.post(f"/api/v1/technician/occupancies/{self.occupancy_id}/finish", json={"idempotency_key": "legacy-original-finish"}, headers=self.tech_a_headers)
+        assert original.status_code == 200, original.text
+        with self.SessionLocal() as db:
+            assert db.get(PositionOccupancy, self.occupancy_id).serviced_by_technician_id == self.tech_a_id
+
+    def test_unresolved_ongoing_service_cannot_be_claimed_and_manager_can_finish(self):
+        with self.SessionLocal() as db:
+            db.get(PositionOccupancy, self.occupancy_id).status = "in_service"
+            manager = Staff(username="legacy-manager", name="店长", role="manager", status="active", store_id=self.store_id, password_hash=hash_password("pass"))
+            db.add(manager)
+            db.commit()
+            manager_headers = {"Authorization": f"Bearer {create_staff_token(manager.id, 'manager')}"}
+        for action in ("confirm", "finish"):
+            response = self.client.post(f"/api/v1/technician/occupancies/{self.occupancy_id}/{action}", json={"idempotency_key": f"legacy-unassigned-{action}"}, headers=self.tech_b_headers)
+            assert response.status_code == 409, response.text
+            assert response.json()["detail"]["code"] == "TECHNICIAN_SERVICE_OWNER_UNRESOLVED"
+        managed = self.client.post(f"/api/v1/admin/occupancies/{self.occupancy_id}/finish-service", json={"idempotency_key": "manager-legacy-finish", "note": "核对现场后结束"}, headers=manager_headers)
+        assert managed.status_code == 200, managed.text
+        with self.SessionLocal() as db:
+            assert db.get(PositionOccupancy, self.occupancy_id).serviced_by_technician_id is None
+
+    def test_superseded_confirmed_profile_is_pending_in_history_and_filter(self):
+        with self.SessionLocal() as db:
+            occupancy = db.get(PositionOccupancy, self.occupancy_id)
+            occupancy.serviced_by_technician_id = self.tech_a_id
+            occupancy.actual_service_end_at = datetime.now(timezone.utc)
+            original = CustomerProfileRecord(store_id=self.store_id, user_id=self.customer_id, selection_session_id="history-session", technician_id=self.tech_a_id, created_by_staff_id=self.staff_a_id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, profile={"customer_reported": {"force_preference": "gentle"}})
+            db.add(original)
+            db.flush()
+            db.add(CustomerProfileRecord(store_id=self.store_id, user_id=self.customer_id, selection_session_id="history-session", technician_id=self.tech_a_id, created_by_staff_id=self.staff_a_id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=False, correction_of_id=original.id, profile={"customer_reported": {"force_preference": "medium"}}))
+            db.commit()
+        confirmed = self.client.get("/api/v1/technician/service-history?profile_status=confirmed", headers=self.tech_a_headers).json()
+        pending = self.client.get("/api/v1/technician/service-history?profile_status=pending", headers=self.tech_a_headers).json()
+        assert confirmed["total"] == 0
+        assert pending["total"] == 1
+        assert pending["items"][0]["profile_summary"] is None
 
     def test_confirm_binds_technician_and_history_returns_only_own_finished_services(self):
         confirmed = self.client.post(
@@ -338,6 +382,19 @@ class TestTechnicianServiceHistoryApi:
             assert forbidden not in serialized
 
 
+def test_safe_summary_rejects_malformed_nested_values_without_leaking_or_crashing():
+    from app.api.technician import _history_profile_summary
+    for version, taxonomy in ((2, "service_reference_v1"), (3, "service_reference_v2")):
+        record = CustomerProfileRecord(schema_version=version, taxonomy_version=taxonomy, profile={
+            "customer_reported": {"focus_areas": ["neck_shoulder", {"phone": "13800000000"}], "force_preference": {"quote": "private"}, "work_lifestyle": "private", "communication_consumption": {"decision_priorities": "private"}},
+            "technician_observed": ["private"], "next_visit": "private",
+        })
+        summary = _history_profile_summary(record)
+        assert summary["focus_areas"] == ["肩颈"]
+        assert "private" not in str(summary)
+        assert "13800000000" not in str(summary)
+
+
 def test_legacy_backfill_only_assigns_a_unique_audited_technician():
     project_root = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory() as directory:
@@ -351,10 +408,13 @@ def test_legacy_backfill_only_assigns_a_unique_audited_technician():
             connection.execute(text("CREATE TABLE position_occupancies (id INTEGER PRIMARY KEY, store_id INTEGER, actual_service_end_at DATETIME)"))
             connection.execute(text("CREATE TABLE audit_logs (id INTEGER PRIMARY KEY, actor_type VARCHAR(16), actor_id VARCHAR(64), store_id INTEGER, action VARCHAR(64), entity_type VARCHAR(32), entity_id VARCHAR(64))"))
             connection.execute(text("INSERT INTO stores(id) VALUES (1), (2)"))
+            connection.execute(text("ALTER TABLE position_occupancies ADD COLUMN status VARCHAR(32) DEFAULT 'released'"))
             connection.execute(text("INSERT INTO technicians(id, store_id) VALUES (11, 1), (12, 1), (13, 2)"))
             connection.execute(text("INSERT INTO staff(id, store_id, technician_id) VALUES (21, 1, 11), (22, 1, 12), (23, 1, 13)"))
             connection.execute(text("INSERT INTO position_occupancies(id, store_id, actual_service_end_at) VALUES (31, 1, CURRENT_TIMESTAMP), (32, 1, CURRENT_TIMESTAMP), (33, 1, CURRENT_TIMESTAMP), (34, 1, CURRENT_TIMESTAMP), (35, 1, CURRENT_TIMESTAMP)"))
             connection.execute(text("INSERT INTO audit_logs(id, actor_type, actor_id, store_id, action, entity_type, entity_id) VALUES (1, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '31'), (2, 'staff', '21', 1, 'technician_finish_service', 'position_occupancy', '31'), (3, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '32'), (4, 'staff', '22', 1, 'technician_finish_service', 'position_occupancy', '32'), (5, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '34'), (6, 'staff', '999', 1, 'technician_finish_service', 'position_occupancy', '34'), (7, 'staff', '23', 1, 'technician_confirm_service', 'position_occupancy', '35')"))
+            connection.execute(text("INSERT INTO position_occupancies(id, store_id, status) VALUES (36, 1, 'in_service'), (37, 1, 'in_service'), (38, 1, 'in_service')"))
+            connection.execute(text("INSERT INTO audit_logs(id, actor_type, actor_id, store_id, action, entity_type, entity_id) VALUES (8, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '36'), (9, 'staff', '21', 1, 'technician_confirm_service', 'position_occupancy', '37'), (10, 'staff', '22', 1, 'technician_confirm_service', 'position_occupancy', '37')"))
         engine.dispose()
 
         env = os.environ.copy()
@@ -387,4 +447,4 @@ def test_legacy_backfill_only_assigns_a_unique_audited_technician():
                 "SELECT id, serviced_by_technician_id FROM position_occupancies ORDER BY id"
             )).tuples().all())
         engine.dispose()
-        assert rows == {31: 11, 32: None, 33: None, 34: None, 35: None}
+        assert rows == {31: 11, 32: None, 33: None, 34: None, 35: None, 36: 11, 37: None, 38: None}

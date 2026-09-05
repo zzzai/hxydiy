@@ -18,8 +18,9 @@ const labelValue = (field: string, value: unknown) => {
   if (field === '体型' && value === 'balanced') return '匀称';
   if (field === '预算倾向' && value === 'balanced') return '平衡';
   if (field === '睡眠自述' && value === 'average') return '一般';
-  if (Array.isArray(value)) return value.map(item => LABELS[String(item)] || String(item)).join('、');
-  return value ? LABELS[String(value)] || String(value) : '';
+  const knownLabel = (code: unknown) => typeof code === 'string' && Object.prototype.hasOwnProperty.call(LABELS, code) ? LABELS[code] : '';
+  if (Array.isArray(value)) return value.map(knownLabel).filter(Boolean).join('、');
+  return knownLabel(value);
 };
 
 export function buildServiceReferenceDisplay(record: any): ServiceReferenceDisplay {
@@ -40,7 +41,7 @@ export function buildServiceReferenceDisplay(record: any): ServiceReferenceDispl
   ];
   const groups = rows.map(([title, values]) => ({
     title,
-    items: values.filter(([, value]) => Array.isArray(value) ? value.length > 0 : Boolean(value)).map(([label, value]) => ({ label, value: labelValue(label, value) })),
+    items: values.map(([label, value]) => ({ label, value: labelValue(label, value) })).filter(item => Boolean(item.value)),
   })).filter(group => group.items.length > 0);
   const knownVersion = (record?.schema_version === 3 && record?.taxonomy_version === 'service_reference_v2')
     || (record?.schema_version === 2 && record?.taxonomy_version === 'service_reference_v1');

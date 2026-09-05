@@ -58,7 +58,7 @@ def upgrade() -> None:
               AND technicians.store_id = position_occupancies.store_id
               AND staff.technician_id IS NOT NULL
         )
-        WHERE actual_service_end_at IS NOT NULL
+        WHERE (actual_service_end_at IS NOT NULL OR status = 'in_service')
           AND (
               SELECT COUNT(*)
               FROM audit_logs

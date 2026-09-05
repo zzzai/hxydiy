@@ -140,7 +140,7 @@ class TestTechnicianProfileV3Contract:
         minimal = self.v3_payload(profile={
             "schema_version": 3,
             "taxonomy_version": "service_reference_v2",
-            "customer_reported": {},
+            "customer_reported": {"force_preference": "gentle"},
             "technician_observed": {},
             "next_visit": {},
         })
@@ -212,6 +212,66 @@ class TestTechnicianProfileV3Contract:
             headers={**self.technician_headers, "Idempotency-Key": "v3-profile-limits-002"},
         )
         assert rejected.status_code == 422, rejected.text
+
+    def test_blank_v3_is_rejected_even_when_sections_and_quote_are_present(self):
+        for confirmed in (True, False):
+            payload = self.v3_payload(customer_confirmed=confirmed, profile={
+                "schema_version": 3, "taxonomy_version": "service_reference_v2",
+                "customer_reported": {"service_related_context": {"quote": "  "}},
+                "technician_observed": {}, "next_visit": {},
+            })
+            response = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=self.technician_headers)
+            assert response.status_code == 422, response.text
+
+        observation = self.v3_payload(customer_confirmed=False, profile={
+            "schema_version": 3, "taxonomy_version": "service_reference_v2",
+            "technician_observed": {"service_feedback": "suitable"},
+        })
+        response = self.client.post("/api/v1/admin/v2/customer-profile-records", json=observation, headers=self.technician_headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["source"] == "service_observation"
+        assert response.json()["customer_confirmed"] is False
+        assert response.json()["confirmed_at"] is None
+
+    def test_v3_requires_service_association(self):
+        response = self.client.post("/api/v1/admin/v2/customer-profile-records", json=self.v3_payload(selection_session_id=None), headers=self.technician_headers)
+        assert response.status_code == 422, response.text
+
+    def test_manager_cannot_create_v3_or_correct_v3_via_legacy_version(self):
+        saved = self.client.post("/api/v1/admin/v2/customer-profile-records", json=self.v3_payload(), headers=self.technician_headers)
+        assert saved.status_code == 200, saved.text
+        with self.SessionLocal() as db:
+            manager = Staff(username="v3-manager", name="店长", password_hash=hash_password("pass"), role="manager", status="active", store_id=1)
+            db.add(manager)
+            db.commit()
+            headers = {"Authorization": f"Bearer {create_staff_token(manager.id, 'manager')}", "Idempotency-Key": "manager-v3-block"}
+        for payload in (self.v3_payload(), self.v3_payload(correction_of_id=saved.json()["id"], correction_reason="核对"), {
+            "user_id": self.user_id, "profile": {"age_range": "31-40"},
+            "correction_of_id": saved.json()["id"], "correction_reason": "绕过版本",
+        }):
+            response = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=headers)
+            assert response.status_code == 403, response.text
+
+    def test_v3_saved_record_is_visible_to_next_service_without_private_content(self):
+        saved = self.client.post("/api/v1/admin/v2/customer-profile-records", json=self.v3_payload(), headers=self.technician_headers)
+        assert saved.status_code == 200, saved.text
+        with self.SessionLocal() as db:
+            old = db.query(PositionOccupancy).first()
+            old.active_room_id = None
+            old.active_session_id = None
+            db.flush()
+            session = SelectionSession(id="next-v3-session", store_id=1, customer_id=self.user_id, access_token_hash="next-v3", status="submitted", items=[])
+            db.add(session)
+            db.flush()
+            occupancy = PositionOccupancy(store_id=1, room_id=old.room_id, active_room_id=old.room_id, selection_session_id=session.id, active_session_id=session.id, status="waiting_service")
+            db.add(occupancy)
+            db.commit()
+            occupancy_id = occupancy.id
+        response = self.client.get(f"/api/v1/technician/occupancies/{occupancy_id}/service-reference", headers=self.technician_headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["record"]["occupation_contexts"] == ["久坐办公"]
+        assert "顾客自述正在用药" not in response.text
+        assert "personal_context" not in response.text
 
     def test_taxonomy_endpoint_exposes_v3_stable_codes(self):
         response = self.client.get(
