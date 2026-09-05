@@ -24,7 +24,13 @@ jobs:
       pull-requests: read
     outputs:
       allowed: ${{ steps.scope.outputs.allowed }}
+      docs_only: ${{ steps.scope.outputs.docs_only }}
     steps:
+      # Load classification from the trusted base, never from PR code.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
       - id: scope
         uses: actions/github-script@v7
         with:
@@ -38,6 +44,12 @@ jobs:
               pr.head.repo.full_name === `${context.repo.owner}/${context.repo.repo}`
             );
             core.setOutput('allowed', String(allowed));
+            const { docsOnly } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/change-scope.cjs`);
+            const files = allowed ? await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo, pull_number: pr.number, per_page: 100,
+            }) : [];
+            const paths = files.flatMap((file) => [file.filename, file.previous_filename].filter(Boolean));
+            core.setOutput('docs_only', String(allowed && files.length === pr.changed_files && docsOnly(paths)));
             if (!allowed) core.info('Only non-draft PRs from this repository are eligible.');
 
   static:
@@ -57,6 +69,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Run contracts, whitespace and credential scan
         shell: bash
         env:
@@ -91,6 +106,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
+          if [[ '${{ needs.scope.outputs.docs_only }}' == true ]]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if git cat-file -e "$BASE_SHA:admin-react/package.json" 2>/dev/null; then
             test -f admin-react/package.json
             test -f admin-react/package-lock.json
@@ -129,6 +148,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
+          if [[ '${{ needs.scope.outputs.docs_only }}' == true ]]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if git cat-file -e "$BASE_SHA:diy-web/package.json" 2>/dev/null; then
             test -f diy-web/package.json
             test -f diy-web/package-lock.json
@@ -162,9 +185,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v5
+        if: needs.scope.outputs.docs_only != 'true'
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            hxy-server/requirements.txt
+            hxy-server/requirements-dev.txt
       - name: Test backend
+        if: needs.scope.outputs.docs_only != 'true'
         id: detect
         shell: bash
         env:

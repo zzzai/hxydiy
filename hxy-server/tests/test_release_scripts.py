@@ -104,10 +104,14 @@ class ReleaseScriptTests(unittest.TestCase):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
         self.assertIn("context: ${HXY_DIY_CURRENT:-../../current}", compose)
 
-    def test_production_workflow_builds_customer_dist_before_asset_tests(self):
+    def test_production_workflow_reuses_customer_dist_tested_by_ci(self):
         workflow = (REPO_ROOT / ".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
-
-        self.assertIn("(cd diy-web && npm ci && npm run build && npm test)", workflow)
+        ci = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertLess(ci.index("working-directory: diy-web\n        run: npm run build"), ci.index("working-directory: diy-web\n        run: npm test"))
+        self.assertIn("name: customer-dist-${{ github.sha }}", ci)
+        self.assertIn("name: customer-dist-${{ needs.verify.outputs.sha }}", workflow)
+        self.assertIn("run-id: ${{ needs.verify.outputs.run_id }}", workflow)
+        self.assertNotIn("npm ci", workflow)
 
     def test_release_creation_excludes_local_runtime_and_secret_files(self):
         create = (REPO_ROOT / "deploy/diy/create-release.sh").read_text(encoding="utf-8")

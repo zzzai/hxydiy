@@ -27,43 +27,40 @@ jobs:
     outputs:
       should_deploy: ${{ steps.gate.outputs.should_deploy }}
       sha: ${{ steps.gate.outputs.sha }}
+      run_id: ${{ steps.gate.outputs.run_id }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
       - id: gate
         uses: actions/github-script@v7
         with:
           script: |
             const fromCi = context.eventName === 'workflow_run';
-            const run = context.payload.workflow_run;
+            let run = context.payload.workflow_run;
             const sha = fromCi ? run.head_sha : (context.payload.inputs?.commit_sha || '');
-            let shouldDeploy = Boolean(sha);
-            if (fromCi) {
-              shouldDeploy = run.conclusion === 'success' && run.head_branch === 'main';
+            const { eligibleRun, hasBuilds } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-policy.cjs`);
+            const { data: latest } = await github.rest.repos.getCommit({ ...context.repo, ref: 'main' });
+            if (!fromCi && /^[0-9a-f]{40}$/.test(sha)) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo, workflow_id: 'ci.yml', head_sha: sha, event: 'push', status: 'success', per_page: 20,
+              });
+              run = data.workflow_runs.find((candidate) => eligibleRun(candidate, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`));
             }
+            let shouldDeploy = eligibleRun(run, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`);
             if (shouldDeploy) {
-              const { data: commit } = await github.rest.repos.getCommit({ ...context.repo, ref: sha });
-              shouldDeploy = commit.sha === sha;
-            }
-            if (shouldDeploy) {
-              const requiredPaths = [
-                'admin-react/package-lock.json',
-                'diy-web/package-lock.json',
-                'hxy-server/requirements.txt',
-                'deploy/diy/deploy-production.sh',
-              ];
-              for (const path of requiredPaths) {
-                try {
-                  await github.rest.repos.getContent({ ...context.repo, ref: sha, path });
-                } catch {
-                  shouldDeploy = false;
-                  break;
-                }
-              }
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: run.id, per_page: 100,
+              });
+              shouldDeploy = hasBuilds(artifacts, sha);
             }
             core.setOutput('should_deploy', String(shouldDeploy));
             core.setOutput('sha', sha || '');
+            core.setOutput('run_id', run?.id || '');
       - name: Explain skipped deployment
         if: steps.gate.outputs.should_deploy != 'true'
-        run: echo 'No successful CI result for a main commit; production deployment is skipped.'
+        run: echo 'No current-main successful CI with both build artifacts (including docs-only runs); deployment skipped.'
 
   deploy:
     name: Backup, rehearse, deploy and verify
@@ -73,6 +70,28 @@ jobs:
     environment: production
     timeout-minutes: 45
     steps:
+      - name: Preflight deployment configuration
+        shell: bash
+        env:
+          PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+          PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          PRODUCTION_SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          PRODUCTION_SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in PRODUCTION_SSH_KNOWN_HOSTS PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing production secret: $name"
+              missing=1
+            fi
+          done
+          test "$missing" = 0
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/known_hosts ~/.ssh/id_ed25519
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" true
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.verify.outputs.sha }}
@@ -85,24 +104,27 @@ jobs:
           test -f diy-web/package-lock.json
           test -f hxy-server/requirements.txt
           test -x deploy/diy/deploy-production.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: |
-            admin-react/package-lock.json
-            diy-web/package-lock.json
-      - name: Build management and customer applications
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd admin-react && npm ci && npm test && npm run build)
-          (cd diy-web && npm ci && npm run build && npm test)
+          name: admin-dist-${{ needs.verify.outputs.sha }}
+          path: admin-react/dist
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.verify.outputs.run_id }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: customer-dist-${{ needs.verify.outputs.sha }}
+          path: diy-web/dist
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.verify.outputs.run_id }}
       - name: Package immutable release input
         shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.verify.outputs.sha }}
         run: |
           set -euo pipefail
-          release_id="github-${GITHUB_SHA::12}-${GITHUB_RUN_ID}"
+          test -f admin-react/dist/index.html
+          test -f diy-web/dist/index.html
+          release_id="github-${SOURCE_SHA::12}-${GITHUB_RUN_ID}"
           mkdir -p release-package
           tar --exclude='.git' --exclude='.venv' --exclude='node_modules' --exclude='__pycache__' --exclude='*.pyc' --exclude='*.pyo' --exclude='*.db' --exclude='*.db-*' --exclude='.env' --exclude='.env.*' --exclude='tests' -cf - hxy-server | tar -xf - -C release-package
           mkdir -p release-package/admin-react release-package/diy-web
@@ -112,25 +134,6 @@ jobs:
           tar -C release-package -czf "${release_id}.tar.gz" .
           sha256sum "${release_id}.tar.gz" > "${release_id}.tar.gz.sha256"
           printf '%s' "$release_id" > release-id.txt
-      - name: Configure pinned production host key
-        shell: bash
-        env:
-          PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          test -n "$PRODUCTION_SSH_KNOWN_HOSTS"
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-      - name: Configure deployment key
-        shell: bash
-        env:
-          PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "$PRODUCTION_SSH_PRIVATE_KEY"
-          printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
       - name: Upload and run guarded release
         shell: bash
         env:
@@ -141,8 +144,10 @@ jobs:
           set -euo pipefail
           test -n "$PRODUCTION_SSH_HOST"
           test -n "$PRODUCTION_SSH_USER"
+          [[ "$PRODUCTION_ROOT" =~ ^/root/hxy-diy-[A-Za-z0-9_-]+$ ]]
           release_id=$(cat release-id.txt)
+          [[ "$release_id" =~ ^github-[0-9a-f]{12}-[0-9]+$ ]]
           archive="${release_id}.tar.gz"
-          ssh -o BatchMode=yes "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" "mkdir -p '${PRODUCTION_ROOT}/incoming/${release_id}' '${PRODUCTION_ROOT}/workspaces'"
-          scp -o BatchMode=yes "$archive" "${archive}.sha256" "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}:${PRODUCTION_ROOT}/incoming/${release_id}/"
-          ssh -o BatchMode=yes "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" "set -eu; cd '${PRODUCTION_ROOT}/incoming/${release_id}'; sha256sum -c '${archive}.sha256'; rm -rf '${PRODUCTION_ROOT}/workspaces/${release_id}'; mkdir -p '${PRODUCTION_ROOT}/workspaces/${release_id}'; tar -xzf '${archive}' -C '${PRODUCTION_ROOT}/workspaces/${release_id}'; '${PRODUCTION_ROOT}/workspaces/${release_id}/deploy/diy/deploy-production.sh' '${release_id}' '${PRODUCTION_ROOT}/workspaces/${release_id}'"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" "hxy-deploy prepare $release_id"
+          scp -O -o BatchMode=yes -o StrictHostKeyChecking=yes "$archive" "${archive}.sha256" "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}:${PRODUCTION_ROOT}/incoming/${release_id}/"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" "hxy-deploy release $release_id"

@@ -78,6 +78,17 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("deploy-production.sh", content)
         self.assertIn("concurrency:", content)
 
+    def test_deployment_reuses_sha_pinned_builds_and_fails_early_without_credentials(self):
+        content = workflow("deploy-production.yml")
+        self.assertLess(content.index("Preflight deployment configuration"), content.index("actions/download-artifact@v4"))
+        self.assertIn("run-id: ${{ needs.verify.outputs.run_id }}", content)
+        self.assertIn("eligibleRun", content)
+        self.assertIn("StrictHostKeyChecking=yes", content)
+        self.assertNotIn("npm ci", content)
+        self.assertNotIn("rm -rf", content)
+        self.assertIn("hxy-deploy release", content)
+        self.assertIn("actions/upload-artifact@v4", workflow("ci.yml"))
+
     def test_ci_fetches_the_pr_base_before_comparing_whitespace(self):
         content = workflow("ci.yml")
 
