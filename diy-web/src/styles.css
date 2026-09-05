@@ -557,6 +557,7 @@ h1, h2, h3, p { margin-top: 0; }
 .selection-sheet-item-price > strong { color: #c98d3b; font-size: 14px; line-height: 20px; }
 .selection-sheet-item-price > strong.is-free { color: #1f8f75; font-size: 11px; }
 .selection-sheet-item-price > del { color: var(--price-reference); font-size: 9px; line-height: 16px; }
+.selection-sheet-member-price { color: var(--price-member); font-size: 10px; font-weight: 700; line-height: 16px; }
 .selection-sheet-item-actions { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
 .selection-sheet-item-actions button {
   display: inline-flex;
