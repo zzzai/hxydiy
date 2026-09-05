@@ -1,31 +1,31 @@
 # hxy-diy 当前状态
 
-更新时间：2026-09-05 11:12（Asia/Shanghai）
+更新时间：2026-09-05 12:00（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
 
 - 服务器部署根目录：`/root/hxy-diy-20260811`
-- Release：`manual-2c3793ea3b95-20260905-1`
-- 对应主干提交：`2c3793e`（顾客端业务 PR #18、发布流水线 PR #19）
-- API 镜像：`hxy-diy-api:2c3793e`，镜像 ID `sha256:9742cd63e0ae4f1ecdc7c8862d4dc6f4fe36d7469808a2c1121aa9daf084b15b`
+- Release：`manual-fd58312185ae-20260905-2`
+- 对应主干提交：`fd583121`（顾客端匿名选购清单逐项会员价 PR #21）
+- API 镜像 ID：`sha256:6be07a904832fa2fc239def7bc010217d3934921321c0b2118d2c945ec924d1e`
 - Alembic head：`20260904_service_reference_v2`
-- 数据库备份：`pre-manual-2c3793ea3b95-20260905-1-20260905T025134Z.dump`
-- 备份 SHA-256：`e81964a2fc53455650de9cca6e88ee11ba722695e06607132078661af7e04156`
+- 数据库备份：`pre-manual-fd58312185ae-20260905-2-20260905T035528Z.dump`
+- 备份 SHA-256：`fb0b70d0101ead825e2bc0405a238aa8cb3bbe176806627afb49d449fd5b2e1f`
 - 备份恢复演练：通过
 - 公网 `/`、`/admin/`、`/technician/`、`/api/v1/health`：HTTP 200
 - API 与数据库容器：运行中，发布验收时重启次数均为 0，数据库健康
-- Release Manifest：逐文件校验通过；Manifest SHA-256 `2ad2123696c2e5166e837c524b2a8635053793e9097a9fae1865933f7be44c7f`
+- Release Manifest：逐文件校验通过；Manifest SHA-256 `be93e898cfd3f8fd09f09de98e266fb3890c1632c4ea470bd49f3e6bfd1e0950`
 
-顾客端入口加载 `index-BB45yxbT.js` 与 `index-C5IUvO1n.css`；本次未执行数据库迁移。
+顾客端入口加载 `index-C3V8Tw16.js` 与 `index-BPbw_Ea8.css`；本次未执行数据库迁移。
 
 ## 三端当前状态
 
 ### 顾客端
 
 - 正式入口：`https://diy.hexiaoyue.com/`
-- 已发布服务结束后重新进入空白选购、匿名多次提交整单门店价、浏览器匿名身份自愈、底部会员价和固定高度选购抽屉修复。
+- 已发布服务结束后重新进入空白选购、匿名多次提交整单门店价、浏览器匿名身份自愈、底部会员价和固定高度选购抽屉修复；匿名/非会员在选购清单中可逐项看到低于门店价的会员价参考。
 - 顾客端不直接管理技师服务参考标签；未来如增加顾客确认入口，必须复用后端版本化标签契约。
 
 ### 管理端
