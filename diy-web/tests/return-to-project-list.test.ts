@@ -25,19 +25,19 @@ function scenario(status: string, map: () => Promise<unknown>) {
     shouldRestartStoredEntry: (s: { requestedPositionFound: boolean; hasActiveOccupancy: boolean }) => s.requestedPositionFound && !s.hasActiveOccupancy,
     clearRecord: (...args: unknown[]) => cleared.push(args),
     startFreshSelectionDraft: () => { drafts++; },
-    enterPosition: async (code: string) => { entered.push(code); },
+    enterPosition: async (code: string, _recovered?: boolean, startNew?: boolean) => { entered.push(`${code}:${Boolean(startNew)}`); },
     persistCurrent: () => {}, flash: (message: string) => messages.push(message),
   };
   return { run: () => new AsyncFunction(...Object.keys(deps), body)(...Object.values(deps)),
     states, cleared, entered, messages, drafts: () => drafts };
 }
 
-test('结束但服务位仍占用，返回列表且保留旧会话，不重新开位', async () => {
-  const s = scenario('post_service_present', async () => ({ positions: [{ occupancy: { status: 'post_service_present' } }] }));
+test('服务结束且顾客仍在原位，返回列表并创建独立的新选购', async () => {
+  const s = scenario('post_service_present', async () => { throw new Error('不应先等待地图'); });
   await s.run();
   assert.equal(s.states.at(-1), 'ready');
   assert.deepEqual(s.cleared, []);
-  assert.deepEqual(s.entered, []);
+  assert.deepEqual(s.entered, ['sofa-01:true']);
   assert.equal(s.drafts(), 1);
 });
 
@@ -62,8 +62,8 @@ test('慢网时无需等服务位查询返回就进入列表', async () => {
 test('确认原服务位已释放才创建新选购会话', async () => {
   const s = scenario('released', async () => ({ positions: [{ occupancy: null }] }));
   await s.run();
-  assert.deepEqual(s.entered, ['sofa-01']);
-  assert.deepEqual(s.cleared, [[1, 'sofa-01']]);
+  assert.deepEqual(s.entered, ['sofa-01:false']);
+  assert.deepEqual(s.cleared, []);
 });
 
 test('未结束的已提交服务仍直接返回空白追加草稿', async () => {
