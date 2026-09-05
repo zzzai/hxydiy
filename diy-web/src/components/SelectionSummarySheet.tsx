@@ -33,11 +33,17 @@ type Props = {
   onQuantityChange: (target: Extract<SelectionTarget, { kind: 'project' | 'local' }>, delta: 1 | -1) => void;
 };
 
-function Price({ cents, label, originalPriceCents }: { cents: number; label?: string; originalPriceCents: number | null }) {
+function Price({ cents, label, originalPriceCents, memberPriceCents }: {
+  cents: number;
+  label?: string;
+  originalPriceCents: number | null;
+  memberPriceCents: number | null;
+}) {
   return (
     <div className="selection-sheet-item-price">
       <strong className={label ? 'is-free' : ''}>{label || formatMoney(cents)}</strong>
       {!label && originalPriceCents !== null && <del>门店价 {formatMoney(originalPriceCents)}</del>}
+      {!label && memberPriceCents !== null && <span className="selection-sheet-member-price">会员价 {formatMoney(memberPriceCents)}</span>}
     </div>
   );
 }
@@ -84,7 +90,7 @@ function ChildLine({ item, readOnly, onModify, onRemove, onQuantityChange }: {
         <p>{item.detail}</p>
       </div>
       <div className="selection-sheet-item-side">
-        <Price cents={item.priceCents} label={item.priceLabel} originalPriceCents={item.originalPriceCents} />
+        <Price cents={item.priceCents} label={item.priceLabel} originalPriceCents={item.originalPriceCents} memberPriceCents={item.memberPriceCents} />
         <ItemActions target={item.target} title={item.title} quantity={item.quantity} adjustable={false} readOnly={readOnly} onModify={onModify} onRemove={onRemove} onQuantityChange={onQuantityChange} />
       </div>
     </div>
@@ -107,7 +113,7 @@ function GroupLine({ group, readOnly, onModify, onRemove, onQuantityChange }: {
           <p>{group.detail}</p>
         </div>
         <div className="selection-sheet-item-side">
-          <Price cents={group.priceCents} label={group.priceLabel} originalPriceCents={group.originalPriceCents} />
+          <Price cents={group.priceCents} label={group.priceLabel} originalPriceCents={group.originalPriceCents} memberPriceCents={group.memberPriceCents} />
           <ItemActions target={group.target} title={group.title} quantity={group.quantity} adjustable={group.kind !== 'tea'} readOnly={readOnly} onModify={onModify} onRemove={onRemove} onQuantityChange={onQuantityChange} />
         </div>
       </div>

@@ -125,7 +125,7 @@ test('清单按主项目、挂载加项、局部调理和赠饮生成可操作�
   assert.equal(summary.groups[3].priceLabel, '赠饮');
 });
 
-test('会员已选清单保留门店价对比值，非会员不展示会员专属划线价', () => {
+test('会员已选清单保留门店价对比值，匿名清单逐项保留会员价参考', () => {
   const memberSummary = buildSelectionSummary({ projects: [footBath, local], addons: [addon], draft: draft(), isMember: true });
   assert.equal(memberSummary.groups[0].originalPriceCents, 3990);
   assert.equal(memberSummary.groups[0].children[0].originalPriceCents, 1200);
@@ -134,6 +134,9 @@ test('会员已选清单保留门店价对比值，非会员不展示会员专�
   const storeSummary = buildSelectionSummary({ projects: [footBath, local], addons: [addon], draft: draft(), isMember: false });
   assert.equal(storeSummary.groups[0].originalPriceCents, null);
   assert.equal(storeSummary.groups[0].children[0].originalPriceCents, null);
+  assert.equal(storeSummary.groups[0].memberPriceCents, 2990);
+  assert.equal(storeSummary.groups[0].children[0].memberPriceCents, 800);
+  assert.equal(storeSummary.groups[1].memberPriceCents, 4900);
 });
 
 test('免费加项在清单显示免费而不是零元价格', () => {

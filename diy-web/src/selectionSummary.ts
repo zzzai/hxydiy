@@ -66,6 +66,7 @@ export type SelectionSummaryChild = {
   quantity: number;
   priceCents: number;
   originalPriceCents: number | null;
+  memberPriceCents: number | null;
   priceLabel?: '免费';
   target: Extract<SelectionTarget, { kind: 'addon' }>;
 };
@@ -78,6 +79,7 @@ export type SelectionSummaryGroup = {
   quantity: number;
   priceCents: number;
   originalPriceCents: number | null;
+  memberPriceCents: number | null;
   priceLabel?: '赠饮';
   target: Exclude<SelectionTarget, { kind: 'addon' }>;
   children: SelectionSummaryChild[];
@@ -134,6 +136,9 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
         originalPriceCents: addon.chargeable && isMember && addon.prices.store > addon.prices.member
           ? addon.prices.store * quantity
           : null,
+        memberPriceCents: addon.chargeable && !isMember && addon.prices.member < addon.prices.store
+          ? addon.prices.member * quantity
+          : null,
         priceLabel: addon.chargeable ? undefined : '免费' as const,
         target: { kind: 'addon' as const, projectId, addonId: addon.id },
       }));
@@ -146,6 +151,9 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
       priceCents: effectivePrice(project, isMember) * quantity,
       originalPriceCents: isMember && priceOf(project, 'store') > priceOf(project, 'member')
         ? priceOf(project, 'store') * quantity
+        : null,
+      memberPriceCents: !isMember && priceOf(project, 'member') < priceOf(project, 'store')
+        ? priceOf(project, 'member') * quantity
         : null,
       target: { kind: 'project', projectId: project.id },
       children,
@@ -164,6 +172,9 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
       originalPriceCents: localProject && isMember && priceOf(localProject, 'store') > priceOf(localProject, 'member')
         ? priceOf(localProject, 'store') * quantity
         : null,
+      memberPriceCents: localProject && !isMember && priceOf(localProject, 'member') < priceOf(localProject, 'store')
+        ? priceOf(localProject, 'member') * quantity
+        : null,
       target: { kind: 'local', part },
       children: [],
     });
@@ -178,6 +189,7 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
       quantity: 1,
       priceCents: 0,
       originalPriceCents: null,
+      memberPriceCents: null,
       priceLabel: '赠饮',
       target: { kind: 'tea' },
       children: [],
