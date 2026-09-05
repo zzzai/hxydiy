@@ -1,24 +1,24 @@
 # hxy-diy 当前状态
 
-更新时间：2026-09-05 13:21（Asia/Shanghai）
+更新时间：2026-09-05 14:10（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
 
 - 服务器部署根目录：`/root/hxy-diy-20260811`
-- Release：`manual-8912faf-20260905-3`
-- 对应主干提交：`8912faf`（顾客端详情介绍精简与暂停新增发券 PR #23）
-- API 镜像 ID：`sha256:35ded3c7399903c6c24e87ffede235764d458e498454bf7d63bfd845c411cc0a`
+- Release：`manual-1f10b35-20260905-4`
+- 对应主干提交：`1f10b35`（顾客端二级页价格分组与介绍排版 PR #25）
+- API 镜像 ID：`sha256:84361fb787de0ddf9b29ed96dd56ff6a7073aea5356197f83e0670b41a3be9e2`
 - Alembic head：`20260904_service_reference_v2`
-- 数据库备份：`pre-manual-8912faf-20260905-3-20260905T051832Z.dump`
-- 备份 SHA-256：`b82b660efba5698545108a9a189acb2695bec34da5ac62178f03a2bed2a45047`
+- 数据库备份：`pre-manual-1f10b35-20260905-4-20260905T060906Z.dump`
+- 备份 SHA-256：`0b67b4e6a361d812c5791bdf7879f0f986c09a6aba5a732d9e2444ec46879bbc`
 - 备份恢复演练：通过
 - 公网 `/`、`/admin/`、`/technician/`、`/api/v1/health`：HTTP 200
 - API 与数据库容器：运行中，发布验收时重启次数均为 0，数据库健康
-- Release Manifest：逐文件校验通过；Manifest SHA-256 `0485249be920962cc0f55c38fe78c2492d55278117ddb8bc05938ad7de8f19c8`
+- Release Manifest：逐文件校验通过；Manifest SHA-256 `cebde564f166c3e33c563110ab41d549fe3abf5430485280aaa10ea4bcf537a4`
 
-顾客端入口加载 `index-DbL61-n0.js` 与 `index-D5z4NagC.css`；本次未执行数据库迁移。
+顾客端入口加载 `index-BUW-BRvJ.js` 与 `index-Cu0pxEgk.css`；本次未执行数据库迁移。
 
 ## 三端当前状态
 
@@ -26,7 +26,7 @@
 
 - 正式入口：`https://diy.hexiaoyue.com/`
 - 已发布服务结束后重新进入空白选购、匿名多次提交整单门店价、浏览器匿名身份自愈、底部会员价和固定高度选购抽屉修复；匿名/非会员在选购清单中可逐项看到低于门店价的会员价参考。
-- 已发布各类服务项目与茶饮详情介绍精简，保留原 UI 和完整长图；同价合并标注，有差价保留会员参考。
+- 已发布各类服务项目与茶饮详情介绍精简及排版优化，保留原 UI 和完整长图；价格标签紧贴金额，同价合并标注，有差价保留会员参考，局部单位不变。
 - 新增发券策略已暂停：新客、主动领券、分享和邀请奖励不再发新券，匿名领券引导关闭；已领券与既有使用规则保留。生产 `coupon_issuance_enabled=False`，公开领券模板列表为空。
 - 顾客端不直接管理技师服务参考标签；未来如增加顾客确认入口，必须复用后端版本化标签契约。
 
