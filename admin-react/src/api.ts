@@ -60,6 +60,8 @@ export const getTechnicianMe = () => client.get('/technician/me');
 export const getTechnicianTasks = () => client.get('/technician/tasks');
 export const getTechnicianServiceReference = (occupancyId: number) =>
   client.get<TechnicianServiceReferenceResponse>(`/technician/occupancies/${occupancyId}/service-reference`);
+export const getTechnicianServiceHistory = (page = 1, pageSize = 20, profileStatus: 'all' | 'confirmed' | 'pending' = 'all') =>
+  client.get('/technician/service-history', { params: { page, page_size: pageSize, profile_status: profileStatus } });
 export const getTechnicianServiceOrders = (status: 'in_progress' | 'history' = 'in_progress', page = 1, pageSize = 30) =>
   client.get('/admin/v2/service-orders', { params: { status, page, page_size: pageSize } });
 export const createProfileRecord = (customerId: number, data: { tags: string[]; service_note: string }, idempotencyKey?: string) =>
@@ -101,8 +103,8 @@ export const createCustomerProfileRecord = (data: {
   selection_session_id?: string;
   technician_id?: number;
   source?: 'customer_statement' | 'service_observation' | 'both';
-  schema_version?: 1 | 2;
-  taxonomy_version?: 'service_reference_v1';
+  schema_version?: 1 | 2 | 3;
+  taxonomy_version?: 'service_reference_v1' | 'service_reference_v2';
   customer_confirmed?: boolean;
   profile: Record<string, unknown>;
   signals: string[];

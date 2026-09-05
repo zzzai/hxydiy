@@ -60,3 +60,8 @@ test('技师看板按沙发和房间分组，保留顾客提交的服务位顺�
   assert.equal(groups[0].items[0].room_name, '沙发 01');
   assert.equal(groups[1].items[0].room_name, '包间 02 A 床');
 });
+
+test('本人历史状态文案区分顾客确认与本次观察', () => {
+  assert.equal((technicianMobile as any).technicianProfileStatusLabel('confirmed'), '顾客已确认');
+  assert.equal((technicianMobile as any).technicianProfileStatusLabel('pending'), '本次观察');
+});
