@@ -3,11 +3,12 @@ import { App, Button, Spin } from 'antd';
 import { CalendarOutlined, ClockCircleOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getTechnicianMe } from '../api';
+import { TECHNICIAN_MOBILE_TAB_PATHS } from './technicianMobile';
 
 const tabs = [
-  { path: '/technician/today', label: '今日服务', icon: <CalendarOutlined /> },
-  { path: '/technician/history', label: '服务记录', icon: <ClockCircleOutlined /> },
-  { path: '/technician/me', label: '我的', icon: <UserOutlined /> },
+  { path: TECHNICIAN_MOBILE_TAB_PATHS[0], label: '今日服务', icon: <CalendarOutlined /> },
+  { path: TECHNICIAN_MOBILE_TAB_PATHS[1], label: '服务记录', icon: <ClockCircleOutlined /> },
+  { path: TECHNICIAN_MOBILE_TAB_PATHS[2], label: '我的', icon: <UserOutlined /> },
 ];
 
 export default function TechnicianMobileShell({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {

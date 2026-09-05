@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as technicianMobile from '../src/technician/technicianMobile.ts';
 import { TECHNICIAN_MOBILE_ROUTES, technicianAccountStatusLabel, technicianEmploymentStatusLabel, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
 
 test('移动技师端只暴露三栏业务路由', () => {
   assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/history', '/technician/me']);
+});
+
+test('底部导航使用 basename 内部路径，避免重复拼接 technician 前缀', () => {
+  assert.deepEqual(
+    (technicianMobile as { TECHNICIAN_MOBILE_TAB_PATHS?: readonly string[] }).TECHNICIAN_MOBILE_TAB_PATHS,
+    ['/today', '/history', '/me'],
+  );
 });
 
 test('技师状态使用现场可理解文案', () => {
