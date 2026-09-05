@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           (cd admin-react && npm ci && npm test && npm run build)
-          (cd diy-web && npm ci && npm test && npm run build)
+          (cd diy-web && npm ci && npm run build && npm test)
       - name: Package immutable release input
         shell: bash
         run: |

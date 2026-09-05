@@ -98,6 +98,11 @@ class ReleaseScriptTests(unittest.TestCase):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
         self.assertIn("context: ${HXY_DIY_CURRENT:-../../current}", compose)
 
+    def test_production_workflow_builds_customer_dist_before_asset_tests(self):
+        workflow = (REPO_ROOT / ".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
+
+        self.assertIn("(cd diy-web && npm ci && npm run build && npm test)", workflow)
+
     def test_release_creation_excludes_local_runtime_and_secret_files(self):
         create = (REPO_ROOT / "deploy/diy/create-release.sh").read_text(encoding="utf-8")
 
