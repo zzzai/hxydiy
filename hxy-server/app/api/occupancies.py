@@ -236,7 +236,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
             body.start_new_after_service
             and existing_session
             and existing_session.customer_id == anonymous_customer_id
-            and existing_session.status == "confirmed"
+            and existing_session.status in {"submitted", "confirmed"}
             and existing.status == "post_service_present"
         ):
             # 只结束 DIY 对旧会话的活动引用；不改变物理房位状态，也不删除旧单或评价。

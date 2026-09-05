@@ -40,7 +40,7 @@
 
 ## 最近决策
 
-2026-09-05：服务结束后的“返回项目列表”与物理服务位释放解耦。原匿名浏览器在 `confirmed + post_service_present` 可保留旧单与评价，并于原位建立独立新选购；旧 DIY 占用仅取消活动引用，不改变其结束状态，不触发智慧宝或物理释放。其他设备、未结束与清洁状态不得接管。详见 `contracts/customer-browser-identity.md`。
+2026-09-05：服务结束后的“返回项目列表”与物理服务位释放解耦。生产真实闭环可能留下 `submitted + post_service_present`，因此以占用的 `post_service_present` 为结束权威，并兼容旧选单 `submitted`/`confirmed`。原匿名浏览器可保留旧单与评价并于原位建立独立新选购；旧 DIY 占用仅取消活动引用，不触发智慧宝或物理释放。其他设备、未结束与清洁状态不得接管。详见 `contracts/customer-browser-identity.md`。
 
 2026-09-05：用户要求暂停新增发券并去除匿名送券引导；策略边界见 `contracts/coupon-issuance-policy.md`。保留已领券记录及既有使用规则。生产生效状态以 CURRENT-STATE 为准。
 

@@ -403,7 +403,9 @@ class OccupancyApiTests(unittest.TestCase):
         old_occupancy_id = first.json()["occupancy"]["id"]
         with self.SessionLocal() as db:
             old_session = db.get(SelectionSession, old_session_id)
-            old_session.status = "confirmed"
+            # 生产真实闭环中，技师结束服务后选单仍可能保持 submitted；
+            # occupancy 的 post_service_present 才是服务结束权威状态。
+            old_session.status = "submitted"
             old_occupancy = db.get(PositionOccupancy, old_occupancy_id)
             old_occupancy.status = "post_service_present"
             db.commit()
@@ -430,7 +432,7 @@ class OccupancyApiTests(unittest.TestCase):
         with self.SessionLocal() as db:
             old_session = db.get(SelectionSession, old_session_id)
             old_occupancy = db.get(PositionOccupancy, old_occupancy_id)
-            self.assertEqual(old_session.status, "confirmed")
+            self.assertEqual(old_session.status, "submitted")
             self.assertEqual(old_occupancy.status, "post_service_present")
             self.assertIsNone(old_occupancy.active_room_id)
             self.assertIsNone(old_occupancy.active_session_id)
