@@ -150,6 +150,17 @@ class TestTechnicianServiceHistoryApi:
         assert other.status_code == 200, other.text
         assert other.json()["total"] == 0
 
+    def test_history_returns_only_unassigned_legacy_count_without_record_details(self):
+        with self.SessionLocal() as db:
+            occupancy = db.get(PositionOccupancy, self.occupancy_id)
+            occupancy.actual_service_end_at = datetime.now(timezone.utc)
+            db.commit()
+        response = self.client.get("/api/v1/technician/service-history", headers=self.tech_a_headers)
+        assert response.status_code == 200, response.text
+        assert response.json() == {
+            "items": [], "total": 0, "page": 1, "page_size": 20, "unassigned_legacy_count": 1,
+        }
+
     def test_finish_rejects_a_different_technician_and_keeps_owner_after_service_end(self):
         confirmed = self.client.post(
             f"/api/v1/technician/occupancies/{self.occupancy_id}/confirm",

@@ -189,15 +189,19 @@ SERVICE_REFERENCE_LABELS = {
 
 
 SERVICE_REFERENCE_V2_TAXONOMY = {
-    "occupation_contexts": {"desk_work": "久坐办公", "standing_work": "久站服务"},
+    "occupation_contexts": {"desk_work": "久坐办公", "standing_work": "久站服务", "frequent_driving": "经常驾驶", "physical_labor": "体力劳动", "family_care": "照护家庭", "freelance": "自由职业", "retired": "退休", "other": "其他"},
     "personal_context": {
-        "age_band": {"25_34": "25-34岁"},
-        "build": {"balanced": "匀称"},
+        "age_band": {"18_24": "18-24岁", "25_34": "25-34岁", "35_44": "35-44岁", "45_54": "45-54岁", "55_64": "55-64岁", "65_plus": "65岁以上"},
+        "build": {"slim": "偏瘦", "balanced": "匀称", "sturdy": "偏壮"},
         "height_band": {"shorter": "偏矮", "average": "适中", "taller": "偏高"},
     },
-    "work_lifestyle": {"sleep_quality": {"average": "一般"}},
-    "service_related_context": {"contexts": {"medication_mentioned": "顾客提及正在用药"}},
+    "work_lifestyle": {"sleep_quality": {"good": "良好", "average": "一般", "poor": "较差"}},
+    "service_related_context": {"contexts": {"long_term_condition": "顾客提及长期身体情况", "recent_discomfort_recovery": "顾客提及近期不适或恢复情况", "skin_sensitivity": "顾客提及皮肤敏感或接触偏好", "medication_mentioned": "顾客提及正在用药", "pregnancy_postpartum": "顾客提及孕期或产后阶段", "other_reconfirm": "其他需再次确认的情况"}},
     "session_response": {"relaxation": {"quick": "较快", "gradual": "逐渐", "tense": "始终较紧张"}},
+    "communication_consumption": {
+        "decision_priorities": {"price": "价格", "quality": "品质", "environment": "环境", "efficiency": "效率", "fixed_technician": "固定技师", "fixed_time": "固定时段"},
+        "budget_preference": {"value": "实惠优先", "balanced": "平衡", "experience": "体验优先", "unexpressed": "未表达"},
+    },
 }
 
 
@@ -449,7 +453,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
         observed = profile.get("technician_observed") or {}
         next_visit = profile.get("next_visit") or {}
         area_labels = SERVICE_REFERENCE_LABELS["areas"]
-        return {
+        summary = {
             "schema_version": 2,
             "taxonomy_version": "service_reference_v1",
             "focus_areas": [
@@ -475,14 +479,21 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
                 next_visit.get("plan")
             ),
         }
+        return summary
     if record.schema_version == 3 and record.taxonomy_version == "service_reference_v2":
         reported = profile.get("customer_reported") or {}
         lifestyle = reported.get("work_lifestyle") or {}
+        consumption = reported.get("communication_consumption") or {}
         observed = profile.get("technician_observed") or {}
         response = observed.get("session_response") or {}
-        return {
+        area_labels = SERVICE_REFERENCE_LABELS["areas"]
+        summary = {
             "schema_version": 3,
             "taxonomy_version": "service_reference_v2",
+            "focus_areas": [area_labels[code] for code in reported.get("focus_areas", []) if code in area_labels],
+            "avoid_areas": [area_labels[code] for code in reported.get("avoid_areas", []) if code in area_labels],
+            "force_preference": SERVICE_REFERENCE_LABELS["force"].get(reported.get("force_preference")),
+            "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(reported.get("temperature_preference")),
             "occupation_contexts": [
                 SERVICE_REFERENCE_V2_TAXONOMY["occupation_contexts"][code]
                 for code in lifestyle.get("occupation_contexts", [])
@@ -491,7 +502,16 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
             "relaxation": SERVICE_REFERENCE_V2_TAXONOMY["session_response"]["relaxation"].get(
                 response.get("relaxation")
             ),
+            "service_feedback": SERVICE_REFERENCE_LABELS["feedback"].get(observed.get("service_feedback")),
+            "next_visit_plan": SERVICE_REFERENCE_LABELS["next_visit"].get((profile.get("next_visit") or {}).get("plan")),
+            "decision_priorities": [
+                SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"][code]
+                for code in consumption.get("decision_priorities", [])
+                if code in SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"]
+            ],
+            "budget_preference": SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["budget_preference"].get(consumption.get("budget_preference")),
         }
+        return {key: value for key, value in summary.items() if value not in (None, [], "")}
     return None
 
 
@@ -525,6 +545,11 @@ def service_history(
         conditions.append(~confirmed_profile)
 
     total = db.scalar(select(func.count(PositionOccupancy.id)).where(*conditions)) or 0
+    unassigned_legacy_count = db.scalar(select(func.count(PositionOccupancy.id)).where(
+        PositionOccupancy.store_id == technician.store_id,
+        PositionOccupancy.serviced_by_technician_id.is_(None),
+        PositionOccupancy.actual_service_end_at.is_not(None),
+    )) or 0
     rows = db.execute(
         select(PositionOccupancy, SelectionSession, Room, User)
         .join(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
@@ -571,7 +596,7 @@ def service_history(
             "service_position": room.name,
             "profile_summary": _history_profile_summary(record),
         })
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "unassigned_legacy_count": unassigned_legacy_count}
 
 
 @router.post("/leave-requests")

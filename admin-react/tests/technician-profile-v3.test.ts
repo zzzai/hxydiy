@@ -10,6 +10,9 @@ test('v3 快记默认展示高频项并把扩展维度放在折叠区', () => {
   assert.match(source, /本次重点/);
   assert.match(source, /更多服务记忆/);
   assert.match(source, /已向顾客复述并确认/);
+  assert.match(source, /待保存摘要/);
+  assert.match(source, /预算倾向/);
+  assert.match(source, /决策关注/);
 });
 
 test('本人历史使用技师专用接口而不是门店级 service-orders', () => {

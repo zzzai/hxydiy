@@ -45,11 +45,11 @@ test('移动技师首页将同一房间的多活动占用显式显示为待核�
   assert.match(mobileSource, /conflict/);
 });
 
-test('移动技师服务参考提交完成服务关联和 v2 字段', () => {
+test('移动技师服务参考提交完成服务关联和 v3 单一载荷', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /createCustomerProfileRecord/);
   assert.match(source, /selection_session_id/);
-  assert.match(source, /buildServiceReferencePayload/);
+  assert.match(source, /buildServiceReferenceV3Payload/);
   assert.match(source, /customerConfirmed/);
 });
 

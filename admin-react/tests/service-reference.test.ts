@@ -29,3 +29,16 @@ test('服务参考 v3 无可选值时构造合法最小载荷', () => {
   assert.deepEqual(payload.profile.technician_observed, {});
   assert.deepEqual(payload.profile.next_visit, {});
 });
+
+test('服务参考 v3 单一载荷同时保存高频六组和扩展偏好', () => {
+  const payload = buildServiceReferenceV3Payload(12, 'session-v3-mixed', {
+    focusAreas: ['neck_shoulder', 'legs'], avoidAreas: ['abdomen'],
+    forcePreference: 'medium', temperaturePreference: 'lower', serviceFeedback: 'suitable', nextVisitPlan: 'repeat_current',
+    personalContext: { ageBand: '65_plus', build: 'slim' },
+    communicationConsumption: { decisionPriorities: ['quality'], budgetPreference: 'balanced' },
+  });
+  assert.deepEqual(payload.profile.customer_reported.focus_areas, ['neck_shoulder', 'legs']);
+  assert.equal(payload.profile.technician_observed.service_feedback, 'suitable');
+  assert.equal(payload.profile.next_visit.plan, 'repeat_current');
+  assert.deepEqual(payload.profile.customer_reported.communication_consumption, { decision_priorities: ['quality'], budget_preference: 'balanced' });
+});

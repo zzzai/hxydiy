@@ -2046,13 +2046,15 @@ class ServiceReferenceProfile(BaseModel):
         )
 
 
-V3AgeBand = Literal["25_34"]
-V3Build = Literal["balanced"]
+V3AgeBand = Literal["18_24", "25_34", "35_44", "45_54", "55_64", "65_plus"]
+V3Build = Literal["slim", "balanced", "sturdy"]
 V3HeightBand = Literal["shorter", "average", "taller"]
-V3OccupationContext = Literal["desk_work", "standing_work"]
-V3SleepQuality = Literal["average"]
-V3ServiceRelatedContext = Literal["medication_mentioned"]
+V3OccupationContext = Literal["desk_work", "standing_work", "frequent_driving", "physical_labor", "family_care", "freelance", "retired", "other"]
+V3SleepQuality = Literal["good", "average", "poor"]
+V3ServiceRelatedContext = Literal["long_term_condition", "recent_discomfort_recovery", "skin_sensitivity", "medication_mentioned", "pregnancy_postpartum", "other_reconfirm"]
 V3Relaxation = Literal["quick", "gradual", "tense"]
+V3DecisionPriority = Literal["price", "quality", "environment", "efficiency", "fixed_technician", "fixed_time"]
+V3BudgetPreference = Literal["value", "balanced", "experience", "unexpressed"]
 
 
 class ServiceReferenceV3PersonalContext(BaseModel):
@@ -2097,12 +2099,34 @@ class ServiceReferenceV3ServiceRelatedContext(BaseModel):
         return text
 
 
+class ServiceReferenceV3CommunicationConsumption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision_priorities: list[V3DecisionPriority] = Field(default_factory=list, max_length=6)
+    budget_preference: V3BudgetPreference | None = None
+
+    @field_validator("decision_priorities")
+    @classmethod
+    def validate_unique_decision_priorities(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
+
+
 class ServiceReferenceV3CustomerReported(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     personal_context: ServiceReferenceV3PersonalContext = Field(default_factory=ServiceReferenceV3PersonalContext)
     work_lifestyle: ServiceReferenceV3WorkLifestyle = Field(default_factory=ServiceReferenceV3WorkLifestyle)
     service_related_context: ServiceReferenceV3ServiceRelatedContext = Field(default_factory=ServiceReferenceV3ServiceRelatedContext)
+    focus_areas: list[ServiceArea] = Field(default_factory=list, max_length=6)
+    avoid_areas: list[AvoidArea] = Field(default_factory=list, max_length=5)
+    force_preference: Literal["gentle", "medium", "strong"] | None = None
+    temperature_preference: Literal["lower", "medium", "higher"] | None = None
+    communication_consumption: ServiceReferenceV3CommunicationConsumption = Field(default_factory=ServiceReferenceV3CommunicationConsumption)
+
+    @field_validator("focus_areas", "avoid_areas")
+    @classmethod
+    def validate_unique_areas(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
 
 
 class ServiceReferenceV3SessionResponse(BaseModel):
@@ -2115,10 +2139,12 @@ class ServiceReferenceV3TechnicianObserved(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     session_response: ServiceReferenceV3SessionResponse = Field(default_factory=ServiceReferenceV3SessionResponse)
+    service_feedback: Literal["suitable", "better_after_adjustment", "adjust_next_time"] | None = None
 
 
 class ServiceReferenceV3NextVisit(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    plan: Literal["repeat_current", "confirm_on_arrival"] | None = None
 
 
 class ServiceReferenceV3Profile(BaseModel):

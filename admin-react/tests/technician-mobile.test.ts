@@ -65,3 +65,18 @@ test('本人历史状态文案区分顾客确认与本次观察', () => {
   assert.equal((technicianMobile as any).technicianProfileStatusLabel('confirmed'), '顾客已确认');
   assert.equal((technicianMobile as any).technicianProfileStatusLabel('pending'), '本次观察');
 });
+
+test('本人历史摘要只输出强类型白名单字段且忽略嵌套敏感值', () => {
+  const lines = (technicianMobile as any).technicianHistorySummaryLines({
+    focus_areas: ['肩颈'], force_preference: '适中', occupation_contexts: ['久坐办公'],
+    quote: '不得显示', phone: '13800000000', unknown: { secret: '不得显示' },
+  });
+  assert.deepEqual(lines, ['重点：肩颈', '力度：适中', '职业场景：久坐办公']);
+  assert.doesNotMatch(lines.join(''), /不得显示|13800000000|object Object/);
+});
+
+test('本人历史空态按接口计数互斥分类', () => {
+  assert.equal((technicianMobile as any).technicianHistoryEmptyState('all', 0), 'none');
+  assert.equal((technicianMobile as any).technicianHistoryEmptyState('all', 2), 'legacy');
+  assert.equal((technicianMobile as any).technicianHistoryEmptyState('confirmed', 2), 'filtered');
+});

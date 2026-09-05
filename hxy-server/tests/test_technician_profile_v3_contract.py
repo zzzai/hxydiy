@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, Order, PositionOccupancy, SelectionSession, Staff, Store, User
+from app.models import AuditLog, CustomerProfileRecord, Order, PositionOccupancy, SelectionSession, Staff, Store, User
 from app.models.operations import Room, Technician
 
 
@@ -160,6 +160,42 @@ class TestTechnicianProfileV3Contract:
         )
         assert response.status_code == 422, response.text
 
+    def test_v3_profile_saves_quick_six_and_extended_preferences_in_one_record(self):
+        payload = self.v3_payload()
+        payload["profile"]["customer_reported"].update({
+            "focus_areas": ["neck_shoulder", "legs"],
+            "avoid_areas": ["abdomen"],
+            "force_preference": "medium",
+            "temperature_preference": "lower",
+            "communication_consumption": {
+                "decision_priorities": ["quality", "fixed_technician"],
+                "budget_preference": "balanced",
+            },
+        })
+        payload["profile"]["technician_observed"]["service_feedback"] = "suitable"
+        payload["profile"]["next_visit"]["plan"] = "repeat_current"
+
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "v3-profile-mixed-001"},
+        )
+        assert response.status_code == 200, response.text
+        with self.SessionLocal() as db:
+            records = db.query(CustomerProfileRecord).all()
+            assert len(records) == 1
+            stored = records[0].profile
+            assert stored["customer_reported"]["focus_areas"] == ["neck_shoulder", "legs"]
+            assert stored["customer_reported"]["communication_consumption"]["budget_preference"] == "balanced"
+
+        payload["profile"]["customer_reported"]["focus_areas"] = ["legs", "legs"]
+        duplicate = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "v3-profile-mixed-002"},
+        )
+        assert duplicate.status_code == 422, duplicate.text
+
     def test_taxonomy_endpoint_exposes_v3_stable_codes(self):
         response = self.client.get(
             "/api/v1/technician/service-reference-taxonomy",
@@ -171,6 +207,8 @@ class TestTechnicianProfileV3Contract:
         assert body["taxonomy_version"] == "service_reference_v2"
         assert "desk_work" in body["groups"]["occupation_contexts"]
         assert body["groups"]["personal_context"]["height_band"]["average"] == "适中"
+        assert set(body["groups"]["personal_context"]["age_band"]) == {"18_24", "25_34", "35_44", "45_54", "55_64", "65_plus"}
+        assert set(body["groups"]["communication_consumption"]["budget_preference"]) == {"value", "balanced", "experience", "unexpressed"}
 
     def test_taxonomy_codes_submit_at_their_published_model_paths(self):
         taxonomy = self.client.get(
