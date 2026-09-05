@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from pydantic import Field
+from datetime import datetime
 
 
 class LoginRequest(BaseModel):
@@ -27,6 +28,7 @@ class UserOut(BaseModel):
     phone: str = ""
     is_member: bool = False
     member_type: str | None = None
+    member_expire_at: datetime | None = None
     balance_cents: int = 0
 
     model_config = {"from_attributes": True}

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import Order, OrderEvent, PriceBook, Project, Store, User, UserCoupon
 from app.schemas.order import CreateOrderResponse, OrderCreate, OrderOut
-from app.core.security import decode_token
+from app.core.customer_auth import current_customer_id
 from fastapi import Header
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -23,12 +23,9 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 PAYMENT_TIMEOUT_MINUTES = 30
 
 
-def _current_user_id(authorization: str | None = Header(default=None)) -> int | None:
+def _current_user_id(authorization: str | None, db: Session) -> int | None:
     """从 Bearer token 取用户 ID；游客返回 None。"""
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    payload = decode_token(authorization[7:])
-    return int(payload["sub"]) if payload else None
+    return current_customer_id(authorization, db, optional=True)
 
 
 def gen_order_no() -> str:
@@ -81,7 +78,7 @@ def create_order(
     db: Session = Depends(get_db),
 ) -> CreateOrderResponse:
     """下单：服务端按价格表计价，生成 pending_payment 订单。"""
-    user_id = _current_user_id(authorization)
+    user_id = _current_user_id(authorization, db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
 
@@ -237,7 +234,7 @@ def list_orders(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> list[Order]:
-    user_id = _current_user_id(authorization)
+    user_id = _current_user_id(authorization, db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
     orders = list(db.scalars(
@@ -255,7 +252,7 @@ def cancel_order(
     db: Session = Depends(get_db),
 ) -> dict:
     """顾客自助取消：仅未支付订单可取消，释放锁定的优惠券并记录审计事件。"""
-    user_id = _current_user_id(authorization)
+    user_id = _current_user_id(authorization, db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
     order = db.get(Order, order_id)
@@ -282,7 +279,7 @@ def get_order(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> Order:
-    user_id = _current_user_id(authorization)
+    user_id = _current_user_id(authorization, db)
     order = db.get(Order, order_id)
     if not order or order.user_id != user_id:
         raise HTTPException(status_code=404, detail="订单不存在")

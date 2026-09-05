@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { App, Table, Input, Select, Button, Tag, Popconfirm } from 'antd';
+import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { getUsers, getTags, addUserTag, setUserMembership } from '../api';
+import { getUsers, getTags, addUserTag, setUserMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 
@@ -16,7 +16,10 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [tags, setTags] = useState<any[]>([]);
   const [profileCustomerId, setProfileCustomerId] = useState<number>();
+  const [deviceCustomer, setDeviceCustomer] = useState<any>();
+  const [deviceState, setDeviceState] = useState<any>();
   const canCreateProfile = getStaff()?.role === 'manager' || getStaff()?.role === 'admin';
+  const canManageDevice = getStaff()?.role === 'manager';
 
   useEffect(() => { getTags().then(r => setTags(r.data || [])); }, []);
 
@@ -48,6 +51,8 @@ export default function UsersPage() {
       message.error(e?.response?.data?.detail || '操作失败');
     }
   };
+  const openDevice = async (user: any) => { setDeviceCustomer(user); const response = await getCustomerTrustedDevice(user.id); setDeviceState(response.data); };
+  const revokeDevice = async () => { if (!deviceCustomer) return; await revokeCustomerTrustedDevice(deviceCustomer.id, '顾客申请换机，店长确认撤销旧设备'); message.success('旧可信设备和未使用会员码已撤销'); const response = await getCustomerTrustedDevice(deviceCustomer.id); setDeviceState(response.data); };
 
   return (
     <div>
@@ -71,6 +76,7 @@ export default function UsersPage() {
               <>
                 <Button size="small" onClick={() => doAddTag(r.id)}>打标</Button>
                 {canCreateProfile && <Button size="small" style={{ marginLeft: 6 }} onClick={() => setProfileCustomerId(r.id)}>画像记录</Button>}
+                {r.is_member && canManageDevice && <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openDevice(r)}>可信设备</Button>}
                 <Popconfirm
                   title={r.is_member ? '确认取消该用户会员身份？' : '确认开通会员？（请先确认已线下收款）'}
                   onConfirm={() => doToggleMembership(r)}
@@ -85,6 +91,7 @@ export default function UsersPage() {
         ]}
       />
       <ProfileRecordForm customerId={profileCustomerId} open={profileCustomerId !== undefined} onClose={() => setProfileCustomerId(undefined)} onSaved={() => load(page)} />
+      <Modal title="会员可信设备" open={Boolean(deviceCustomer)} onCancel={() => { setDeviceCustomer(undefined); setDeviceState(undefined); }} footer={deviceState?.bound ? <Popconfirm title="确认已核实顾客换机申请？撤销后旧设备和旧会员码立即失效。" onConfirm={() => void revokeDevice()}><Button danger>撤销旧设备</Button></Popconfirm> : null}><Descriptions column={1} items={[{ label: '会员', children: deviceCustomer?.nickname || deviceCustomer?.phone_masked || '-' }, { label: '设备状态', children: deviceState?.bound ? <Tag color="green">已绑定</Tag> : <Tag>未绑定</Tag> }, { label: '绑定时间', children: deviceState?.created_at?.slice(0, 19) || '-' }, { label: '最近使用', children: deviceState?.last_seen_at?.slice(0, 19) || '-' }]} /><p>管理后台只处理受控换绑与审计，日常会员核验请使用技师端扫码。</p></Modal>
     </div>
   );
 }

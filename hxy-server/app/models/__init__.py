@@ -14,6 +14,7 @@ from app.models.browser import BrowserInstance
 from app.models.feedback import ServiceFeedback
 from app.models.external_identity import CustomerExternalIdentity
 from app.models.membership import MembershipBenefitGrant
+from app.models.membership_verification import CustomerTrustedDevice, MembershipCode
 from app.models.settlement import SettlementAdjustment
 from app.models.service_position_qr import ServicePositionQr
 from app.models.customer_profile import CustomerProfileRecord
@@ -36,7 +37,7 @@ __all__ = [
     "CustomerTagRelation", "Room", "RoomAssignment", "ServiceAssignment", "ServiceOrder",
     "StateTransition", "Technician", "Visit", "SelectionSession", "SelectionRevision", "SelectionChangeRequest", "ServiceLine", "PositionOccupancy",
     "CustomerVerificationCode", "PageContent", "BrowserInstance", "ServiceFeedback", "CustomerExternalIdentity",
-    "MembershipBenefitGrant", "SettlementAdjustment", "ServicePositionQr",
+    "MembershipBenefitGrant", "CustomerTrustedDevice", "MembershipCode", "SettlementAdjustment", "ServicePositionQr",
     "CustomerProfileRecord",
     "TechnicianInvite", "TechnicianLeaveRequest",
     "MediaAsset",

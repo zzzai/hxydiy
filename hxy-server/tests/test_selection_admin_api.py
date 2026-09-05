@@ -150,6 +150,7 @@ class SelectionAdminApiTests(unittest.TestCase):
                 source="personal_qr",
                 device_label="顾客手机",
                 status="submitted",
+                membership_verified_at=datetime(2026, 8, 18, 1, 59, tzinfo=timezone.utc),
                 items=[item],
                 diy_preferences={},
                 pricing_snapshot={"payable_total_cents": 8000},

@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260905_tech_history_v3"
-down_revision = "20260904_service_reference_v2"
+down_revision = "20260905_membership_verification"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

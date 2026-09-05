@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import decode_token
+from app.core.customer_auth import current_customer_id
 from app.core.config import settings
 from app.db.session import get_db
 from app.models import CouponTemplate, User, UserCoupon, SelectionSession
@@ -24,11 +24,8 @@ def _aware(value):
     return value
 
 
-def _user_id(authorization: str | None) -> int | None:
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    payload = decode_token(authorization[7:])
-    return int(payload["sub"]) if payload else None
+def _user_id(authorization: str | None, db: Session) -> int | None:
+    return current_customer_id(authorization, db, optional=True)
 
 def _trusted_store_id(db: Session, user: User | None) -> int | None:
     if not user:
@@ -74,7 +71,7 @@ def claimable_templates(
     """领券中心：可公开领取的券模板（无需登录可看，领取需登录）。"""
     if not settings.coupon_issuance_enabled:
         return {"items": [], "total": 0}
-    user_id = _user_id(authorization)
+    user_id = _user_id(authorization, db)
     user = db.get(User, user_id) if user_id is not None else None
     if user_id is not None:
         if user and user.is_member:
@@ -111,7 +108,7 @@ def activity_promotion(
 
     会员直接享会员最低价，不展示非会员券活动。
     """
-    user_id = _user_id(authorization)
+    user_id = _user_id(authorization, db)
     user = db.get(User, user_id) if user_id is not None else None
     if user_id is not None:
         if user and user.is_member:
@@ -142,7 +139,7 @@ def claim_coupon(
     db: Session = Depends(get_db),
 ) -> dict:
     """领取领券中心券（服务端校验：可领 / 每日限领 / 总限领）。"""
-    user_id = _user_id(authorization)
+    user_id = _user_id(authorization, db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先完成手机号登录")
     if not settings.coupon_issuance_enabled:
@@ -187,7 +184,7 @@ def claim_share_coupon(
     """分享有礼：分享小程序得券（24h 内同用户限 1 次，幂等）。"""
     if not settings.coupon_issuance_enabled:
         return {"code": 0, "granted": False, "reason": "领券活动已暂停"}
-    user_id = _user_id(authorization)
+    user_id = _user_id(authorization, db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
     user = db.get(User, user_id)
@@ -224,7 +221,7 @@ def my_coupons(
     db: Session = Depends(get_db),
 ) -> dict:
     """我的优惠券列表（合并模板信息；unused 且过期的动态标记为 expired）。"""
-    user_id = _user_id(authorization)
+    user_id = _user_id(authorization, db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
 

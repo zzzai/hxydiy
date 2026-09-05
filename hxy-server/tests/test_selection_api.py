@@ -8,7 +8,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import Order, PositionOccupancy, Project, SelectionSession, ServiceFeedback, Store
+from app.models import Order, PositionOccupancy, Project, SelectionSession, ServiceFeedback, Store, User
+from app.core.security import create_access_token
 
 
 class SelectionSessionApiTests(unittest.TestCase):
@@ -249,6 +250,50 @@ class SelectionSessionApiTests(unittest.TestCase):
         self.assertEqual(duplicate.json()["rating"], 5)
         with self.SessionLocal() as db:
             self.assertEqual(db.scalar(select(func.count()).select_from(ServiceFeedback).where(ServiceFeedback.selection_session_id == session_id)), 1)
+
+    def test_my_records_include_pending_feedback_and_completed_price_snapshot(self):
+        with self.SessionLocal() as db:
+            user = User(openid="profile-record-user", phone="13100131000", is_member=True)
+            db.add(user)
+            db.flush()
+            session = SelectionSession(
+                id="profile-completed-session", access_token_hash="hash", store_id=self.store_id,
+                customer_id=user.id, status="confirmed", items=[{"name": "经典草本泡", "quantity": 1}],
+                pricing_snapshot={"applied_price_type": "member", "payable_total_cents": 6900},
+                store_total_cents=8900, member_total_cents=6900,
+            )
+            db.add(session)
+            db.flush()
+            ended_at = datetime.now(timezone.utc)
+            db.add(PositionOccupancy(store_id=self.store_id, room_id=1, selection_session_id=session.id, status="post_service_present", actual_service_end_at=ended_at))
+            db.commit()
+            token = create_access_token(str(user.id), user.openid, user.customer_login_version)
+
+        response = self.client.get("/api/v1/selection-sessions/mine", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(response.status_code, 200, response.text)
+        record = next(item for item in response.json()["items"] if item["id"] == "profile-completed-session")
+        self.assertEqual(record["occupancy_status"], "post_service_present")
+        self.assertTrue(record["can_evaluate"])
+        self.assertFalse(record["evaluated"])
+        self.assertIsNotNone(record["service_completed_at"])
+
+        feedback = self.client.post(
+            "/api/v1/selection-sessions/profile-completed-session/feedback",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"rating": 5, "tags": ["服务细致"], "note": "很好"},
+        )
+        self.assertEqual(feedback.status_code, 200, feedback.text)
+
+    def test_customer_cannot_open_another_users_record(self):
+        with self.SessionLocal() as db:
+            owner = User(openid="detail-owner", phone="13000130000")
+            other = User(openid="detail-other", phone="13000130001")
+            db.add_all([owner, other]); db.flush()
+            db.add(SelectionSession(id="private-profile-session", access_token_hash="hash", store_id=self.store_id, customer_id=owner.id, items=[], pricing_snapshot={}))
+            db.commit()
+            other_token = create_access_token(str(other.id), other.openid, other.customer_login_version)
+        response = self.client.get("/api/v1/selection-sessions/private-profile-session/customer-detail", headers={"Authorization": f"Bearer {other_token}"})
+        self.assertEqual(response.status_code, 404)
 
 
 if __name__ == "__main__":

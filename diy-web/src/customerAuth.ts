@@ -5,12 +5,14 @@ export type CustomerUser = {
   nickname: string;
   is_member: boolean;
   member_type: string | null;
+  member_expire_at?: string | null;
   balance_cents: number;
 };
 
 export type CustomerAuth = { token: string; user: CustomerUser };
 
 const STORAGE_KEY = 'hxy_diy_customer_auth';
+export const CUSTOMER_SESSION_REFRESH_INTERVAL_MS = 5_000;
 
 export function normalizePhone(value: string): string {
   return value.replace(/\D/g, '').slice(0, 11);
@@ -52,10 +54,9 @@ export function isCustomerAuthTokenActive(token: string, nowSeconds = Math.floor
   }
 }
 
-export function authFailureAction(error: unknown): 'reauthenticate' | 'show-error' {
-  return typeof error === 'object' && error !== null && 'status' in error && (error as { status?: unknown }).status === 401
-    ? 'reauthenticate'
-    : 'show-error';
+export function authFailureAction(error: unknown): 'session-replaced' | 'reauthenticate' | 'show-error' {
+  if (typeof error !== 'object' || error === null || !('status' in error) || (error as { status?: unknown }).status !== 401) return 'show-error';
+  return 'code' in error && (error as { code?: unknown }).code === 'SESSION_REPLACED' ? 'session-replaced' : 'reauthenticate';
 }
 
 export function shouldOfferRecordBinding(evaluated: boolean, auth: CustomerAuth | null): boolean {

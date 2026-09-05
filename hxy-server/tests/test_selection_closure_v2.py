@@ -930,6 +930,7 @@ class SelectionClosureV2Tests(unittest.TestCase):
             }
             session = db.get(SelectionSession, session_id)
             session.customer_id = user.id
+            session.membership_verified_at = datetime(2026, 8, 18, 1, 59, tzinfo=timezone.utc)
             session.status = "confirmed"
             session.items = [baseline_item]
             session.pricing_snapshot = {"payable_total_cents": 6800}

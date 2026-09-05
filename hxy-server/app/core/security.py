@@ -7,12 +7,13 @@ from app.core.config import settings
 ALGORITHM = settings.jwt_algorithm
 
 
-def create_access_token(user_id: str, openid: str) -> str:
+def create_access_token(user_id: str, openid: str, login_version: int = 1) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {
         "sub": str(user_id),
         "openid": openid,
         "token_type": "customer",
+        "login_version": int(login_version),
         "exp": expire,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)

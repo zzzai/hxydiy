@@ -10,6 +10,7 @@ import {
   isOverlayRootState,
   readOverlayHistoryStack,
   readOverlayHistoryState,
+  shouldRestoreProfileOverlay,
   replaceOverlayHistoryState,
   shouldRunDeferredSwipeBack,
 } from '../src/overlayHistory.ts';
@@ -92,4 +93,11 @@ test('原生边缘返回已经退层后，不再执行第二次自定义返回',
 
   assert.equal(shouldRunDeferredSwipeBack(couponLogin, couponLogin), true);
   assert.equal(shouldRunDeferredSwipeBack(couponLogin, projectDetail), false);
+});
+
+test('刷新我的页面时从当前历史状态恢复个人中心', () => {
+  const profile = createOverlayHistoryState(createOverlayGuardState(null), 'profile');
+
+  assert.equal(shouldRestoreProfileOverlay(profile), true);
+  assert.equal(shouldRestoreProfileOverlay(createOverlayGuardState(null)), false);
 });

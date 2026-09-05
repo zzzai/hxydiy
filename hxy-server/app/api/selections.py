@@ -22,6 +22,7 @@ from app.domain.selection_options import (
 )
 from app.models import Addon, CouponTemplate, PositionOccupancy, Project, ProjectCatalogVersion, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
 from app.schemas.selection import (
+    MySelectionRecordOut,
     MySelectionSessionsOut,
     SelectionCreateIn,
     SelectionCreateOut,
@@ -29,6 +30,7 @@ from app.schemas.selection import (
     SelectionSaveIn,
     SelectionSessionOut,
 )
+from app.core.customer_auth import current_customer_id
 
 router = APIRouter(prefix="/selection-sessions", tags=["selection-sessions"])
 SESSION_TTL_HOURS = 12
@@ -102,7 +104,7 @@ def _session_price_type(
 ) -> str:
     user = db.get(User, session.customer_id) if session.customer_id else None
     return price_type_for_member(
-        bool(user and user.is_member),
+        bool(user and user.is_member and session.membership_verified_at),
         member_expire_at=user.member_expire_at if user else None,
         confirmed_at=confirmed_at,
         member_type=user.member_type if user else None,
@@ -125,7 +127,7 @@ def refresh_session_pricing(
         if member_expire_at is not None and member_expire_at.tzinfo is None:
             member_expire_at = member_expire_at.replace(tzinfo=timezone.utc)
         price_context = PriceContext(
-            is_member=bool(user and user.is_member),
+            is_member=bool(user and user.is_member and session.membership_verified_at),
             member_type=user.member_type if user else None,
             member_expire_at=member_expire_at,
             confirmed_at=confirmed_at,
@@ -157,9 +159,17 @@ def service_status(session_id: str, x_selection_token: str | None = Header(defau
     }
 
 
+def _customer_owned_session(db: Session, session_id: str, authorization: str | None) -> SelectionSession:
+    user_id = current_customer_id(authorization, db)
+    session = db.scalar(select(SelectionSession).where(SelectionSession.id == session_id, SelectionSession.customer_id == user_id))
+    if not session:
+        raise HTTPException(status_code=404, detail="到店记录不存在")
+    return session
+
+
 @router.post("/{session_id}/feedback")
-def submit_feedback(session_id: str, body: FeedbackIn, x_selection_token: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
-    session = _get_session(db, session_id, x_selection_token)
+def submit_feedback(session_id: str, body: FeedbackIn, x_selection_token: str | None = Header(default=None), authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
+    session = _get_session(db, session_id, x_selection_token) if x_selection_token else _customer_owned_session(db, session_id, authorization)
     occupancy = _latest_service_occupancy(db, session.id)
     if not occupancy or not occupancy.actual_service_end_at:
         raise HTTPException(status_code=409, detail="服务完成后才可以评价")
@@ -570,14 +580,37 @@ def my_selection_sessions(
     db: Session = Depends(get_db),
 ) -> MySelectionSessionsOut:
     """个人中心：按 JWT 列出当前顾客的选单（新→旧，最多 50 条）。"""
-    user_id = _current_user_id(authorization)
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="请先登录")
+    user_id = current_customer_id(authorization, db)
     stmt = select(SelectionSession).where(SelectionSession.customer_id == user_id)
     if status:
         stmt = stmt.where(SelectionSession.status == status)
     sessions = list(db.scalars(stmt.order_by(SelectionSession.created_at.desc()).limit(50)))
-    return MySelectionSessionsOut(items=sessions, total=len(sessions))
+    items = []
+    for session in sessions:
+        occupancy = _latest_service_occupancy(db, session.id)
+        evaluated = bool(db.scalar(select(ServiceFeedback.id).where(ServiceFeedback.selection_session_id == session.id)))
+        completed_at = occupancy.actual_service_end_at if occupancy else None
+        items.append(MySelectionRecordOut.model_validate(session).model_copy(update={
+            "occupancy_status": occupancy.status if occupancy else None,
+            "service_completed_at": completed_at,
+            "can_evaluate": bool(completed_at),
+            "evaluated": evaluated,
+        }))
+    return MySelectionSessionsOut(items=items, total=len(items))
+
+
+@router.get("/{session_id}/customer-detail", response_model=MySelectionRecordOut)
+def customer_selection_detail(session_id: str, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> MySelectionRecordOut:
+    session = _customer_owned_session(db, session_id, authorization)
+    occupancy = _latest_service_occupancy(db, session.id)
+    completed_at = occupancy.actual_service_end_at if occupancy else None
+    evaluated = bool(db.scalar(select(ServiceFeedback.id).where(ServiceFeedback.selection_session_id == session.id)))
+    return MySelectionRecordOut.model_validate(session).model_copy(update={
+        "occupancy_status": occupancy.status if occupancy else None,
+        "service_completed_at": completed_at,
+        "can_evaluate": bool(completed_at),
+        "evaluated": evaluated,
+    })
 
 
 @router.get("/{session_id}", response_model=SelectionSessionOut)

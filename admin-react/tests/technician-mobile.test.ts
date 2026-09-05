@@ -3,14 +3,19 @@ import test from 'node:test';
 import * as technicianMobile from '../src/technician/technicianMobile.ts';
 import { TECHNICIAN_MOBILE_ROUTES, technicianAccountStatusLabel, technicianEmploymentStatusLabel, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
 
-test('移动技师端只暴露三栏业务路由', () => {
-  assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/history', '/technician/me']);
+test('移动技师端暴露会员核验独立路由', () => {
+  assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/member-verify', '/technician/history', '/technician/me']);
+});
+
+test('会员核验使用独立入口，不扩大技师服务动作', () => {
+  assert.deepEqual(technicianActions('membership_verify'), []);
+  assert.equal(TECHNICIAN_MOBILE_ROUTES.includes('/technician/member-verify'), true);
 });
 
 test('底部导航使用 basename 内部路径，避免重复拼接 technician 前缀', () => {
   assert.deepEqual(
     (technicianMobile as { TECHNICIAN_MOBILE_TAB_PATHS?: readonly string[] }).TECHNICIAN_MOBILE_TAB_PATHS,
-    ['/today', '/history', '/me'],
+    ['/today', '/member-verify', '/history', '/me'],
   );
 });
 

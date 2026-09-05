@@ -67,14 +67,33 @@ export function selectionDisplayAmount(session: {
 }
 
 export function membershipSavingCents(sessions: Array<{
+  service_completed_at?: string | null;
   store_total_cents?: number | null;
   member_total_cents?: number | null;
 }>): number {
   return sessions.reduce((total, session) => {
+    if (!session.service_completed_at) return total;
     const store = Number(session.store_total_cents || 0);
     const member = Number(session.member_total_cents || 0);
     return total + (Number.isFinite(store) && Number.isFinite(member) ? Math.max(0, store - member) : 0);
   }, 0);
+}
+
+export function membershipState(expireAt: string | null | undefined, now = new Date()): { kind: 'active' | 'expiring' | 'expired' | 'unknown'; daysLeft: number | null } {
+  if (!expireAt) return { kind: 'unknown', daysLeft: null };
+  const expires = new Date(expireAt);
+  if (Number.isNaN(expires.getTime())) return { kind: 'unknown', daysLeft: null };
+  const daysLeft = Math.max(0, Math.ceil((expires.getTime() - now.getTime()) / 86_400_000));
+  if (expires.getTime() <= now.getTime()) return { kind: 'expired', daysLeft: 0 };
+  return { kind: daysLeft <= 30 ? 'expiring' : 'active', daysLeft };
+}
+
+export type RecordFilter = 'all' | 'pending-feedback' | 'in-service' | 'completed';
+export function recordFilter<T extends { can_evaluate?: boolean; evaluated?: boolean; occupancy_status?: string | null }>(records: T[], filter: RecordFilter): T[] {
+  if (filter === 'pending-feedback') return records.filter((item) => item.can_evaluate && !item.evaluated);
+  if (filter === 'in-service') return records.filter((item) => item.occupancy_status === 'waiting_service' || item.occupancy_status === 'in_service');
+  if (filter === 'completed') return records.filter((item) => item.can_evaluate || ['post_service_present', 'cleaning', 'released'].includes(item.occupancy_status || ''));
+  return records;
 }
 
 const COUPON_STATUS_LABELS: Record<string, string> = {

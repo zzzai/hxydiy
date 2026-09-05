@@ -1,14 +1,16 @@
-import { ArrowLeft, BadgeCheck, Clock3, LogOut, ReceiptText, Ticket, UserRound } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Ticket, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 
-import { ApiError, cancelOrder, getMyCoupons, getMyOrders, getMySelectionSessions, loginByPhone, sendPhoneCode, type MyCoupon, type Order } from '../api';
+import { ApiError, cancelOrder, enrollTrustedDevice, getMyCoupons, getMyOrders, getMySelectionSessions, issueMemberCode, loginByPhone, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
 import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth, type CustomerUser } from '../customerAuth';
 import { formatMoney } from '../domain';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
-import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipSavingCents, orderStatusLabel, selectionDisplayAmount, selectionStatusLabel } from '../profile';
+import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipSavingCents, membershipState, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
 import MembershipBanner from './MembershipBanner';
+import FeedbackDialog from './FeedbackDialog';
 
-type TabKey = 'orders' | 'selections' | 'coupons';
+type TabKey = 'records' | 'coupons';
 
 export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
   open: boolean;
@@ -16,7 +18,12 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
   onClose: () => void;
   onAuthChange: (auth: CustomerAuth | null) => void;
 }) {
-  const [tab, setTab] = useState<TabKey>('orders');
+  const [tab, setTab] = useState<TabKey>('records');
+  const [recordState, setRecordState] = useState<RecordFilter>('all');
+  const [selectedRecord, setSelectedRecord] = useState<SelectionSession | null>(null);
+  const [feedbackRecord, setFeedbackRecord] = useState<SelectionSession | null>(null);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [memberCodeOpen, setMemberCodeOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sessions, setSessions] = useState<Awaited<ReturnType<typeof getMySelectionSessions>>>([]);
   const [coupons, setCoupons] = useState<MyCoupon[]>([]);
@@ -37,7 +44,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
       setSessions(sessionItems);
       setCoupons(couponItems);
     }).catch((reason) => {
-      if (authFailureAction(reason) === 'reauthenticate') {
+      if (['reauthenticate', 'session-replaced'].includes(authFailureAction(reason))) {
         clearCustomerAuth();
         onAuthChange(null);
         return;
@@ -51,9 +58,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
     loadData(auth.token, auth.user.is_member);
   }, [open, auth, loadData]);
 
-  useEffect(() => {
-    if (auth?.user.is_member && tab === 'coupons') setTab('orders');
-  }, [auth?.user.is_member, tab]);
+  useEffect(() => { if (auth?.user.is_member && tab === 'coupons') setTab('records'); }, [auth?.user.is_member, tab]);
 
   const handleCancelOrder = async (order: Order) => {
     if (!auth || cancelling) return;
@@ -63,7 +68,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
       await cancelOrder(order.id, auth.token);
       loadData(auth.token, auth.user.is_member);
     } catch (reason) {
-      if (authFailureAction(reason) === 'reauthenticate') {
+      if (['reauthenticate', 'session-replaced'].includes(authFailureAction(reason))) {
         clearCustomerAuth();
         onAuthChange(null);
         return;
@@ -88,21 +93,22 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
         ? <ProfileLogin onAuthChange={onAuthChange} />
         : (
           <main className="profile-body">
-            <ProfileCard user={auth.user} />
-            {auth.user.is_member && <div className="profile-saving-banner"><strong>会员价累计预计省下</strong><span>{formatMoney(membershipSavingCents(sessions))}</span><small>按历史到店选单的门店价与会员价差额估算</small></div>}
+            <ProfileCard user={auth.user} savingCents={membershipSavingCents(sessions)} completedCount={sessions.filter((item) => item.service_completed_at).length} onShowCode={() => setMemberCodeOpen(true)} />
+            {sessions.some((item) => item.can_evaluate && !item.evaluated) && <button className="profile-pending-task" type="button" onClick={() => { setTab('records'); setRecordState('pending-feedback'); }}><span><MessageSquareText size={19} /><strong>待评价 {sessions.filter((item) => item.can_evaluate && !item.evaluated).length}</strong><small>完成评价，帮助我们改进服务</small></span><ChevronRight size={18} /></button>}
             {!auth.user.is_member && <MembershipBanner />}
             <nav className="profile-tabs" aria-label="个人中心板块">
-              <TabButton active={tab === 'orders'} onClick={() => setTab('orders')} icon={<ReceiptText size={15} />} label="服务记录" count={orders.length} />
-              <TabButton active={tab === 'selections'} onClick={() => setTab('selections')} icon={<Clock3 size={15} />} label="到店记录" count={sessions.length} />
+              <TabButton active={tab === 'records'} onClick={() => setTab('records')} icon={<Clock3 size={15} />} label="到店记录" count={sessions.length} />
               {shouldShowCouponTab(auth.user.is_member) && <TabButton active={tab === 'coupons'} onClick={() => setTab('coupons')} icon={<Ticket size={15} />} label="我的券" count={coupons.length} />}
             </nav>
             {loadError && <p className="profile-error">{loadError}</p>}
             {loading && <p className="profile-empty">正在加载…</p>}
             {!loading && !loadError && (
-              tab === 'orders' ? <OrderList orders={orders} cancelling={cancelling} onCancel={handleCancelOrder} />
-                : tab === 'selections' ? <SelectionList sessions={sessions} onContinue={onClose} />
-                  : shouldShowCouponTab(auth.user.is_member) ? <CouponList coupons={coupons} /> : <OrderList orders={orders} cancelling={cancelling} onCancel={handleCancelOrder} />
+              tab === 'records' ? <><RecordFilters value={recordState} onChange={setRecordState} /><SelectionList sessions={recordFilter(sessions, recordState)} onContinue={onClose} onOpen={setSelectedRecord} onFeedback={setFeedbackRecord} /></>
+                : shouldShowCouponTab(auth.user.is_member) ? <CouponList coupons={coupons} /> : <OrderList orders={orders} cancelling={cancelling} onCancel={handleCancelOrder} />
             )}
+            {selectedRecord && <RecordDetail record={selectedRecord} onClose={() => setSelectedRecord(null)} onFeedback={() => { setFeedbackRecord(selectedRecord); setSelectedRecord(null); }} />}
+            <FeedbackDialog open={Boolean(feedbackRecord)} submitting={feedbackSubmitting} submitted={Boolean(feedbackRecord?.evaluated)} onClose={() => setFeedbackRecord(null)} onSubmit={async (input) => { if (!auth || !feedbackRecord) return; setFeedbackSubmitting(true); try { await submitCustomerFeedback(feedbackRecord.id, auth.token, input); setFeedbackRecord(null); loadData(auth.token, auth.user.is_member); } finally { setFeedbackSubmitting(false); } }} />
+            {memberCodeOpen && <MemberCodeDialog token={auth.token} onClose={() => setMemberCodeOpen(false)} />}
           </main>
         )}
     </div>
@@ -168,7 +174,9 @@ function ProfileLogin({ onAuthChange }: { onAuthChange: (auth: CustomerAuth) => 
   );
 }
 
-function ProfileCard({ user }: { user: CustomerUser }) {
+function ProfileCard({ user, savingCents, completedCount, onShowCode }: { user: CustomerUser; savingCents: number; completedCount: number; onShowCode: () => void }) {
+  const state = membershipState(user.member_expire_at);
+  const expiry = user.member_expire_at ? formatDateTime(user.member_expire_at).slice(0, 10) : '';
   return (
     <section className={`profile-card ${user.is_member ? 'is-member' : 'is-guest'}`}>
       <div className="profile-avatar"><UserRound size={22} /></div>
@@ -179,7 +187,8 @@ function ProfileCard({ user }: { user: CustomerUser }) {
       <div className="profile-identity">
         {user.is_member ? <><BadgeCheck size={17} /><span>会员价</span></> : <span>到店服务</span>}
       </div>
-      {user.is_member && <p className="profile-card-benefit">全年享会员价 · 周二会员日更优惠</p>}
+      {user.is_member && <div className="profile-member-value"><div><small>{state.kind === 'expired' ? '会员权益已到期' : `有效期至 ${expiry || '以门店记录为准'}`}</small>{state.kind === 'expiring' && <em>还有 {state.daysLeft} 天到期</em>}</div><div><small>累计会员省</small><strong>{completedCount ? formatMoney(savingCents) : '完成首次服务后可查看'}</strong><span>{completedCount ? `已完成 ${completedCount} 次服务` : '按已完成服务价格快照计算'}</span></div></div>}
+      {user.is_member && state.kind !== 'expired' && <button className="profile-member-code-button" type="button" onClick={onShowCode}>出示动态会员码</button>}
       {!user.is_member && <p className="profile-card-benefit">到店办理年度权益卡，开通后享会员价</p>}
     </section>
   );
@@ -229,15 +238,40 @@ function OrderList({ orders, cancelling, onCancel }: {
   );
 }
 
-function SelectionList({ sessions, onContinue }: { sessions: Awaited<ReturnType<typeof getMySelectionSessions>>; onContinue: () => void }) {
+function RecordFilters({ value, onChange }: { value: RecordFilter; onChange: (value: RecordFilter) => void }) {
+  return <div className="profile-record-filters" aria-label="到店记录筛选">{([['all', '全部'], ['pending-feedback', '待评价'], ['in-service', '服务中'], ['completed', '已完成']] as const).map(([key, label]) => <button key={key} type="button" className={value === key ? 'active' : ''} aria-pressed={value === key} onClick={() => onChange(key)}>{label}</button>)}</div>;
+}
+
+function MemberCodeDialog({ token, onClose }: { token: string; onClose: () => void }) {
+  const [code, setCode] = useState('');
+  const [seconds, setSeconds] = useState(30);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      let result;
+      try { result = await issueMemberCode(token); }
+      catch (reason) {
+        if (reason instanceof ApiError && reason.code === 'DEVICE_NOT_TRUSTED') { await enrollTrustedDevice(token); result = await issueMemberCode(token); }
+        else throw reason;
+      }
+      setCode(result.code_token); setSeconds(Math.max(1, Math.ceil((new Date(result.expires_at).getTime() - Date.now()) / 1000)));
+    } catch (reason) { setCode(''); setError(reason instanceof Error ? reason.message : '会员码生成失败'); }
+  }, [token]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (!code) return; const timer = window.setInterval(() => setSeconds((value) => { if (value <= 1) { window.clearInterval(timer); void load(); return 0; } return value - 1; }), 1000); return () => window.clearInterval(timer); }, [code, load]);
+  return <div className="profile-detail-backdrop" role="presentation" onClick={onClose}><section className="profile-member-code-dialog" role="dialog" aria-modal="true" aria-labelledby="member-code-title" onClick={(event) => event.stopPropagation()}><header><strong id="member-code-title">会员本人核验</strong><button type="button" aria-label="关闭会员码" onClick={onClose}><X size={20} /></button></header>{code ? <><QRCodeSVG value={code} size={220} level="M" /><strong>请向技师或店长出示</strong><p>{seconds} 秒后自动刷新</p><small>动态码每 30 秒更新，仅限本机当次使用，请勿截图或转发。</small></> : <><p>{error || '正在生成会员码…'}</p>{error && <button type="button" onClick={() => void load()}>重新生成</button>}</>}</section></div>;
+}
+
+function SelectionList({ sessions, onContinue, onOpen, onFeedback }: { sessions: Awaited<ReturnType<typeof getMySelectionSessions>>; onContinue: () => void; onOpen: (record: SelectionSession) => void; onFeedback: (record: SelectionSession) => void }) {
   if (!sessions.length) return <p className="profile-empty">还没有到店选单记录。</p>;
   return (
     <ul className="profile-list">
       {sessions.map((session) => (
-        <li key={session.id} className="profile-order profile-selection-record">
+        <li key={session.id} className="profile-order profile-selection-record" tabIndex={0} role="button" onClick={() => onOpen(session)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(session); } }}>
           <div className="profile-list-head profile-record-store">
             <strong><span className="profile-record-badge">到店</span>荷小悦草本服务</strong>
-            <span className={`profile-status status-${session.status}`}>{selectionStatusLabel(session.status)}</span>
+            <span className={`profile-status status-${session.status}`}>{session.can_evaluate && !session.evaluated ? '待评价' : session.service_completed_at ? '已完成' : selectionStatusLabel(session.status)}</span>
           </div>
           <div className="profile-record-product">
             <div className="profile-record-thumb"><ReceiptText size={22} /></div>
@@ -248,11 +282,15 @@ function SelectionList({ sessions, onContinue }: { sessions: Awaited<ReturnType<
             <span className="profile-record-quantity">×{session.items.reduce((sum, item) => sum + Math.max(1, item.quantity || 1), 0)}</span>
           </div>
           <div className="profile-record-meta"><span>{formatDateTime(session.submitted_at) || '到店扫码选购'}</span><strong>共计 {formatMoney(selectionDisplayAmount(session))}</strong></div>
-          <div className="profile-record-actions"><button type="button" onClick={onContinue}>再次选购</button><button type="button" onClick={onContinue}>返回菜单</button></div>
+          <div className="profile-record-actions">{session.can_evaluate && !session.evaluated && <button type="button" onClick={(event) => { event.stopPropagation(); onFeedback(session); }}>去评价</button>}<button type="button" onClick={(event) => { event.stopPropagation(); onContinue(); }}>再次选购</button><span aria-hidden="true"><ChevronRight size={17} /></span></div>
         </li>
       ))}
     </ul>
   );
+}
+
+function RecordDetail({ record, onClose, onFeedback }: { record: SelectionSession; onClose: () => void; onFeedback: () => void }) {
+  return <div className="profile-detail-backdrop" role="presentation" onClick={onClose}><section className="profile-detail" role="dialog" aria-modal="true" aria-labelledby="record-detail-title" onClick={(event) => event.stopPropagation()}><header><button type="button" aria-label="关闭到店详情" onClick={onClose}><X size={20} /></button><strong id="record-detail-title">到店详情</strong><span /></header><div className="profile-detail-body"><div className="profile-detail-status"><BadgeCheck size={24} /><strong>{record.can_evaluate && !record.evaluated ? '服务已完成，待评价' : record.service_completed_at ? '本次服务已完成' : selectionStatusLabel(record.status)}</strong><small>{formatDateTime(record.service_completed_at || record.submitted_at)}</small></div><section><h3>服务项目</h3>{record.items.map((item, index) => <div className="profile-detail-item" key={`${item.project_id}-${index}`}><span>{item.name || '到店服务'}</span><strong>×{Math.max(1, item.quantity || 1)}</strong></div>)}</section><section><h3>价格记录</h3><div className="profile-detail-price"><span>门店价 {formatMoney(record.store_total_cents)}</span><span>会员价 {formatMoney(record.member_total_cents)}</span><strong>本次记录 {formatMoney(selectionDisplayAmount(record))}</strong></div></section><p className="profile-detail-note">金额以当次提交和门店确认的服务清单为准。</p></div>{record.can_evaluate && !record.evaluated && <footer><button type="button" onClick={onFeedback}>评价本次服务</button></footer>}</section></div>;
 }
 
 function CouponList({ coupons }: { coupons: MyCoupon[] }) {
