@@ -392,6 +392,78 @@ class OccupancyApiTests(unittest.TestCase):
         self.release_if_active("sofa-06")
         self.set_room_status("sofa-06", "available")
 
+    def test_same_browser_can_start_a_new_selection_after_service_ends_without_releasing_room(self):
+        self.release_if_active("sofa-06")
+        browser = TestClient(app)
+        first = browser.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr", "device_label": "测试平板",
+        })
+        self.assertEqual(first.status_code, 200, first.text)
+        old_session_id = first.json()["session"]["id"]
+        old_occupancy_id = first.json()["occupancy"]["id"]
+        with self.SessionLocal() as db:
+            old_session = db.get(SelectionSession, old_session_id)
+            old_session.status = "confirmed"
+            old_occupancy = db.get(PositionOccupancy, old_occupancy_id)
+            old_occupancy.status = "post_service_present"
+            db.commit()
+
+        second = browser.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr",
+            "device_label": "测试平板", "start_new_after_service": True,
+        })
+
+        self.assertEqual(second.status_code, 200, second.text)
+        self.assertFalse(second.json()["resumed"])
+        self.assertNotEqual(second.json()["session"]["id"], old_session_id)
+        self.assertEqual(second.json()["session"]["status"], "draft")
+        self.assertEqual(second.json()["occupancy"]["status"], "held")
+        submitted = browser.post(
+            f"/api/v1/selection-sessions/{second.json()['session']['id']}/revisions",
+            headers={
+                "X-Selection-Token": second.json()["access_token"],
+                "Idempotency-Key": "new-round-after-service",
+            },
+            json={"items": [{"project_id": self.foot_id}]},
+        )
+        self.assertEqual(submitted.status_code, 200, submitted.text)
+        with self.SessionLocal() as db:
+            old_session = db.get(SelectionSession, old_session_id)
+            old_occupancy = db.get(PositionOccupancy, old_occupancy_id)
+            self.assertEqual(old_session.status, "confirmed")
+            self.assertEqual(old_occupancy.status, "post_service_present")
+            self.assertIsNone(old_occupancy.active_room_id)
+            self.assertIsNone(old_occupancy.active_session_id)
+            next_occupancy = db.scalar(select(PositionOccupancy).where(
+                PositionOccupancy.active_session_id == second.json()["session"]["id"]
+            ))
+            self.assertEqual(next_occupancy.status, "waiting_service")
+        browser.close()
+        self.release_if_active("sofa-06")
+
+    def test_new_selection_after_service_requires_same_browser_and_completed_state(self):
+        self.release_if_active("sofa-06")
+        owner = TestClient(app)
+        first = owner.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr", "device_label": "测试平板",
+        })
+        other = TestClient(app)
+        blocked = other.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr",
+            "device_label": "其他设备", "start_new_after_service": True,
+        })
+        self.assertEqual(blocked.status_code, 409, blocked.text)
+        self.assertEqual(blocked.json()["detail"]["code"], "POSITION_OCCUPIED")
+        resumed = owner.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr",
+            "device_label": "测试平板", "start_new_after_service": True,
+        })
+        self.assertEqual(resumed.status_code, 200, resumed.text)
+        self.assertTrue(resumed.json()["resumed"])
+        self.assertEqual(resumed.json()["session"]["id"], first.json()["session"]["id"])
+        owner.close(); other.close()
+        self.release_if_active("sofa-06")
+
     def test_same_browser_cannot_hold_two_positions_after_scanning_wrong_qr(self):
         self.release_if_active("sofa-07")
         self.release_if_active("sofa-08")

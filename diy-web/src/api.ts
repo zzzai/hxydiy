@@ -254,6 +254,7 @@ export function createEntrySession(input: {
   source: string;
   device_label: string;
   entry_token?: string;
+  start_new_after_service?: boolean;
 }) {
   return runTrackedOperation('position_select', {
     store_id: input.store_id,

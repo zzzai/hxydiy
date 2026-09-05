@@ -229,6 +229,34 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
             "current_position_code": current_room.code if current_room else None,
         })
     existing = _active_occupancy_for_room(db, room.id)
+    rolled_over_after_service = False
+    if existing:
+        existing_session = db.get(SelectionSession, existing.active_session_id)
+        if (
+            body.start_new_after_service
+            and existing_session
+            and existing_session.customer_id == anonymous_customer_id
+            and existing_session.status == "confirmed"
+            and existing.status == "post_service_present"
+        ):
+            # 只结束 DIY 对旧会话的活动引用；不改变物理房位状态，也不删除旧单或评价。
+            existing.active_room_id = None
+            existing.active_session_id = None
+            existing.version += 1
+            audit_occupancy(db, existing, "next_selection_started", "customer", existing_session.id, {
+                "room_id": room.id,
+                "position_code": room.code,
+            })
+            db.flush()
+            existing = None
+            rolled_over_after_service = True
+        elif body.start_new_after_service and existing_session and existing_session.customer_id != anonymous_customer_id:
+            raise HTTPException(status_code=409, detail={
+                "code": "POSITION_OCCUPIED",
+                "message": "该服务位已有顾客，请核对二维码或联系前台",
+                "position_code": room.code,
+                "state": existing.status,
+            })
     if existing:
         existing_session = db.get(SelectionSession, existing.active_session_id)
         if existing_session and existing_session.customer_id == anonymous_customer_id and existing_session.status in {"draft", "submitted", "confirmed"}:
@@ -244,7 +272,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
             "position_code": room.code,
             "state": existing.status,
         })
-    if room.status != "available":
+    if room.status != "available" and not rolled_over_after_service:
         raise HTTPException(status_code=409, detail={
             "code": "POSITION_UNAVAILABLE",
             "message": "该服务位暂不可用，请联系前台安排",

@@ -678,6 +678,10 @@ export default function App() {
     if (currentStatus === 'post_service_present' || currentStatus === 'cleaning' || currentStatus === 'released') {
       // 服务状态可能先于服务位地图返回，不能让旧 in_service 快照开放历史订单编辑。
       if (occupancy) setOccupancy({ ...occupancy, status: currentStatus });
+      if (currentStatus === 'post_service_present') {
+        await enterPosition(positionCode, false, true);
+        return;
+      }
       try {
         const map = await getServicePositionMap(query.storeId, session?.id, accessToken || undefined);
         setPositions(map.positions);
@@ -686,7 +690,6 @@ export default function App() {
           requestedPositionFound: Boolean(current),
           hasActiveOccupancy: Boolean(current?.occupancy),
         })) {
-          clearRecord(query.storeId, positionCode);
           await enterPosition(positionCode);
           return;
         }
@@ -709,7 +712,7 @@ export default function App() {
     return { map, current };
   };
 
-  const enterPosition = async (code: string, recovered = false) => {
+  const enterPosition = async (code: string, recovered = false, startNewAfterService = false) => {
     setBoot('loading');
     setBootMessage('正在为您确认服务位');
     try {
@@ -723,6 +726,7 @@ export default function App() {
         }),
         device_label: deviceLabel(),
         entry_token: query.qrToken || undefined,
+        start_new_after_service: startNewAfterService || undefined,
       });
       setAccessToken(entry.access_token);
       setSession(entry.session);
@@ -751,6 +755,11 @@ export default function App() {
       setBoot(canEditSelection(entry.session.status, entry.occupancy.status) ? 'ready' : 'submitted');
       if (recovered) flash(`已恢复${entry.position.customer_label}的本次选单`);
     } catch (error) {
+      if (startNewAfterService) {
+        setBoot('ready');
+        flash(error instanceof Error ? error.message : '暂时无法开始新一轮选购，请稍后重试');
+        return;
+      }
       if (error instanceof ApiError) {
         const currentPositionCode = typeof error.detail.current_position_code === 'string'
           ? error.detail.current_position_code
