@@ -43,6 +43,18 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn('if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then', entrypoint)
         self.assertIn('RUN_MIGRATIONS: "false"', compose)
 
+    def test_production_release_only_allows_reviewed_membership_migration(self):
+        deploy = (REPO_ROOT / "deploy/diy/deploy-production.sh").read_text(encoding="utf-8")
+
+        self.assertIn("20260905_membership_verification.py", deploy)
+        self.assertIn("Unapproved Alembic migration change detected.", deploy)
+        self.assertIn('"$rehearsal_db"', deploy)
+        self.assertIn("api alembic upgrade head", deploy)
+        self.assertLess(
+            deploy.index('api sh -c'),
+            deploy.index('api alembic upgrade head'),
+        )
+
     def test_backend_deploy_health_check_matches_compose_host_port(self):
         deploy = (REPO_ROOT / "hxy-server/deploy.sh").read_text(encoding="utf-8")
         compose = (REPO_ROOT / "hxy-server/docker-compose.yml").read_text(encoding="utf-8")

@@ -43,6 +43,7 @@ backup_checksum=''
 rehearsal_db=''
 compose_backup=''
 activated=false
+migration_required=false
 
 for required in \
   "$workspace_root/hxy-server/requirements.txt" \
@@ -125,14 +126,24 @@ docker exec "$db_container" psql -v ON_ERROR_STOP=1 -U "$db_user" -d postgres \
   -c "CREATE DATABASE \"$rehearsal_db\"" >/dev/null
 docker exec -i "$db_container" pg_restore --exit-on-error -U "$db_user" -d "$rehearsal_db" < "$backup_file"
 docker exec "$db_container" psql -v ON_ERROR_STOP=1 -U "$db_user" -d "$rehearsal_db" -c 'SELECT 1' >/dev/null
-drop_rehearsal_database
 
-# Automatic deployment must not silently apply an irreversible schema change.
+# Only the reviewed additive membership verification migration is permitted.
+# Any removed or unknown revision remains blocked.
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
   <(find "$workspace_root/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) >/dev/null; then
-  echo "Alembic migration change detected; use the separately approved migration runbook." >&2
-  exit 1
+  mapfile -t added_migrations < <(comm -13 \
+    <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
+    <(find "$workspace_root/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort))
+  mapfile -t removed_migrations < <(comm -23 \
+    <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
+    <(find "$workspace_root/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort))
+  if [[ "${#added_migrations[@]}" -ne 1 || "${added_migrations[0]}" != '20260905_membership_verification.py' ||
+        "${#removed_migrations[@]}" -ne 0 ]]; then
+    echo "Unapproved Alembic migration change detected." >&2
+    exit 1
+  fi
+  migration_required=true
 fi
 
 compose_backup=$(mktemp "$release_root/.docker-compose.hxy.yml.XXXXXX")
@@ -140,6 +151,17 @@ if [[ -f "$compose_file" ]]; then
   cp "$compose_file" "$compose_backup"
 fi
 install -m 0644 "$workspace_root/deploy/diy/docker-compose.hxy.yml" "$compose_file"
+
+if [[ "$migration_required" == true ]]; then
+  HXY_DIY_CURRENT="$workspace_root" docker compose --env-file "$env_file" -f "$compose_file" build api
+  HXY_DIY_CURRENT="$workspace_root" docker compose --env-file "$env_file" -f "$compose_file" run --rm --no-deps \
+    api sh -c 'export DATABASE_URL="${DATABASE_URL%/*}/'"$rehearsal_db"'"; alembic upgrade head'
+  drop_rehearsal_database
+  HXY_DIY_CURRENT="$workspace_root" docker compose --env-file "$env_file" -f "$compose_file" run --rm --no-deps \
+    api alembic upgrade head
+else
+  drop_rehearsal_database
+fi
 
 HXY_DIY_RELEASE_ROOT="$release_root" "$workspace_root/deploy/diy/create-release.sh" "$release_id" "$workspace_root"
 HXY_DIY_RELEASE_ROOT="$release_root" "$workspace_root/deploy/diy/activate-release.sh" "$release_id"
