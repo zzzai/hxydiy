@@ -1,3 +1,22 @@
+# 2026-09-05 顾客端匿名选购清单逐项会员价发布
+
+## 已发布生产
+
+- 顾客端 PR #21 已 squash 合并，主干提交 `fd583121`；匿名/非会员在“本次待提交”中对会员价低于门店价的主项目、收费加项和局部调理显示逐项“会员价 ¥…”参考，会员继续显示会员价主价与门店价划线；赠饮和无差价项目不显示虚假会员价。
+- Release：`/root/hxy-diy-20260811/releases/manual-fd58312185ae-20260905-2`；上一 release 为 `manual-2c3793ea3b95-20260905-1`。API 镜像 ID `sha256:6be07a904832fa2fc239def7bc010217d3934921321c0b2118d2c945ec924d1e`。
+- 数据库备份：`pre-manual-fd58312185ae-20260905-2-20260905T035528Z.dump`，SHA-256 `fb0b70d0101ead825e2bc0405a238aa8cb3bbe176806627afb49d449fd5b2e1f`；隔离恢复演练通过。
+- Release `MANIFEST.sha256` 逐文件校验通过，Manifest SHA-256 `be93e898cfd3f8fd09f09de98e266fb3890c1632c4ea470bd49f3e6bfd1e0950`；`current` 已原子切换。
+- 公网首页、管理端、技师端、健康接口、新顾客端 JS/CSS 与关键项目图均返回 HTTP 200；API 与数据库运行且重启次数为 0，Alembic 保持 `20260904_service_reference_v2 (head)`。本次未执行数据库迁移。
+
+## 发布边界与异常
+
+- GitHub 自动发布仍在 `Configure pinned production host key` 处因缺失 `PRODUCTION_SSH_KNOWN_HOSTS` 停止，未连接服务器。服务器直连 GitHub 拉取也因 TLS 中断失败，均未改变生产 `current`。
+- 最终使用校验通过的 152,384 字节静态增量包，以已核验的上一 release 为基底，仅覆盖本次构建的顾客端 HTML/CSS/JS 和新版发布配置；仍完整执行备份、恢复演练、Manifest、原子切换与健康检查。镜像构建日志确认 Python 依赖使用阿里云 PyPI 镜像。
+
+## 待现场验收
+
+- 使用匿名、登录非会员、会员三种身份分别打开“本次待提交”，核对逐项价格、底栏总价和前台最终确认价；自动化和公网探针不替代门店现场验收。
+
 # 2026-09-05 顾客端再次选购、匿名价格与选购抽屉发布
 
 ## 本地与主干完成
