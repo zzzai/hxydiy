@@ -47,3 +47,11 @@ python -m pytest tests/test_technician_portal_api.py tests/test_technician_servi
 - SQLite 临时数据库已验证迁移升级及旧迁移链。本轮未执行 PostgreSQL 服务器迁移、备份恢复、生产权限穿透、并发服务器验证或回滚演练。生产执行前需验证回填数量、NULL 分类及 SQL 时间/锁影响，并完成既定备份与恢复演练。
 - 未归属旧服务由店长核对后经既有流程结束，不会写为某位技师的本人历史；若服务已有关联履约单，既有管理端履约边界仍生效，需要使用现有派钟服务流程。
 - 未完成真机、网络重试或门店现场验收。自动测试和本地构建不代表服务器验证、生产上线或门店接受。
+
+## Scoped 复审追加：跨次摘要数组契约
+
+- 复审发现 `_history_profile_summary()` 的 v3 最小投影会省略空部位列表，而当前服务抽屉直接调用 `focus_areas.join()` / `avoid_areas.join()`。仅力度或单边部位记录会使抽屉报错。
+- 本次仅在跨次 service-reference GET 响应组合处补上 `focus_areas=[]`、`avoid_areas=[]` 默认值，再由已有安全投影覆盖实际列表；history 卡片的最小摘要实现和输出均未修改。
+- 新增三组真实 API 回归：仅力度、只有 focus、只有 avoid，验证写入与下一次服务读取成功，两字段始终为数组且文案正确。将同一 API 响应送入 Node.js 执行抽屉的数组 join 消费表达式，验证“未记录”回退与中文部位展示；本地 Node v22.19.0 已实际执行。仅 Python 的测试环境仍执行全部 API 数组断言，省略额外 Node 消费检查，不新增后端运行依赖。
+- RED：三组均失败，缺少 focus_areas 或 avoid_areas；GREEN：`python -m pytest tests/test_technician_profile_v3_contract.py tests/test_technician_service_history_api.py tests/test_technician_portal_api.py -q` 为 **40 passed**，包括 history 精确最小摘要回归。`git diff --check` 通过。
+- 追加提交主题：`fix: keep next-service reference area arrays stable`，实现、测试与本节随同一提交保存。没有推送、发布或其他范围变更。

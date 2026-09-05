@@ -261,6 +261,8 @@ def get_service_reference(
         return {"record": None, "message": "暂无顾客确认的历史服务参考，请现场询问"}
 
     safe_record = {
+        "focus_areas": [],
+        "avoid_areas": [],
         **(_history_profile_summary(record) or {}),
         "recorded_date": record.created_at.date().isoformat() if record.created_at else None,
         "prompt": "请本次服务前再次确认",

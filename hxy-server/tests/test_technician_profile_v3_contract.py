@@ -1,4 +1,9 @@
 from datetime import datetime, timezone
+import json
+import shutil
+import subprocess
+
+import pytest
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -272,6 +277,51 @@ class TestTechnicianProfileV3Contract:
         assert response.json()["record"]["occupation_contexts"] == ["久坐办公"]
         assert "顾客自述正在用药" not in response.text
         assert "personal_context" not in response.text
+
+    @pytest.mark.parametrize(("reported", "expected_areas", "expected_labels"), [
+        ({"force_preference": "gentle"}, ([], []), ["未记录", "未记录"]),
+        ({"focus_areas": ["neck_shoulder"]}, (["肩颈"], []), ["肩颈", "未记录"]),
+        ({"avoid_areas": ["abdomen"]}, ([], ["腹部"]), ["未记录", "腹部"]),
+    ])
+    def test_next_service_arrays_support_drawer_join_for_minimal_v3(self, reported, expected_areas, expected_labels):
+        payload = self.v3_payload(profile={
+            "schema_version": 3, "taxonomy_version": "service_reference_v2",
+            "customer_reported": reported,
+        })
+        saved = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=self.technician_headers)
+        assert saved.status_code == 200, saved.text
+        with self.SessionLocal() as db:
+            old = db.query(PositionOccupancy).first()
+            old.active_room_id = None
+            old.active_session_id = None
+            db.flush()
+            session = SelectionSession(id="minimal-v3-next", store_id=1, customer_id=self.user_id, access_token_hash="minimal-v3-next", status="submitted", items=[])
+            db.add(session)
+            db.flush()
+            occupancy = PositionOccupancy(store_id=1, room_id=old.room_id, active_room_id=old.room_id, selection_session_id=session.id, active_session_id=session.id, status="waiting_service")
+            db.add(occupancy)
+            db.commit()
+            occupancy_id = occupancy.id
+        response = self.client.get(f"/api/v1/technician/occupancies/{occupancy_id}/service-reference", headers=self.technician_headers)
+        assert response.status_code == 200, response.text
+        record = response.json()["record"]
+        assert record["focus_areas"] == expected_areas[0]
+        assert record["avoid_areas"] == expected_areas[1]
+        if "force_preference" in reported:
+            assert record["force_preference"] == "轻柔"
+
+        # Consume the real API payload using the drawer's JavaScript array contract.
+        # This catches absent/null arrays that would throw in Array.join at render.
+        node = shutil.which("node")
+        if node is None:
+            return  # Backend-only environments still verify both array fields above.
+        rendered = subprocess.run([
+            node, "-e",
+            "const record = JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify([record.focus_areas.join('、') || '未记录', record.avoid_areas.join('、') || '未记录']));",
+            json.dumps(record),
+        ], capture_output=True, text=True, encoding="utf-8", check=False)
+        assert rendered.returncode == 0, rendered.stderr
+        assert json.loads(rendered.stdout) == expected_labels
 
     def test_taxonomy_endpoint_exposes_v3_stable_codes(self):
         response = self.client.get(
