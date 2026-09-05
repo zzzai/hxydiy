@@ -188,6 +188,27 @@ SERVICE_REFERENCE_LABELS = {
 }
 
 
+SERVICE_REFERENCE_V2_TAXONOMY = {
+    "occupation_contexts": {"desk_work": "久坐办公", "standing_work": "久站服务"},
+    "personal_context": {
+        "age_band": {"25_34": "25-34岁"},
+        "build": {"balanced": "匀称"},
+    },
+    "body_context": {"height_band": {"shorter": "偏矮", "average": "适中", "taller": "偏高"}},
+    "work_lifestyle": {"sleep_quality": {"average": "一般"}},
+    "service_related_context": {"contexts": {"medication_mentioned": "顾客提及正在用药"}},
+    "session_response": {"relaxation": {"quick": "较快", "gradual": "逐渐", "tense": "始终较紧张"}},
+}
+
+
+@router.get("/service-reference-taxonomy")
+def get_service_reference_taxonomy(
+    authorization: str | None = Header(None), db: Session = Depends(get_db)
+) -> dict:
+    current_technician(authorization, db)
+    return {"schema_version": 3, "taxonomy_version": "service_reference_v2", "groups": SERVICE_REFERENCE_V2_TAXONOMY}
+
+
 @router.get("/occupancies/{occupancy_id}/service-reference")
 def get_service_reference(
     occupancy_id: int,
