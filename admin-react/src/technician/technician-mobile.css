@@ -5,7 +5,7 @@
 .technician-mobile-header span { color: #b9d3c8; font-size: 12px; }
 .technician-mobile-header .ant-btn { color: #dcebdd; min-width: 44px; min-height: 44px; }
 .technician-mobile-content { width: min(100%, 560px); margin: 0 auto; padding: 18px 16px 24px; }
-.technician-mobile-tabbar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(3, 1fr); padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.96); border-top: 1px solid #dfeae5; box-shadow: 0 -4px 18px rgba(20,60,49,.08); }
+.technician-mobile-tabbar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: grid; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.96); border-top: 1px solid #dfeae5; box-shadow: 0 -4px 18px rgba(20,60,49,.08); }
 .technician-mobile-tabbar button { min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; background: transparent; color: #7b8f88; font: inherit; font-size: 11px; }
 .technician-mobile-tabbar button .anticon { font-size: 20px; }
 .technician-mobile-tabbar button.active { color: #1f8f75; font-weight: 650; }
@@ -75,3 +75,13 @@
 .technician-primary-button { min-height: 48px; border-radius: 10px; }
 .technician-reference-state, .technician-reference-card { display: grid; gap: 16px; }
 @media (min-width: 768px) { .technician-mobile-app { width: 430px; min-height: 100vh; margin: 0 auto; box-shadow: 0 0 0 1px #dce8e2, 0 10px 50px rgba(21,65,55,.08); } .technician-mobile-tabbar { right: calc(50% - 215px); left: calc(50% - 215px); } }
+
+.technician-member-verify { display: grid; gap: 14px; padding-bottom: 24px; }
+.technician-member-verify > h2, .technician-member-verify > p { margin: 0; }
+.technician-member-verify .ant-card-body { display: grid; gap: 14px; }
+.technician-member-verify .ant-select { width: 100%; }
+.technician-member-camera { position: relative; overflow: hidden; border-radius: 18px; background: #102e28; min-height: 280px; display: grid; place-items: center; }
+.technician-member-camera video { width: 100%; min-height: 280px; object-fit: cover; }
+.technician-member-camera .ant-spin { position: absolute; inset: auto 0 18px; }
+.technician-member-result { text-align: center; }
+.technician-member-result .anticon { color: #176c58; font-size: 42px; }

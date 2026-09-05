@@ -361,6 +361,14 @@ export function submitFeedback(sessionId: string, token: string, input: { rating
   }));
 }
 
+export function enrollTrustedDevice(token: string) {
+  return request<{ trusted: boolean }>('/auth/h5/trusted-device/enroll', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function issueMemberCode(token: string) {
+  return request<{ code_token: string; expires_at: string }>('/auth/h5/member-code', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+}
+
 export function submitCustomerFeedback(sessionId: string, token: string, input: { rating: number; tags: string[]; note: string }) {
   return runTrackedOperation('feedback_submit', { selection_session_id: sessionId, rating: input.rating, tag_count: input.tags.length }, () => request<ServiceFeedback>(`/selection-sessions/${sessionId}/feedback`, {
     method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(input),

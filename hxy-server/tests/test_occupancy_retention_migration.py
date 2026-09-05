@@ -19,7 +19,7 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
         project_root = Path(__file__).resolve().parents[1]
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():
-            if table.name in {"service_position_qrs", "media_assets"}:
+            if table.name in {"service_position_qrs", "media_assets", "customer_trusted_devices", "membership_codes"}:
                 continue
             copied = table.to_metadata(previous_metadata)
             if copied.name == "users" and "customer_login_version" in copied.c:
@@ -30,6 +30,16 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                     if retained_until.name in index.columns:
                         copied.indexes.discard(index)
                 copied._columns.remove(retained_until)
+            if copied.name == "selection_sessions":
+                for column_name in ("membership_verified_at", "membership_verified_by_staff_id"):
+                    column = copied.c[column_name]
+                    for constraint in list(copied.foreign_key_constraints):
+                        if any(foreign_key.parent is column for foreign_key in constraint.elements):
+                            for foreign_key in constraint.elements:
+                                foreign_key.parent.foreign_keys.discard(foreign_key)
+                                copied.foreign_keys.discard(foreign_key)
+                            copied.foreign_key_constraints.discard(constraint); copied.constraints.discard(constraint)
+                    copied._columns.remove(column)
             if copied.name == "rooms":
                 for column_name in ("parent_room_id", "is_space_container", "is_service_position"):
                     hierarchy_column = copied.c[column_name]

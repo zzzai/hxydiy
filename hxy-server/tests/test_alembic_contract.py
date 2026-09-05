@@ -85,7 +85,7 @@ class AlembicContractTests(unittest.TestCase):
     def test_production_sms_revision_upgrades_to_current_head(self):
         project_root = Path(__file__).resolve().parents[1]
         previous_metadata = MetaData()
-        excluded_tables = {"service_position_qrs", "customer_profile_records", "media_assets"}
+        excluded_tables = {"service_position_qrs", "customer_profile_records", "media_assets", "customer_trusted_devices", "membership_codes"}
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
                 continue
@@ -107,6 +107,16 @@ class AlembicContractTests(unittest.TestCase):
                         copied.foreign_key_constraints.discard(constraint)
                         copied.constraints.discard(constraint)
                 copied._columns.remove(membership_store_column)
+            if copied.name == "selection_sessions":
+                for column_name in ("membership_verified_at", "membership_verified_by_staff_id"):
+                    column = copied.c[column_name]
+                    for constraint in list(copied.foreign_key_constraints):
+                        if any(foreign_key.parent is column for foreign_key in constraint.elements):
+                            for foreign_key in constraint.elements:
+                                foreign_key.parent.foreign_keys.discard(foreign_key)
+                                copied.foreign_keys.discard(foreign_key)
+                            copied.foreign_key_constraints.discard(constraint); copied.constraints.discard(constraint)
+                    copied._columns.remove(column)
             if copied.name == "rooms":
                 for column_name in (
                     "parent_room_id",
@@ -230,6 +240,8 @@ class AlembicContractTests(unittest.TestCase):
             "service_position_qrs",
             "customer_profile_records",
             "media_assets",
+            "customer_trusted_devices",
+            "membership_codes",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():
@@ -273,6 +285,16 @@ class AlembicContractTests(unittest.TestCase):
                         if retained_until_column.name in index.columns:
                             copied.indexes.discard(index)
                     copied._columns.remove(retained_until_column)
+                if copied.name == "selection_sessions":
+                    for column_name in ("membership_verified_at", "membership_verified_by_staff_id"):
+                        column = copied.c[column_name]
+                        for constraint in list(copied.foreign_key_constraints):
+                            if any(foreign_key.parent is column for foreign_key in constraint.elements):
+                                for foreign_key in constraint.elements:
+                                    foreign_key.parent.foreign_keys.discard(foreign_key)
+                                    copied.foreign_keys.discard(foreign_key)
+                                copied.foreign_key_constraints.discard(constraint); copied.constraints.discard(constraint)
+                        copied._columns.remove(column)
                 if copied.name == "rooms":
                     for column_name in ("parent_room_id", "is_space_container", "is_service_position"):
                         hierarchy_column = copied.c[column_name]

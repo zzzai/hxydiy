@@ -23,7 +23,7 @@ from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, PageContent,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, PositionOccupancy,
-    MembershipBenefitGrant,
+    MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
     CustomerProfileRecord,
     ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup,
     TechnicianInvite,
@@ -40,6 +40,30 @@ from app.models.scrm import (
 from app.schemas.profile import ProfileRecordCreate
 
 router = APIRouter(prefix="/admin/v2", tags=["admin-v2"])
+
+
+class TrustedDeviceRevokeIn(BaseModel):
+    reason: str = Field(min_length=2, max_length=200)
+
+
+@router.get("/users/{user_id}/trusted-device")
+def get_customer_trusted_device(user_id: int, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
+    staff = _current_staff(authorization, db); _require_admin(staff); _require_store_user(db, user_id, staff)
+    device = db.scalar(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == user_id, CustomerTrustedDevice.status == "active").order_by(CustomerTrustedDevice.created_at.desc()))
+    return {"bound": bool(device), "created_at": device.created_at if device else None, "last_seen_at": device.last_seen_at if device else None}
+
+
+@router.post("/users/{user_id}/trusted-device/revoke")
+def revoke_customer_trusted_device(user_id: int, body: TrustedDeviceRevokeIn, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
+    staff = _current_staff(authorization, db); _require_admin(staff); user = _require_store_user(db, user_id, staff)
+    now = datetime.now(timezone.utc)
+    devices = list(db.scalars(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == user_id, CustomerTrustedDevice.status == "active")))
+    for device in devices: device.status = "revoked"; device.revoked_at = now
+    user.customer_login_version = int(user.customer_login_version or 1) + 1
+    db.query(MembershipCode).filter(MembershipCode.user_id == user_id, MembershipCode.status.in_(["issued", "scanned_pending"])).update({"status": "revoked"}, synchronize_session=False)
+    db.add(AuditLog(actor_type="staff", actor_id=str(staff.id), store_id=staff.store_id, action="revoke_customer_trusted_device", entity_type="user", entity_id=str(user_id), detail={"reason": body.reason, "revoked_count": len(devices)}))
+    db.commit()
+    return {"revoked": bool(devices)}
 
 
 # ─── helpers ─────────────────────────────────────────

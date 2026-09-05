@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
 
 import {
   ANNUAL_MEMBERSHIP_BENEFITS,
@@ -33,6 +34,14 @@ test('会员有效期映射为有效、临期和过期状态', () => {
   assert.deepEqual(membershipState('2026-10-20T00:00:00Z', new Date('2026-09-05T00:00:00Z')), { kind: 'active', daysLeft: 45 });
   assert.deepEqual(membershipState('2026-09-20T00:00:00Z', new Date('2026-09-05T00:00:00Z')), { kind: 'expiring', daysLeft: 15 });
   assert.deepEqual(membershipState('2026-09-04T00:00:00Z', new Date('2026-09-05T00:00:00Z')), { kind: 'expired', daysLeft: 0 });
+});
+
+test('会员卡提供动态会员码且明确30秒刷新和可信设备边界', () => {
+  const source = fs.readFileSync(new URL('../src/components/ProfilePage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /出示动态会员码/);
+  assert.match(source, /30 秒/);
+  assert.match(source, /issueMemberCode/);
+  assert.match(source, /enrollTrustedDevice/);
 });
 
 test('到店记录可按待评价和服务状态筛选', () => {

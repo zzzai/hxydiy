@@ -104,7 +104,7 @@ def _session_price_type(
 ) -> str:
     user = db.get(User, session.customer_id) if session.customer_id else None
     return price_type_for_member(
-        bool(user and user.is_member),
+        bool(user and user.is_member and session.membership_verified_at),
         member_expire_at=user.member_expire_at if user else None,
         confirmed_at=confirmed_at,
         member_type=user.member_type if user else None,
@@ -127,7 +127,7 @@ def refresh_session_pricing(
         if member_expire_at is not None and member_expire_at.tzinfo is None:
             member_expire_at = member_expire_at.replace(tzinfo=timezone.utc)
         price_context = PriceContext(
-            is_member=bool(user and user.is_member),
+            is_member=bool(user and user.is_member and session.membership_verified_at),
             member_type=user.member_type if user else None,
             member_expire_at=member_expire_at,
             confirmed_at=confirmed_at,

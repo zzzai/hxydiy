@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff, create_staff_token, hash_password, normalize_staff_role
 from app.db.session import get_db
-from app.models import AuditLog, CustomerProfileRecord, PositionOccupancy, SelectionSession, Staff
+from app.models import AuditLog, CustomerProfileRecord, CustomerTrustedDevice, MembershipCode, PositionOccupancy, SelectionSession, Staff, User
 from app.models.operations import Room, Technician
 from app.models.catalog import Addon, Project
 from app.models.service import StateTransition
@@ -36,6 +36,16 @@ class ActionIn(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
+class MembershipVerificationIn(BaseModel):
+    code_token: str = Field(min_length=20, max_length=256)
+    selection_session_id: str = Field(min_length=1, max_length=36)
+    idempotency_key: str = Field(min_length=8, max_length=96)
+
+
+class MembershipScanIn(BaseModel):
+    code_token: str = Field(min_length=20, max_length=256)
+
+
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -56,6 +66,96 @@ def current_technician(authorization: str | None, db: Session) -> tuple[Staff, T
     if not technician or technician.store_id != staff.store_id or technician.status not in {"available", "busy"}:
         raise HTTPException(status_code=401, detail={"code": "TECHNICIAN_ACCOUNT_UNAVAILABLE", "message": "技师当前不在岗或账号不可用"})
     return staff, technician
+
+
+def current_membership_verifier(authorization: str | None, db: Session) -> Staff:
+    staff = _current_staff(authorization, db)
+    role = normalize_staff_role(staff.role, staff.technician_id)
+    if role not in {"technician", "manager"} or not staff.store_id:
+        raise HTTPException(status_code=403, detail={"code": "MEMBERSHIP_VERIFY_FORBIDDEN", "message": "当前账号无会员核验权限"})
+    if role == "technician":
+        current_technician(authorization, db)
+    return staff
+
+
+def _masked_phone(phone: str) -> str:
+    return f"{phone[:3]}****{phone[-4:]}" if len(phone) == 11 else "已保护"
+
+
+@router.post("/membership-verification/scan")
+def scan_membership_code(body: MembershipScanIn, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
+    staff = current_membership_verifier(authorization, db)
+    code = db.scalar(select(MembershipCode).where(MembershipCode.token_hash == token_hash(body.code_token)).with_for_update())
+    now = datetime.now(timezone.utc)
+    if not code or code.status != "issued":
+        raise HTTPException(status_code=409, detail={"code": "MEMBER_CODE_USED", "message": "会员码无效或已扫码"})
+    expires_at = code.expires_at if code.expires_at.tzinfo else code.expires_at.replace(tzinfo=timezone.utc)
+    if now >= expires_at:
+        code.status = "expired"; db.commit(); raise HTTPException(status_code=409, detail={"code": "MEMBER_CODE_EXPIRED", "message": "会员码已过期，请顾客刷新"})
+    user = db.get(User, code.user_id); device = db.get(CustomerTrustedDevice, code.trusted_device_id)
+    member_expiry = user.member_expire_at if user else None
+    if member_expiry and member_expiry.tzinfo is None:
+        member_expiry = member_expiry.replace(tzinfo=timezone.utc)
+    if not user or not user.is_member or (member_expiry and member_expiry <= now) or not device or device.status != "active":
+        code.status = "rejected"; db.commit(); raise HTTPException(status_code=409, detail={"code": "MEMBERSHIP_INACTIVE", "message": "会员权益当前不可用"})
+    code.status = "scanned_pending"; code.scanned_by_staff_id = staff.id; code.store_id = staff.store_id; code.scanned_at = now
+    db.commit()
+    return {"scan_token": body.code_token, "member": {"name_masked": (user.nickname[:1] + "**") if user.nickname else "会员", "phone_masked": _masked_phone(user.phone), "member_expire_at": user.member_expire_at}}
+
+
+@router.post("/membership-verification/consume")
+def consume_membership_code(body: MembershipVerificationIn, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
+    staff = current_membership_verifier(authorization, db)
+    session = db.scalar(select(SelectionSession).where(SelectionSession.id == body.selection_session_id).with_for_update())
+    if not session:
+        raise HTTPException(status_code=404, detail="选单不存在")
+    if session.store_id != staff.store_id:
+        raise HTTPException(status_code=403, detail={"code": "CROSS_STORE_FORBIDDEN", "message": "只能核验当前门店选单"})
+    replay = db.scalar(select(MembershipCode).where(MembershipCode.idempotency_key == body.idempotency_key))
+    if replay:
+        if replay.token_hash != token_hash(body.code_token) or replay.selection_session_id != session.id or replay.scanned_by_staff_id != staff.id:
+            raise HTTPException(status_code=409, detail={"code": "IDEMPOTENCY_KEY_REUSED", "message": "幂等键已用于其他会员核验"})
+        user = db.get(User, replay.user_id)
+        return {"verified": True, "selection_session_id": session.id, "member": {"name_masked": (user.nickname[:1] + "**") if user and user.nickname else "会员", "phone_masked": _masked_phone(user.phone) if user else "已保护", "member_expire_at": user.member_expire_at if user else None}, "pricing": {"store_total_cents": session.store_total_cents, "member_total_cents": session.member_total_cents, "applied_price_type": (session.pricing_snapshot or {}).get("applied_price_type")}}
+    now = datetime.now(timezone.utc)
+    code = db.scalar(select(MembershipCode).where(MembershipCode.token_hash == token_hash(body.code_token)).with_for_update())
+    if not code or code.status not in {"issued", "scanned_pending"}:
+        raise HTTPException(status_code=409, detail={"code": "MEMBER_CODE_USED", "message": "会员码无效或已使用"})
+    expires_at = code.expires_at if code.expires_at.tzinfo else code.expires_at.replace(tzinfo=timezone.utc)
+    if now >= expires_at:
+        code.status = "expired"; db.commit()
+        raise HTTPException(status_code=409, detail={"code": "MEMBER_CODE_EXPIRED", "message": "会员码已过期，请顾客刷新"})
+    if code.status == "scanned_pending" and (code.scanned_by_staff_id != staff.id or code.store_id != staff.store_id):
+        raise HTTPException(status_code=403, detail={"code": "MEMBER_CODE_RESERVED", "message": "该会员码已由其他员工扫码"})
+    user = db.get(User, code.user_id)
+    device = db.get(CustomerTrustedDevice, code.trusted_device_id)
+    member_expiry = user.member_expire_at if user else None
+    if member_expiry and member_expiry.tzinfo is None:
+        member_expiry = member_expiry.replace(tzinfo=timezone.utc)
+    if not user or not user.is_member or (member_expiry and member_expiry <= now) or not device or device.status != "active":
+        code.status = "rejected"; db.commit()
+        raise HTTPException(status_code=409, detail={"code": "MEMBERSHIP_INACTIVE", "message": "会员权益当前不可用"})
+    if session.customer_id and session.customer_id != user.id:
+        bound = db.get(User, session.customer_id)
+        if bound and not bound.openid.startswith("anon_"):
+            raise HTTPException(status_code=409, detail={"code": "SELECTION_ALREADY_BOUND", "message": "选单已绑定其他顾客"})
+    session.customer_id = user.id
+    session.membership_verified_at = now
+    session.membership_verified_by_staff_id = staff.id
+    from app.api.selections import refresh_session_pricing
+    pricing = refresh_session_pricing(db, session)
+    code.status = "consumed"; code.scanned_by_staff_id = staff.id; code.store_id = staff.store_id
+    code.selection_session_id = session.id; code.idempotency_key = body.idempotency_key; code.scanned_at = now; code.consumed_at = now
+    db.add(AuditLog(actor_type="staff", actor_id=str(staff.id), store_id=staff.store_id, action="membership_verify", entity_type="selection_session", entity_id=session.id, detail={"membership_code_id": code.id, "customer_id": user.id, "applied_price_type": pricing.get("applied_price_type")}))
+    db.commit()
+    return {"verified": True, "selection_session_id": session.id, "member": {"name_masked": (user.nickname[:1] + "**") if user.nickname else "会员", "phone_masked": _masked_phone(user.phone), "member_expire_at": user.member_expire_at}, "pricing": {"store_total_cents": session.store_total_cents, "member_total_cents": session.member_total_cents, "applied_price_type": pricing.get("applied_price_type")}}
+
+
+@router.get("/membership-verification/selections")
+def membership_verification_selections(authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
+    staff = current_membership_verifier(authorization, db)
+    rows = db.execute(select(SelectionSession, PositionOccupancy, Room).join(PositionOccupancy, PositionOccupancy.selection_session_id == SelectionSession.id).join(Room, Room.id == PositionOccupancy.room_id).where(SelectionSession.store_id == staff.store_id, PositionOccupancy.status.in_(["held", "waiting_service", "in_service"])).order_by(PositionOccupancy.id.desc())).all()
+    return {"items": [{"selection_session_id": session.id, "position_label": room.name, "status": occupancy.status, "item_count": len(session.items or [])} for session, occupancy, room in rows]}
 
 
 @router.post("/activate")

@@ -24,8 +24,8 @@ export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff
         return;
       }
       const response = await login(values.username || '', values.password);
-      if (response.data.staff?.role !== 'technician') {
-        message.error('该账号不是技师账号，请使用员工后台入口');
+      if (!['technician', 'manager'].includes(response.data.staff?.role)) {
+        message.error('该账号没有移动端会员核验权限');
         return;
       }
       localStorage.setItem('hxy_admin_token', response.data.token);
@@ -40,12 +40,12 @@ export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff
 
   return <main className="technician-login-page">
     <section className="technician-login-card">
-      <div className="technician-login-brand"><span>荷</span><div><Typography.Title level={2}>技师工作台</Typography.Title><Typography.Text>手机端服务助手</Typography.Text></div></div>
+      <div className="technician-login-brand"><span>荷</span><div><Typography.Title level={2}>门店移动工作台</Typography.Title><Typography.Text>技师服务与会员核验</Typography.Text></div></div>
       <Form layout="vertical" size="large" onFinish={submit} preserve>
         {mode === 'login' ? <>
-          <Form.Item name="username" label="账号" rules={[{ required: true, message: '请输入账号' }]}><Input prefix={<UserOutlined />} placeholder="请输入技师账号" autoComplete="username" /></Form.Item>
+          <Form.Item name="username" label="账号" rules={[{ required: true, message: '请输入账号' }]}><Input prefix={<UserOutlined />} placeholder="请输入技师或店长账号" autoComplete="username" /></Form.Item>
           <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}><Input.Password prefix={<LockOutlined />} placeholder="请输入密码" autoComplete="current-password" /></Form.Item>
-          <Button type="primary" htmlType="submit" block loading={loading} className="technician-primary-button">登录技师端</Button>
+          <Button type="primary" htmlType="submit" block loading={loading} className="technician-primary-button">登录移动工作台</Button>
           <Button type="link" block onClick={() => setMode('activate')}>首次激活 / 重置密码</Button>
         </> : <>
           <Form.Item name="token" label="激活凭证" rules={[{ required: true, message: '请输入店长提供的激活凭证' }]}><Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="粘贴店长提供的一次性凭证" /></Form.Item>
