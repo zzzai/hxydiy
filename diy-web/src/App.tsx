@@ -51,7 +51,7 @@ import ProfilePage from './components/ProfilePage';
 import RecordLoginDialog from './components/RecordLoginDialog';
 import SavingHintDialog from './components/SavingHintDialog';
 import SelectionSummarySheet from './components/SelectionSummarySheet';
-import { authFailureAction, clearCustomerAuth, readCustomerAuth, shouldOfferRecordBinding, writeCustomerAuth, type CustomerAuth } from './customerAuth';
+import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL_MS, readCustomerAuth, shouldOfferRecordBinding, writeCustomerAuth, type CustomerAuth } from './customerAuth';
 import { customerPageSubtitle, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
 import { customerServiceProgress, shouldPollCustomerServiceStatus } from './customerServiceStatus';
 import ProjectDetailPage from './components/ProjectDetailPage';
@@ -64,6 +64,7 @@ import {
   isOverlayRootState,
   readOverlayHistoryStack,
   replaceOverlayHistoryState,
+  shouldRestoreProfileOverlay,
   shouldRunDeferredSwipeBack,
   type OverlayHistoryKind,
 } from './overlayHistory';
@@ -301,7 +302,7 @@ export default function App() {
   const [teaDetailOpen, setTeaDetailOpen] = useState(false);
   const [localDetailOpen, setLocalDetailOpen] = useState(false);
   const [seatMapOpen, setSeatMapOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(() => shouldRestoreProfileOverlay(window.history.state));
   const [membershipKind, setMembershipKind] = useState<MembershipKind | null>(null);
   const [moving, setMoving] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -975,8 +976,18 @@ export default function App() {
         }
       });
     refreshCustomer();
-    const timer = window.setInterval(refreshCustomer, 60_000);
-    return () => { active = false; window.clearInterval(timer); };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshCustomer();
+    };
+    const timer = window.setInterval(refreshCustomer, CUSTOMER_SESSION_REFRESH_INTERVAL_MS);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshCustomer);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshCustomer);
+    };
   }, [customerAuth?.token]);
 
   useEffect(() => {

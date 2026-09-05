@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  CUSTOMER_SESSION_REFRESH_INTERVAL_MS,
   authFailureAction,
   isCustomerAuthTokenActive,
   isValidPhone,
   normalizePhone,
   shouldOfferRecordBinding,
 } from '../src/customerAuth.ts';
+import fs from 'node:fs';
 
 test('手机号输入只保留 11 位数字', () => {
   assert.equal(normalizePhone('138 0013-8000abc'), '13800138000');
@@ -41,4 +43,11 @@ test('账号接口返回 401 时进入重新验证，不把请先登录当普通
   assert.equal(authFailureAction({ status: 401 }), 'reauthenticate');
   assert.equal(authFailureAction({ status: 500 }), 'show-error');
   assert.equal(authFailureAction(new Error('网络异常')), 'show-error');
+});
+
+test('旧设备在短轮询或重新回到页面时主动校验单设备会话', () => {
+  assert.equal(CUSTOMER_SESSION_REFRESH_INTERVAL_MS <= 5_000, true);
+  const app = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /visibilitychange/);
+  assert.match(app, /window\.addEventListener\('focus', refreshCustomer\)/);
 });
