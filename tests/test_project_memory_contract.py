@@ -34,8 +34,8 @@ class ProjectMemoryContractTests(unittest.TestCase):
 
     def test_current_state_matches_verified_production(self):
         current = read("docs/CURRENT-STATE.md")
-        self.assertIn("github-ae20a3415cbf-33963739227", current)
-        self.assertIn("index-Bp9tsD85.js", current)
+        self.assertIn("github-51db505150c6-33964908298", current)
+        self.assertIn("index-BhzZQLv-.js", current)
         self.assertIn("index-BoAeh19J.css", current)
         self.assertIn("20260905_membership_verification", current)
 
