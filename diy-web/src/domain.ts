@@ -132,6 +132,39 @@ export function resolveMemberTotalCents(
   return Number.isFinite(fallback) && fallback >= 0 ? fallback : 0;
 }
 
+/**
+ * 读取已提交会话的门店价整单金额。
+ * payable_total_cents 跟随服务端会话身份，不能在匿名页面中替代门店价；
+ * 无促销时优先使用整单小计，兼容旧会话顶层总价只含最后一次加选的异常数据。
+ */
+export function resolveStoreTotalCents(
+  snapshot: Record<string, unknown> | null | undefined,
+  fallbackCents: number | null | undefined,
+): number {
+  const data = snapshot || {};
+  const promotionCode = String(data.promotion_code ?? '').trim();
+  const snapshotTotal = Number(data.store_total_cents);
+  const fallback = Number(fallbackCents);
+
+  if (promotionCode) {
+    if (Number.isFinite(snapshotTotal) && snapshotTotal >= 0) return snapshotTotal;
+    if (Number.isFinite(fallback) && fallback >= 0) return fallback;
+  }
+
+  const subtotal = Number(data.store_subtotal_cents);
+  if (Number.isFinite(subtotal) && subtotal >= 0) return subtotal;
+
+  const lines = Array.isArray(data.lines) ? data.lines : [];
+  const lineTotal = lines.reduce((sum, line) => {
+    if (!line || typeof line !== 'object') return sum;
+    const value = Number((line as Record<string, unknown>).store_line_total_cents);
+    return Number.isFinite(value) && value >= 0 ? sum + value : sum;
+  }, 0);
+  if (lineTotal > 0) return lineTotal;
+  if (Number.isFinite(snapshotTotal) && snapshotTotal >= 0) return snapshotTotal;
+  return Number.isFinite(fallback) && fallback >= 0 ? fallback : 0;
+}
+
 export type CouponReminder = {
   name: string;
   amount_cents: number;

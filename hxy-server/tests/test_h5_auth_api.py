@@ -128,7 +128,7 @@ class H5AuthApiTests(unittest.TestCase):
             verification = db.scalar(select(CustomerVerificationCode).where(CustomerVerificationCode.phone == "13600136000"))
             self.assertIsNone(verification.used_at)
 
-    def test_phone_login_merges_anonymous_completed_record_and_feedback_for_browser(self):
+    def test_phone_login_merges_anonymous_completed_record_without_persisting_phone_identity_in_browser_cookie(self):
         anonymous_id = None
         with self.SessionLocal() as db:
             anonymous = User(openid="anon_merge_browser")
@@ -168,7 +168,10 @@ class H5AuthApiTests(unittest.TestCase):
             self.assertIsNotNone(user)
             for session_id in ("anon-merge-one", "anon-merge-two", "anon-merge-completed"):
                 self.assertEqual(db.get(SelectionSession, session_id).customer_id, user.id)
-            self.assertEqual(db.scalar(select(BrowserInstance).where(BrowserInstance.token_hash == "merge-browser-token")).customer_id, user.id)
+            self.assertEqual(
+                db.scalar(select(BrowserInstance).where(BrowserInstance.token_hash == "merge-browser-token")).customer_id,
+                anonymous_id,
+            )
             feedback = db.scalar(select(ServiceFeedback).where(ServiceFeedback.selection_session_id == "anon-merge-completed"))
             self.assertEqual(feedback.customer_id, user.id)
             visit = db.scalar(select(Visit).where(Visit.selection_session_id == "anon-merge-completed"))

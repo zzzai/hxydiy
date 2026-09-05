@@ -471,6 +471,7 @@ h1, h2, h3, p { margin-top: 0; }
 .selection-summary-total strong { overflow: hidden; color: var(--green-950); font-size: 22px; letter-spacing: 0; line-height: 1; text-overflow: ellipsis; }
 .selection-summary-meta { display: flex; min-width: 0; gap: 6px; overflow: hidden; color: var(--muted); font-size: 8px; line-height: 1.2; white-space: nowrap; text-overflow: ellipsis; }
 .selection-summary-meta span { color: var(--green-700); }
+.selection-summary-member-price { color: var(--price-member) !important; font-size: 11px; font-weight: 700; }
 .selection-summary-meta b { color: var(--gold); font-weight: 700; }
 .selection-summary-meta del { color: #9aa5a0; }
 .submit-button { display: inline-flex; min-width: 122px; height: 46px; align-items: center; justify-content: center; gap: 3px; padding: 0 12px; border: 0; border-radius: 7px; color: #ffffff; background: var(--green-900); font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: transform 160ms var(--ease), opacity 160ms ease-out; }
@@ -492,8 +493,7 @@ h1, h2, h3, p { margin-top: 0; }
 .selection-summary-sheet {
   display: flex;
   width: min(100%, 520px);
-  max-height: min(72dvh, 640px);
-  min-height: 220px;
+  height: min(72dvh, 640px);
   overflow: hidden;
   flex-direction: column;
   border-radius: 18px 18px 0 0;

@@ -16,6 +16,7 @@ import {
   previewPriceForIdentity,
   detailPriceComparison,
   resolveMemberTotalCents,
+  resolveStoreTotalCents,
   detailBasePriceComparison,
   projectCatalogBadge,
   projectTagLabel,
@@ -178,6 +179,26 @@ test('存在促销时保留快照最终会员总价，不用明细小计覆盖�
     member_subtotal_cents: 12790,
     promotion_code: 'FOOT_BATH_TWO_LOCAL',
   }, 9800), 9800);
+});
+
+test('匿名多次提交后门店价使用整单门店总额，不把服务端当前应付价当成门店价', () => {
+  assert.equal(resolveStoreTotalCents({
+    applied_price_type: 'member',
+    payable_total_cents: 5900,
+    store_subtotal_cents: 63290,
+    store_total_cents: 61200,
+    member_total_cents: 44200,
+    promotion_code: 'FOOT_BATH_TWO_LOCAL',
+  }, 61200), 61200);
+});
+
+test('无促销时门店总价优先采用快照整单小计，避免旧会话只显示最后一次加选金额', () => {
+  assert.equal(resolveStoreTotalCents({
+    payable_total_cents: 5900,
+    store_subtotal_cents: 61200,
+    store_total_cents: 5900,
+    promotion_code: '',
+  }, 5900), 61200);
 });
 
 test('详情页主价格始终是当前项目基础门店价与会员价，不包含已选加购合计', () => {
