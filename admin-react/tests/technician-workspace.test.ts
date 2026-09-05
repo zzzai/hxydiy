@@ -105,6 +105,19 @@ test('移动技师今日看板在重新可见或获得焦点时立即同步，�
   assert.match(source, /window\.removeEventListener\('focus'/);
 });
 
+test('移动技师今日看板仅在页面可见时执行定时同步，恢复可见后立即补拉', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /const refresh = \(\) => \{\s*if \(document\.visibilityState !== 'visible'\) return;/);
+  assert.match(source, /if \(document\.visibilityState === 'visible'\) refresh\(\);/);
+});
+
+test('移动技师今日看板跳过在途自动刷新，并只用最新请求更新看板状态', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /if \(background && activeLoads\.current > 0\) return;/);
+  assert.match(source, /const requestId = \+\+latestLoadRequest\.current;/);
+  assert.match(source, /if \(requestId !== latestLoadRequest\.current\) return;/);
+});
+
 test('管理端将 v3 服务参考显示为结构化摘要而非普通运营标签', () => {
   const source = readFileSync(new URL('../src/pages/SelectionSessionsPage.tsx', import.meta.url), 'utf8');
   assert.match(source, /buildServiceReferenceDisplay/);
