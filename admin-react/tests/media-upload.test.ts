@@ -17,7 +17,8 @@ test('项目、商品和加项表单使用媒体上传控件而非图片地址�
 
 test('媒体上传控件调用门店隔离的上传 API 并支持删除', () => {
   const component = source('components/MediaUploadField.tsx');
-  assert.match(component, /uploadMedia\(/);
+  assert.match(component, /uploadMedia\(file as File, purpose, storeId\)/);
+  assert.match(component, /disabled=.*requireStoreId/);
   assert.match(component, /deleteMedia\(/);
   assert.match(source('api.ts'), /client\.post\('\/admin\/media'/);
 });

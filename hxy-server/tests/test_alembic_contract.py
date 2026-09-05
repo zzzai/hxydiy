@@ -14,6 +14,18 @@ from app.db.session import Base
 
 
 class AlembicContractTests(unittest.TestCase):
+    def test_service_reference_revision_adds_version_confirmation_and_indexes(self):
+        project_root = Path(__file__).resolve().parents[1]
+        migration_path = project_root / "alembic" / "versions" / "20260904_service_reference_v2.py"
+
+        self.assertTrue(migration_path.exists())
+        migration = migration_path.read_text(encoding="utf-8")
+        self.assertIn('down_revision = "20260830_media_assets"', migration)
+        for column in ("schema_version", "taxonomy_version", "customer_confirmed", "confirmed_at"):
+            self.assertIn(f'"{column}"', migration)
+        self.assertIn("ix_customer_profile_store_user_confirmed_created", migration)
+        self.assertIn("ix_customer_profile_store_technician_created", migration)
+
     def test_membership_store_backfill_uses_cross_database_boolean_predicate(self):
         project_root = Path(__file__).resolve().parents[1]
         migration = (

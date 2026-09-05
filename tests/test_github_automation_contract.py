@@ -36,13 +36,13 @@ class GitHubAutomationContractTests(unittest.TestCase):
         content = workflow("auto-merge.yml")
 
         self.assertIn("workflow_run:", content)
-        self.assertIn('workflows: ["Trusted PR Gate"]', content)
+        self.assertIn('workflows: ["AI PR Review", "Trusted PR Gate"]', content)
         self.assertIn("branches: [main]", content)
         self.assertIn("github.event.workflow_run", content)
         self.assertIn("pr.head.sha", content)
         self.assertIn("github.rest.checks.listForRef", content)
         self.assertIn("Trusted PR Gate", content)
-        self.assertNotIn("'AI PR Review',", content)
+        self.assertIn("'AI PR Review',", content)
         self.assertIn("pr.head.repo.full_name !== `${owner}/${repo}`", content)
         self.assertIn("github.rest.pulls.merge", content)
         self.assertIn("sha: pr.head.sha", content)
@@ -59,7 +59,8 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("persist-credentials: false", content)
         self.assertIn("refs/pull/${{ github.event.pull_request.number }}/merge", content)
         self.assertIn("github.rest.checks.create", content)
-        self.assertIn("github.rest.checks.update", content)
+        self.assertNotIn("github.rest.checks.update", content)
+        self.assertIn("name: Publish trusted result", content)
         self.assertIn("name: Trusted PR Gate", content)
         self.assertIn("context.payload.pull_request.head.sha", content)
         self.assertIn("core.setFailed", content)
@@ -82,6 +83,18 @@ class GitHubAutomationContractTests(unittest.TestCase):
 
         self.assertIn("fetch-depth: 0", content)
         self.assertIn('git diff-tree --no-commit-id --check -r "$GITHUB_SHA"', content)
+
+    def test_ci_builds_customer_assets_before_asset_tests_and_installs_backend_test_dependencies(self):
+        ci = workflow("ci.yml")
+        trusted = workflow("trusted-pr-gate.yml")
+
+        self.assertLess(ci.index("working-directory: diy-web\n        run: npm run build"), ci.index("working-directory: diy-web\n        run: npm test"))
+        self.assertIn("-r requirements-dev.txt", ci)
+        self.assertIn("npm ci && npm run build && npm test", trusted)
+        self.assertIn("-r requirements-dev.txt", trusted)
+        self.assertIn("python -m pytest -q", ci)
+        self.assertIn("python -m pytest -q", trusted)
+        self.assertGreaterEqual(trusted.count("fetch-depth: 0"), 4)
 
     def test_remote_release_script_backs_up_verifies_and_rolls_back(self):
         script = (REPO_ROOT / "deploy" / "diy" / "deploy-production.sh").read_text(encoding="utf-8")

@@ -22,3 +22,9 @@ test('加项数据可以回填为元单位表单', () => {
   assert.equal(form.store_price, 12);
   assert.equal(form.member_price, 8);
 });
+
+test('编辑时清除关联主项目会显式提交 null', () => {
+  const payload = addonFormPayload({ chargeable: true, store_price: 12, parent_project_id: undefined });
+  assert.equal(payload.parent_project_id, null);
+  assert.match(JSON.stringify(payload), /"parent_project_id":null/);
+});

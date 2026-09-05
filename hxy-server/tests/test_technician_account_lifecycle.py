@@ -9,7 +9,8 @@ from app.api.admin import create_staff_token, hash_password
 from app.api.technician import make_invite_token, token_hash
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, Staff, Store, Technician, TechnicianInvite
+from app.models import AuditLog, PositionOccupancy, SelectionSession, Staff, Store, Technician, TechnicianInvite
+from app.models.operations import Room
 from app.models.service import ServiceAssignment
 
 
@@ -347,3 +348,27 @@ class TestTechnicianAccountLifecycle:
             technician = db.get(Technician, self.technician_id)
             assert technician.status == "available"
             assert db.scalar(select(Staff).where(Staff.technician_id == self.technician_id)).status == "invited"
+
+    def test_resign_and_leave_approval_reject_a_diy_service_confirmed_by_the_technician(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="lifecycle-occupancy", password_hash=hash_password("tech-pass-123"), name="小悦技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            session = SelectionSession(id="lifecycle-occupancy-session", access_token_hash="hash", store_id=self.store_id, status="submitted")
+            room = Room(store_id=self.store_id, code="LIFECYCLE-OCCUPANCY", name="离职校验服务位", room_type="sofa", status="occupied")
+            db.add_all([staff, session, room])
+            db.flush()
+            occupancy = PositionOccupancy(store_id=self.store_id, room_id=room.id, active_room_id=room.id, selection_session_id=session.id, active_session_id=session.id, status="waiting_service")
+            db.add(occupancy)
+            db.commit()
+            staff_id, occupancy_id = staff.id, occupancy.id
+
+        technician_headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        confirmed = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/confirm", headers=technician_headers, json={"idempotency_key": "lifecycle-confirm-occupancy"})
+        assert confirmed.status_code == 200, confirmed.text
+        leave = self.client.post("/api/v1/technician/leave-requests", headers=technician_headers, json={"start_date": datetime.now(timezone.utc).date().isoformat(), "end_date": datetime.now(timezone.utc).date().isoformat(), "reason": "临时休息"})
+        assert leave.status_code == 200, leave.text
+        leave_approval = self.client.post(f"/api/v1/admin/v2/technician-leave-requests/{leave.json()['id']}/approve", headers=self.manager_headers)
+        assert leave_approval.status_code == 409, leave_approval.text
+        assert leave_approval.json()["detail"]["code"] == "TECHNICIAN_ACTIVE_SERVICE"
+        resignation = self.client.post(f"/api/v1/admin/v2/technicians/{self.technician_id}/resign", headers=self.manager_headers, json={"reason": "服务未结束"})
+        assert resignation.status_code == 409, resignation.text
+        assert resignation.json()["detail"]["code"] == "TECHNICIAN_ACTIVE_SERVICE"

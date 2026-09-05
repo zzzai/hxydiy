@@ -121,6 +121,102 @@ class TestTechnicianProfileQuickNoteContract:
             "note": "顾客自述久坐后肩颈容易紧张。",
         }
 
+    def _v2_payload(self, *, confirmed=True):
+        return {
+            "user_id": self.own_user_id,
+            "selection_session_id": self.session_id,
+            "schema_version": 2,
+            "taxonomy_version": "service_reference_v1",
+            "customer_confirmed": confirmed,
+            "profile": {
+                "schema_version": 2,
+                "taxonomy_version": "service_reference_v1",
+                "customer_reported": {
+                    "focus_areas": ["neck_shoulder", "legs"],
+                    "avoid_areas": [],
+                    "force_preference": "medium",
+                    "temperature_preference": "lower",
+                    "quote": "肩颈重点，温度低一点",
+                },
+                "technician_observed": {"service_feedback": "better_after_adjustment"},
+                "next_visit": {"plan": "repeat_current"},
+            },
+        }
+
+    def test_v2_service_reference_persists_stable_structure_and_confirmation(self):
+        payload = self._v2_payload()
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            headers={**self.headers, "Idempotency-Key": "quick-note-v2-confirmed-001"},
+            json=payload,
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["schema_version"] == 2
+        assert response.json()["taxonomy_version"] == "service_reference_v1"
+        assert response.json()["customer_confirmed"] is True
+        assert response.json()["source"] == "both"
+        with self.SessionLocal() as db:
+            record = db.get(CustomerProfileRecord, response.json()["id"])
+            assert record.profile["customer_reported"]["avoid_areas"] == []
+            assert record.confirmed_at is not None
+
+    def test_v2_unconfirmed_service_reference_uses_observation_source(self):
+        payload = self._v2_payload(confirmed=False)
+        payload["profile"]["customer_reported"].pop("avoid_areas")
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            headers={**self.headers, "Idempotency-Key": "quick-note-v2-unconfirmed-001"},
+            json=payload,
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["source"] == "service_observation"
+        assert "avoid_areas" not in response.json()["profile"]["customer_reported"]
+        assert response.json()["confirmed_at"] is None
+
+    def test_v2_rejects_unknown_duplicate_long_and_medical_content(self):
+        cases = []
+        unknown = self._v2_payload()
+        unknown["profile"]["customer_reported"]["force_preference"] = "extreme"
+        cases.append(unknown)
+        duplicate = self._v2_payload()
+        duplicate["profile"]["customer_reported"]["focus_areas"] = ["legs", "legs"]
+        cases.append(duplicate)
+        too_long = self._v2_payload()
+        too_long["profile"]["customer_reported"]["quote"] = "顾" * 101
+        cases.append(too_long)
+        medical = self._v2_payload()
+        medical["profile"]["customer_reported"]["quote"] = "顾客说已经确诊颈椎病"
+        cases.append(medical)
+        extra = self._v2_payload()
+        extra["profile"]["customer_reported"]["personality"] = "安静"
+        cases.append(extra)
+
+        for index, payload in enumerate(cases):
+            response = self.client.post(
+                "/api/v1/admin/v2/customer-profile-records",
+                headers={**self.headers, "Idempotency-Key": f"quick-note-v2-invalid-{index:03d}"},
+                json=payload,
+            )
+            assert response.status_code == 422, response.text
+
+    def test_v2_quote_rejects_contact_consumption_and_personality_content(self):
+        quotes = [
+            "手机号13812345678", "联系 138 1234 5678", "座机 010-12345678",
+            "QQ 123456789", "微信号 abc123", "邮箱 guest@example.com",
+            "消费能力很强", "性格比较安静",
+        ]
+        for index, quote in enumerate(quotes):
+            payload = self._v2_payload()
+            payload["profile"]["customer_reported"]["quote"] = quote
+            response = self.client.post(
+                "/api/v1/admin/v2/customer-profile-records",
+                headers={**self.headers, "Idempotency-Key": f"quick-note-v2-private-{index:03d}"},
+                json=payload,
+            )
+            assert response.status_code == 422, response.text
+
     def test_technician_cannot_read_unrelated_same_store_profile_history(self):
         response = self.client.get(
             f"/api/v1/admin/v2/users/{self.other_user_id}/customer-profile-records",

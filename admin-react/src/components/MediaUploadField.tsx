@@ -6,10 +6,12 @@ import { client, deleteMedia, uploadMedia } from '../api';
 
 type MediaValue = string | { id?: number; url: string } | undefined;
 
-export default function MediaUploadField({ value, onChange, purpose = 'general' }: {
+export default function MediaUploadField({ value, onChange, purpose = 'general', storeId, requireStoreId = false }: {
   value?: MediaValue;
   onChange?: (value: string) => void;
   purpose?: string;
+  storeId?: number;
+  requireStoreId?: boolean;
 }) {
   const { message } = App.useApp();
   const [uploading, setUploading] = useState(false);
@@ -34,7 +36,7 @@ export default function MediaUploadField({ value, onChange, purpose = 'general' 
     customRequest: async ({ file, onError, onSuccess }) => {
       setUploading(true);
       try {
-        const response = await uploadMedia(file as File, purpose);
+        const response = await uploadMedia(file as File, purpose, storeId);
         const media = response.data;
         onChange?.(media.url);
         onSuccess?.(media);
@@ -60,7 +62,7 @@ export default function MediaUploadField({ value, onChange, purpose = 'general' 
   return <Space direction="vertical" size={8}>
     {previewUrl && <Image src={previewUrl} width={120} height={90} style={{ objectFit: 'cover' }} />}
     <Space>
-      <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading}>{url ? '替换图片' : '上传图片'}</Button></Upload>
+      <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading} disabled={requireStoreId && !storeId}>{url ? '替换图片' : '上传图片'}</Button></Upload>
       {mediaId && <Button danger type="text" icon={<DeleteOutlined />} onClick={async () => { await deleteMedia(mediaId); onChange?.(''); message.success('图片已删除'); }}>删除</Button>}
     </Space>
   </Space>;

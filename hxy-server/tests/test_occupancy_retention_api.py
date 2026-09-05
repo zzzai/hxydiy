@@ -42,7 +42,7 @@ class OccupancyRetentionApiTests(unittest.TestCase):
                 username="retention-staff",
                 password_hash=hash_password("pass"),
                 name="前台",
-                role="staff",
+                role="manager",
                 store_id=store.id,
                 status="active",
             )

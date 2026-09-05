@@ -55,13 +55,16 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_self_signed_sms_configuration_is_forwarded_to_api_container(self):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
 
-        self.assertIn("ALIYUN_SMS_ACCESS_KEY_ID: ${ALIYUN_SMS_ACCESS_KEY_ID}", compose)
-        self.assertIn("ALIYUN_SMS_ACCESS_KEY_SECRET: ${ALIYUN_SMS_ACCESS_KEY_SECRET}", compose)
-        self.assertIn("ALIYUN_SMS_SIGN_NAME: ${ALIYUN_SMS_SIGN_NAME}", compose)
-        self.assertIn("ALIYUN_SMS_TEMPLATE_CODE: ${ALIYUN_SMS_TEMPLATE_CODE}", compose)
-        self.assertIn("ALIYUN_PNVS_ACCESS_KEY_ID: ${ALIYUN_PNVS_ACCESS_KEY_ID}", compose)
-        self.assertIn("ALIYUN_PNVS_ACCESS_KEY_SECRET: ${ALIYUN_PNVS_ACCESS_KEY_SECRET}", compose)
-        self.assertIn("ALIYUN_PNVS_SCHEME_NAME: ${ALIYUN_PNVS_SCHEME_NAME}", compose)
+        for variable in (
+            "ALIYUN_SMS_ACCESS_KEY_ID",
+            "ALIYUN_SMS_ACCESS_KEY_SECRET",
+            "ALIYUN_SMS_SIGN_NAME",
+            "ALIYUN_SMS_TEMPLATE_CODE",
+            "ALIYUN_PNVS_ACCESS_KEY_ID",
+            "ALIYUN_PNVS_ACCESS_KEY_SECRET",
+            "ALIYUN_PNVS_SCHEME_NAME",
+        ):
+            self.assertIn(f"{variable}: ${{{variable}:-}}", compose)
 
     def test_wechat_payment_configuration_is_forwarded_to_api_container(self):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
@@ -93,8 +96,7 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_release_compose_build_context_points_to_release_root(self):
         compose = (REPO_ROOT / "deploy/diy/docker-compose.hxy.yml").read_text(encoding="utf-8")
-        self.assertIn("context: ../..", compose)
-        self.assertNotIn("context: ../../current", compose)
+        self.assertIn("context: ${HXY_DIY_CURRENT:-../../current}", compose)
 
     def test_release_creation_excludes_local_runtime_and_secret_files(self):
         create = (REPO_ROOT / "deploy/diy/create-release.sh").read_text(encoding="utf-8")
@@ -157,14 +159,16 @@ class ReleaseScriptTests(unittest.TestCase):
             (workspace / "diy-web/dist/index.html").write_text("customer-v1", encoding="utf-8")
             (workspace / "admin-react/dist/index.html").write_text("staff-v1", encoding="utf-8")
             environment = {**os.environ, "HXY_DIY_RELEASE_ROOT": str(release_root)}
+            copied_create = workspace / "deploy/diy/create-release.sh"
+            copied_activate = workspace / "deploy/diy/activate-release.sh"
 
-            subprocess.run(shell_command(CREATE, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
-            subprocess.run(shell_command(ACTIVATE, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            subprocess.run(shell_command(copied_create, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            subprocess.run(shell_command(copied_activate, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
             (workspace / "diy-web/dist/index.html").write_text("customer-v2", encoding="utf-8")
             (workspace / "admin-react/dist/index.html").write_text("staff-v2", encoding="utf-8")
-            subprocess.run(shell_command(CREATE, "release-v2"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
-            subprocess.run(shell_command(ACTIVATE, "release-v2"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
-            rolled_back = subprocess.run(shell_command(ACTIVATE, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            subprocess.run(shell_command(copied_create, "release-v2"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            subprocess.run(shell_command(copied_activate, "release-v2"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
+            rolled_back = subprocess.run(shell_command(copied_activate, "release-v1"), cwd=workspace / "deploy/diy", env=environment, capture_output=True, text=True, check=True)
 
             self.assertEqual(Path(rolled_back.stdout.strip()), release_root / "releases/release-v1")
             if os.name == "posix":

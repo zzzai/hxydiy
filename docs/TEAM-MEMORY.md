@@ -24,13 +24,13 @@
 
 - 生产服务器：`root@115.190.245.14`。
 - 生产部署根目录：`/root/hxy-diy-20260811`。
-- 2026-08-31 只读核对的服务器 `current`：`technician-profile-contract-20260830-1`。
+- 当前生产事实统一从 `docs/CURRENT-STATE.md` 读取；涉及发布决策时仍需实时核验服务器，不能把文档当作监控。
 - 技师移动端入口：`https://diy.hexiaoyue.com/technician/`。
 - 生产发布前必须完成测试、构建、数据库备份、Manifest 校验、原子切换和健康检查。
 
 ## 协作规则
 
-- 三个窗口都先读取本文件、`PROJECT-CONTEXT-20260826.md` 和 `WORK-STATUS.md`。
+- 三个窗口默认只读取 `AGENTS.md`、`docs/CONTEXT-MANIFEST.md`、`docs/CURRENT-STATE.md` 和本端 workstream；本文件与历史资料按任务需要读取。
 - 每个窗口只修改自己负责的目录；公共文件由主窗口统一修改。
 - 技师端窗口同步更新 `docs/workstreams/technician.md`；发布事实统一追加到 `docs/WORK-STATUS.md`。
 - 不把浏览器 `localStorage` 当作跨端业务数据源；订单、服务状态和审计以 API/PostgreSQL 为准。
@@ -42,10 +42,11 @@
 
 | 日期 | 决策 | 影响范围 |
 |---|---|---|
+| 2026-09-04 | 加项管理采用 `PATCH /api/v1/admin/v2/addons/{id}`，保留同路径 POST 兼容；总部可跨门店维护主数据，店长仅能对本店在 `published` / `inactive` 间切换，普通员工无目录权限，跨店单项写入对店长返回 404。加项 `parent_project_id`、`duration_min`、`member_price_cents` 可显式 `null` 清空；`summary`、`image_url`、`store_price_cents`、`publication_status` 不接受 `null`，简介与图片清空使用空字符串。会员价不得高于门店价，前后端均校验。 | 管理端、后端目录契约 |
 | 2026-09-01 | PR 不要求人工审批：采用 GitHub Ruleset 必需检查、默认分支可信 PR 门禁、AI 风险 Check Run 与精确 SHA 自动 squash 合并；生产 Environment 审批继续保留 | 全仓库协作、发布 |
 | 2026-08-29 | 技师首页显示全部 8 个沙发和 7 个房间，并按状态使用不同颜色 | 技师端 |
 | 2026-08-29 | 技师移动端保留三栏：今日服务、服务记录、我的 | 技师端 |
-| 2026-08-29 | 服务结束后第一屏填写年龄段、性别、体型、职业场景和服务参考 | 技师端、后端 |
+| 2026-09-05 | 服务参考使用 `schema_version=2`、`taxonomy_version=service_reference_v1` 和稳定英文编码；区分顾客表达、技师观察、顾客确认与下次建议。结构化服务参考不得转写为普通运营标签；当前以后端入库校验为权威，后续由后端只读字典接口消除前端重复映射。 | 技师端、管理端、后端 |
 | 2026-08-30 | 技师确认/结束服务的幂等键必须绑定当前服务位、动作和登录技师；复用到其他目标时返回冲突，不得返回首笔结果 | 技师端、后端 |
 | 2026-08-30 | 管理端媒体统一通过门店隔离上传 API 管理；店长仅本店，总部上传必须指定目标门店，图片对象软删除并审计 | 管理端、后端 |
 | 2026-08-30 | 商品管理编辑统一使用 `PATCH /api/v1/admin/v2/products/{id}`；总部可修改商品主数据，绑定门店店长仅可修改 `publication_status`，旧 POST 更新路径继续兼容 | 管理端、后端 |

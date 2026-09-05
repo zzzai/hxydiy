@@ -6,6 +6,8 @@
 from datetime import UTC, datetime, timezone
 import hashlib
 import json
+import re
+import unicodedata
 import uuid
 from typing import Literal
 
@@ -44,7 +46,7 @@ router = APIRouter(prefix="/admin/v2", tags=["admin-v2"])
 
 def _require_admin(staff: Staff):
     try:
-        normalized_role = normalize_staff_role(staff.role, staff.technician_id)
+        normalized_role = normalize_staff_role(getattr(staff, "role", None), getattr(staff, "technician_id", None))
     except (AttributeError, ValueError, TypeError):
         # 登录层通常会先拦截旧/非法角色，但 endpoint helper 也必须独立保持
         # 结构化鉴权失败，避免测试 mock、内部调用或未来中间件绕过时冒泡成 500。
@@ -95,7 +97,7 @@ def _require_catalog_write(
     if _is_headquarters_admin(staff):
         return
     try:
-        normalized_role = normalize_staff_role(staff.role, staff.technician_id)
+        normalized_role = normalize_staff_role(getattr(staff, "role", None), getattr(staff, "technician_id", None))
     except (AttributeError, TypeError, ValueError):
         normalized_role = None
     allowed_statuses = store_allowed_publication_statuses or {"published", "inactive"}
@@ -1592,9 +1594,19 @@ class AddonPatchIn(BaseModel):
     can_attach_to_parent: bool | None = None
     publication_status: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_null_for_non_nullable_fields(cls, data):
+        if isinstance(data, dict):
+            non_nullable = {"summary", "image_url", "store_price_cents", "publication_status"}
+            invalid = sorted(field for field in non_nullable if field in data and data[field] is None)
+            if invalid:
+                raise ValueError(f"{', '.join(invalid)} 不允许为 null")
+        return data
+
 
 def _validate_addon_payload(db: Session, body: AddonIn, store_id: int) -> None:
-    if body.publication_status not in {"draft", "candidate", "published", "archived"}:
+    if body.publication_status not in {"draft", "candidate", "published", "inactive", "archived"}:
         raise HTTPException(status_code=400, detail="加项发布状态无效")
     if body.parent_project_id is not None:
         project = db.get(Project, body.parent_project_id)
@@ -1606,15 +1618,12 @@ def _validate_addon_payload(db: Session, body: AddonIn, store_id: int) -> None:
         raise HTTPException(status_code=400, detail="免费选项不能配置会员价格或金额")
     if body.member_price_enabled and body.member_price_cents is None:
         raise HTTPException(status_code=400, detail="启用会员价时必须填写会员价")
+    if body.member_price_enabled and body.member_price_cents > body.store_price_cents:
+        raise HTTPException(status_code=400, detail="会员价不能高于门店价")
 
 
 def _addon_view(addon: Addon) -> dict:
     store_price = int(addon.store_price_cents if addon.store_price_cents is not None else addon.price_cents)
-    member_price = int(
-        addon.member_price_cents
-        if addon.member_price_enabled and addon.member_price_cents is not None
-        else store_price
-    )
     return {
         "id": addon.id,
         "store_id": addon.store_id,
@@ -1627,7 +1636,7 @@ def _addon_view(addon: Addon) -> dict:
         "display_order": addon.display_order,
         "chargeable": addon.chargeable,
         "store_price_cents": store_price,
-        "member_price_cents": member_price,
+        "member_price_cents": addon.member_price_cents,
         "member_price_enabled": addon.member_price_enabled,
         "independently_sellable": addon.independently_sellable,
         "can_attach_to_parent": addon.can_attach_to_parent,
@@ -1640,18 +1649,39 @@ def list_addons_admin(
     store_id: int | None = Query(None),
     status: str | None = Query(None),
     parent_project_id: int | None = Query(None),
+    page: int | None = Query(None, ge=1),
+    page_size: int | None = Query(None, ge=1, le=100),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
-) -> list[dict]:
+):
     staff = _current_staff(authorization, db)
     _require_admin(staff)
-    scoped_store_id = _scoped_store_id(staff, store_id)
-    stmt = select(Addon).where(Addon.store_id == scoped_store_id)
+    stmt = select(Addon)
+    if not _is_headquarters_admin(staff):
+        scoped_store_id = _scoped_store_id(staff, store_id)
+        stmt = stmt.where(Addon.store_id == scoped_store_id)
+    elif store_id is not None:
+        stmt = stmt.where(Addon.store_id == store_id)
     if status:
         stmt = stmt.where(Addon.publication_status == status)
     if parent_project_id is not None:
         stmt = stmt.where(Addon.parent_project_id == parent_project_id)
-    return [_addon_view(addon) for addon in db.scalars(stmt.order_by(Addon.display_order, Addon.id))]
+    if page is None and page_size is None:
+        return [_addon_view(addon) for addon in db.scalars(stmt.order_by(Addon.display_order, Addon.id))]
+    resolved_page = page or 1
+    resolved_page_size = page_size or 50
+    total = db.scalar(select(sa_func.count()).select_from(stmt.subquery())) or 0
+    addons = db.scalars(
+        stmt.order_by(Addon.display_order, Addon.id)
+        .offset((resolved_page - 1) * resolved_page_size)
+        .limit(resolved_page_size)
+    ).all()
+    return {
+        "items": [_addon_view(addon) for addon in addons],
+        "total": total,
+        "page": resolved_page,
+        "page_size": resolved_page_size,
+    }
 
 
 @router.post("/addons")
@@ -1679,33 +1709,41 @@ def create_addon(body: AddonIn, db: Session = Depends(get_db), authorization: st
 
 
 @router.post("/addons/{addon_id}")
+@router.patch("/addons/{addon_id}")
 def update_addon(addon_id: int, body: AddonPatchIn, db: Session = Depends(get_db), authorization: str | None = Header(None)) -> dict:
     staff = _current_staff(authorization, db)
-    _require_catalog_master_admin(staff)
     addon = db.get(Addon, addon_id) if _is_headquarters_admin(staff) else _require_owned(
         db.get(Addon, addon_id), staff, "加项不存在"
     )
     if not addon:
         raise HTTPException(status_code=404, detail="加项不存在")
+    patch_values = body.model_dump(exclude_unset=True)
+    fields = set(patch_values)
+    _require_catalog_write(
+        staff,
+        fields,
+        publication_status=body.publication_status,
+        current_publication_status=addon.publication_status,
+    )
     current = _addon_view(addon)
     merged = AddonIn(
         store_id=addon.store_id,
-        code=body.code if body.code is not None else addon.code,
-        name=body.name if body.name is not None else addon.name,
-        parent_project_id=body.parent_project_id if body.parent_project_id is not None else addon.parent_project_id,
-        duration_min=body.duration_min if body.duration_min is not None else addon.duration_min,
-        summary=body.summary if body.summary is not None else addon.summary,
-        image_url=body.image_url if body.image_url is not None else addon.image_url,
-        display_order=body.display_order if body.display_order is not None else addon.display_order,
-        chargeable=body.chargeable if body.chargeable is not None else addon.chargeable,
-        store_price_cents=body.store_price_cents if body.store_price_cents is not None else current["store_price_cents"],
-        member_price_cents=body.member_price_cents if body.member_price_cents is not None else (
+        code=patch_values["code"] if "code" in patch_values else addon.code,
+        name=patch_values["name"] if "name" in patch_values else addon.name,
+        parent_project_id=patch_values["parent_project_id"] if "parent_project_id" in patch_values else addon.parent_project_id,
+        duration_min=patch_values["duration_min"] if "duration_min" in patch_values else addon.duration_min,
+        summary=patch_values["summary"] if "summary" in patch_values and patch_values["summary"] is not None else addon.summary,
+        image_url=patch_values["image_url"] if "image_url" in patch_values and patch_values["image_url"] is not None else addon.image_url,
+        display_order=patch_values["display_order"] if "display_order" in patch_values else addon.display_order,
+        chargeable=patch_values["chargeable"] if "chargeable" in patch_values else addon.chargeable,
+        store_price_cents=patch_values["store_price_cents"] if "store_price_cents" in patch_values and patch_values["store_price_cents"] is not None else current["store_price_cents"],
+        member_price_cents=patch_values["member_price_cents"] if "member_price_cents" in patch_values else (
             addon.member_price_cents if addon.member_price_enabled else None
         ),
-        member_price_enabled=body.member_price_enabled if body.member_price_enabled is not None else addon.member_price_enabled,
-        independently_sellable=body.independently_sellable if body.independently_sellable is not None else addon.independently_sellable,
-        can_attach_to_parent=body.can_attach_to_parent if body.can_attach_to_parent is not None else addon.can_attach_to_parent,
-        publication_status=body.publication_status if body.publication_status is not None else addon.publication_status,
+        member_price_enabled=patch_values["member_price_enabled"] if "member_price_enabled" in patch_values else addon.member_price_enabled,
+        independently_sellable=patch_values["independently_sellable"] if "independently_sellable" in patch_values else addon.independently_sellable,
+        can_attach_to_parent=patch_values["can_attach_to_parent"] if "can_attach_to_parent" in patch_values else addon.can_attach_to_parent,
+        publication_status=patch_values["publication_status"] if "publication_status" in patch_values and patch_values["publication_status"] is not None else addon.publication_status,
     )
     duplicate = db.scalar(select(Addon).where(Addon.code == merged.code, Addon.id != addon.id))
     if duplicate:
@@ -1922,6 +1960,90 @@ PROFILE_PRESET_SIGNALS = {
 }
 PROFILE_FORCE_SIGNALS = {"偏好轻柔力度", "偏好中等力度", "偏好强力力度"}
 PROFILE_FORBIDDEN_WORDS = ("确诊", "诊断", "疾病", "治疗", "治愈", "疗效", "癌", "处方")
+PROFILE_PRIVATE_WORDS = ("微信", "手机号", "电话", "座机", "联系方式", "qq", "消费能力", "有钱", "贫穷", "性格", "人格")
+PROFILE_EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+PROFILE_MOBILE_PATTERN = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
+PROFILE_LANDLINE_PATTERN = re.compile(r"(?<!\d)0\d{9,11}(?!\d)")
+
+
+def _contains_private_profile_content(text: str) -> bool:
+    normalized = unicodedata.normalize("NFKC", text)
+    compact = re.sub(r"[\s\-()（）]", "", normalized)
+    return (
+        any(word in normalized.lower() for word in PROFILE_PRIVATE_WORDS)
+        or bool(PROFILE_EMAIL_PATTERN.search(normalized))
+        or bool(PROFILE_MOBILE_PATTERN.search(compact))
+        or bool(PROFILE_LANDLINE_PATTERN.search(compact))
+    )
+
+ServiceArea = Literal["neck_shoulder", "waist_hip", "legs", "abdomen", "feet", "full_relaxation"]
+AvoidArea = Literal["neck_shoulder", "waist_hip", "legs", "abdomen", "feet"]
+
+
+def _reject_duplicate_codes(value: list[str]) -> list[str]:
+    if len(value) != len(set(value)):
+        raise ValueError("服务参考选项不能重复")
+    return value
+
+
+class ServiceReferenceCustomerReported(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    focus_areas: list[ServiceArea] = Field(default_factory=list, max_length=6)
+    avoid_areas: list[AvoidArea] = Field(default_factory=list, max_length=5)
+    force_preference: Literal["gentle", "medium", "strong"] | None = None
+    temperature_preference: Literal["lower", "medium", "higher"] | None = None
+    quote: str = Field(default="", max_length=100)
+
+    @field_validator("focus_areas", "avoid_areas")
+    @classmethod
+    def validate_unique_areas(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
+
+    @field_validator("quote")
+    @classmethod
+    def validate_quote(cls, value: str) -> str:
+        text = value.strip()
+        if any(word in text for word in PROFILE_FORBIDDEN_WORDS):
+            raise ValueError("服务参考仅支持非医疗描述，请勿填写诊断或治疗结论")
+        if _contains_private_profile_content(text):
+            raise ValueError("顾客原话请勿填写联系方式、消费能力或人格评价")
+        return text
+
+
+class ServiceReferenceTechnicianObserved(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    service_feedback: Literal["suitable", "better_after_adjustment", "adjust_next_time"] | None = None
+
+
+class ServiceReferenceNextVisit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    plan: Literal["repeat_current", "confirm_on_arrival"] | None = None
+
+
+class ServiceReferenceProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[2]
+    taxonomy_version: Literal["service_reference_v1"]
+    customer_reported: ServiceReferenceCustomerReported = Field(default_factory=ServiceReferenceCustomerReported)
+    technician_observed: ServiceReferenceTechnicianObserved = Field(default_factory=ServiceReferenceTechnicianObserved)
+    next_visit: ServiceReferenceNextVisit = Field(default_factory=ServiceReferenceNextVisit)
+
+    def storage_payload(self) -> dict:
+        return self.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+
+    def has_content(self) -> bool:
+        reported = self.customer_reported
+        return bool(
+            reported.focus_areas
+            or reported.avoid_areas
+            or reported.force_preference
+            or reported.temperature_preference
+            or reported.quote
+            or self.technician_observed.service_feedback
+            or self.next_visit.plan
+        )
 
 
 class CustomerProfileRecordIn(BaseModel):
@@ -1931,7 +2053,10 @@ class CustomerProfileRecordIn(BaseModel):
     selection_session_id: str | None = None
     technician_id: int | None = None
     source: Literal["customer_statement", "service_observation", "both"] = "customer_statement"
-    profile: dict[str, StrictStr] = Field(default_factory=dict)
+    schema_version: Literal[1, 2] = 1
+    taxonomy_version: Literal["service_reference_v1"] | None = None
+    customer_confirmed: StrictBool = False
+    profile: dict[str, StrictStr] | ServiceReferenceProfile = Field(default_factory=dict)
     signals: list[str] = Field(default_factory=list, max_length=30)
     note: str = Field(default="", max_length=500)
     correction_of_id: int | None = None
@@ -1939,7 +2064,9 @@ class CustomerProfileRecordIn(BaseModel):
 
     @field_validator("profile")
     @classmethod
-    def validate_profile(cls, value: dict[str, str]) -> dict[str, str]:
+    def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile) -> dict[str, str] | ServiceReferenceProfile:
+        if isinstance(value, ServiceReferenceProfile):
+            return value
         unknown_fields = set(value) - set(PROFILE_FIELD_OPTIONS)
         if unknown_fields:
             raise ValueError("画像基础信息包含不支持的字段")
@@ -1978,6 +2105,22 @@ class CustomerProfileRecordIn(BaseModel):
         if any(word in text for word in PROFILE_FORBIDDEN_WORDS):
             raise ValueError("画像记录仅支持非医疗描述，请勿填写诊断或治疗结论")
         return text
+
+    @model_validator(mode="after")
+    def validate_service_reference_version(self):
+        if self.schema_version == 2:
+            if self.taxonomy_version != "service_reference_v1" or not isinstance(self.profile, ServiceReferenceProfile):
+                raise ValueError("v2 服务参考必须使用 service_reference_v1 结构")
+            if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
+                raise ValueError("服务参考内外版本必须一致")
+            if self.signals or self.note:
+                raise ValueError("v2 服务参考不能混用旧版标签或备注")
+            if not self.profile.has_content():
+                raise ValueError("请至少记录一项服务参考")
+            self.source = "both" if self.customer_confirmed else "service_observation"
+        elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, ServiceReferenceProfile):
+            raise ValueError("旧版画像不能携带 v2 服务参考元数据")
+        return self
 
 @router.post("/tags")
 def create_tag(body: TagIn, db: Session = Depends(get_db),
@@ -2048,6 +2191,10 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
         "created_by_staff_id": record.created_by_staff_id,
         "created_by_name": creator.name if creator else "",
         "source": record.source or "customer_statement",
+        "schema_version": record.schema_version or 1,
+        "taxonomy_version": record.taxonomy_version,
+        "customer_confirmed": bool(record.customer_confirmed),
+        "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
         "profile": record.profile or {},
         "signals": record.signals or [],
         "note": record.note,
@@ -2059,13 +2206,22 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
     }
 
 
+def _profile_payload(body: CustomerProfileRecordIn) -> dict:
+    if isinstance(body.profile, ServiceReferenceProfile):
+        return body.profile.storage_payload()
+    return body.profile
+
+
 def _profile_request_fingerprint(body: CustomerProfileRecordIn, technician_id: int | None) -> str:
     payload = {
         "user_id": body.user_id,
         "selection_session_id": body.selection_session_id,
         "technician_id": technician_id,
         "source": body.source,
-        "profile": body.profile,
+        "schema_version": body.schema_version,
+        "taxonomy_version": body.taxonomy_version,
+        "customer_confirmed": body.customer_confirmed,
+        "profile": _profile_payload(body),
         "signals": body.signals,
         "note": body.note,
         "correction_of_id": body.correction_of_id,
@@ -2080,6 +2236,9 @@ def _same_profile_request(record: CustomerProfileRecord, body: CustomerProfileRe
         "selection_session_id": record.selection_session_id,
         "technician_id": record.technician_id,
         "source": record.source or "customer_statement",
+        "schema_version": record.schema_version or 1,
+        "taxonomy_version": record.taxonomy_version,
+        "customer_confirmed": bool(record.customer_confirmed),
         "profile": record.profile or {},
         "signals": record.signals or [],
         "note": record.note or "",
@@ -2257,7 +2416,7 @@ def create_customer_profile_record(
         raise HTTPException(status_code=403, detail="当前账号无权新增画像记录")
     idempotency_key = _require_profile_idempotency_key(idempotency_key)
     is_bound_technician = role == "technician" and bool(staff.technician_id)
-    if is_bound_technician and "source" not in body.model_fields_set:
+    if is_bound_technician and body.schema_version == 1 and "source" not in body.model_fields_set:
         raise HTTPException(status_code=422, detail="技师记录必须明确选择记录来源")
     if is_bound_technician and (body.technician_id is not None or body.correction_of_id is not None):
         raise HTTPException(status_code=403, detail="技师不能代填他人画像或更正历史记录")
@@ -2265,8 +2424,10 @@ def create_customer_profile_record(
     if is_bound_technician:
         if not body.selection_session_id:
             raise HTTPException(status_code=403, detail="技师画像记录必须关联已完成服务")
+    if body.schema_version == 2 and not body.selection_session_id:
+        raise HTTPException(status_code=422, detail="v2 服务参考必须关联已完成服务")
     _require_store_user(db, body.user_id, staff)
-    if not body.profile and not body.signals and not body.note:
+    if not _profile_payload(body) and not body.signals and not body.note:
         raise HTTPException(status_code=422, detail="请至少记录一项服务参考")
     unsupported_signals = [signal for signal in body.signals if signal not in PROFILE_PRESET_SIGNALS and not db.scalar(select(CustomerTag.id).where(
         CustomerTag.store_id == store_id,
@@ -2326,12 +2487,16 @@ def create_customer_profile_record(
         selection_session_id=body.selection_session_id,
         technician_id=technician_id,
         created_by_staff_id=staff.id,
-        profile=body.profile,
+        profile=_profile_payload(body),
         signals=body.signals,
         note=body.note,
         correction_of_id=body.correction_of_id,
         correction_reason=body.correction_reason.strip(),
         source=body.source,
+        schema_version=body.schema_version,
+        taxonomy_version=body.taxonomy_version,
+        customer_confirmed=body.customer_confirmed,
+        confirmed_at=datetime.now(timezone.utc) if body.customer_confirmed else None,
         idempotency_key=idempotency_key,
     )
     db.add(record)

@@ -25,6 +25,7 @@
 .technician-position-tile.tone-waiting { border-color: #f2bd55; background: #fff8e8; box-shadow: 0 5px 18px rgba(181,116,0,.10); }
 .technician-position-tile.tone-serving { border-color: #78cda5; background: #edf9f2; box-shadow: 0 5px 18px rgba(21,115,79,.10); }
 .technician-position-tile.tone-finished { border-color: #a8c5dc; background: #f0f6fb; box-shadow: 0 5px 18px rgba(47,107,148,.08); }
+.technician-position-tile.tone-conflict { border-color: #e49a8e; background: #fff2f0; box-shadow: 0 5px 18px rgba(164,53,36,.10); }
 .technician-position-tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
 .technician-position-tile-top strong { font-size: 17px; line-height: 1.2; }
 .technician-position-tile .ant-tag { margin: 0; flex: 0 0 auto; font-size: 11px; }
@@ -35,6 +36,7 @@
 .technician-position-tile.tone-waiting .technician-position-count, .technician-position-tile.tone-waiting .technician-position-tile-action { color: #af6900; }
 .technician-position-tile.tone-serving .technician-position-count, .technician-position-tile.tone-serving .technician-position-tile-action { color: #15734f; }
 .technician-position-tile.tone-finished .technician-position-count, .technician-position-tile.tone-finished .technician-position-tile-action { color: #2f6b94; }
+.technician-position-tile.tone-conflict .technician-position-count, .technician-position-tile.tone-conflict .technician-position-tile-action { color: #b44230; }
 .technician-order-drawer { padding-bottom: env(safe-area-inset-bottom); }
 .technician-order-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 4px 0 14px; }
 .technician-order-drawer-head h2 { margin: 3px 0 0; font-size: 23px; }
@@ -55,7 +57,7 @@
 .technician-profile-hero h1 { margin: 0 0 5px; font-size: 22px; }
 .technician-profile-hero p { margin: 0; color: #b9d3c8; }
 .technician-tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.technician-tag-list .ant-tag { min-height: 36px; display: inline-flex; align-items: center; margin: 0; padding: 0 13px; border-radius: 18px; }
+.technician-tag-list .ant-tag { min-height: 40px; display: inline-flex; align-items: center; margin: 0; padding: 0 13px; border-radius: 20px; }
 .technician-profile-context { display: grid; gap: 6px; margin-bottom: 14px; padding: 12px; background: #f1f7f4; border: 1px solid #dce9e2; border-radius: 10px; }
 .technician-profile-context > div { display: flex; align-items: center; gap: 8px; }
 .technician-profile-context .ant-typography { margin: 0; }
@@ -71,4 +73,5 @@
 .technician-login-brand h2 { margin: 0 !important; color: #0d2f29; }
 .technician-login-brand .ant-typography { margin: 0; }
 .technician-primary-button { min-height: 48px; border-radius: 10px; }
+.technician-reference-state, .technician-reference-card { display: grid; gap: 16px; }
 @media (min-width: 768px) { .technician-mobile-app { width: 430px; min-height: 100vh; margin: 0 auto; box-shadow: 0 0 0 1px #dce8e2, 0 10px 50px rgba(21,65,55,.08); } .technician-mobile-tabbar { right: calc(50% - 215px); left: calc(50% - 215px); } }

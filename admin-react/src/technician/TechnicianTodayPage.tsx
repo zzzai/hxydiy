@@ -10,6 +10,7 @@ import {
   technicianStatusLabel,
 } from './technicianMobile';
 import TechnicianProfileSheet from './TechnicianProfileSheet';
+import TechnicianServiceReferenceDrawer from './TechnicianServiceReferenceDrawer';
 
 function orderSummary(order: any): string {
   return (order.items || []).map(technicianOrderItemLabel).filter(Boolean).join('、') || '顾客暂未填写项目';
@@ -33,12 +34,13 @@ function statusColor(status: string): string {
 }
 
 function positionTagColor(status: string): string {
-  return ({ available: 'green', held: 'gold', waiting_service: 'gold', in_service: 'cyan', post_service_present: 'blue', cleaning: 'purple', released: 'default', unavailable: 'default' } as Record<string, string>)[status] || 'default';
+  return ({ available: 'green', held: 'gold', waiting_service: 'gold', in_service: 'cyan', post_service_present: 'blue', conflict: 'red', cleaning: 'purple', released: 'default', unavailable: 'default' } as Record<string, string>)[status] || 'default';
 }
 
 function taskToOrder(task: any): any {
   const occupancyStatus = task.occupancy_status;
-  const status = occupancyStatus === 'waiting_service' ? 'ready'
+  const status = task.conflict ? 'conflict'
+    : occupancyStatus === 'waiting_service' ? 'ready'
     : occupancyStatus === 'post_service_present' ? 'completed'
       : occupancyStatus === 'in_service' ? 'in_service' : 'cancelled';
   return {
@@ -57,6 +59,7 @@ export default function TechnicianTodayPage() {
   const [acting, setActing] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>();
   const [profileOrder, setProfileOrder] = useState<any>();
+  const [referenceOccupancyId, setReferenceOccupancyId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -102,7 +105,7 @@ export default function TechnicianTodayPage() {
     : [];
 
   const groups = technicianBoardGroups(tasks);
-  const activeOrderCount = tasks.filter((task) => task.occupancy_status && task.occupancy_status !== 'available').length;
+  const activeOrderCount = tasks.reduce((total, task) => total + (task.conflict ? Number(task.conflict_count || 1) : (task.occupancy_id ? 1 : 0)), 0);
 
   if (loading && !tasks.length) return <div className="technician-loading"><Spin size="large" /></div>;
 
@@ -124,30 +127,36 @@ export default function TechnicianTodayPage() {
           {group.items.map((task: any) => {
             const order = taskToOrder(task);
             const status = task.occupancy_status || 'available';
-            const hasOrder = Boolean(task.occupancy_id && task.user_id);
-            return <button type="button" className={`technician-position-tile tone-${technicianPositionTone(status)}`} key={task.room_id} onClick={() => setSelectedOrder(order)} aria-label={`查看${task.room_name || '服务位'}${hasOrder ? '订单' : '状态'}`}>
+            const hasConflict = Boolean(task.conflict);
+            const hasOrder = Boolean(task.occupancy_id && task.user_id) && !hasConflict;
+            const tileStatus = hasConflict ? 'conflict' : status;
+            return <button type="button" className={`technician-position-tile tone-${technicianPositionTone(tileStatus)}`} key={task.room_id} onClick={() => setSelectedOrder(order)} aria-label={`查看${task.room_name || '服务位'}${hasConflict ? '待核对状态' : hasOrder ? '订单' : '状态'}`}>
               <div className="technician-position-tile-top"><strong>{task.room_name || '服务位'}</strong><Tag color={positionTagColor(status)}>{technicianStatusLabel(status)}</Tag></div>
-              <div className="technician-position-tile-body"><span className="technician-position-count">{hasOrder ? ((task.items || []).length || 0) : '—'}</span><span>{hasOrder ? '个项目' : '暂无订单'}</span></div>
-              <div className="technician-position-tile-summary">{hasOrder ? orderSummary(order) : status === 'available' ? '空闲，可接待顾客' : '当前无可查看选单'}</div>
-              <div className="technician-position-tile-action"><EyeOutlined /> {hasOrder ? '查看顾客订单' : '查看区位状态'}</div>
+              <div className="technician-position-tile-body"><span className="technician-position-count">{hasConflict ? task.conflict_count : hasOrder ? ((task.items || []).length || 0) : '—'}</span><span>{hasConflict ? '条占用待核对' : hasOrder ? '个项目' : '暂无订单'}</span></div>
+              <div className="technician-position-tile-summary">{hasConflict ? '同一房间存在多个活动占用，暂不可操作' : hasOrder ? orderSummary(order) : status === 'available' ? '空闲，可接待顾客' : '当前无可查看选单'}</div>
+              <div className="technician-position-tile-action"><EyeOutlined /> {hasConflict ? '查看核对提示' : hasOrder ? '查看顾客订单' : '查看区位状态'}</div>
             </button>;
           })}
         </div>
       </section>)}
     </section>}
-    <Drawer title={selectedOrder ? `服务单 #${selectedOrder.id}` : '服务单'} placement="bottom" height="min(78vh, 620px)" open={!!selectedOrder} onClose={() => setSelectedOrder(undefined)}>
+    <Drawer title={selectedOrder ? (selectedOrder.conflict ? `${selectedOrder.room_name || '服务位'}待核对` : `服务单 #${selectedOrder.id}`) : '服务单'} placement="bottom" height="min(78vh, 620px)" open={!!selectedOrder} onClose={() => setSelectedOrder(undefined)}>
       {selectedOrder && <div className="technician-order-drawer">
+        {selectedOrder.conflict ? <Alert type="warning" showIcon message="服务位记录待核对" description={`该房间存在 ${selectedOrder.conflict_count || 2} 条活动占用记录。为避免误操作，当前不展示顾客选单，也不能确认或结束服务；请联系店长核对现场服务位。`} /> : <>
         <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">顾客服务单</span><h2>#{selectedOrder.id}</h2></div><Tag color={statusColor(selectedOrder.status)}>{orderStatusLabel(selectedOrder.status)}</Tag></div>
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
         <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
         <div className="technician-task-card-foot">
+          {selectedOccupancyId !== null && selectedOrder.customer?.id && <Button block size="large" icon={<EyeOutlined />} onClick={() => { setReferenceOccupancyId(selectedOccupancyId); setSelectedOrder(undefined); }}>查看上次服务参考</Button>}
           {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>确认服务</Button>}
           {selectedActions.includes('finish') && <Button type="primary" block size="large" icon={<CheckCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'finish')}>服务结束</Button>}
           {selectedOccupancyId === null && <Typography.Text type="secondary">当前服务单接口未提供服务位占用凭证，仅支持查看。</Typography.Text>}
           {selectedOrder.completed_by_me && selectedOrder.customer?.id && selectedOrder.selection_session_id && <Button block size="large" onClick={() => { setProfileOrder(selectedOrder); setSelectedOrder(undefined); }}>填写服务参考</Button>}
         </div>
+        </>}
       </div>}
     </Drawer>
     <TechnicianProfileSheet task={profileOrder} onClose={() => setProfileOrder(undefined)} onSaved={() => { setProfileOrder(undefined); void load(); }} />
+    <TechnicianServiceReferenceDrawer occupancyId={referenceOccupancyId} open={referenceOccupancyId !== null} onClose={() => setReferenceOccupancyId(null)} />
   </div>;
 }

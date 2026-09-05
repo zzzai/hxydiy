@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { LiveServicePositionMap, PositionOccupancy } from './servicePositions.ts';
 import { getEntryLoginPath, isTechnicianEntry } from './auth.ts';
+import type { TechnicianServiceReferenceResponse } from './technician/serviceReference.ts';
 
 const API = '/api/v1/admin';
 const API2 = '/api/v1/admin/v2';
@@ -57,6 +58,8 @@ export const login = (username: string, password: string) =>
 
 export const getTechnicianMe = () => client.get('/technician/me');
 export const getTechnicianTasks = () => client.get('/technician/tasks');
+export const getTechnicianServiceReference = (occupancyId: number) =>
+  client.get<TechnicianServiceReferenceResponse>(`/technician/occupancies/${occupancyId}/service-reference`);
 export const getTechnicianServiceOrders = (status: 'in_progress' | 'history' = 'in_progress', page = 1, pageSize = 30) =>
   client.get('/admin/v2/service-orders', { params: { status, page, page_size: pageSize } });
 export const createProfileRecord = (customerId: number, data: { tags: string[]; service_note: string }, idempotencyKey?: string) =>
@@ -98,7 +101,10 @@ export const createCustomerProfileRecord = (data: {
   selection_session_id?: string;
   technician_id?: number;
   source?: 'customer_statement' | 'service_observation' | 'both';
-  profile: Record<string, string>;
+  schema_version?: 1 | 2;
+  taxonomy_version?: 'service_reference_v1';
+  customer_confirmed?: boolean;
+  profile: Record<string, unknown>;
   signals: string[];
   note: string;
   correction_of_id?: number;

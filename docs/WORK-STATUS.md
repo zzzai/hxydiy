@@ -1,3 +1,79 @@
+# 2026-09-05 技师快速服务参考与共享记忆收口（已发布业务功能）
+
+- 技师快速服务参考 PR #15 已 squash 合并，主干功能提交 `bf0bddf`；生产 release 为 `main-bf0bddf-20260905-1`，API 镜像为 `hxy-diy-api:bf0bddf`。
+- 数据库已从 `20260830_media_assets` 迁移到 `20260904_service_reference_v2`；发布前备份 `pre-main-bf0bddf-20260905-001822.dump`，SHA-256 `9fa62d8422394d078e770978c28de25e40decc4b11734fdb34df383ada297371`，隔离恢复演练通过。
+- 公网 `/`、`/admin/`、`/technician/` 和 `/api/v1/health` 均返回 HTTP 200；API 容器运行中、重启次数 0，近期未发现异常日志；Release Manifest 逐文件校验通过。
+- 新版使用 `schema_version=2`、`taxonomy_version=service_reference_v1`，保留稳定编码、顾客确认、服务关联、门店隔离、幂等、审计和隐私限制。
+- 本次共享记忆收口只修改文档和静态合同测试，不再次发布生产；后续三个窗口从 `docs/CURRENT-STATE.md` 和本端 workstream 开始读取。
+
+# 2026-09-04 后端全量测试基线收口（本地完成，未发布）
+
+- 校正旧 `staff` 测试账号夹具，改用规范的店长或已绑定技师角色；生产认证与权限逻辑未修改，旧测试账号仍不允许登录。
+- 修正 Alembic 测试的旧库构造和当前唯一 head 断言；迁移脚本未修改。
+- 发布测试对齐现行 immutable release/current 与 FastAPI 静态站点挂载，移除对仓库外临时脚本和已删除 nginx 文件的依赖；生产部署配置未修改。
+- 后端全量：`python -m pytest -q`，582 passed、7 skipped、1 个既有 Starlette/httpx 弃用警告，0 failed。
+- 本地完成：是；已发布生产：否。本轮只有测试与文档变更，无数据库、服务器、生产 release 或顾客数据变更。
+
+# 2026-09-04 技师快速服务参考与下次摘要（本地完成，未发布）
+
+## 本地完成
+
+- 服务结束快记改成 20～30 秒可完成的点选流程，移除年龄、性别、体型和职业，增加顾客确认与可选 100 字原话。
+- 后端按版本化 JSON、稳定编码、确认状态和追加式记录保存，为未来多门店离线分析保留统一口径；本轮不建设数据仓库或算法。
+- 新增活动服务位安全摘要接口，仅返回最近一次顾客已确认的受控字段，并保留门店隔离、活动状态限制和查看审计。
+- 旧画像接口与历史记录继续兼容。
+
+## 验证与发布状态
+
+- 后端相关测试 43 passed；Alembic 单 head 为 `20260904_service_reference_v2`。
+- 管理端全量测试 137 passed；`npm run build` 成功，仅有既有大 chunk 提示。
+- 分支：`codex/technician/quick-profile-summary`；尚未合并、尚未发布生产。
+- 上线前必须完成数据库备份、迁移检查、生产健康检查，并用授权测试服务位验证保存、幂等、摘要脱敏、释放后不可读及审计。
+
+# 2026-09-04 管理端加项管理权限与 CRUD（本地完成，未发布）
+
+## 修改内容
+
+- 加项页面接入 ProComponents 与 Refine 统一数据访问，支持总部创建、编辑、强制下线及目标门店选择；店长仅可操作本店上下架；图片改用媒体上传。
+- 新增 `PATCH /api/v1/admin/v2/addons/{id}` 并保留兼容 POST；补齐总部跨店、店长跨店 404、主数据 403、状态转换、普通员工拒绝和门店数据隔离。
+- 加项列表支持服务端分页。显式 `null` 仅允许清空 `parent_project_id`、`duration_min`、`member_price_cents`；非空/必填字段传 `null` 返回 422。
+- 修复审查发现的分页总数丢失、总部媒体上传缺少门店、关联项目无法清空及 API 可绕过会员价上限四项问题。
+
+## 涉及文件
+
+- `admin-react/src/core/resources/index.ts`
+- `admin-react/src/pages/AddonsPage.tsx`
+- `admin-react/src/pages/addon-page-model.ts`
+- `admin-react/tests/addon-page-model.test.ts`
+- `hxy-server/app/api/admin_v2.py`
+- `hxy-server/tests/test_admin_addon_permissions.py`
+- `docs/TEAM-MEMORY.md`
+- `docs/workstreams/admin.md`
+- `docs/WORK-STATUS.md`
+
+## 测试结果
+
+- TDD RED：后端接口测试最初 2 项失败，分别证明显式 `null` 被静默保留、总部列表被错误要求绑定门店；分页测试最初 1 项失败，证明接口忽略分页。
+- 专项 GREEN：`python -m pytest tests/test_admin_addon_permissions.py -q`，9 passed，1 个既有 Starlette/httpx 弃用警告。
+- 管理端测试：`npm test -- --run`，131 passed。
+- TypeScript：`npx tsc -b` 通过。
+- 生产构建：`npm run build` 成功，Vite 转换 4002 个模块；仅有既有大 chunk 警告。
+- `git diff --check`：通过。
+
+## 状态与生产核验
+
+- 本地完成：是，代码、文档与要求的本地验证均已完成。
+- 版本控制：任务分支 `codex/admin/addon-management`；提交、推送和 PR 结果以本轮最终汇报及 GitHub 实际状态为准。
+- 已发布生产：否；本轮不得描述为生产可用。
+- 2026-09-04 只读核验当前生产 release：`customer-detail-long-image-fit-20260904-2`；API 容器运行，`/api/v1/health` 返回 HTTP 200。
+- 本轮未执行数据库备份、Manifest 校验、生产构建上传、`current` 切换、生产权限穿透写测试或回滚验证。
+
+## 尚未完成与待现场验收
+
+- 尚需完成 PR 的 GitHub CI 门禁。
+- 发布前仍需数据库备份、Manifest、线上健康检查、权限穿透、跨店隔离和回滚验证。
+- 发布后使用真实授权的总部、店长及已迁移普通员工账号验收目录可见性、目标门店创建、上下架、强制下线不可恢复、媒体访问和跨店隔离。
+
 # 2026-08-31 服务位停用与现场二维码简化（本地完成，未发布）
 
 ## 修改内容
@@ -99,6 +175,42 @@
 - 发布后需用管理端授权账号验证媒体上传、签名预览、替换、软删除和门店隔离；自动化测试与七牛探针不替代门店现场营业验收。
 
 # 技师端与员工工作台工作状态
+
+## 2026-09-04 技师端 PR #9 干净替代收口（本地完成，待 PR）
+
+### 本地完成
+
+- 旧 PR #9 当前仍为 Open，head `44abbc3`；其 `Static contracts`、`Trusted PR Gate`、`AI PR Review` 失败，管理端、顾客端和后端测试成功。
+- 根因不是单一空白字符：旧分支从过早的恢复基线展开，相对当前 `origin/main` 包含 71 个文件、771 行新增与 2760 行删除，并会回退媒体和管理端后续能力。
+- 在最新 `origin/main` (`a97c768`) 上创建 `codex/technician/pr9-clean-replacement`，仅重建技师服务可靠性与账号/服务状态分离，不包含旧 PR 的基线恢复提交。
+- 新增并通过账号资格、账号/服务状态契约、请求体幂等、房间多占用冲突、服务动作资源只读语义、请假/离职活动服务保护和前端冲突展示回归。
+
+### 验证结果
+
+- 后端指定技师/画像专项：`40 passed / 0 failed`（有 1 条既有 Starlette/httpx 弃用警告）。
+- 管理端全量：`127 passed / 0 failed`。
+- TypeScript `npx tsc --noEmit`：通过。
+- 管理端生产构建：通过（4001 modules；存在既有大 chunk 警告）。
+- `git diff --check`：通过。
+- `npm install` 报告 8 个依赖审计项（3 moderate、5 high），本轮未执行可能引入破坏性升级的 `npm audit fix --force`。
+
+### PR 状态
+
+- GitHub 当前没有 Ruleset；仓库 Auto Merge 关闭，Allow merge commits / squash / rebase 均开启。
+- 干净替代分支待提交、推送并创建目标为 `main` 的非 Draft PR；旧 PR #9 未关闭、未强推、未重跑失败检查。
+
+### 生产状态
+
+- 2026-09-04 SSH 只读核验 `current`：`/root/hxy-diy-20260811/releases/customer-detail-long-image-fit-20260904-2`。
+- 当前 release 未找到 `MANIFEST.sha256`，无法完成逐文件 Manifest 校验；此事实与旧文档记录冲突。
+- `/api/v1/health` 返回 `status: ok`；顾客端、管理端、技师端 HTTPS 均为 200；数据库健康，API 与 Nginx 容器运行中。
+- 本轮未发布、未迁移、未备份、未切换 `current`。
+
+### 待现场验收与风险
+
+- 没有新建安全脱敏订单，写入闭环未完成；不得用真实顾客或营业订单代替。
+- 需在 390×844 真机覆盖弱网/断网、重复点击、跨门店、非本人服务、非法状态、刷新后快记与审计核对。
+- 合并前需等待新 PR 六项检查；Ruleset、Auto Merge 与生产 Manifest 缺失均是发布阻断项。
 
 # 2026-08-30 管理端商品权限与分页契约修复（本地完成，未发布）
 

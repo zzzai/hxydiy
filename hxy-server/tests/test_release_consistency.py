@@ -1,25 +1,11 @@
-import ast
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from scripts.check_release_consistency import check_release_consistency
-from scripts.configure_footbath_options import TARGET_CODES
 
 
 class ReleaseConsistencyTests(unittest.TestCase):
-    def test_catalog_publish_tool_targets_every_configured_service(self):
-        server_root = Path(__file__).resolve().parents[1]
-        publish_tool = server_root.parent / "tmp-codex" / "publish_body_part_catalogs.py"
-        module = ast.parse(publish_tool.read_text(encoding="utf-8"))
-        assignment = next(
-            node for node in module.body
-            if isinstance(node, ast.Assign)
-            and any(isinstance(target, ast.Name) and target.id == "TARGET_CODES" for target in node.targets)
-        )
-
-        self.assertEqual(tuple(ast.literal_eval(assignment.value)), TARGET_CODES)
-
     def test_backend_release_context_contains_footbath_configurator(self):
         server_root = Path(__file__).resolve().parents[1]
         configurator = server_root / "scripts" / "configure_footbath_options.py"

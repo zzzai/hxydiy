@@ -1,6 +1,19 @@
 # 管理后台与员工工作台工作流
 
-更新时间：2026-08-31
+更新时间：2026-09-05
+
+## 当前任务
+
+- 状态：现有管理 API 可读取完整画像历史；新版服务参考管理展示和聚合能力待开发
+- 负责人：管理端窗口
+- 开始前读取：`../CONTEXT-MANIFEST.md`、`../CURRENT-STATE.md` 和本文件
+
+## 服务参考待办
+
+- 管理页面按 `schema_version=2` 正确展示顾客表达、技师观察、顾客确认和下次建议，同时兼容旧记录。
+- 标签字典由后端作为唯一标准源，管理端只消费编码、中文展示、版本和启停状态。
+- 第一阶段只增加门店范围的基础分布、确认率和调整率，不建设复杂标签配置中心或实时数据仓库。
+- 结构化服务参考不得复制为普通用户标签；普通标签继续承担运营分群，不承担服务事实存储。
 
 ## 负责范围
 
@@ -13,8 +26,24 @@
 
 - 统一代码仓库：GitHub `zzzai/hxydiy`。
 - 管理端代码：`admin-react/`；顾客端和后端仅作为同仓库联调基线，不在本工作流中修改其业务。
-- 共享记忆：`docs/TEAM-MEMORY.md`；任务交接：本目录；发布事实：`docs/WORK-STATUS.md`。
+- 共享入口：`docs/CURRENT-STATE.md`；跨端记忆：`docs/TEAM-MEMORY.md`；任务交接：本目录；发布事实：`docs/WORK-STATUS.md`。
 - Obsidian 打开仓库根目录即可阅读上述 Markdown；代码变更必须走 `codex/admin/<task>` 分支和 Pull Request。
+
+## 2026-09-04 加项管理权限与 CRUD 收口（本地完成，未发布）
+
+- 加项页改用 `PageContainer`、`ProTable`、`ModalForm` 和统一 Refine data provider；图片通过门店隔离的 `MediaUploadField` 上传，不要求管理员填写 URL。
+- 总部管理员可查看全门店目录、选择目标门店创建、编辑主数据及强制下线；店长仅能查看本店并在 `published` / `inactive` 间上下架，不能恢复 `archived`；普通员工不显示目录入口，直接访问和调用 API 均被拒绝。
+- 后端新增严格 `PATCH /api/v1/admin/v2/addons/{id}`，保留旧 POST 更新路径；总部跨店更新可用，店长跨店单项更新返回 404。列表支持状态筛选和服务端分页，未带分页参数时继续返回旧数组。
+- 显式 null 契约：`parent_project_id`、`duration_min`、`member_price_cents` 可清空；数据库非空或业务必填的 `summary`、`image_url`、`store_price_cents`、`publication_status` 传 null 返回 422。简介与图片删除使用空字符串，免费加项价格由服务端归零。
+- 总部媒体上传携带编辑记录或新建表单选择的目标门店；未选择门店前禁用上传。列表保留服务端总数，关联项目清除会显式提交 null；服务端同时阻止会员价高于门店价。
+
+涉及文件：`admin-react/src/core/resources/index.ts`、`admin-react/src/pages/AddonsPage.tsx`、`admin-react/src/pages/addon-page-model.ts`、`admin-react/tests/addon-page-model.test.ts`、`hxy-server/app/api/admin_v2.py`、`hxy-server/tests/test_admin_addon_permissions.py`、协作文档。
+
+验证：后端专项 9 passed（1 个既有 Starlette/httpx 弃用警告）；管理端完整套件 131 passed；`npx tsc -b` 通过；生产构建成功（Vite 4002 modules，保留既有大 chunk 警告）；`git diff --check` 通过。
+
+发布状态：本地完成，未发布生产；2026-09-04 只读核验服务器 `current` 为 `customer-detail-long-image-fit-20260904-2`，公网健康接口 HTTP 200。本轮未执行数据库备份、Manifest、生产切换或权限穿透写测试。
+
+待现场验收：发布后使用总部、店长和已完成角色迁移的普通员工账号，验证跨店目录、目标门店选择、上下架、总部强制下线不可恢复、媒体预览及门店隔离。
 
 ## 2026-08-31 服务位二维码查看与店长配置边界（本地完成，未发布）
 
