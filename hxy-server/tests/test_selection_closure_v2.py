@@ -270,7 +270,7 @@ class SelectionClosureV2Tests(unittest.TestCase):
             self.assertEqual(session.store_total_cents, 7980)
             self.assertEqual(session.pricing_snapshot["payable_total_cents"], 7980)
 
-    def test_quote_falls_back_to_claimable_coupon_hint_when_member_price_is_equal(self):
+    def test_equal_price_quote_respects_coupon_issuance_policy(self):
         session_id, token = self.create_session()
         with self.SessionLocal() as db:
             equal_project = Project(
@@ -301,7 +301,16 @@ class SelectionClosureV2Tests(unittest.TestCase):
             json={"items": [{"project_id": equal_project.id}]},
         )
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["saving_hint"], {"kind": "coupon", "login_required": True})
+        self.assertIsNone(response.json()["saving_hint"])
+        from unittest.mock import patch
+        from app.core.config import settings
+        with patch.object(settings, "coupon_issuance_enabled", True):
+            enabled = self.client.post(
+                f"/api/v1/selection-sessions/{session_id}/quote",
+                headers={"X-Selection-Token": token},
+                json={"items": [{"project_id": equal_project.id}]},
+            )
+            self.assertEqual(enabled.json()["saving_hint"], {"kind": "coupon", "login_required": True})
 
     def test_quote_prices_structured_addon_with_member_rule(self):
         session_id, token = self.create_session()
