@@ -127,7 +127,7 @@ docker exec "$db_container" psql -v ON_ERROR_STOP=1 -U "$db_user" -d postgres \
 docker exec -i "$db_container" pg_restore --exit-on-error -U "$db_user" -d "$rehearsal_db" < "$backup_file"
 docker exec "$db_container" psql -v ON_ERROR_STOP=1 -U "$db_user" -d "$rehearsal_db" -c 'SELECT 1' >/dev/null
 
-# Only the reviewed additive membership verification migration is permitted.
+# Only the two reviewed additive customer membership migrations are permitted.
 # Any removed or unknown revision remains blocked.
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
@@ -138,7 +138,9 @@ if ! diff -q \
   mapfile -t removed_migrations < <(comm -23 \
     <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
     <(find "$workspace_root/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort))
-  if [[ "${#added_migrations[@]}" -ne 1 || "${added_migrations[0]}" != '20260905_membership_verification.py' ||
+  if [[ "${#added_migrations[@]}" -ne 2 ||
+        "${added_migrations[0]}" != '20260905_customer_single_session.py' ||
+        "${added_migrations[1]}" != '20260905_membership_verification.py' ||
         "${#removed_migrations[@]}" -ne 0 ]]; then
     echo "Unapproved Alembic migration change detected." >&2
     exit 1
