@@ -81,6 +81,10 @@ export function readOverlayHistoryState(state: unknown): OverlayHistoryKind | nu
   return readOverlayHistoryStack(state).at(-1) ?? null;
 }
 
+export function shouldRestoreProfileOverlay(state: unknown): boolean {
+  return readOverlayHistoryStack(state).includes('profile');
+}
+
 export function shouldRunDeferredSwipeBack(before: unknown, current: unknown): boolean {
   const beforeStack = readOverlayHistoryStack(before);
   const currentStack = readOverlayHistoryStack(current);

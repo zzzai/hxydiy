@@ -12,6 +12,7 @@ export type CustomerUser = {
 export type CustomerAuth = { token: string; user: CustomerUser };
 
 const STORAGE_KEY = 'hxy_diy_customer_auth';
+export const CUSTOMER_SESSION_REFRESH_INTERVAL_MS = 5_000;
 
 export function normalizePhone(value: string): string {
   return value.replace(/\D/g, '').slice(0, 11);
