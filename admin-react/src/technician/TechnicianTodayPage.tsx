@@ -62,21 +62,36 @@ export default function TechnicianTodayPage() {
   const [referenceOccupancyId, setReferenceOccupancyId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    if (!background) setLoading(true);
+    if (!background) setError('');
     try {
           const [profile, list] = await Promise.all([getTechnicianMe(), getTechnicianTasks()]);
           setMe(profile.data);
           setTasks(list.data?.items || []);
+          setError('');
     } catch {
-      setError('任务加载失败，请检查网络后重试');
+      if (!background) setError('任务加载失败，请检查网络后重试');
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const refresh = () => { void load({ background: true }); };
+    const refreshTimer = window.setInterval(refresh, 3000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(refreshTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [load]);
 
   const act = async (order: any, action: 'confirm' | 'finish') => {
     const occupancyId = typeof order.occupancy_id === 'number' ? order.occupancy_id : null;

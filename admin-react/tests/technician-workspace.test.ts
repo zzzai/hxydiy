@@ -87,6 +87,24 @@ test('画像写入请求附带幂等键', () => {
   assert.match(source.slice(start, nextExport > start ? nextExport : undefined), /Idempotency-Key/);
 });
 
+test('移动技师今日看板在展示期间每 3 秒静默同步顾客新提交的服务单', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /setInterval\([^,]+,\s*3000\)/);
+  assert.match(source, /load\(\{ background: true \}\)/);
+  assert.match(source, /if \(!background\) setLoading\(true\)/);
+  assert.doesNotMatch(source, /background[\s\S]{0,300}setTasks\(\[\]\)/);
+});
+
+test('移动技师今日看板在重新可见或获得焦点时立即同步，并在卸载时清理监听和定时器', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /document\.addEventListener\('visibilitychange'/);
+  assert.match(source, /window\.addEventListener\('focus'/);
+  assert.match(source, /document\.visibilityState === 'visible'/);
+  assert.match(source, /clearInterval\(refreshTimer\)/);
+  assert.match(source, /document\.removeEventListener\('visibilitychange'/);
+  assert.match(source, /window\.removeEventListener\('focus'/);
+});
+
 test('管理端将 v3 服务参考显示为结构化摘要而非普通运营标签', () => {
   const source = readFileSync(new URL('../src/pages/SelectionSessionsPage.tsx', import.meta.url), 'utf8');
   assert.match(source, /buildServiceReferenceDisplay/);
