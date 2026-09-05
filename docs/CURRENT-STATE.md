@@ -1,24 +1,22 @@
 # hxy-diy 当前状态
 
-更新时间：2026-09-05 15:10（Asia/Shanghai）
+更新时间：2026-09-05 19:45（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
 
 - 服务器部署根目录：`/root/hxy-diy-20260811`
-- Release：`github-0dbb1efad621-33951155821`
-- 对应主干提交：`0dbb1ef`（自动发布与 CI 提效 PR #27，业务 UI 未变）
-- API 镜像 ID：`sha256:a222d36d26fec6282924de2975021f12b06e663fbc341399b7649fd0d68e5e76`
-- Alembic head：`20260904_service_reference_v2`
-- 数据库备份：`pre-github-0dbb1efad621-33951155821-20260905T070721Z.dump`
-- 备份 SHA-256：`42c62fe7f4b56b4f3d7f48d89531a64024f3d1895fd6f9f22a927c59af85984f`
+- Release：`github-ae20a3415cbf-33963739227`
+- 对应主干提交：`ae20a34`（顾客会员本人核验与受控迁移发布）
+- Alembic head：`20260905_membership_verification`
+- 数据库备份：`pre-github-ae20a3415cbf-33963739227-20260905T114331Z.dump`
 - 备份恢复演练：通过
 - 公网 `/`、`/admin/`、`/technician/`、`/api/v1/health`：HTTP 200
 - API 与数据库容器：运行中，发布验收时重启次数均为 0，数据库健康
-- Release Manifest：逐文件校验通过；Manifest SHA-256 `688956168d8ac93dfb837050826a10db7de5bdc249833a5651986a89898ad73e`
+- Release Manifest：发布脚本逐文件校验通过。
 
-顾客端入口加载 `index-BUW-BRvJ.js` 与 `index-Cu0pxEgk.css`；本次未执行数据库迁移。
+顾客端入口加载 `index-Bp9tsD85.js` 与 `index-BoAeh19J.css`；本次先在恢复演练库、再在生产库执行两条加法迁移。
 
 自动发布已通过专用受限密钥执行，复用当前 main CI 产物；纯文档变更保留静态门禁，不构建三端应用、不发布。发布脚本和说明见 `docs/customer-release-fast-path.md`。
 
@@ -31,6 +29,7 @@
 - 已发布各类服务项目与茶饮详情介绍精简及排版优化，保留原 UI 和完整长图；价格标签紧贴金额，同价合并标注，有差价保留会员参考，局部单位不变。
 - 新增发券策略已暂停：新客、主动领券、分享和邀请奖励不再发新券，匿名领券引导关闭；已领券与既有使用规则保留。生产 `coupon_issuance_enabled=False`，公开领券模板列表为空。
 - 顾客端不直接管理技师服务参考标签；未来如增加顾客确认入口，必须复用后端版本化标签契约。
+- 已发布单设备登录、“我的”任务中心、会员到期/累计节省、待评价和到店详情；会员本人权益采用唯一可信设备与30秒动态码，核验后才按会员价重算。
 
 ### 管理端
 
