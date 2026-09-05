@@ -13,6 +13,10 @@ test('v3 快记默认展示高频项并把扩展维度放在折叠区', () => {
   assert.match(source, /待保存摘要/);
   assert.match(source, /预算倾向/);
   assert.match(source, /决策关注/);
+  assert.equal(source.match(/label="相关情况原话"/g)?.length, 1);
+  assert.match(source, /最多选择 2 项/);
+  assert.match(source, /最多选择 1 项/);
+  assert.doesNotMatch(source, /保存失败，请检查网络后重试/);
 });
 
 test('本人历史使用技师专用接口而不是门店级 service-orders', () => {

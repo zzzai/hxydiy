@@ -30,19 +30,40 @@ export type TechnicianHistoryProfileSummary = {
   budget_preference?: string | null;
 };
 
-export function technicianHistorySummaryLines(summary: TechnicianHistoryProfileSummary | null): string[] {
+const HISTORY_SUMMARY_VALUES = {
+  areas: ['肩颈', '腰臀', '腿部', '腹部', '足部', '整体放松'],
+  force: ['轻柔', '适中', '偏强'], temperature: ['偏低', '适中', '偏高'],
+  feedback: ['本次合适', '调整后更合适', '下次需调整'], nextVisit: ['延续本次', '到店再确认'],
+  occupations: ['久坐办公', '久站服务', '经常驾驶', '体力劳动', '照护家庭', '自由职业', '退休', '其他'],
+  relaxation: ['较快', '逐渐', '始终较紧张'], decisions: ['价格', '品质', '环境', '效率', '固定技师', '固定时段'],
+  budget: ['实惠优先', '平衡', '体验优先', '未表达'],
+} as const;
+
+function safeSummaryArray(value: unknown, allowed: readonly string[]): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && allowed.includes(item)) : [];
+}
+
+function safeSummaryValue(value: unknown, allowed: readonly string[]): string {
+  return typeof value === 'string' && allowed.includes(value) ? value : '';
+}
+
+export function technicianHistorySummaryLines(summary: TechnicianHistoryProfileSummary | Record<string, unknown> | null): string[] {
   if (!summary) return [];
+  const focusAreas = safeSummaryArray(summary.focus_areas, HISTORY_SUMMARY_VALUES.areas);
+  const avoidAreas = safeSummaryArray(summary.avoid_areas, HISTORY_SUMMARY_VALUES.areas);
+  const force = safeSummaryValue(summary.force_preference, HISTORY_SUMMARY_VALUES.force);
+  const temperature = safeSummaryValue(summary.temperature_preference, HISTORY_SUMMARY_VALUES.temperature);
+  const feedback = safeSummaryValue(summary.service_feedback, HISTORY_SUMMARY_VALUES.feedback);
+  const nextVisit = safeSummaryValue(summary.next_visit_plan, HISTORY_SUMMARY_VALUES.nextVisit);
+  const occupations = safeSummaryArray(summary.occupation_contexts, HISTORY_SUMMARY_VALUES.occupations);
+  const relaxation = safeSummaryValue(summary.relaxation, HISTORY_SUMMARY_VALUES.relaxation);
+  const decisions = safeSummaryArray(summary.decision_priorities, HISTORY_SUMMARY_VALUES.decisions);
+  const budget = safeSummaryValue(summary.budget_preference, HISTORY_SUMMARY_VALUES.budget);
   const lines = [
-    summary.focus_areas?.length ? `重点：${summary.focus_areas.join('、')}` : '',
-    summary.avoid_areas?.length ? `避开或谨慎：${summary.avoid_areas.join('、')}` : '',
-    summary.force_preference ? `力度：${summary.force_preference}` : '',
-    summary.temperature_preference ? `温度：${summary.temperature_preference}` : '',
-    summary.service_feedback ? `反馈：${summary.service_feedback}` : '',
-    summary.next_visit_plan ? `下次：${summary.next_visit_plan}` : '',
-    summary.occupation_contexts?.length ? `职业场景：${summary.occupation_contexts.join('、')}` : '',
-    summary.relaxation ? `放松过程：${summary.relaxation}` : '',
-    summary.decision_priorities?.length ? `决策关注：${summary.decision_priorities.join('、')}` : '',
-    summary.budget_preference ? `预算倾向：${summary.budget_preference}` : '',
+    focusAreas.length ? `重点：${focusAreas.join('、')}` : '', avoidAreas.length ? `避开或谨慎：${avoidAreas.join('、')}` : '',
+    force ? `力度：${force}` : '', temperature ? `温度：${temperature}` : '', feedback ? `反馈：${feedback}` : '', nextVisit ? `下次：${nextVisit}` : '',
+    occupations.length ? `职业场景：${occupations.join('、')}` : '', relaxation ? `放松过程：${relaxation}` : '',
+    decisions.length ? `决策关注：${decisions.join('、')}` : '', budget ? `预算倾向：${budget}` : '',
   ];
   return lines.filter(Boolean);
 }

@@ -83,3 +83,22 @@
 - v3 taxonomy 当前仍由前后端受控常量分别定义；两端合同测试覆盖提交路径和关键完整枚举，但尚未建设前端运行时动态字典加载。
 - `unassigned_legacy_count` 是门店级不可归属历史总数，仅作空态解释，不代表这些记录属于当前技师。
 - 仍未执行服务器、生产或 390×844 门店现场验收。
+
+## 修复轮次 2（3 个 Important）
+
+### RED
+
+- 前端新增原话冲突、页面统一输入、多选提示及历史白名单键内恶意值测试；首次专项运行 `3 failed, 146 passed`，分别证明原话会被 OR 覆盖、页面缺少上限、历史白名单键仍可直出任意值。
+- 后端新增职业 2 项与相关情况 1 项可提交、职业第 3 项返回 422 的组合边界测试；既有严格模型已满足该边界，测试用于锁定前端必须对齐的合同。
+
+### 修复
+
+- 页面删除默认区重复的“顾客原话”输入，仅保留扩展区一个“相关情况原话”，最多 100 字；v3 构造器继续兼容旧 `quote` 调用，但两个不同入口同时传值时明确抛错，不再静默覆盖。
+- `CheckableField` 增加选择上限：职业场景最多 2 项、相关情况最多 1 项；达到上限后不改变表单值并显示明确提示。服务端 422 后页面不再额外误报“网络错误”。
+- 历史摘要对每个允许键同时校验运行时类型和已知中文枚举；数组仅保留已知字符串，标量仅接受已知值。对象、普通字符串数组、电话号码、未知文案和嵌套对象均不会渲染或生成 `[object Object]`。
+
+### GREEN 与验证
+
+- `npm test`：`149 passed, 0 failed`。
+- `python -m pytest tests/test_technician_profile_v3_contract.py tests/test_technician_service_history_api.py tests/test_technician_portal_api.py -q`：`29 passed, 1 warning`；warning 为既有 Starlette/httpx 弃用提示。
+- `npx tsc -b && npx vite build`：退出码 0，4004 modules transformed；仅既有大 chunk 警告。

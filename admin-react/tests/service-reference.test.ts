@@ -42,3 +42,11 @@ test('服务参考 v3 单一载荷同时保存高频六组和扩展偏好', () =
   assert.equal(payload.profile.next_visit.plan, 'repeat_current');
   assert.deepEqual(payload.profile.customer_reported.communication_consumption, { decision_priorities: ['quality'], budget_preference: 'balanced' });
 });
+
+test('服务参考 v3 兼容旧原话入口但拒绝两个不同原话静默覆盖', () => {
+  const compatible = buildServiceReferenceV3Payload(12, 'session-v3-quote', { quote: ' 顾客说温度低一点 ' });
+  assert.equal(compatible.profile.customer_reported.service_related_context.quote, '顾客说温度低一点');
+  assert.throws(() => buildServiceReferenceV3Payload(12, 'session-v3-two-quotes', {
+    quote: '第一段', serviceRelatedContext: { quote: '第二段' },
+  }), /只能填写一处/);
+});

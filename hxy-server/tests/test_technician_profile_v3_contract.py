@@ -196,6 +196,23 @@ class TestTechnicianProfileV3Contract:
         )
         assert duplicate.status_code == 422, duplicate.text
 
+    def test_v3_quick_note_accepts_documented_multi_select_limits_and_rejects_excess(self):
+        payload = self.v3_payload()
+        payload["profile"]["customer_reported"]["work_lifestyle"]["occupation_contexts"] = ["desk_work", "frequent_driving"]
+        payload["profile"]["customer_reported"]["service_related_context"]["contexts"] = ["skin_sensitivity"]
+        accepted = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records", json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "v3-profile-limits-001"},
+        )
+        assert accepted.status_code == 200, accepted.text
+
+        payload["profile"]["customer_reported"]["work_lifestyle"]["occupation_contexts"].append("physical_labor")
+        rejected = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records", json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "v3-profile-limits-002"},
+        )
+        assert rejected.status_code == 422, rejected.text
+
     def test_taxonomy_endpoint_exposes_v3_stable_codes(self):
         response = self.client.get(
             "/api/v1/technician/service-reference-taxonomy",

@@ -92,7 +92,10 @@ export function buildServiceReferenceV3Payload(userId: number, selectionSessionI
 
   const serviceRelatedContext: Record<string, unknown> = {};
   if (values.serviceRelatedContext?.contexts) serviceRelatedContext.contexts = values.serviceRelatedContext.contexts;
-  const relatedQuote = values.serviceRelatedContext?.quote?.trim() || values.quote?.trim();
+  const v3Quote = values.serviceRelatedContext?.quote?.trim();
+  const legacyQuote = values.quote?.trim();
+  if (v3Quote && legacyQuote && v3Quote !== legacyQuote) throw new Error('顾客自述只能填写一处，请合并后再保存');
+  const relatedQuote = v3Quote || legacyQuote;
   if (relatedQuote) serviceRelatedContext.quote = relatedQuote;
 
   const communicationConsumption: Record<string, unknown> = {};

@@ -46,7 +46,7 @@ function safeDraftSummary(values: ServiceReferenceInput): string[] {
     selectedLabel(values.sessionResponse?.relaxation, MORE_REFERENCE_OPTIONS.relaxation) && `放松过程：${selectedLabel(values.sessionResponse?.relaxation, MORE_REFERENCE_OPTIONS.relaxation)}`,
     selectedLabels(values.communicationConsumption?.decisionPriorities, MORE_REFERENCE_OPTIONS.decisionPriorities) && `决策关注：${selectedLabels(values.communicationConsumption?.decisionPriorities, MORE_REFERENCE_OPTIONS.decisionPriorities)}`,
     selectedLabel(values.communicationConsumption?.budgetPreference, MORE_REFERENCE_OPTIONS.budgetPreference) && `预算倾向：${selectedLabel(values.communicationConsumption?.budgetPreference, MORE_REFERENCE_OPTIONS.budgetPreference)}`,
-    (values.serviceRelatedContext?.quote?.trim() || values.quote?.trim()) && `顾客原话：${values.serviceRelatedContext?.quote?.trim() || values.quote?.trim()}`,
+    values.serviceRelatedContext?.quote?.trim() && `顾客原话：${values.serviceRelatedContext.quote.trim()}`,
   ];
   return lines.filter((line): line is string => Boolean(line));
 }
@@ -55,10 +55,13 @@ function makeIdempotencyKey() {
   return globalThis.crypto?.randomUUID?.() || `profile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function CheckableField({ value = [], onChange, options }: { value?: string[]; onChange?: (value: string[]) => void; options: ReadonlyArray<{ label: string; value: string }> }) {
+function CheckableField({ value = [], onChange, options, maxSelected, onLimit }: { value?: string[]; onChange?: (value: string[]) => void; options: ReadonlyArray<{ label: string; value: string }>; maxSelected?: number; onLimit?: () => void }) {
   return <div className="technician-tag-list">{options.map((option) => {
     const checked = value.includes(option.value);
-    return <Tag.CheckableTag key={option.value} checked={checked} onChange={(next) => onChange?.(next ? [...value, option.value] : value.filter((item) => item !== option.value))}>{option.label}</Tag.CheckableTag>;
+    return <Tag.CheckableTag key={option.value} checked={checked} onChange={(next) => {
+      if (next && maxSelected !== undefined && value.length >= maxSelected) { onLimit?.(); return; }
+      onChange?.(next ? [...value, option.value] : value.filter((item) => item !== option.value));
+    }}>{option.label}</Tag.CheckableTag>;
   })}</div>;
 }
 
@@ -104,7 +107,7 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
       onSaved();
     } catch {
       setSaveFailed(true);
-      message.error('保存失败，请检查网络后重试');
+      message.error('保存未成功，请按提示检查内容后重试');
     } finally {
       setSaving(false);
     }
@@ -137,15 +140,14 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
       <Form.Item name="temperaturePreference" label="温度偏好"><Radio.Group optionType="button" buttonStyle="solid" options={SERVICE_REFERENCE_OPTIONS.temperature} /></Form.Item>
       <Form.Item name="serviceFeedback" label="服务反馈"><Radio.Group optionType="button" buttonStyle="solid" options={SERVICE_REFERENCE_OPTIONS.feedback} /></Form.Item>
       <Form.Item name="nextVisitPlan" label="下次建议"><Radio.Group optionType="button" buttonStyle="solid" options={SERVICE_REFERENCE_OPTIONS.nextVisit} /></Form.Item>
-      <Form.Item name="quote" label="顾客原话（可选）"><Input.TextArea rows={2} maxLength={100} showCount placeholder="只记服务偏好，不记诊断、联系方式或隐私信息" /></Form.Item>
       <Collapse ghost items={[{ key: 'more', label: '更多服务记忆', children: <>
         <Typography.Paragraph type="secondary">按需补充；未选择的维度不会写入。身体、健康或用药相关情况仅记录顾客自述，服务前请再次确认。</Typography.Paragraph>
         <Form.Item name={['personalContext', 'ageBand']} label="年龄段"><Radio.Group optionType="button" buttonStyle="solid" options={[...MORE_REFERENCE_OPTIONS.ageBand]} /></Form.Item>
         <Form.Item name={['personalContext', 'build']} label="体型"><Radio.Group optionType="button" buttonStyle="solid" options={[...MORE_REFERENCE_OPTIONS.build]} /></Form.Item>
         <Form.Item name={['personalContext', 'heightBand']} label="身高区间"><Radio.Group optionType="button" buttonStyle="solid" options={[...MORE_REFERENCE_OPTIONS.heightBand]} /></Form.Item>
-        <Form.Item name={['workLifestyle', 'occupationContexts']} label="工作与生活场景"><CheckableField options={MORE_REFERENCE_OPTIONS.occupationContexts} /></Form.Item>
+        <Form.Item name={['workLifestyle', 'occupationContexts']} label="工作与生活场景" extra="最多选择 2 项"><CheckableField options={MORE_REFERENCE_OPTIONS.occupationContexts} maxSelected={2} onLimit={() => message.warning('工作与生活场景最多选择 2 项')} /></Form.Item>
         <Form.Item name={['workLifestyle', 'sleepQuality']} label="睡眠自述"><Radio.Group optionType="button" buttonStyle="solid" options={[...MORE_REFERENCE_OPTIONS.sleepQuality]} /></Form.Item>
-        <Form.Item name={['serviceRelatedContext', 'contexts']} label="服务相关情况"><CheckableField options={MORE_REFERENCE_OPTIONS.serviceContexts} /></Form.Item>
+        <Form.Item name={['serviceRelatedContext', 'contexts']} label="服务相关情况" extra="最多选择 1 项"><CheckableField options={MORE_REFERENCE_OPTIONS.serviceContexts} maxSelected={1} onLimit={() => message.warning('服务相关情况最多选择 1 项')} /></Form.Item>
         <Form.Item name={['serviceRelatedContext', 'quote']} label="相关情况原话"><Input.TextArea rows={2} maxLength={100} showCount placeholder="顾客自述，服务前请再次确认" /></Form.Item>
         <Form.Item name={['sessionResponse', 'relaxation']} label="本次放松反应"><Radio.Group optionType="button" buttonStyle="solid" options={[...MORE_REFERENCE_OPTIONS.relaxation]} /></Form.Item>
         <Form.Item name={['communicationConsumption', 'decisionPriorities']} label="决策关注"><CheckableField options={MORE_REFERENCE_OPTIONS.decisionPriorities} /></Form.Item>
