@@ -956,7 +956,7 @@ export default function App() {
     const token = customerAuth?.token;
     if (!token) return undefined;
     let active = true;
-    void getCurrentCustomer(token)
+    const refreshCustomer = () => void getCurrentCustomer(token)
       .then((user) => {
         if (!active) return;
         setCustomerAuth((current) => {
@@ -967,13 +967,16 @@ export default function App() {
         });
       })
       .catch((error) => {
-        if (active && authFailureAction(error) === 'reauthenticate') {
+        const action = authFailureAction(error);
+        if (active && (action === 'reauthenticate' || action === 'session-replaced')) {
           clearCustomerAuth();
           setCustomerAuth(null);
-          flash('登录状态已更新，请重新登录');
+          flash(action === 'session-replaced' ? '账号已在另一台设备登录，请重新登录' : '登录状态已更新，请重新登录');
         }
       });
-    return () => { active = false; };
+    refreshCustomer();
+    const timer = window.setInterval(refreshCustomer, 60_000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [customerAuth?.token]);
 
   useEffect(() => {
@@ -1329,7 +1332,7 @@ export default function App() {
         try {
           await bindSelectionCustomer(session.id, accessToken, customerAuth.token);
         } catch (error) {
-          if (authFailureAction(error) === 'reauthenticate') {
+          if (['reauthenticate', 'session-replaced'].includes(authFailureAction(error))) {
             clearCustomerAuth();
             setCustomerAuth(null);
             openRecordLogin();

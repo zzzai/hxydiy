@@ -69,6 +69,9 @@ export const createProfileRecord = (customerId: number, data: { tags: string[]; 
 export const submitTechnicianLeave = (data: { start_date: string; end_date: string; reason: string }) => client.post('/technician/leave-requests', data);
 export const confirmTechnicianService = (occupancyId: number, idempotencyKey: string) => client.post(`/technician/occupancies/${occupancyId}/confirm`, { idempotency_key: idempotencyKey });
 export const finishTechnicianService = (occupancyId: number, idempotencyKey: string) => client.post(`/technician/occupancies/${occupancyId}/finish`, { idempotency_key: idempotencyKey });
+export const getMembershipVerificationSelections = () => client.get('/technician/membership-verification/selections');
+export const scanMembershipCode = (codeToken: string) => client.post('/technician/membership-verification/scan', { code_token: codeToken });
+export const consumeMembershipCode = (codeToken: string, selectionSessionId: string) => client.post('/technician/membership-verification/consume', { code_token: codeToken, selection_session_id: selectionSessionId, idempotency_key: `member-verify-${globalThis.crypto?.randomUUID?.() || Date.now()}` });
 
 export const getTodayStats = () => client.get('/admin/stats');
 export const checkIn = (id: number) => client.post(`/admin/orders/${id}/check-in`);
@@ -285,6 +288,8 @@ export const deleteTag = (id: number) => client.delete(`/admin/v2/tags/${id}`);
 
 // Users
 export const getUsers = (params?: any) => client.get('/admin/v2/users', { params });
+export const getCustomerTrustedDevice = (userId: number) => client.get(`/admin/v2/users/${userId}/trusted-device`);
+export const revokeCustomerTrustedDevice = (userId: number, reason: string) => client.post(`/admin/v2/users/${userId}/trusted-device/revoke`, { reason });
 export const addUserTag = (userId: number, tagId: number) =>
   client.post(`/admin/v2/users/${userId}/tags`, { tag_id: tagId });
 export const setUserMembership = (userId: number, isMember: boolean) => {

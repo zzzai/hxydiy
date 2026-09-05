@@ -40,6 +40,8 @@
 
 ## 最近决策
 
+2026-09-05：会员本人使用采用“唯一顾客登录会话＋唯一可信设备＋30秒动态会员码＋风险核验”。动态码由顾客端生成；日常扫码入口在技师端，技师或店长账号按门店和独立 `membership_verify` 权限使用；电脑管理后台仅负责设备换绑与审计。后端以 `issued -> scanned_pending -> consumed` 状态机原子完成码消费、本人/门店/选单校验与会员价重算，未核验选单按门店价提交；手机号查询、自由勾选会员或前端改价不得绕过。首期复用现有手机摄像头，不采购专用硬件。实现位于任务分支，尚未合并或发布，契约见 `contracts/customer-membership-verification.md`。
+
 2026-09-05：服务结束后的“返回项目列表”与物理服务位释放解耦。生产真实闭环可能留下 `submitted + post_service_present`，因此以占用的 `post_service_present` 为结束权威，并兼容旧选单 `submitted`/`confirmed`。原匿名浏览器可保留旧单与评价并于原位建立独立新选购；旧 DIY 占用仅取消活动引用，不触发智慧宝或物理释放。其他设备、未结束与清洁状态不得接管。详见 `contracts/customer-browser-identity.md`。
 
 2026-09-05：用户要求暂停新增发券并去除匿名送券引导；策略边界见 `contracts/coupon-issuance-policy.md`。保留已领券记录及既有使用规则。生产生效状态以 CURRENT-STATE 为准。

@@ -40,6 +40,8 @@ class SelectionSession(Base):
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    membership_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    membership_verified_by_staff_id: Mapped[int | None] = mapped_column(ForeignKey("staff.id"), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

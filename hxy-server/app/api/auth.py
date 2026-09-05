@@ -1,16 +1,18 @@
 import hashlib
 import re
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import create_access_token
+from app.core.customer_auth import current_customer_id
 from app.db.session import get_db
-from app.models import CouponTemplate, CustomerVerificationCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
+from app.models import CouponTemplate, CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
 from app.models.service import Visit
 from app.schemas.auth import (
     BindPhoneRequest, H5LoginRequest, H5SendCodeRequest, H5SendCodeResponse,
@@ -21,6 +23,7 @@ from app.services.aliyun_sms import AliyunSmsError, send_sms_code as send_standa
 from app.services.wechat import code2session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+TRUSTED_DEVICE_COOKIE = "hxy_member_device"
 
 
 def _normalize_phone(phone: str) -> str:
@@ -31,6 +34,50 @@ def _normalize_phone(phone: str) -> str:
 
 def _hash_code(code: str) -> str:
     return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+def _trusted_device(db: Session, user_id: int, token: str | None) -> CustomerTrustedDevice | None:
+    if not token:
+        return None
+    return db.scalar(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == user_id, CustomerTrustedDevice.token_hash == _hash_code(token), CustomerTrustedDevice.status == "active"))
+
+
+@router.post("/h5/trusted-device/enroll")
+def enroll_trusted_device(response: Response, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
+    user_id = current_customer_id(authorization, db)
+    user = db.get(User, user_id)
+    if not user or not user.is_member:
+        raise HTTPException(status_code=403, detail={"code": "MEMBERSHIP_REQUIRED", "message": "仅有效会员可绑定可信设备"})
+    existing = db.scalar(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == user_id, CustomerTrustedDevice.status == "active"))
+    if existing:
+        raise HTTPException(status_code=409, detail={"code": "DEVICE_ALREADY_BOUND", "message": "会员已绑定其他可信设备，请申请换绑"})
+    token = secrets.token_urlsafe(32)
+    device = CustomerTrustedDevice(user_id=user_id, token_hash=_hash_code(token), last_seen_at=datetime.now(timezone.utc))
+    db.add(device); db.commit()
+    response.set_cookie(TRUSTED_DEVICE_COOKIE, token, max_age=31536000, httponly=True, secure=settings.environment == "production", samesite="lax", path="/")
+    return {"trusted": True}
+
+
+@router.post("/h5/member-code")
+def issue_member_code(authorization: str | None = Header(default=None), device_token: str | None = Cookie(default=None, alias=TRUSTED_DEVICE_COOKIE), db: Session = Depends(get_db)) -> dict:
+    user_id = current_customer_id(authorization, db)
+    user = db.get(User, user_id)
+    now = datetime.now(timezone.utc)
+    expiry = user.member_expire_at if user else None
+    if expiry and expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+    if not user or not user.is_member or (expiry and expiry <= now):
+        raise HTTPException(status_code=403, detail={"code": "MEMBERSHIP_INACTIVE", "message": "会员权益当前不可用"})
+    device = _trusted_device(db, user_id, device_token)
+    if not device:
+        raise HTTPException(status_code=403, detail={"code": "DEVICE_NOT_TRUSTED", "message": "当前设备未完成会员本人验证"})
+    db.query(MembershipCode).filter(MembershipCode.user_id == user_id, MembershipCode.status == "issued").update({"status": "revoked"}, synchronize_session=False)
+    token = secrets.token_urlsafe(32)
+    expires_at = now + timedelta(seconds=30)
+    db.add(MembershipCode(id=str(uuid.uuid4()), user_id=user_id, trusted_device_id=device.id, token_hash=_hash_code(token), status="issued", expires_at=expires_at))
+    device.last_seen_at = now
+    db.commit()
+    return {"code_token": token, "expires_at": expires_at}
 
 
 def _hash_selection_token(token: str) -> str:
@@ -172,6 +219,7 @@ def h5_login(
     else:
         user.phone = phone
     user.last_login_at = now
+    user.customer_login_version = int(user.customer_login_version or 1) + 1
     if selection_session:
         session = selection_session
         if session.status in {"draft", "submitted", "confirmed"}:
@@ -206,7 +254,7 @@ def h5_login(
                 refresh_session_pricing(db, session)
     db.commit()
     db.refresh(user)
-    return LoginResponse(token=create_access_token(str(user.id), openid), user=UserOut.model_validate(user))
+    return LoginResponse(token=create_access_token(str(user.id), openid, user.customer_login_version), user=UserOut.model_validate(user))
 
 
 @router.get("/h5/me", response_model=UserOut)
@@ -215,7 +263,7 @@ def h5_current_user(
     db: Session = Depends(get_db),
 ) -> UserOut:
     """刷新 H5 登录用户快照，确保后台刚开通的会员身份即时同步到顾客端。"""
-    user = db.get(User, _current_user_id(authorization, db))
+    user = db.get(User, current_customer_id(authorization, db))
     if user is None:
         raise HTTPException(status_code=401, detail="登录已失效，请重新登录")
     return UserOut.model_validate(user)
