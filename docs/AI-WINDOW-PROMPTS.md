@@ -8,6 +8,12 @@
 你正在维护 hxy-diy Monorepo。先读取根目录 AGENTS.md。保存当前未提交工作后执行 git fetch origin，并确认当前任务分支已经合入或 rebase 到最新 origin/main；不要覆盖其他窗口的工作。然后只读取 docs/CONTEXT-MANIFEST.md、docs/CURRENT-STATE.md 和本端 workstream。涉及 API、价格、状态机、权限、服务位或画像字段时，再读取 docs/TEAM-MEMORY.md、相关 docs/contracts/、源码和合同测试。聊天、未提交文件和旧提示词不是共享事实源。
 ```
 
+## 三端公共交付规则
+
+```text
+完成本地验证和本次授权提交后，按 docs/script-first-delivery.md 启动 tools/release/start-release-watch.ps1。正常等待交给脚本，报告路径交给用户后结束本轮，不让模型循环轮询。下次先读取 report.json；terminal=false 不宣称完成，失败/超时/冲突才读必要的失败片段。未经授权不传 -Merge，不自动重跑或手工重复部署。脚本不调用模型，云端 AI 审查默认关闭；不要把整项研发宣称为零 token。
+```
+
 ## 顾客端窗口
 
 ```text
