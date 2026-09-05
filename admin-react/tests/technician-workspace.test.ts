@@ -85,3 +85,13 @@ test('画像写入请求附带幂等键', () => {
   const nextExport = source.indexOf('\nexport const ', start + 1);
   assert.match(source.slice(start, nextExport > start ? nextExport : undefined), /Idempotency-Key/);
 });
+
+test('管理端将 v3 服务参考显示为结构化摘要而非普通运营标签', () => {
+  const source = readFileSync(new URL('../src/pages/SelectionSessionsPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /schema_version/);
+  assert.match(source, /service_reference_v2/);
+  assert.match(source, /customer_confirmed/);
+  assert.match(source, /confirmed_at/);
+  assert.doesNotMatch(source, /addUserTag\(/);
+  assert.doesNotMatch(source, /createCustomerProfileRecord/);
+});
