@@ -45,6 +45,7 @@ def upgrade() -> None:
             SELECT MIN(staff.technician_id)
             FROM audit_logs
             JOIN staff ON CAST(staff.id AS VARCHAR) = audit_logs.actor_id
+            JOIN technicians ON technicians.id = staff.technician_id
             WHERE audit_logs.actor_type = 'staff'
               AND audit_logs.entity_type = 'position_occupancy'
               AND audit_logs.entity_id = CAST(position_occupancies.id AS VARCHAR)
@@ -54,6 +55,7 @@ def upgrade() -> None:
               )
               AND audit_logs.store_id = position_occupancies.store_id
               AND staff.store_id = position_occupancies.store_id
+              AND technicians.store_id = position_occupancies.store_id
               AND staff.technician_id IS NOT NULL
         )
         WHERE actual_service_end_at IS NOT NULL
@@ -70,6 +72,7 @@ def upgrade() -> None:
               SELECT COUNT(*)
               FROM audit_logs
               JOIN staff ON CAST(staff.id AS VARCHAR) = audit_logs.actor_id
+              JOIN technicians ON technicians.id = staff.technician_id
               WHERE audit_logs.actor_type = 'staff'
                 AND audit_logs.entity_type = 'position_occupancy'
                 AND audit_logs.entity_id = CAST(position_occupancies.id AS VARCHAR)
@@ -79,12 +82,14 @@ def upgrade() -> None:
                 )
                 AND audit_logs.store_id = position_occupancies.store_id
                 AND staff.store_id = position_occupancies.store_id
+                AND technicians.store_id = position_occupancies.store_id
                 AND staff.technician_id IS NOT NULL
           )
           AND 1 = (
               SELECT COUNT(DISTINCT staff.technician_id)
               FROM audit_logs
               JOIN staff ON CAST(staff.id AS VARCHAR) = audit_logs.actor_id
+              JOIN technicians ON technicians.id = staff.technician_id
               WHERE audit_logs.actor_type = 'staff'
                 AND audit_logs.entity_type = 'position_occupancy'
                 AND audit_logs.entity_id = CAST(position_occupancies.id AS VARCHAR)
@@ -94,6 +99,7 @@ def upgrade() -> None:
                 )
                 AND audit_logs.store_id = position_occupancies.store_id
                 AND staff.store_id = position_occupancies.store_id
+                AND technicians.store_id = position_occupancies.store_id
                 AND staff.technician_id IS NOT NULL
           )
     """))
