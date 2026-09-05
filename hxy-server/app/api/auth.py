@@ -223,6 +223,8 @@ def h5_current_user(
 
 def grant_new_user_coupons(db: Session, user_id: int) -> None:
     """新用户自动发券：发放所有 auto_grant_new_user 的已发布券模板。"""
+    if not settings.coupon_issuance_enabled:
+        return
     templates = db.scalars(select(CouponTemplate).where(
         CouponTemplate.auto_grant_new_user.is_(True),
         CouponTemplate.status == "published",

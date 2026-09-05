@@ -1,14 +1,16 @@
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.security import create_access_token
+from app.core.config import settings
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import CouponTemplate, Store, User
+from app.models import CouponTemplate, Store, User, UserCoupon
 
 
 class CouponClaimTests(unittest.TestCase):
@@ -37,6 +39,10 @@ class CouponClaimTests(unittest.TestCase):
         cls.engine.dispose()
 
     def setUp(self):
+        # 原有领券限额测试显式启用策略，默认生产配置保持暂停。
+        enabled = patch.object(settings, "coupon_issuance_enabled", True)
+        enabled.start()
+        self.addCleanup(enabled.stop)
         import secrets
         suffix = secrets.token_hex(4).upper()
         with self.SessionLocal() as db:
@@ -63,6 +69,39 @@ class CouponClaimTests(unittest.TestCase):
 
     def _auth(self):
         return {"Authorization": f"Bearer {create_access_token(str(self.user_id), 'openid-x')}"}
+
+    def test_paused_policy_blocks_all_new_issuance_and_preserves_existing_coupon(self):
+        from app.api.auth import grant_new_user_coupons
+        from app.api.orders import _grant_inviter_reward
+        from app.api.selections import _saving_hint
+
+        with self.SessionLocal() as db:
+            template = db.get(CouponTemplate, self.daily_id)
+            template.auto_grant_new_user = True
+            db.add(UserCoupon(user_id=self.user_id, template_id=self.limited_id, status="unused"))
+            db.commit()
+
+        with patch.object(settings, "coupon_issuance_enabled", False):
+            for headers in ({}, self._auth()):
+                response = self.client.get("/api/v1/coupons/templates", headers=headers)
+                self.assertEqual(response.json(), {"items": [], "total": 0})
+            response = self.client.post("/api/v1/coupons/claim", headers=self._auth(), json={"template_id": self.daily_id})
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json()["detail"]["code"], "COUPON_ISSUANCE_PAUSED")
+            response = self.client.post("/api/v1/coupons/claim-share", headers=self._auth())
+            self.assertFalse(response.json()["granted"])
+            with self.SessionLocal() as db:
+                grant_new_user_coupons(db, self.user_id)
+                self.assertFalse(_grant_inviter_reward(db, self.user_id))
+                pricing = {"payable_total_cents": 1990, "member_total_cents": 1990, "store_total_cents": 1990}
+                self.assertIsNone(_saving_hint(db, 1, pricing, None))
+                pricing["member_total_cents"] = 990
+                self.assertEqual(_saving_hint(db, 1, pricing, None)["kind"], "member")
+                db.commit()
+                self.assertEqual(db.scalar(select(func.count()).select_from(UserCoupon).where(UserCoupon.user_id == self.user_id)), 1)
+            response = self.client.get("/api/v1/coupons", headers=self._auth())
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.json()["items"]), 1)
 
     def test_daily_claimable_coupon_second_claim_same_day_rejected(self):
         first = self.client.post("/api/v1/coupons/claim", headers=self._auth(), json={"template_id": self.daily_id})

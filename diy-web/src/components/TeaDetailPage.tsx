@@ -1,9 +1,10 @@
 import { ArrowLeft, Check, ChevronRight, Coffee } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { resolveTeaImage, TEAS, TEA_DETAIL_PROFILES, TEA_SERVICE } from '../domain';
+import { resolveTeaImage, TEAS, TEA_DETAIL_PROFILES } from '../domain';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
+import DetailIntroduction from './DetailIntroduction';
 
 type TeaOption = { name: string; note?: string; description?: string; image_url?: string; image?: string };
 
@@ -42,8 +43,7 @@ export default function TeaDetailPage({ open, selectedTea, positionLabel, readOn
         <div className="tea-detail-hero"><img key={activeTea.name} src={resolveTeaImage(activeTea)} alt={activeTea.name} /></div>
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="tea-detail-title">{activeTea.name}</h1><Coffee size={22} /></div>
-          <div className="mini-detail-tags"><span>{TEA_SERVICE.name}</span><span>{activeProfile.highlight}</span><span>到店现泡</span></div>
-          <p>{activeProfile.description}</p>
+          <DetailIntroduction name={activeTea.name} summary={activeProfile.description} highlights={[activeProfile.highlight]} />
           <div className="tea-free-price"><strong>免费提供</strong><span>本次到店可选一种</span></div>
         </section>
 

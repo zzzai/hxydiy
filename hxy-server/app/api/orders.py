@@ -51,6 +51,9 @@ INVITE_REWARD_DAILY_LIMIT = 3
 
 def _grant_inviter_reward(db: Session, inviter_id: int) -> bool:
     """邀请人得老带新券（每日限 3 张）。"""
+    from app.core.config import settings
+    if not settings.coupon_issuance_enabled:
+        return False
     from app.models import CouponTemplate
     tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.code == INVITE_REWARD_CODE))
     if not tpl or tpl.status != "published":

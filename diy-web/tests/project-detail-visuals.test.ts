@@ -38,6 +38,6 @@ test('详情顶部使用项目基础价，底部使用当前项目配置价并�
 
   assert.match(source, /const basePrices = detailBasePriceComparison\(project, isMember\)/);
   assert.match(source, /const configuredPrices = detailPriceComparison\(preview, isMember\)/);
-  assert.match(source, /mini-detail-price[\s\S]*basePrices\.currentCents/);
+  assert.match(source, /<DetailPrice current=\{basePrices\.currentCents\}/);
   assert.match(source, /mini-detail-total[\s\S]*configuredPrices\.currentCents/);
 });

@@ -256,7 +256,7 @@ function SelectionList({ sessions, onContinue }: { sessions: Awaited<ReturnType<
 }
 
 function CouponList({ coupons }: { coupons: MyCoupon[] }) {
-  if (!coupons.length) return <p className="profile-empty">还没有优惠券。到店可参与领券活动。</p>;
+  if (!coupons.length) return <p className="profile-empty">暂无优惠券</p>;
   return (
     <ul className="profile-list">
       {coupons.map((coupon) => (

@@ -1305,6 +1305,11 @@ h1, h2, h3, p { margin-top: 0; }
 .mini-detail-price del { color: var(--price-reference); font-size: 10px; }
 .mini-detail-price .member-reference-price { color: #9a7220; font-size: 10px; }
 .mini-detail-price em { margin-left: auto; padding: 4px 8px; border-radius: 8px; color: #176856; background: #eef8f3; font-size: 9px; font-style: normal; font-weight: 700; }
+.mini-detail-summary-card > .detail-intro-copy { margin-top: 10px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.mini-detail-summary-card > .detail-intro-facts { margin-top: 7px; font-size: 11px; }
+.detail-intro-highlights + .detail-intro-copy { margin-top: 0; }
+.mini-detail-summary-card .mini-detail-price { flex-wrap: wrap; row-gap: 5px; }
+.detail-additions-heading { flex-wrap: wrap; }
 .price-identity-hint { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .mini-seat-reminder { display: flex; align-items: center; gap: 8px; margin: 10px 14px 0; padding: 10px 14px; border-radius: 10px; color: #66736d; background: #fff; font-size: 10px; }
 .mini-seat-reminder strong { color: #176856; font-size: 13px; }

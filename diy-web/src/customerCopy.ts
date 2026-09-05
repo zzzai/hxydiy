@@ -90,8 +90,9 @@ export function projectDetailActionLabel(
   return selected ? '保存本次选择' : '加入本次服务';
 }
 
-export function shouldShowCouponPrompt(isMember: boolean, detailOnly: boolean): boolean {
-  return !isMember && !detailOnly;
+export function shouldShowCouponPrompt(_isMember: boolean, _detailOnly: boolean): boolean {
+  // 发券策略暂停，所有身份均不展示拉新领券引导。
+  return false;
 }
 
 export function shouldShowCouponTab(isMember: boolean): boolean {

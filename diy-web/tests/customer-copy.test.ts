@@ -100,10 +100,11 @@ test('详情页底部只提供加入或保存动作，删除统一在已选清�
   assert.equal(projectDetailActionLabel(true, true, false), '已提交前台');
 });
 
-test('会员详情页不展示普通券入口，固定套盒也不展示券入口', () => {
+test('发券暂停期间所有身份与项目均不展示领券引导', () => {
   assert.equal(shouldShowCouponPrompt(true, false), false);
   assert.equal(shouldShowCouponPrompt(false, true), false);
-  assert.equal(shouldShowCouponPrompt(false, false), true);
+  assert.equal(shouldShowCouponPrompt(false, false), false);
+  assert.equal(shouldShowCouponPrompt(true, true), false);
 });
 
 test('非会员优惠券提示不承诺自动抵扣，明确以门店结算为准', () => {
