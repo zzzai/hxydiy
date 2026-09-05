@@ -179,6 +179,14 @@ class TestTechnicianProfileV3Contract:
         ).json()["groups"]
 
         payloads = []
+        for code in taxonomy["personal_context"]["age_band"]:
+            payload = self.v3_payload()
+            payload["profile"]["customer_reported"]["personal_context"] = {"age_band": code}
+            payloads.append(payload)
+        for code in taxonomy["personal_context"]["build"]:
+            payload = self.v3_payload()
+            payload["profile"]["customer_reported"]["personal_context"] = {"build": code}
+            payloads.append(payload)
         for code in taxonomy["personal_context"]["height_band"]:
             payload = self.v3_payload()
             payload["profile"]["customer_reported"]["personal_context"] = {"height_band": code}
@@ -186,6 +194,14 @@ class TestTechnicianProfileV3Contract:
         for code in taxonomy["occupation_contexts"]:
             payload = self.v3_payload()
             payload["profile"]["customer_reported"]["work_lifestyle"] = {"occupation_contexts": [code]}
+            payloads.append(payload)
+        for code in taxonomy["work_lifestyle"]["sleep_quality"]:
+            payload = self.v3_payload()
+            payload["profile"]["customer_reported"]["work_lifestyle"] = {"sleep_quality": code}
+            payloads.append(payload)
+        for code in taxonomy["service_related_context"]["contexts"]:
+            payload = self.v3_payload()
+            payload["profile"]["customer_reported"]["service_related_context"] = {"contexts": [code]}
             payloads.append(payload)
         for code in taxonomy["session_response"]["relaxation"]:
             payload = self.v3_payload()
