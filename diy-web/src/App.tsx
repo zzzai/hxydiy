@@ -1329,7 +1329,7 @@ export default function App() {
         }
       }
       const quote = await quoteSelectionSession(session.id, accessToken, submissionItems, deviceLabel());
-      if (quote.saving_hint) {
+      if (quote.saving_hint?.kind === 'member') {
         setSavingHint(quote.saving_hint);
         setSavingHintOpen(true);
         openOverlay('saving-hint');

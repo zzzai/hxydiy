@@ -351,6 +351,9 @@ def _saving_hint(db: Session, store_id: int, pricing: dict, customer: User | Non
     saving = max(0, int(pricing["payable_total_cents"]) - int(pricing["member_total_cents"]))
     if saving:
         return {"kind": "member", "estimated_saving_cents": saving, "login_required": True}
+    from app.core.config import settings
+    if not settings.coupon_issuance_enabled:
+        return None
     claimable = list(db.scalars(select(CouponTemplate).where(
         CouponTemplate.is_claimable.is_(True),
         CouponTemplate.status == "published",

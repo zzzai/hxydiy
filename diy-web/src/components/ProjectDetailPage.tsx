@@ -2,8 +2,6 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
-  Clock3,
-  Heart,
   TicketPercent,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -17,6 +15,8 @@ import CatalogLinkedProjectGroup from './project-options/CatalogLinkedProjectGro
 import LocalStrengthGroup from './project-options/LocalStrengthGroup';
 import FootBathBundleProgress from './project-options/FootBathBundleProgress';
 import ProjectDetailVisualSections from './ProjectDetailVisualSections';
+import DetailIntroduction from './DetailIntroduction';
+import DetailPrice from './DetailPrice';
 import { projectDetailVisuals } from '../projectDetailVisuals';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
@@ -41,9 +41,6 @@ import {
   detailPriceComparison,
   displayProjectName,
   projectImage,
-  customerProjectHighlights,
-  customerProjectSummaryTags,
-  customerProjectPurchaseTags,
   customerProjectTagGroups,
   customerProjectSummaryText,
   type Addon,
@@ -217,6 +214,9 @@ export default function ProjectDetailPage({
   const configuredPrices = detailPriceComparison(preview, isMember);
   const detailVisualSections = projectDetailVisuals(project.code);
   const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
+  const hasAdditions = !detailOnly && (catalogPublished
+    ? catalogSmallChoices.length > 0 || (isFootbathOptions && catalogLocalChoices.length > 0)
+    : (isCatalogOptions && attachableAddons.length > 0) || (isFootbathOptions && Boolean(localProject)));
 
   return (
     <motion.div data-motion="detail" {...detailMotion} className={`project-detail-page mini-detail-page ${isMember ? 'member-active' : ''}`} role="dialog" aria-modal="true" aria-labelledby="project-detail-title">
@@ -230,19 +230,9 @@ export default function ProjectDetailPage({
         <img className="mini-detail-hero" src={projectImage(project)} alt={`${displayName}服务场景`} />
 
         <section className="mini-detail-card mini-detail-summary-card">
-          <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><Heart size={22} /></div>
-          <div className="mini-detail-tags">
-            {project.duration_min && <span><Clock3 size={11} />{project.duration_min}分钟</span>}
-            <span>价格透明</span>
-          </div>
-          <p>{customerProjectSummaryText(project)}</p>
-          {(projectHighlights.length > 0 || projectSummaryTags.length > 0 || projectPurchaseTags.length > 0) && <div className="customer-tag-groups" aria-label="项目标签">
-            {projectHighlights.length > 0 && <div className="customer-tag-group customer-tag-group-highlight"><strong>项目特色</strong><div>{projectHighlights.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
-            {projectSummaryTags.length > 0 && <div className="customer-tag-group customer-tag-group-summary"><strong>项目简介</strong><div>{projectSummaryTags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
-            {projectPurchaseTags.length > 0 && <div className="customer-tag-group customer-tag-group-purchase"><strong>选购规则</strong><div>{projectPurchaseTags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>}
-          </div>}
-          <div className="mini-detail-price"><strong>{formatMoney(basePrices.currentCents)}</strong>{isMember ? <del>{basePrices.comparisonLabel} {formatMoney(basePrices.comparisonCents)}</del> : <span className="member-reference-price">会员价 {formatMoney(basePrices.comparisonCents)}</span>}<em>{basePrices.currentLabel}</em></div>
-          {!isMember && <small className="price-identity-hint">到店办理年度权益卡，本项目可享会员价 {formatMoney(basePrices.comparisonCents)}</small>}
+          <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1></div>
+          <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
+          <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} />
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
 
@@ -266,6 +256,7 @@ export default function ProjectDetailPage({
           );
         })}
 
+        {hasAdditions && !catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
         {isCatalogOptions && !catalogPublished && attachableAddons.length > 0 && (
           <section className="mini-config-card">
             <div className="mini-config-title"><strong>加购服务</strong><span>按需加购 · 可多选</span></div>
@@ -294,6 +285,7 @@ export default function ProjectDetailPage({
           </section>
         ))}
 
+        {hasAdditions && catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
         {isCatalogOptions && catalogPublished && catalogSmallChoices.length > 0 && (
           <CatalogLinkedProjectGroup title="加购服务" choices={catalogSmallChoices} selectedChoiceIds={draftChoiceIds} onToggle={toggleChoice} projects={projects} isMember={isMember} readOnly={readOnly} />
         )}

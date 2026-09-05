@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
+from app.core.config import settings
 from app.db.session import get_db
 from app.models import CouponTemplate, User, UserCoupon, SelectionSession
 
@@ -71,6 +72,8 @@ def claimable_templates(
     db: Session = Depends(get_db),
 ) -> dict:
     """领券中心：可公开领取的券模板（无需登录可看，领取需登录）。"""
+    if not settings.coupon_issuance_enabled:
+        return {"items": [], "total": 0}
     user_id = _user_id(authorization)
     user = db.get(User, user_id) if user_id is not None else None
     if user_id is not None:
@@ -142,6 +145,8 @@ def claim_coupon(
     user_id = _user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先完成手机号登录")
+    if not settings.coupon_issuance_enabled:
+        raise HTTPException(status_code=409, detail={"code": "COUPON_ISSUANCE_PAUSED", "message": "领券活动已暂停"})
     user = db.get(User, user_id)
     if user and user.is_member:
         raise HTTPException(status_code=400, detail="会员已享会员价，无需领取优惠券")
@@ -180,6 +185,8 @@ def claim_share_coupon(
     db: Session = Depends(get_db),
 ) -> dict:
     """分享有礼：分享小程序得券（24h 内同用户限 1 次，幂等）。"""
+    if not settings.coupon_issuance_enabled:
+        return {"code": 0, "granted": False, "reason": "领券活动已暂停"}
     user_id = _user_id(authorization)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
