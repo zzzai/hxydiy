@@ -1,3 +1,34 @@
+# 2026-09-05 顾客端再次选购、匿名价格与选购抽屉发布
+
+## 本地与主干完成
+
+- 顾客端业务 PR #18 已 squash 合并，主干提交 `36a00bf`；发布流水线构建顺序修复 PR #19 已 squash 合并，主干提交 `2c3793e`。
+- 顾客端测试 `168 passed / 0 failed / 1 skipped`，生产构建产物为 `index-BB45yxbT.js` 与 `index-C5IUvO1n.css`。
+- 后端身份、服务位、选单专项 `77 passed`；后端全量 `584 passed / 7 skipped / 0 failed`；管理端保留构建测试 `137 passed / 0 failed`。
+- 发布脚本回归新增“顾客端先构建 dist 再检查生产素材”，发布脚本专项 `10 passed / 3 skipped`。
+
+## 已发布生产
+
+- Release：`/root/hxy-diy-20260811/releases/manual-2c3793ea3b95-20260905-1`；对应主干 `2c3793e`，顾客端业务来自 PR #18。
+- 数据库备份：`pre-manual-2c3793ea3b95-20260905-1-20260905T025134Z.dump`，SHA-256 `e81964a2fc53455650de9cca6e88ee11ba722695e06607132078661af7e04156`；隔离恢复演练通过。
+- Release `MANIFEST.sha256` 逐文件校验通过，Manifest SHA-256 `2ad2123696c2e5166e837c524b2a8635053793e9097a9fae1865933f7be44c7f`；`current` 已原子切换。
+- API 镜像已标记为 `hxy-diy-api:2c3793e`，镜像 ID `sha256:9742cd63e0ae4f1ecdc7c8862d4dc6f4fe36d7469808a2c1121aa9daf084b15b`；API 与数据库均运行，重启次数为 0。
+- 公网首页、管理端、技师端和 `/api/v1/health` 返回 HTTP 200；入口加载新 CSS/JS，足部精修主图、详情图和女神专享详情图均返回 200；真实浏览器打开 6 号沙发入口，项目列表和会员参考价正常渲染，控制台无错误或警告。
+- Alembic 仍为 `20260904_service_reference_v2`；本次未执行数据库迁移。
+
+## 发布异常与恢复事实
+
+- 第一次 GitHub 自动发布因顾客端测试早于构建导致 `dist` 素材断言失败；PR #19 已把发布顺序修正为先构建再测试。
+- 第二次自动发布在服务器连接前因 `production` 环境缺少 `PRODUCTION_SSH_KNOWN_HOSTS` 而停止；需由仓库管理员补齐该 Environment Secret，后续才能恢复全自动发布。
+- 手工受保护发布首次接管时遇到历史 `tmp` Compose 项目的同名 API 容器；脚本回滚已恢复旧 `current`，随后启动原数据卷对应数据库、核验数据连通，并以保留旧 API 容器为 `hxy-diy-api-pre-2c3793e` 的可回退方式完成新容器切换。
+- 生产服务器访问阿里云 PyPI 镜像返回 HTTP 200；Release Dockerfile 改为默认 `https://mirrors.aliyun.com/pypi/simple/` 且允许 build arg 覆盖，避免后续重新从低速官方源下载。
+
+## 待现场验收
+
+- 使用门店授权测试服务位验证“首次匿名提交 → 返回项目列表 → 追加选择 → 再次提交”，整单门店价、会员参考价和节省金额与前台一致。
+- 分别以匿名、登录非会员、会员三种身份检查底部价格信息；在小屏和长清单下检查固定高度抽屉、内部滚动与提交按钮无遮挡。
+- 使用已完成并释放的测试服务验证刷新、返回和重新打开均进入空白新选购，不恢复昨晚旧订单。自动化和公网探针不替代门店现场验收。
+
 # 2026-09-05 技师快速服务参考与共享记忆收口（已发布业务功能）
 
 - 技师快速服务参考 PR #15 已 squash 合并，主干功能提交 `bf0bddf`；生产 release 为 `main-bf0bddf-20260905-1`，API 镜像为 `hxy-diy-api:bf0bddf`。
