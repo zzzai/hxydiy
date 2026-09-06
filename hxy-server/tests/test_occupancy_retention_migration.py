@@ -19,7 +19,10 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
         project_root = Path(__file__).resolve().parents[1]
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():
-            if table.name in {"service_position_qrs", "media_assets", "customer_trusted_devices", "membership_codes"}:
+            if table.name in {
+                "service_position_qrs", "customer_profile_consents", "customer_profile_current",
+                "media_assets", "customer_trusted_devices", "membership_codes",
+            }:
                 continue
             copied = table.to_metadata(previous_metadata)
             if copied.name == "position_occupancies" and "serviced_by_technician_id" in copied.c:

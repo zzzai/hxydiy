@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, CustomerProfileRecord, Order, PositionOccupancy, SelectionSession, Staff, Store, User
+from app.models import AuditLog, CustomerProfileCurrent, CustomerProfileRecord, Order, PositionOccupancy, SelectionSession, Staff, Store, User
 from app.models.operations import Room, Technician
 
 
@@ -380,3 +380,112 @@ class TestTechnicianProfileV3Contract:
                 headers={**self.technician_headers, "Idempotency-Key": f"v3-taxonomy-path-{index:03d}"},
             )
             assert response.status_code == 200, response.text
+
+    def test_confirmed_v3_write_updates_current_profile(self):
+        payload = self.v3_payload()
+        payload["profile"]["customer_reported"]["force_preference"] = "medium"
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "current-profile-write-001"},
+        )
+        assert response.status_code == 200, response.text
+
+        with self.SessionLocal() as db:
+            rows = db.query(CustomerProfileCurrent).filter_by(customer_id=self.user_id).all()
+            assert {(row.profile_code, row.profile_value_key) for row in rows} >= {
+                ("age_band", "25_34"),
+                ("work_context", "desk_work"),
+                ("force_preference", "medium"),
+            }
+
+    def test_unconfirmed_v3_write_does_not_replace_confirmed_current_profile(self):
+        confirmed = self.v3_payload()
+        confirmed["profile"]["customer_reported"]["force_preference"] = "medium"
+        first = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=confirmed,
+            headers={**self.technician_headers, "Idempotency-Key": "current-profile-write-002"},
+        )
+        assert first.status_code == 200, first.text
+
+        pending = self.v3_payload(customer_confirmed=False)
+        pending["profile"]["customer_reported"]["force_preference"] = "strong"
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=pending,
+            headers={**self.technician_headers, "Idempotency-Key": "current-profile-write-003"},
+        )
+        assert response.status_code == 200, response.text
+
+        with self.SessionLocal() as db:
+            row = db.query(CustomerProfileCurrent).filter_by(
+                customer_id=self.user_id,
+                profile_code="force_preference",
+            ).one()
+            assert row.profile_value_key == "medium"
+
+    def test_manager_can_read_current_profile_with_audit_but_technician_cannot(self):
+        payload = self.v3_payload()
+        payload["profile"]["customer_reported"]["force_preference"] = "medium"
+        created = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "current-profile-read-001"},
+        )
+        assert created.status_code == 200, created.text
+
+        with self.SessionLocal() as db:
+            store_id = db.query(Store.id).one()[0]
+            manager = Staff(
+                username="v3-profile-manager",
+                password_hash=hash_password("manager-pass"),
+                name="v3 店长",
+                role="manager",
+                status="active",
+                store_id=store_id,
+            )
+            other_store = Store(store_code="v3-profile-other", name="另一家测试店", address="另一地址")
+            db.add_all([manager, other_store])
+            db.flush()
+            other_manager = Staff(
+                username="v3-profile-other-manager",
+                password_hash=hash_password("manager-pass"),
+                name="另一店长",
+                role="manager",
+                status="active",
+                store_id=other_store.id,
+            )
+            # 顾客到访过另一家门店，仍不能让该店读取本店生成的当前画像。
+            db.add_all([
+                other_manager,
+                Order(order_no="V3-PROFILE-OTHER-ORDER", order_type="service", user_id=self.user_id, store_id=other_store.id, items=[], status="completed", pay_status="paid"),
+            ])
+            db.commit()
+            manager_id = manager.id
+            other_manager_id = other_manager.id
+
+        denied = self.client.get(
+            f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-current",
+            headers=self.technician_headers,
+        )
+        assert denied.status_code == 403
+
+        response = self.client.get(
+            f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-current",
+            headers={"Authorization": f"Bearer {create_staff_token(manager_id, 'manager')}"},
+        )
+        assert response.status_code == 200, response.text
+        assert {item["profile_code"] for item in response.json()["items"]} >= {"force_preference", "age_band"}
+        assert all("service_related_context" not in item for item in response.json()["items"])
+
+        other_store_response = self.client.get(
+            f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-current",
+            headers={"Authorization": f"Bearer {create_staff_token(other_manager_id, 'manager')}"},
+        )
+        assert other_store_response.status_code == 200, other_store_response.text
+        assert other_store_response.json()["items"] == []
+
+        with self.SessionLocal() as db:
+            audit = db.query(AuditLog).filter_by(action="manager_view_customer_profile_current").one()
+            assert audit.detail == {"profile_codes": sorted(audit.detail["profile_codes"]), "count": audit.detail["count"]}

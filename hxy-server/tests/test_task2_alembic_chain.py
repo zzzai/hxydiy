@@ -25,7 +25,7 @@ class Task2AlembicChainTests(unittest.TestCase):
             config = Config()
             config.set_main_option("script_location", str(migration_dir.parent))
             scripts = ScriptDirectory.from_config(config)
-            self.assertEqual(scripts.get_heads(), ["20260905_tech_history_v3"])
+            self.assertEqual(scripts.get_heads(), ["20260906_wellness_current"])
             self.assertIn(
                 "20260815_member_grants",
                 {revision.revision for revision in scripts.walk_revisions()},

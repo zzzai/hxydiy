@@ -18,6 +18,7 @@ from app.models.membership_verification import CustomerTrustedDevice, Membership
 from app.models.settlement import SettlementAdjustment
 from app.models.service_position_qr import ServicePositionQr
 from app.models.customer_profile import CustomerProfileRecord
+from app.models.customer_profile_state import CustomerProfileConsent, CustomerProfileCurrent
 from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
 from app.models.media import MediaAsset
 from app.models.catalog_options import (
@@ -38,7 +39,7 @@ __all__ = [
     "StateTransition", "Technician", "Visit", "SelectionSession", "SelectionRevision", "SelectionChangeRequest", "ServiceLine", "PositionOccupancy",
     "CustomerVerificationCode", "PageContent", "BrowserInstance", "ServiceFeedback", "CustomerExternalIdentity",
     "MembershipBenefitGrant", "CustomerTrustedDevice", "MembershipCode", "SettlementAdjustment", "ServicePositionQr",
-    "CustomerProfileRecord",
+    "CustomerProfileRecord", "CustomerProfileConsent", "CustomerProfileCurrent",
     "TechnicianInvite", "TechnicianLeaveRequest",
     "MediaAsset",
     "CHARGE_MODES", "CHOICE_TYPES", "OptionChoicePrice", "ProjectCatalogVersion",

@@ -24,12 +24,13 @@ from app.models import (
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, PageContent,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, PositionOccupancy,
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
-    CustomerProfileRecord,
+    CustomerProfileCurrent, CustomerProfileRecord,
     ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup,
     TechnicianInvite,
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.occupancy import audit_occupancy, release_occupancy
+from app.services.customer_profile_projection import rebuild_customer_profile_current
 from app.models.operations import Room, Technician
 from app.models.room_assign import RoomAssignment
 from app.models.service import ServiceAssignment, ServiceOrder, Visit
@@ -2676,6 +2677,7 @@ def create_customer_profile_record(
         if existing and _same_profile_request(existing, body, technician_id):
             return _profile_record_view(existing, db)
         raise HTTPException(status_code=409, detail="该幂等键已用于内容不同的画像记录")
+    rebuild_customer_profile_current(db, customer_id=body.user_id, store_id=store_id)
     # 已存在的门店运营标签自动建立关联；画像原始信号仍保留在记录快照中，避免跨门店污染标签字典。
     for signal in body.signals:
         tag = db.scalar(select(CustomerTag).where(
@@ -2732,6 +2734,54 @@ def list_customer_profile_records(
         CustomerProfileRecord.user_id == user_id,
     ).order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc())).all()
     return {"items": [_profile_record_view(record, db) for record in records]}
+
+
+@router.get("/users/{user_id}/customer-profile-current")
+def get_customer_profile_current(
+    user_id: int,
+    include_expired: bool = Query(False),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """供店长在服务前查看顾客已确认的当前画像，不返回原始记录或敏感自述。"""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    _require_store_user(db, user_id, staff)
+
+    statement = select(CustomerProfileCurrent).where(
+        CustomerProfileCurrent.customer_id == user_id,
+        CustomerProfileCurrent.store_id == _staff_store_id(staff),
+    )
+    if not include_expired:
+        statement = statement.where(CustomerProfileCurrent.status == "active")
+    rows = db.scalars(statement.order_by(
+        CustomerProfileCurrent.profile_code,
+        CustomerProfileCurrent.body_area_code,
+        CustomerProfileCurrent.body_side,
+        CustomerProfileCurrent.id,
+    )).all()
+    profile_codes = sorted({row.profile_code for row in rows})
+    if rows:
+        _audit(db, staff, "manager_view_customer_profile_current", "user", str(user_id), {
+            "profile_codes": profile_codes,
+            "count": len(rows),
+        })
+        db.commit()
+    return {
+        "items": [
+            {
+                "profile_code": row.profile_code,
+                "profile_value": row.profile_value_json,
+                "body_area_code": row.body_area_code or None,
+                "body_side": row.body_side or None,
+                "last_confirmed_at": row.last_confirmed_at,
+                "valid_until": row.valid_until,
+                "taxonomy_version": row.taxonomy_version,
+                "status": row.status,
+            }
+            for row in rows
+        ],
+    }
 
 
 # ──────────────────────────────────────────────────────
