@@ -44,7 +44,7 @@ jobs:
             const { data: latest } = await github.rest.repos.getCommit({ ...context.repo, ref: 'main' });
             if (!fromCi && /^[0-9a-f]{40}$/.test(sha)) {
               const { data } = await github.rest.actions.listWorkflowRuns({
-                ...context.repo, workflow_id: 'ci.yml', head_sha: sha, event: 'push', status: 'success', per_page: 20,
+                ...context.repo, workflow_id: 'ci.yml', head_sha: sha, status: 'success', per_page: 20,
               });
               run = data.workflow_runs.find((candidate) => eligibleRun(candidate, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`));
             }

@@ -97,7 +97,7 @@ jobs:
         working-directory: admin-react
         run: npm run build
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'push' && steps.detect.outputs.available == 'true'
+        if: github.event_name != 'pull_request' && steps.detect.outputs.available == 'true'
         with:
           name: admin-dist-${{ github.sha }}
           path: admin-react/dist/
@@ -147,7 +147,7 @@ jobs:
         working-directory: diy-web
         run: npm test
       - uses: actions/upload-artifact@v4
-        if: github.event_name == 'push' && steps.detect.outputs.available == 'true'
+        if: github.event_name != 'pull_request' && steps.detect.outputs.available == 'true'
         with:
           name: customer-dist-${{ github.sha }}
           path: diy-web/dist/
