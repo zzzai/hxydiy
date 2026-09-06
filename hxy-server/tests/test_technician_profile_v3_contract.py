@@ -424,3 +424,45 @@ class TestTechnicianProfileV3Contract:
                 profile_code="force_preference",
             ).one()
             assert row.profile_value_key == "medium"
+
+    def test_manager_can_read_current_profile_with_audit_but_technician_cannot(self):
+        payload = self.v3_payload()
+        payload["profile"]["customer_reported"]["force_preference"] = "medium"
+        created = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "current-profile-read-001"},
+        )
+        assert created.status_code == 200, created.text
+
+        with self.SessionLocal() as db:
+            store_id = db.query(Store.id).one()[0]
+            manager = Staff(
+                username="v3-profile-manager",
+                password_hash=hash_password("manager-pass"),
+                name="v3 店长",
+                role="manager",
+                status="active",
+                store_id=store_id,
+            )
+            db.add(manager)
+            db.commit()
+            manager_id = manager.id
+
+        denied = self.client.get(
+            f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-current",
+            headers=self.technician_headers,
+        )
+        assert denied.status_code == 403
+
+        response = self.client.get(
+            f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-current",
+            headers={"Authorization": f"Bearer {create_staff_token(manager_id, 'manager')}"},
+        )
+        assert response.status_code == 200, response.text
+        assert {item["profile_code"] for item in response.json()["items"]} >= {"force_preference", "age_band"}
+        assert all("service_related_context" not in item for item in response.json()["items"])
+
+        with self.SessionLocal() as db:
+            audit = db.query(AuditLog).filter_by(action="manager_view_customer_profile_current").one()
+            assert audit.detail == {"profile_codes": sorted(audit.detail["profile_codes"]), "count": audit.detail["count"]}

@@ -24,7 +24,7 @@ from app.models import (
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, PageContent,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, PositionOccupancy,
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
-    CustomerProfileRecord,
+    CustomerProfileCurrent, CustomerProfileRecord,
     ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup,
     TechnicianInvite,
 )
@@ -2734,6 +2734,52 @@ def list_customer_profile_records(
         CustomerProfileRecord.user_id == user_id,
     ).order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc())).all()
     return {"items": [_profile_record_view(record, db) for record in records]}
+
+
+@router.get("/users/{user_id}/customer-profile-current")
+def get_customer_profile_current(
+    user_id: int,
+    include_expired: bool = Query(False),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """供店长在服务前查看顾客已确认的当前画像，不返回原始记录或敏感自述。"""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    _require_store_user(db, user_id, staff)
+
+    statement = select(CustomerProfileCurrent).where(
+        CustomerProfileCurrent.customer_id == user_id,
+    )
+    if not include_expired:
+        statement = statement.where(CustomerProfileCurrent.status == "active")
+    rows = db.scalars(statement.order_by(
+        CustomerProfileCurrent.profile_code,
+        CustomerProfileCurrent.body_area_code,
+        CustomerProfileCurrent.body_side,
+        CustomerProfileCurrent.id,
+    )).all()
+    profile_codes = sorted({row.profile_code for row in rows})
+    _audit(db, staff, "manager_view_customer_profile_current", "user", str(user_id), {
+        "profile_codes": profile_codes,
+        "count": len(rows),
+    })
+    db.commit()
+    return {
+        "items": [
+            {
+                "profile_code": row.profile_code,
+                "profile_value": row.profile_value_json,
+                "body_area_code": row.body_area_code or None,
+                "body_side": row.body_side or None,
+                "last_confirmed_at": row.last_confirmed_at,
+                "valid_until": row.valid_until,
+                "taxonomy_version": row.taxonomy_version,
+                "status": row.status,
+            }
+            for row in rows
+        ],
+    }
 
 
 # ──────────────────────────────────────────────────────
