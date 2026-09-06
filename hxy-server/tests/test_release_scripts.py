@@ -48,6 +48,7 @@ class ReleaseScriptTests(unittest.TestCase):
 
         self.assertIn("20260905_customer_single_session.py", deploy)
         self.assertIn("20260905_membership_verification.py", deploy)
+        self.assertIn("20260905_technician_service_history_v3.py", deploy)
         self.assertIn("20260906_wellness_profile_current.py", deploy)
         self.assertIn('for migration in "${added_migrations[@]}"', deploy)
         self.assertIn("Unapproved Alembic migration change detected.", deploy)
