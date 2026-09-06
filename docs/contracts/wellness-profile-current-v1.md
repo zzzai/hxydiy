@@ -4,7 +4,7 @@
 
 ## 目的
 
-`customer_profile_current` 是从服务参考原始记录投影得到的当前有效画像，用于后续服务连续性。它不是新的自由标签系统，也不是诊断、营销分层或健康评分。
+`customer_profile_current` 是从同一门店服务参考原始记录投影得到的当前有效画像，用于后续服务连续性。它不是新的自由标签系统，也不是诊断、营销分层或健康评分。
 
 ## 输入与兼容
 
@@ -32,15 +32,15 @@
 
 ## 当前画像行
 
-每行包含顾客、画像编码、值键、值 JSON、可选部位维度、来源记录、首次和最近确认时间、确认次数、有效期、敏感等级、授权关联、字典版本和状态。
+每行包含顾客、门店、画像编码、值键、值 JSON、可选部位维度、来源记录、首次和最近确认时间、确认次数、有效期、敏感等级、授权关联、字典版本和状态。
 
 唯一维度为：
 
 ```text
-customer_id + profile_code + profile_value_key + body_area_code + body_side
+customer_id + store_id + profile_code + profile_value_key + body_area_code + body_side
 ```
 
-单值字段以最近一次已确认记录整体替换；多值字段以最近一次已确认数组整体替换。显式空数组清空该字段。任何角色不得直接编辑当前画像，必须通过原始记录更正后重建。
+投影和重建始终按 `customer_id + store_id` 执行。单值字段以该门店最近一次已确认记录整体替换；多值字段以该门店最近一次已确认数组整体替换。显式空数组清空该字段。任何角色不得直接编辑当前画像，必须通过原始记录更正后重建。
 
 ## 过期与读取
 
@@ -54,5 +54,13 @@ customer_id + profile_code + profile_value_key + body_area_code + body_side
 
 - 仅 `manager`、`admin` 可调用。
 - 先验证顾客与当前员工属于同一门店范围。
+- 查询同时以当前员工门店过滤 `customer_profile_current.store_id`；同一顾客跨店到访时不得复用另一门店的画像。
 - 默认响应不返回敏感字段、顾客原话、联系方式、消费金额、创建技师或完整原始记录。
 - 成功返回至少一行时写入 `manager_view_customer_profile_current` 审计，审计只保存编码和数量，不复制值。
+- 空结果不写敏感读取审计。
+
+示例响应只返回当前投影字段：
+
+```json
+{"items":[{"profile_code":"force_preference","profile_value":{"value":"medium"},"body_area_code":null,"body_side":null,"taxonomy_version":"service_reference_v2","status":"active"}]}
+```

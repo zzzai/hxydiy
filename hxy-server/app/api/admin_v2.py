@@ -2677,7 +2677,7 @@ def create_customer_profile_record(
         if existing and _same_profile_request(existing, body, technician_id):
             return _profile_record_view(existing, db)
         raise HTTPException(status_code=409, detail="该幂等键已用于内容不同的画像记录")
-    rebuild_customer_profile_current(db, customer_id=body.user_id)
+    rebuild_customer_profile_current(db, customer_id=body.user_id, store_id=store_id)
     # 已存在的门店运营标签自动建立关联；画像原始信号仍保留在记录快照中，避免跨门店污染标签字典。
     for signal in body.signals:
         tag = db.scalar(select(CustomerTag).where(
@@ -2750,6 +2750,7 @@ def get_customer_profile_current(
 
     statement = select(CustomerProfileCurrent).where(
         CustomerProfileCurrent.customer_id == user_id,
+        CustomerProfileCurrent.store_id == _staff_store_id(staff),
     )
     if not include_expired:
         statement = statement.where(CustomerProfileCurrent.status == "active")
@@ -2760,11 +2761,12 @@ def get_customer_profile_current(
         CustomerProfileCurrent.id,
     )).all()
     profile_codes = sorted({row.profile_code for row in rows})
-    _audit(db, staff, "manager_view_customer_profile_current", "user", str(user_id), {
-        "profile_codes": profile_codes,
-        "count": len(rows),
-    })
-    db.commit()
+    if rows:
+        _audit(db, staff, "manager_view_customer_profile_current", "user", str(user_id), {
+            "profile_codes": profile_codes,
+            "count": len(rows),
+        })
+        db.commit()
     return {
         "items": [
             {

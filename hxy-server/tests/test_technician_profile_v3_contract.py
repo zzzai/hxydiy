@@ -445,9 +445,25 @@ class TestTechnicianProfileV3Contract:
                 status="active",
                 store_id=store_id,
             )
-            db.add(manager)
+            other_store = Store(store_code="v3-profile-other", name="另一家测试店", address="另一地址")
+            db.add_all([manager, other_store])
+            db.flush()
+            other_manager = Staff(
+                username="v3-profile-other-manager",
+                password_hash=hash_password("manager-pass"),
+                name="另一店长",
+                role="manager",
+                status="active",
+                store_id=other_store.id,
+            )
+            # 顾客到访过另一家门店，仍不能让该店读取本店生成的当前画像。
+            db.add_all([
+                other_manager,
+                Order(order_no="V3-PROFILE-OTHER-ORDER", order_type="service", user_id=self.user_id, store_id=other_store.id, items=[], status="completed", pay_status="paid"),
+            ])
             db.commit()
             manager_id = manager.id
+            other_manager_id = other_manager.id
 
         denied = self.client.get(
             f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-current",
@@ -462,6 +478,13 @@ class TestTechnicianProfileV3Contract:
         assert response.status_code == 200, response.text
         assert {item["profile_code"] for item in response.json()["items"]} >= {"force_preference", "age_band"}
         assert all("service_related_context" not in item for item in response.json()["items"])
+
+        other_store_response = self.client.get(
+            f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-current",
+            headers={"Authorization": f"Bearer {create_staff_token(other_manager_id, 'manager')}"},
+        )
+        assert other_store_response.status_code == 200, other_store_response.text
+        assert other_store_response.json()["items"] == []
 
         with self.SessionLocal() as db:
             audit = db.query(AuditLog).filter_by(action="manager_view_customer_profile_current").one()

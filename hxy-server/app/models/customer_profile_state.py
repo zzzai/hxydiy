@@ -30,14 +30,15 @@ class CustomerProfileCurrent(Base):
     __tablename__ = "customer_profile_current"
     __table_args__ = (
         UniqueConstraint(
-            "customer_id", "profile_code", "profile_value_key", "body_area_code", "body_side",
+            "customer_id", "store_id", "profile_code", "profile_value_key", "body_area_code", "body_side",
             name="uq_customer_profile_current_dimension",
         ),
-        Index("ix_customer_profile_current_customer_valid", "customer_id", "status", "valid_until"),
+        Index("ix_customer_profile_current_store_customer_valid", "store_id", "customer_id", "status", "valid_until"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
     profile_code: Mapped[str] = mapped_column(String(64))
     profile_value_key: Mapped[str] = mapped_column(String(128), default="")
     profile_value_json: Mapped[dict] = mapped_column(JSON)

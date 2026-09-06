@@ -15,12 +15,16 @@ def rebuild_customer_profile_current(
     db: Session,
     *,
     customer_id: int,
+    store_id: int,
     now: datetime | None = None,
 ) -> list[CustomerProfileCurrent]:
     current_time = _as_utc(now) if now is not None else datetime.now(timezone.utc)
     records = list(db.scalars(
         select(CustomerProfileRecord)
-        .where(CustomerProfileRecord.user_id == customer_id)
+        .where(
+            CustomerProfileRecord.user_id == customer_id,
+            CustomerProfileRecord.store_id == store_id,
+        )
         .order_by(CustomerProfileRecord.created_at.asc(), CustomerProfileRecord.id.asc())
     ))
     superseded_ids = {record.correction_of_id for record in records if record.correction_of_id is not None}
@@ -39,7 +43,10 @@ def rebuild_customer_profile_current(
                 confirmation_counts[key] = confirmation_counts.get(key, 0) + 1
                 first_confirmed.setdefault(key, confirmed_at)
 
-    db.execute(delete(CustomerProfileCurrent).where(CustomerProfileCurrent.customer_id == customer_id))
+    db.execute(delete(CustomerProfileCurrent).where(
+        CustomerProfileCurrent.customer_id == customer_id,
+        CustomerProfileCurrent.store_id == store_id,
+    ))
     db.flush()
 
     created: list[CustomerProfileCurrent] = []
@@ -50,6 +57,7 @@ def rebuild_customer_profile_current(
             valid_until = confirmed_at + timedelta(days=value.valid_days)
             row = CustomerProfileCurrent(
                 customer_id=customer_id,
+                store_id=store_id,
                 profile_code=profile_code,
                 profile_value_key=value.value,
                 profile_value_json={"value": value.value},

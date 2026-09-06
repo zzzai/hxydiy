@@ -38,6 +38,7 @@ def upgrade() -> None:
         "customer_profile_current",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("customer_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("store_id", sa.Integer(), sa.ForeignKey("stores.id"), nullable=False),
         sa.Column("profile_code", sa.String(length=64), nullable=False),
         sa.Column("profile_value_key", sa.String(length=128), nullable=False, server_default=""),
         sa.Column("profile_value_json", sa.JSON(), nullable=False),
@@ -55,23 +56,25 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.UniqueConstraint(
-            "customer_id", "profile_code", "profile_value_key", "body_area_code", "body_side",
+            "customer_id", "store_id", "profile_code", "profile_value_key", "body_area_code", "body_side",
             name="uq_customer_profile_current_dimension",
         ),
     )
     op.create_index("ix_customer_profile_current_customer_id", "customer_profile_current", ["customer_id"])
+    op.create_index("ix_customer_profile_current_store_id", "customer_profile_current", ["store_id"])
     op.create_index("ix_customer_profile_current_source_record_id", "customer_profile_current", ["source_record_id"])
     op.create_index("ix_customer_profile_current_valid_until", "customer_profile_current", ["valid_until"])
     op.create_index("ix_customer_profile_current_status", "customer_profile_current", ["status"])
-    op.create_index("ix_customer_profile_current_customer_valid", "customer_profile_current", ["customer_id", "status", "valid_until"])
+    op.create_index("ix_customer_profile_current_store_customer_valid", "customer_profile_current", ["store_id", "customer_id", "status", "valid_until"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_customer_profile_current_customer_valid", table_name="customer_profile_current")
+    op.drop_index("ix_customer_profile_current_store_customer_valid", table_name="customer_profile_current")
     op.drop_index("ix_customer_profile_current_status", table_name="customer_profile_current")
     op.drop_index("ix_customer_profile_current_valid_until", table_name="customer_profile_current")
     op.drop_index("ix_customer_profile_current_source_record_id", table_name="customer_profile_current")
     op.drop_index("ix_customer_profile_current_customer_id", table_name="customer_profile_current")
+    op.drop_index("ix_customer_profile_current_store_id", table_name="customer_profile_current")
     op.drop_table("customer_profile_current")
     op.drop_index("ix_customer_profile_consents_status", table_name="customer_profile_consents")
     op.drop_index("ix_customer_profile_consents_selection_session_id", table_name="customer_profile_consents")

@@ -85,6 +85,7 @@ class TestCustomerProfileProjection:
             rows = rebuild_customer_profile_current(
                 db,
                 customer_id=self.customer_id,
+                store_id=self.store_id,
                 now=datetime(2026, 9, 7, tzinfo=timezone.utc),
             )
 
@@ -113,7 +114,7 @@ class TestCustomerProfileProjection:
             )
             db.commit()
 
-            rows = rebuild_customer_profile_current(db, customer_id=self.customer_id)
+            rows = rebuild_customer_profile_current(db, customer_id=self.customer_id, store_id=self.store_id)
             assert [(row.profile_code, row.profile_value_key) for row in rows] == [
                 ("force_preference", "gentle"),
             ]
@@ -130,7 +131,7 @@ class TestCustomerProfileProjection:
             )
             db.commit()
 
-            assert rebuild_customer_profile_current(db, customer_id=self.customer_id) == []
+            assert rebuild_customer_profile_current(db, customer_id=self.customer_id, store_id=self.store_id) == []
 
     def test_explicit_empty_multi_value_replaces_prior_values_without_erasing_other_codes(self):
         with self.SessionLocal() as db:
@@ -149,7 +150,7 @@ class TestCustomerProfileProjection:
             })
             db.commit()
 
-            rows = rebuild_customer_profile_current(db, customer_id=self.customer_id)
+            rows = rebuild_customer_profile_current(db, customer_id=self.customer_id, store_id=self.store_id)
 
             assert {(row.profile_code, row.profile_value_key) for row in rows} == {
                 ("force_preference", "medium"),
