@@ -43,11 +43,13 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn('if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then', entrypoint)
         self.assertIn('RUN_MIGRATIONS: "false"', compose)
 
-    def test_production_release_only_allows_reviewed_customer_membership_migrations(self):
+    def test_production_release_only_allows_explicitly_reviewed_migrations(self):
         deploy = (REPO_ROOT / "deploy/diy/deploy-production.sh").read_text(encoding="utf-8")
 
         self.assertIn("20260905_customer_single_session.py", deploy)
         self.assertIn("20260905_membership_verification.py", deploy)
+        self.assertIn("20260906_wellness_profile_current.py", deploy)
+        self.assertIn('for migration in "${added_migrations[@]}"', deploy)
         self.assertIn("Unapproved Alembic migration change detected.", deploy)
         self.assertIn('"$rehearsal_db"', deploy)
         self.assertIn("api alembic upgrade head", deploy)
