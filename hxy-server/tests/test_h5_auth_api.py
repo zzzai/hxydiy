@@ -1,5 +1,6 @@
 import hashlib
 import unittest
+from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -7,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base, get_db
+from app.api import auth as auth_api
 from app.core.security import create_access_token
 from app.main import app
 from app.models import BrowserInstance, CouponTemplate, CustomerVerificationCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
@@ -253,6 +255,31 @@ class H5AuthApiTests(unittest.TestCase):
         self.assertEqual(replaced.json()["detail"]["code"], "SESSION_REPLACED")
         current = self.client.get("/api/v1/auth/h5/me", headers={"Authorization": f"Bearer {second.json()['token']}"})
         self.assertEqual(current.status_code, 200, current.text)
+
+    def test_stale_login_snapshots_still_issue_distinct_session_versions(self):
+        """两个请求即使先后读到同一旧值，也必须签发不同的登录代次。"""
+        with self.SessionLocal() as db:
+            user = User(openid="h5_login_version_race", phone="13100131000", customer_login_version=1)
+            db.add(user)
+            db.commit()
+            user_id = user.id
+
+        # 两个数据库会话均在更新前读到了版本 1，模拟并发登录的陈旧快照。
+        with self.SessionLocal() as first_db, self.SessionLocal() as second_db:
+            self.assertEqual(first_db.get(User, user_id).customer_login_version, 1)
+            self.assertEqual(second_db.get(User, user_id).customer_login_version, 1)
+            self.assertTrue(
+                hasattr(auth_api, "advance_customer_login_version"),
+                "H5 登录必须使用数据库原子递增，而不是基于 ORM 陈旧快照赋值",
+            )
+            now = datetime.now(timezone.utc)
+            first_version = auth_api.advance_customer_login_version(first_db, user_id, now)
+            first_db.commit()
+            second_version = auth_api.advance_customer_login_version(second_db, user_id, now)
+            second_db.commit()
+
+        self.assertEqual(first_version, 2)
+        self.assertEqual(second_version, 3)
 
 
 if __name__ == "__main__":
