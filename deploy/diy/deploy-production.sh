@@ -134,6 +134,7 @@ docker exec "$db_container" psql -v ON_ERROR_STOP=1 -U "$db_user" -d "$rehearsal
 approved_migrations=(
   '20260905_customer_single_session.py'
   '20260905_membership_verification.py'
+  '20260905_technician_service_history_v3.py'
   '20260906_wellness_profile_current.py'
 )
 if ! diff -q \
