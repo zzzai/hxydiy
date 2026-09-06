@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Card, Descriptions, Drawer, Empty, Form, Input, Segmented, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Card, Collapse, Descriptions, Drawer, Empty, Input, Segmented, Space, Table, Tag, Typography } from 'antd';
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
-import { approveSelectionChangeRequest, cancelSelectionSession, confirmSelectionSession, createCustomerProfileRecord, getCustomerProfileRecords, getSelectionChangeRequests, getSelectionSessions, rejectSelectionChangeRequest } from '../api';
+import { approveSelectionChangeRequest, cancelSelectionSession, confirmSelectionSession, getCustomerProfileRecords, getSelectionChangeRequests, getSelectionSessions, rejectSelectionChangeRequest } from '../api';
 import { canApproveSelectionChange, canRejectSelectionChange, selectionChangeItemSummary } from '../selectionChanges';
+import { buildServiceReferenceDisplay } from '../serviceReferenceDisplay';
 
 const STATUS: Record<string, { label: string; color: string }> = {
   submitted: { label: '待确认', color: 'processing' }, confirmed: { label: '已确认', color: 'success' },
@@ -21,10 +22,6 @@ export default function SelectionSessionsPage() {
   const [changeRequests, setChangeRequests] = useState<any[]>([]);
   const [changeLoading, setChangeLoading] = useState(false);
   const [profileRecords, setProfileRecords] = useState<any[]>([]);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [correctionId, setCorrectionId] = useState<number | null>(null);
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileForm] = Form.useForm();
   const load = async () => {
     setLoading(true);
     try { const response = await getSelectionSessions(status === 'all' ? undefined : status); setItems(response.data?.items || []); }
@@ -43,28 +40,6 @@ export default function SelectionSessionsPage() {
     if (!selected?.customer?.id) { setProfileRecords([]); return; }
     void getCustomerProfileRecords(selected.customer.id).then((response) => setProfileRecords(response.data?.items || [])).catch(() => setProfileRecords([]));
   }, [selected]);
-  const saveProfile = async () => {
-    if (!selected?.customer?.id) return;
-    setProfileSaving(true);
-    try {
-      const values = await profileForm.validateFields();
-      await createCustomerProfileRecord({
-        user_id: selected.customer.id,
-        selection_session_id: selected.id,
-        profile: { age_range: values.age_range || '', gender: values.gender || '', body_type: values.body_type || '', occupation: values.occupation || '' },
-        signals: values.signals || [],
-        note: values.note || '',
-        correction_of_id: correctionId || undefined,
-        correction_reason: values.correction_reason || '',
-      });
-      message.success('顾客画像已保存');
-      setProfileOpen(false);
-      const response = await getCustomerProfileRecords(selected.customer.id);
-      setProfileRecords(response.data?.items || []);
-    } catch (error: any) {
-      if (error?.errorFields) return;
-    } finally { setProfileSaving(false); }
-  };
   const act = (record: any, action: 'confirm' | 'cancel') => modal.confirm({
     title: action === 'confirm' ? '确认接收这份选单？' : '取消这份选单？',
     content: action === 'confirm' ? '确认后可按此需求继续安排服务，仍不创建订单。' : '取消后本次需求不再进入门店处理队列。',
@@ -133,23 +108,22 @@ export default function SelectionSessionsPage() {
       ]} />
       <div><Typography.Text strong>DIY 需求</Typography.Text><Typography.Paragraph style={{ marginTop: 8 }}>{(selected.items || []).flatMap((item: any) => item.diy_preferences || []).join('、') || '未填写'}</Typography.Paragraph></div>
       <div><Typography.Text strong>服务评价</Typography.Text>{selected.feedback ? <Descriptions column={1} size="small" style={{ marginTop: 8 }} items={[{ label: '评分', children: <Tag color="gold">{selected.feedback.rating} 星</Tag> }, { label: '标签', children: selected.feedback.tags?.join('、') || '未选择标签' }, { label: '反馈', children: selected.feedback.note || '未填写文字反馈' }, { label: '时间', children: dateText(selected.feedback.created_at) }]} /> : <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>服务完成后，顾客评价会显示在这里。</Typography.Paragraph>}</div>
-      {selected.customer && <Card size="small" title="顾客画像" extra={<Button size="small" type="primary" onClick={() => { setCorrectionId(null); profileForm.resetFields(); setProfileOpen(true); }}>快速记录</Button>}>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>仅作到店服务参考，不构成医疗建议</Typography.Paragraph>
-        {profileRecords.length ? profileRecords.slice(0, 5).map((record: any) => <div key={record.id} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}><Space wrap size={[4, 4]}>{Object.values(record.profile || {}).filter(Boolean).map((value: any) => <Tag key={String(value)} color="blue">{String(value)}</Tag>)}{(record.signals || []).map((signal: string) => <Tag key={signal}>{signal}</Tag>)}</Space>{record.note && <Typography.Paragraph style={{ margin: '4px 0 0' }}>{record.note}</Typography.Paragraph>}<Space size={8} wrap><Typography.Text type="secondary">{dateText(record.created_at)} · {record.created_by_name || '技师'}</Typography.Text><Button type="link" size="small" onClick={() => { setCorrectionId(record.id); profileForm.setFieldsValue({ correction_reason: '', ...record.profile, signals: record.signals || [], note: record.note || '' }); setProfileOpen(true); }}>更正这条记录</Button></Space>{record.correction_of_id && <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>更正自 #{record.correction_of_id}：{record.correction_reason}</Typography.Text>}</div>) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无画像记录" />}
+      {selected.customer && <Card size="small" title="服务参考（只读）">
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>仅作到店服务参考，不构成医疗建议；结构化记录不会转为普通运营标签。</Typography.Paragraph>
+        {profileRecords.length ? profileRecords.slice(0, 5).map((record: any) => {
+          const display = buildServiceReferenceDisplay(record);
+          const isStructured = Boolean(display.version);
+          return <div key={record.id} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
+            {isStructured ? <>
+              <Space wrap size={[4, 4]}><Tag color="green">{display.version}</Tag><Tag color={record.customer_confirmed ? 'success' : 'default'}>{record.customer_confirmed ? '顾客已确认' : '本次观察，未确认'}</Tag></Space>
+              {display.groups.map(group => <div key={group.title} style={{ marginTop: 8 }}><Typography.Text strong>{group.title}</Typography.Text><Descriptions column={1} size="small" items={group.items.map(item => ({ label: item.label, children: item.value }))} /></div>)}
+              {display.collapsedQuote && <Collapse size="small" ghost items={[{ key: 'quote', label: '查看相关情况原话（服务前须再次确认）', children: <Typography.Paragraph>{display.collapsedQuote}</Typography.Paragraph> }]} />}
+            </> : <><Space wrap size={[4, 4]}>{Object.values(record.profile || {}).filter(value => typeof value === 'string' && value).map((value: any) => <Tag key={String(value)} color="blue">{String(value)}</Tag>)}{(record.signals || []).map((signal: string) => <Tag key={signal}>{signal}</Tag>)}</Space>{record.note && <Typography.Paragraph style={{ margin: '4px 0 0' }}>{record.note}</Typography.Paragraph>}</>}
+            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 6 }}>{dateText(record.created_at)} · {record.created_by_name || '技师'} · 来源：{record.source || '-'}{record.customer_confirmed && record.confirmed_at ? ` · 确认于 ${dateText(record.confirmed_at)}` : ''}</Typography.Text>
+          </div>;
+        }) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无服务参考" />}
       </Card>}
       {selected.status === 'submitted' && <Space><Button type="primary" icon={<CheckOutlined />} onClick={() => act(selected, 'confirm')}>确认服务项目</Button><Button danger icon={<CloseOutlined />} onClick={() => act(selected, 'cancel')}>取消服务选单</Button></Space>}
     </Space>}</Drawer>
-    <Drawer title={correctionId ? '更正顾客画像' : '快速记录顾客画像'} open={profileOpen} onClose={() => setProfileOpen(false)} placement="bottom" height="78vh" extra={<Button type="primary" onClick={() => void saveProfile()} loading={profileSaving}>{correctionId ? '保存更正' : '保存记录'}</Button>}>
-      <Typography.Paragraph type="secondary">服务后快速勾选顾客特征；身体情况请使用非医疗描述。历史记录不会被覆盖。</Typography.Paragraph>
-      <Form form={profileForm} layout="vertical">
-        <Form.Item name="age_range" label="年龄段"><Select allowClear options={['18-25岁', '26-35岁', '36-45岁', '46岁以上', '不确定'].map(value => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="gender" label="性别"><Select allowClear options={['男', '女', '不记录'].map(value => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="body_type" label="体型"><Select allowClear options={['偏瘦', '标准', '偏壮', '不记录'].map(value => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="occupation" label="职业场景"><Select allowClear options={['久坐', '久站', '体力工作', '其他', '不记录'].map(value => ({ value, label: value }))} /></Form.Item>
-        <Form.Item name="signals" label="服务特征"><Select mode="multiple" options={['肩颈紧张', '腰部不适', '腿部酸胀', '局部硬结', '偏好轻柔力度', '偏好中等力度', '偏好强力力度', '首次到店', '重点维护'].map(value => ({ value, label: value }))} /></Form.Item>
-        {correctionId && <Form.Item name="correction_reason" label="更正原因" rules={[{ required: true, message: '请填写更正原因' }]}><Input maxLength={256} placeholder="例如：顾客补充说明、上次选择有误" /></Form.Item>}
-        <Form.Item name="note" label="补充备注"><Input.TextArea rows={3} maxLength={1000} showCount placeholder="记录服务后的客观反馈，不填写诊断或治疗结论" /></Form.Item>
-      </Form>
-    </Drawer>
   </Space>;
 }

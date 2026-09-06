@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { dataProvider } from '../src/core/dataProvider/index.ts';
 import { resources } from '../src/core/resources/index.ts';
+import { buildServiceReferenceDisplay } from '../src/serviceReferenceDisplay.ts';
 
 
 test('技师服务单通过严格的只读资源端点加载', async () => {
@@ -45,22 +46,22 @@ test('移动技师首页将同一房间的多活动占用显式显示为待核�
   assert.match(mobileSource, /conflict/);
 });
 
-test('移动技师服务参考提交完成服务关联和 v2 字段', () => {
+test('移动技师服务参考提交完成服务关联和 v3 单一载荷', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /createCustomerProfileRecord/);
   assert.match(source, /selection_session_id/);
-  assert.match(source, /buildServiceReferencePayload/);
+  assert.match(source, /buildServiceReferenceV3Payload/);
   assert.match(source, /customerConfirmed/);
 });
 
 test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
-  for (const field of ['age_range', 'gender', 'body_type', 'occupation']) assert.doesNotMatch(source, new RegExp(field));
+  for (const field of ['age_range', 'gender', 'body_type', 'name="occupation"']) assert.doesNotMatch(source, new RegExp(field));
   for (const field of ['focusAreas', 'avoidAreas', 'forcePreference', 'temperaturePreference', 'serviceFeedback', 'nextVisitPlan']) assert.match(source, new RegExp(field));
   assert.match(source, /name="focusAreas"/);
   assert.match(source, /name="avoidAreas"/);
   assert.match(source, /maxLength=\{100\}/);
-  assert.match(source, /customerConfirmed: false/);
+  assert.match(source, /confirmation === true/);
   assert.match(source, /saving/);
   assert.match(source, /disabled=\{saving\}/);
   assert.match(source, /暂不记录/);
@@ -84,4 +85,88 @@ test('画像写入请求附带幂等键', () => {
   assert.ok(start >= 0, '找不到画像写入 API');
   const nextExport = source.indexOf('\nexport const ', start + 1);
   assert.match(source.slice(start, nextExport > start ? nextExport : undefined), /Idempotency-Key/);
+});
+
+test('移动技师今日看板在展示期间每 3 秒静默同步顾客新提交的服务单', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /setInterval\([^,]+,\s*3000\)/);
+  assert.match(source, /load\(\{ background: true \}\)/);
+  assert.match(source, /if \(!background\) setLoading\(true\)/);
+  assert.doesNotMatch(source, /background[\s\S]{0,300}setTasks\(\[\]\)/);
+});
+
+test('移动技师今日看板在重新可见或获得焦点时立即同步，并在卸载时清理监听和定时器', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /document\.addEventListener\('visibilitychange'/);
+  assert.match(source, /window\.addEventListener\('focus'/);
+  assert.match(source, /document\.visibilityState === 'visible'/);
+  assert.match(source, /clearInterval\(refreshTimer\)/);
+  assert.match(source, /document\.removeEventListener\('visibilitychange'/);
+  assert.match(source, /window\.removeEventListener\('focus'/);
+});
+
+test('移动技师今日看板仅在页面可见时执行定时同步，恢复可见后立即补拉', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /const refresh = \(\) => \{\s*if \(document\.visibilityState !== 'visible'\) return;/);
+  assert.match(source, /if \(document\.visibilityState === 'visible'\) refresh\(\);/);
+});
+
+test('移动技师今日看板跳过在途自动刷新，并只用最新请求更新看板状态', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /if \(background && activeLoads\.current > 0\) return;/);
+  assert.match(source, /const requestId = \+\+latestLoadRequest\.current;/);
+  assert.match(source, /if \(requestId !== latestLoadRequest\.current\) return;/);
+});
+
+test('管理端将 v3 服务参考显示为结构化摘要而非普通运营标签', () => {
+  const source = readFileSync(new URL('../src/pages/SelectionSessionsPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /buildServiceReferenceDisplay/);
+  assert.match(source, /customer_confirmed/);
+  assert.match(source, /confirmed_at/);
+  assert.doesNotMatch(source, /addUserTag\(/);
+  assert.doesNotMatch(source, /createCustomerProfileRecord/);
+  assert.doesNotMatch(source, /addUserTag|searchIndex|algorithmFeature/);
+});
+
+test('管理端以白名单结构化展示 v3 且原话保持默认折叠', () => {
+  const display = buildServiceReferenceDisplay({
+    schema_version: 3, taxonomy_version: 'service_reference_v2', customer_confirmed: true,
+    profile: {
+      customer_reported: { personal_context: { build: 'balanced' }, service_related_context: { contexts: ['medication_mentioned'], quote: '顾客自述正在用药' } },
+      technician_observed: { session_response: { relaxation: 'quick' } }, next_visit: { plan: 'confirm_on_arrival' },
+    },
+  });
+  assert.equal(display.version, 'v3 · service_reference_v2');
+  assert.deepEqual(display.groups, [
+    { title: '个人概况', items: [{ label: '体型', value: '匀称' }] },
+    { title: '服务相关情况', items: [{ label: '需再次确认', value: '顾客提及正在用药' }] },
+    { title: '本次反应', items: [{ label: '放松过程', value: '较快' }] },
+    { title: '下次与沟通', items: [{ label: '下次建议', value: '到店再确认' }] },
+  ]);
+  assert.equal(display.collapsedQuote, '顾客自述正在用药');
+  assert.doesNotMatch(JSON.stringify(display.groups), /顾客自述正在用药/);
+});
+
+test('管理端隐藏未知或非字符串稳定编码，不展示原始敏感内容', () => {
+  const display = buildServiceReferenceDisplay({ schema_version: 3, taxonomy_version: 'service_reference_v2', profile: {
+    customer_reported: { force_preference: '13800000000', focus_areas: ['neck_shoulder', { phone: '13800000000' }, '原始敏感值'], communication_consumption: { budget_preference: 'constructor' } },
+  } });
+  assert.deepEqual(display.groups, [{ title: '服务偏好', items: [{ label: '本次重点', value: '肩颈' }] }]);
+});
+
+test('管理端兼容 v2 嵌套服务参考而不退化为空摘要', () => {
+  const display = buildServiceReferenceDisplay({
+    schema_version: 2, taxonomy_version: 'service_reference_v1', customer_confirmed: false,
+    profile: {
+      customer_reported: { focus_areas: ['neck_shoulder'], avoid_areas: ['abdomen'], force_preference: 'medium', temperature_preference: 'higher', quote: '顾客希望避开腹部' },
+      technician_observed: { service_feedback: 'better_after_adjustment' }, next_visit: { plan: 'repeat_current' },
+    },
+  });
+  assert.equal(display.version, 'v2 · service_reference_v1');
+  assert.deepEqual(display.groups, [
+    { title: '服务偏好', items: [{ label: '本次重点', value: '肩颈' }, { label: '避开或谨慎', value: '腹部' }, { label: '力度', value: '适中' }, { label: '温度', value: '偏高' }] },
+    { title: '本次反应', items: [{ label: '服务反馈', value: '调整后更合适' }] },
+    { title: '下次与沟通', items: [{ label: '下次建议', value: '延续本次' }] },
+  ]);
+  assert.equal(display.collapsedQuote, '顾客希望避开腹部');
 });

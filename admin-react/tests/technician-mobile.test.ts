@@ -65,3 +65,37 @@ test('技师看板按沙发和房间分组，保留顾客提交的服务位顺�
   assert.equal(groups[0].items[0].room_name, '沙发 01');
   assert.equal(groups[1].items[0].room_name, '包间 02 A 床');
 });
+
+test('本人历史状态文案区分顾客确认与本次观察', () => {
+  assert.equal((technicianMobile as any).technicianProfileStatusLabel('confirmed'), '顾客已确认');
+  assert.equal((technicianMobile as any).technicianProfileStatusLabel('pending'), '本次观察');
+});
+
+test('本人历史摘要只输出强类型白名单字段且忽略嵌套敏感值', () => {
+  const lines = (technicianMobile as any).technicianHistorySummaryLines({
+    focus_areas: ['肩颈'], force_preference: '适中', occupation_contexts: ['久坐办公'],
+    quote: '不得显示', phone: '13800000000', unknown: { secret: '不得显示' },
+  });
+  assert.deepEqual(lines, ['重点：肩颈', '力度：适中', '职业场景：久坐办公']);
+  assert.doesNotMatch(lines.join(''), /不得显示|13800000000|object Object/);
+});
+
+test('本人历史白名单键也拒绝错误类型、未知文案和电话文本', () => {
+  const lines = (technicianMobile as any).technicianHistorySummaryLines({
+    focus_areas: '肩颈',
+    avoid_areas: [{ label: '腹部' }],
+    force_preference: { value: '适中' },
+    temperature_preference: '13800000000',
+    occupation_contexts: ['久坐办公', '13800000000', '未知职业'],
+    decision_priorities: ['品质', { secret: '价格' }],
+    budget_preference: '年收入百万',
+  });
+  assert.deepEqual(lines, ['职业场景：久坐办公', '决策关注：品质']);
+  assert.doesNotMatch(lines.join(''), /13800000000|未知职业|年收入|object Object/);
+});
+
+test('本人历史空态按接口计数互斥分类', () => {
+  assert.equal((technicianMobile as any).technicianHistoryEmptyState('all', 0), 'none');
+  assert.equal((technicianMobile as any).technicianHistoryEmptyState('all', 2), 'legacy');
+  assert.equal((technicianMobile as any).technicianHistoryEmptyState('confirmed', 2), 'filtered');
+});

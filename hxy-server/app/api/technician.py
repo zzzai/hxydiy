@@ -3,11 +3,11 @@ import json
 import secrets
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import String, and_, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.api.admin import _current_staff, create_staff_token, hash_password, normalize_staff_role
 from app.db.session import get_db
@@ -288,6 +288,31 @@ SERVICE_REFERENCE_LABELS = {
 }
 
 
+SERVICE_REFERENCE_V2_TAXONOMY = {
+    "occupation_contexts": {"desk_work": "久坐办公", "standing_work": "久站服务", "frequent_driving": "经常驾驶", "physical_labor": "体力劳动", "family_care": "照护家庭", "freelance": "自由职业", "retired": "退休", "other": "其他"},
+    "personal_context": {
+        "age_band": {"18_24": "18-24岁", "25_34": "25-34岁", "35_44": "35-44岁", "45_54": "45-54岁", "55_64": "55-64岁", "65_plus": "65岁以上"},
+        "build": {"slim": "偏瘦", "balanced": "匀称", "sturdy": "偏壮"},
+        "height_band": {"shorter": "偏矮", "average": "适中", "taller": "偏高"},
+    },
+    "work_lifestyle": {"sleep_quality": {"good": "良好", "average": "一般", "poor": "较差"}},
+    "service_related_context": {"contexts": {"long_term_condition": "顾客提及长期身体情况", "recent_discomfort_recovery": "顾客提及近期不适或恢复情况", "skin_sensitivity": "顾客提及皮肤敏感或接触偏好", "medication_mentioned": "顾客提及正在用药", "pregnancy_postpartum": "顾客提及孕期或产后阶段", "other_reconfirm": "其他需再次确认的情况"}},
+    "session_response": {"relaxation": {"quick": "较快", "gradual": "逐渐", "tense": "始终较紧张"}},
+    "communication_consumption": {
+        "decision_priorities": {"price": "价格", "quality": "品质", "environment": "环境", "efficiency": "效率", "fixed_technician": "固定技师", "fixed_time": "固定时段"},
+        "budget_preference": {"value": "实惠优先", "balanced": "平衡", "experience": "体验优先", "unexpressed": "未表达"},
+    },
+}
+
+
+@router.get("/service-reference-taxonomy")
+def get_service_reference_taxonomy(
+    authorization: str | None = Header(None), db: Session = Depends(get_db)
+) -> dict:
+    current_technician(authorization, db)
+    return {"schema_version": 3, "taxonomy_version": "service_reference_v2", "groups": SERVICE_REFERENCE_V2_TAXONOMY}
+
+
 @router.get("/occupancies/{occupancy_id}/service-reference")
 def get_service_reference(
     occupancy_id: int,
@@ -323,8 +348,7 @@ def get_service_reference(
         select(CustomerProfileRecord).where(
             CustomerProfileRecord.store_id == technician.store_id,
             CustomerProfileRecord.user_id == session.customer_id,
-            CustomerProfileRecord.schema_version == 2,
-            CustomerProfileRecord.taxonomy_version == "service_reference_v1",
+            _supported_reference_version(),
             CustomerProfileRecord.customer_confirmed.is_(True),
             CustomerProfileRecord.id.not_in(superseded_ids),
             or_(
@@ -336,18 +360,10 @@ def get_service_reference(
     if record is None:
         return {"record": None, "message": "暂无顾客确认的历史服务参考，请现场询问"}
 
-    profile = record.profile or {}
-    reported = profile.get("customer_reported") or {}
-    observed = profile.get("technician_observed") or {}
-    next_visit = profile.get("next_visit") or {}
-    area_labels = SERVICE_REFERENCE_LABELS["areas"]
     safe_record = {
-        "focus_areas": [area_labels[code] for code in reported.get("focus_areas", []) if code in area_labels],
-        "avoid_areas": [area_labels[code] for code in reported.get("avoid_areas", []) if code in area_labels],
-        "force_preference": SERVICE_REFERENCE_LABELS["force"].get(reported.get("force_preference")),
-        "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(reported.get("temperature_preference")),
-        "service_feedback": SERVICE_REFERENCE_LABELS["feedback"].get(observed.get("service_feedback")),
-        "next_visit_plan": SERVICE_REFERENCE_LABELS["next_visit"].get(next_visit.get("plan")),
+        "focus_areas": [],
+        "avoid_areas": [],
+        **(_history_profile_summary(record) or {}),
         "recorded_date": record.created_at.date().isoformat() if record.created_at else None,
         "prompt": "请本次服务前再次确认",
     }
@@ -434,6 +450,24 @@ def _occupancy_action(db: Session, occupancy: PositionOccupancy, action: str) ->
     raise HTTPException(status_code=409, detail="服务状态不允许此操作")
 
 
+def _resolve_legacy_service_owner(db: Session, occupancy: PositionOccupancy) -> int | None:
+    audits = db.scalars(select(AuditLog).where(
+        AuditLog.entity_type == "position_occupancy",
+        AuditLog.entity_id == str(occupancy.id),
+        AuditLog.action.in_(("technician_confirm_service", "technician_finish_service")),
+    )).all()
+    owners = set()
+    for audit in audits:
+        actor = db.scalar(select(Staff).where(
+            func.cast(Staff.id, String) == audit.actor_id,
+        )) if audit.actor_type == "staff" else None
+        technician = db.get(Technician, actor.technician_id) if actor and actor.technician_id else None
+        if not technician or audit.store_id != occupancy.store_id or actor.store_id != occupancy.store_id or technician.store_id != occupancy.store_id:
+            return None
+        owners.add(technician.id)
+    return next(iter(owners)) if len(owners) == 1 else None
+
+
 def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str | None, db: Session) -> dict:
     staff, technician = current_technician(authorization, db)
     occupancy = _technician_occupancy(db, occupancy_id, technician)
@@ -459,6 +493,49 @@ def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str |
             )
         return replay.result_snapshot
     _reject_conflicted_room_action(db, occupancy)
+    if occupancy.serviced_by_technician_id is None and occupancy.status == "in_service":
+        owner = _resolve_legacy_service_owner(db, occupancy)
+        if owner is None:
+            raise HTTPException(status_code=409, detail={
+                "code": "TECHNICIAN_SERVICE_OWNER_UNRESOLVED",
+                "message": "旧服务无法唯一核对技师，请联系店长核对后通过管理端结束服务",
+            })
+        occupancy.serviced_by_technician_id = owner
+        db.flush()
+    if action == "confirm":
+        owner_claim = db.execute(
+            update(PositionOccupancy)
+            .where(
+                PositionOccupancy.id == occupancy.id,
+                PositionOccupancy.store_id == technician.store_id,
+                PositionOccupancy.serviced_by_technician_id.is_(None),
+                PositionOccupancy.status == "waiting_service",
+            )
+            .values(serviced_by_technician_id=technician.id)
+            .execution_options(synchronize_session=False)
+        )
+        if owner_claim.rowcount:
+            occupancy.serviced_by_technician_id = technician.id
+        else:
+            # The conditional update is the concurrency boundary. Refresh before
+            # deciding whether this is the same technician's idempotent action.
+            db.refresh(occupancy)
+        if occupancy.serviced_by_technician_id != technician.id:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "TECHNICIAN_SERVICE_OWNER_MISMATCH",
+                    "message": "该服务已由其他技师确认",
+                },
+            )
+    elif action == "finish" and occupancy.serviced_by_technician_id != technician.id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "TECHNICIAN_SERVICE_OWNER_MISMATCH",
+                "message": "仅实际确认服务的技师可以结束服务",
+            },
+        )
     before = occupancy.status
     _occupancy_action(db, occupancy, action)
     room = db.get(Room, occupancy.room_id)
@@ -484,6 +561,209 @@ def confirm_service(occupancy_id: int, body: ActionIn, authorization: str | None
 @router.post("/occupancies/{occupancy_id}/finish")
 def finish_service(occupancy_id: int, body: ActionIn, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
     return _action(occupancy_id, "finish", body, authorization, db)
+
+
+def _supported_reference_version():
+    return or_(
+        and_(CustomerProfileRecord.schema_version == 2, CustomerProfileRecord.taxonomy_version == "service_reference_v1"),
+        and_(CustomerProfileRecord.schema_version == 3, CustomerProfileRecord.taxonomy_version == "service_reference_v2"),
+    )
+
+
+def _not_superseded_reference():
+    correction = aliased(CustomerProfileRecord)
+    return ~exists().where(
+        correction.correction_of_id == CustomerProfileRecord.id,
+        correction.store_id == CustomerProfileRecord.store_id,
+        correction.user_id == CustomerProfileRecord.user_id,
+    )
+
+
+def _safe_reference_profile(value) -> dict:
+    # Validate each container and leaf before label lookup. Historical JSON may
+    # predate validation; never stringify arbitrary values or trust nested shape.
+    shape = {
+        "customer_reported": {
+            "focus_areas": list, "avoid_areas": list,
+            "force_preference": str, "temperature_preference": str,
+            "work_lifestyle": {"occupation_contexts": list},
+            "communication_consumption": {"decision_priorities": list, "budget_preference": str},
+        },
+        "technician_observed": {"service_feedback": str, "session_response": {"relaxation": str}},
+        "next_visit": {"plan": str},
+    }
+
+    def project(node, allowed):
+        node = node if isinstance(node, dict) else {}
+        result = {}
+        for key, kind in allowed.items():
+            item = node.get(key)
+            if isinstance(kind, dict):
+                result[key] = project(item, kind)
+            elif kind is list:
+                result[key] = [code for code in item if isinstance(code, str)] if isinstance(item, list) else []
+            else:
+                result[key] = item if isinstance(item, str) else None
+        return result
+
+    return project(value, shape)
+
+
+def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | None:
+    if record is None:
+        return None
+    profile = _safe_reference_profile(record.profile)
+    if record.schema_version == 2 and record.taxonomy_version == "service_reference_v1":
+        reported = profile.get("customer_reported") or {}
+        observed = profile.get("technician_observed") or {}
+        next_visit = profile.get("next_visit") or {}
+        area_labels = SERVICE_REFERENCE_LABELS["areas"]
+        summary = {
+            "schema_version": 2,
+            "taxonomy_version": "service_reference_v1",
+            "focus_areas": [
+                area_labels[code]
+                for code in reported.get("focus_areas", [])
+                if code in area_labels
+            ],
+            "avoid_areas": [
+                area_labels[code]
+                for code in reported.get("avoid_areas", [])
+                if code in area_labels
+            ],
+            "force_preference": SERVICE_REFERENCE_LABELS["force"].get(
+                reported.get("force_preference")
+            ),
+            "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(
+                reported.get("temperature_preference")
+            ),
+            "service_feedback": SERVICE_REFERENCE_LABELS["feedback"].get(
+                observed.get("service_feedback")
+            ),
+            "next_visit_plan": SERVICE_REFERENCE_LABELS["next_visit"].get(
+                next_visit.get("plan")
+            ),
+        }
+        return summary
+    if record.schema_version == 3 and record.taxonomy_version == "service_reference_v2":
+        reported = profile.get("customer_reported") or {}
+        lifestyle = reported.get("work_lifestyle") or {}
+        consumption = reported.get("communication_consumption") or {}
+        observed = profile.get("technician_observed") or {}
+        response = observed.get("session_response") or {}
+        area_labels = SERVICE_REFERENCE_LABELS["areas"]
+        summary = {
+            "schema_version": 3,
+            "taxonomy_version": "service_reference_v2",
+            "focus_areas": [area_labels[code] for code in reported.get("focus_areas", []) if code in area_labels],
+            "avoid_areas": [area_labels[code] for code in reported.get("avoid_areas", []) if code in area_labels],
+            "force_preference": SERVICE_REFERENCE_LABELS["force"].get(reported.get("force_preference")),
+            "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(reported.get("temperature_preference")),
+            "occupation_contexts": [
+                SERVICE_REFERENCE_V2_TAXONOMY["occupation_contexts"][code]
+                for code in lifestyle.get("occupation_contexts", [])
+                if code in SERVICE_REFERENCE_V2_TAXONOMY["occupation_contexts"]
+            ],
+            "relaxation": SERVICE_REFERENCE_V2_TAXONOMY["session_response"]["relaxation"].get(
+                response.get("relaxation")
+            ),
+            "service_feedback": SERVICE_REFERENCE_LABELS["feedback"].get(observed.get("service_feedback")),
+            "next_visit_plan": SERVICE_REFERENCE_LABELS["next_visit"].get((profile.get("next_visit") or {}).get("plan")),
+            "decision_priorities": [
+                SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"][code]
+                for code in consumption.get("decision_priorities", [])
+                if code in SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"]
+            ],
+            "budget_preference": SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["budget_preference"].get(consumption.get("budget_preference")),
+        }
+        return {key: value for key, value in summary.items() if value not in (None, [], "")}
+    return None
+
+
+@router.get("/service-history")
+def service_history(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    profile_status: str = Query(default="all"),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    _, technician = current_technician(authorization, db)
+    if profile_status not in {"all", "confirmed", "pending"}:
+        raise HTTPException(status_code=422, detail="画像状态筛选值不合法")
+
+    confirmed_profile = exists().where(
+        CustomerProfileRecord.store_id == PositionOccupancy.store_id,
+        CustomerProfileRecord.selection_session_id == PositionOccupancy.selection_session_id,
+        CustomerProfileRecord.technician_id == PositionOccupancy.serviced_by_technician_id,
+        _supported_reference_version(),
+        _not_superseded_reference(),
+        CustomerProfileRecord.customer_confirmed.is_(True),
+    )
+    conditions = [
+        PositionOccupancy.store_id == technician.store_id,
+        PositionOccupancy.serviced_by_technician_id == technician.id,
+        PositionOccupancy.actual_service_end_at.is_not(None),
+    ]
+    if profile_status == "confirmed":
+        conditions.append(confirmed_profile)
+    elif profile_status == "pending":
+        conditions.append(~confirmed_profile)
+
+    total = db.scalar(select(func.count(PositionOccupancy.id)).where(*conditions)) or 0
+    unassigned_legacy_count = db.scalar(select(func.count(PositionOccupancy.id)).where(
+        PositionOccupancy.store_id == technician.store_id,
+        PositionOccupancy.serviced_by_technician_id.is_(None),
+        PositionOccupancy.actual_service_end_at.is_not(None),
+    )) or 0
+    rows = db.execute(
+        select(PositionOccupancy, SelectionSession, Room, User)
+        .join(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
+        .join(Room, Room.id == PositionOccupancy.room_id)
+        .outerjoin(User, User.id == SelectionSession.customer_id)
+        .where(*conditions)
+        .order_by(PositionOccupancy.actual_service_end_at.desc(), PositionOccupancy.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    items = []
+    for occupancy, session, room, customer in rows:
+        record = db.scalar(
+            select(CustomerProfileRecord)
+            .where(
+                CustomerProfileRecord.store_id == technician.store_id,
+                CustomerProfileRecord.selection_session_id == session.id,
+                CustomerProfileRecord.technician_id == technician.id,
+                _supported_reference_version(),
+                _not_superseded_reference(),
+                CustomerProfileRecord.customer_confirmed.is_(True),
+            )
+            .order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc())
+            .limit(1)
+        )
+        project_names = []
+        for selection_item in session.items or []:
+            name = selection_item.get("name")
+            if isinstance(name, str) and name.strip() and name.strip() not in project_names:
+                project_names.append(name.strip())
+        duration_minutes = None
+        if occupancy.actual_start_at and occupancy.actual_service_end_at:
+            duration_minutes = max(
+                0,
+                int((occupancy.actual_service_end_at - occupancy.actual_start_at).total_seconds() // 60),
+            )
+        items.append({
+            "occupancy_id": occupancy.id,
+            "completed_at": occupancy.actual_service_end_at,
+            "duration_minutes": duration_minutes,
+            "profile_status": "confirmed" if record else "pending",
+            "customer": {"display_name": f"顾客 #{customer.id}"} if customer else {"display_name": "匿名顾客"},
+            "projects": project_names,
+            "service_position": room.name,
+            "profile_summary": _history_profile_summary(record),
+        })
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "unassigned_legacy_count": unassigned_legacy_count}
 
 
 @router.post("/leave-requests")

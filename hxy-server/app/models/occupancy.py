@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -19,11 +19,22 @@ OCCUPANCY_ACTIVE_STATUSES = {
 
 class PositionOccupancy(Base):
     __tablename__ = "position_occupancies"
+    __table_args__ = (
+        Index(
+            "ix_position_occupancies_store_technician_finished",
+            "store_id",
+            "serviced_by_technician_id",
+            "actual_service_end_at",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True)
     selection_session_id: Mapped[str] = mapped_column(ForeignKey("selection_sessions.id"), index=True)
+    serviced_by_technician_id: Mapped[int | None] = mapped_column(
+        ForeignKey("technicians.id"), nullable=True, index=True
+    )
 
     # 活动期间等于真实外键；释放后置空。可空唯一键可同时兼容 SQLite 和 PostgreSQL，
     # 并在数据库层阻止同一服务位或同一选单出现两个活动占用。

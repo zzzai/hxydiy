@@ -13,6 +13,66 @@ export function technicianStatusLabel(status: string): string {
   return ({ available: '空闲', waiting_service: '待确认', in_service: '服务中', post_service_present: '已完成', conflict: '待核对' } as Record<string, string>)[status] || '处理中';
 }
 
+export function technicianProfileStatusLabel(status: string): string {
+  return status === 'confirmed' ? '顾客已确认' : '本次观察';
+}
+
+export type TechnicianHistoryProfileSummary = {
+  focus_areas?: string[];
+  avoid_areas?: string[];
+  force_preference?: string | null;
+  temperature_preference?: string | null;
+  service_feedback?: string | null;
+  next_visit_plan?: string | null;
+  occupation_contexts?: string[];
+  relaxation?: string | null;
+  decision_priorities?: string[];
+  budget_preference?: string | null;
+};
+
+const HISTORY_SUMMARY_VALUES = {
+  areas: ['肩颈', '腰臀', '腿部', '腹部', '足部', '整体放松'],
+  force: ['轻柔', '适中', '偏强'], temperature: ['偏低', '适中', '偏高'],
+  feedback: ['本次合适', '调整后更合适', '下次需调整'], nextVisit: ['延续本次', '到店再确认'],
+  occupations: ['久坐办公', '久站服务', '经常驾驶', '体力劳动', '照护家庭', '自由职业', '退休', '其他'],
+  relaxation: ['较快', '逐渐', '始终较紧张'], decisions: ['价格', '品质', '环境', '效率', '固定技师', '固定时段'],
+  budget: ['实惠优先', '平衡', '体验优先', '未表达'],
+} as const;
+
+function safeSummaryArray(value: unknown, allowed: readonly string[]): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && allowed.includes(item)) : [];
+}
+
+function safeSummaryValue(value: unknown, allowed: readonly string[]): string {
+  return typeof value === 'string' && allowed.includes(value) ? value : '';
+}
+
+export function technicianHistorySummaryLines(summary: TechnicianHistoryProfileSummary | Record<string, unknown> | null): string[] {
+  if (!summary) return [];
+  const focusAreas = safeSummaryArray(summary.focus_areas, HISTORY_SUMMARY_VALUES.areas);
+  const avoidAreas = safeSummaryArray(summary.avoid_areas, HISTORY_SUMMARY_VALUES.areas);
+  const force = safeSummaryValue(summary.force_preference, HISTORY_SUMMARY_VALUES.force);
+  const temperature = safeSummaryValue(summary.temperature_preference, HISTORY_SUMMARY_VALUES.temperature);
+  const feedback = safeSummaryValue(summary.service_feedback, HISTORY_SUMMARY_VALUES.feedback);
+  const nextVisit = safeSummaryValue(summary.next_visit_plan, HISTORY_SUMMARY_VALUES.nextVisit);
+  const occupations = safeSummaryArray(summary.occupation_contexts, HISTORY_SUMMARY_VALUES.occupations);
+  const relaxation = safeSummaryValue(summary.relaxation, HISTORY_SUMMARY_VALUES.relaxation);
+  const decisions = safeSummaryArray(summary.decision_priorities, HISTORY_SUMMARY_VALUES.decisions);
+  const budget = safeSummaryValue(summary.budget_preference, HISTORY_SUMMARY_VALUES.budget);
+  const lines = [
+    focusAreas.length ? `重点：${focusAreas.join('、')}` : '', avoidAreas.length ? `避开或谨慎：${avoidAreas.join('、')}` : '',
+    force ? `力度：${force}` : '', temperature ? `温度：${temperature}` : '', feedback ? `反馈：${feedback}` : '', nextVisit ? `下次：${nextVisit}` : '',
+    occupations.length ? `职业场景：${occupations.join('、')}` : '', relaxation ? `放松过程：${relaxation}` : '',
+    decisions.length ? `决策关注：${decisions.join('、')}` : '', budget ? `预算倾向：${budget}` : '',
+  ];
+  return lines.filter(Boolean);
+}
+
+export function technicianHistoryEmptyState(status: 'all' | 'confirmed' | 'pending', unassignedLegacyCount: number): 'none' | 'legacy' | 'filtered' {
+  if (status !== 'all') return 'filtered';
+  return unassignedLegacyCount > 0 ? 'legacy' : 'none';
+}
+
 export function technicianPositionTone(status: string): 'idle' | 'waiting' | 'serving' | 'finished' | 'conflict' {
   if (status === 'waiting_service') return 'waiting';
   if (status === 'in_service') return 'serving';

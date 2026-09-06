@@ -52,6 +52,16 @@
 .technician-task-card-foot .ant-btn, .technician-profile-sheet .ant-btn { min-height: 48px; border-radius: 10px; }
 .technician-history-list { display: grid; gap: 10px; }
 .technician-history-card { padding: 14px; }
+.technician-own-history { display: grid; gap: 14px; }
+.technician-history-toolbar { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.technician-history-toolbar .ant-btn { min-width: 44px; min-height: 40px; }
+.technician-history-card-main { min-width: 0; width: 100%; }
+.technician-history-card-headline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.technician-history-card-headline .ant-tag { flex: 0 0 auto; margin: 0; }
+.technician-history-summary.ant-typography { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid #edf2ef; color: #36584d; font-size: 13px; }
+.technician-empty-state { min-height: 280px; display: grid; place-content: center; text-align: center; }
+.technician-empty-state .ant-empty { margin: 0; }
+.technician-empty-state .ant-typography { max-width: 320px; margin: 12px auto 0; }
 .technician-empty, .technician-loading { display: grid; min-height: 280px; place-items: center; }
 .technician-profile-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; padding: 18px; background: #0d2f29; color: white; border-radius: 16px; }
 .technician-profile-hero h1 { margin: 0 0 5px; font-size: 22px; }
@@ -66,6 +76,8 @@
 .technician-profile-sheet .ant-radio-group { display: flex; flex-wrap: wrap; gap: 8px; }
 .technician-profile-sheet .ant-radio-button-wrapper { min-height: 40px; display: inline-flex; align-items: center; border-radius: 8px; }
 .technician-profile-sheet .ant-radio-wrapper { min-height: 40px; margin-inline-end: 8px; }
+.technician-profile-sheet .ant-collapse { margin: 4px 0 14px; border: 1px solid #dce9e2; border-radius: 10px; background: #fff; }
+.technician-profile-sheet .ant-collapse-header { font-weight: 650; }
 .technician-login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px 18px; background: linear-gradient(145deg, #0d2f29, #1f8f75); }
 .technician-login-card { width: min(100%, 420px); padding: 24px 20px 20px; background: white; border-radius: 20px; box-shadow: 0 18px 50px rgba(0,0,0,.2); }
 .technician-login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }

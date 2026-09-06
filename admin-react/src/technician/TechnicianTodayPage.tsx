@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Drawer, Empty, List, Spin, Tag, Typography } from 'antd';
 import { CheckCircleOutlined, EyeOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { confirmTechnicianService, finishTechnicianService, getTechnicianMe, getTechnicianTasks } from '../api';
@@ -61,22 +61,47 @@ export default function TechnicianTodayPage() {
   const [profileOrder, setProfileOrder] = useState<any>();
   const [referenceOccupancyId, setReferenceOccupancyId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const activeLoads = useRef(0);
+  const latestLoadRequest = useRef(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    if (background && activeLoads.current > 0) return;
+    const requestId = ++latestLoadRequest.current;
+    activeLoads.current += 1;
+    if (!background) setLoading(true);
+    if (!background) setError('');
     try {
           const [profile, list] = await Promise.all([getTechnicianMe(), getTechnicianTasks()]);
+          if (requestId !== latestLoadRequest.current) return;
           setMe(profile.data);
           setTasks(list.data?.items || []);
+          setError('');
     } catch {
-      setError('任务加载失败，请检查网络后重试');
+      if (requestId === latestLoadRequest.current && !background) setError('任务加载失败，请检查网络后重试');
     } finally {
-      setLoading(false);
+      activeLoads.current -= 1;
+      if (requestId === latestLoadRequest.current && !background) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      void load({ background: true });
+    };
+    const refreshTimer = window.setInterval(refresh, 3000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(refreshTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [load]);
 
   const act = async (order: any, action: 'confirm' | 'finish') => {
     const occupancyId = typeof order.occupancy_id === 'number' ? order.occupancy_id : null;

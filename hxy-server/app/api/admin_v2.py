@@ -2070,6 +2070,130 @@ class ServiceReferenceProfile(BaseModel):
         )
 
 
+V3AgeBand = Literal["18_24", "25_34", "35_44", "45_54", "55_64", "65_plus"]
+V3Build = Literal["slim", "balanced", "sturdy"]
+V3HeightBand = Literal["shorter", "average", "taller"]
+V3OccupationContext = Literal["desk_work", "standing_work", "frequent_driving", "physical_labor", "family_care", "freelance", "retired", "other"]
+V3SleepQuality = Literal["good", "average", "poor"]
+V3ServiceRelatedContext = Literal["long_term_condition", "recent_discomfort_recovery", "skin_sensitivity", "medication_mentioned", "pregnancy_postpartum", "other_reconfirm"]
+V3Relaxation = Literal["quick", "gradual", "tense"]
+V3DecisionPriority = Literal["price", "quality", "environment", "efficiency", "fixed_technician", "fixed_time"]
+V3BudgetPreference = Literal["value", "balanced", "experience", "unexpressed"]
+
+
+class ServiceReferenceV3PersonalContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    age_band: V3AgeBand | None = None
+    build: V3Build | None = None
+    height_band: V3HeightBand | None = None
+
+
+class ServiceReferenceV3WorkLifestyle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    occupation_contexts: list[V3OccupationContext] = Field(default_factory=list, max_length=2)
+    sleep_quality: V3SleepQuality | None = None
+
+    @field_validator("occupation_contexts")
+    @classmethod
+    def validate_unique_occupation_contexts(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
+
+
+class ServiceReferenceV3ServiceRelatedContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contexts: list[V3ServiceRelatedContext] = Field(default_factory=list, max_length=1)
+    quote: str = Field(default="", max_length=100)
+
+    @field_validator("contexts")
+    @classmethod
+    def validate_unique_contexts(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
+
+    @field_validator("quote")
+    @classmethod
+    def validate_quote(cls, value: str) -> str:
+        text = value.strip()
+        if any(word in text for word in PROFILE_FORBIDDEN_WORDS):
+            raise ValueError("服务参考仅支持顾客自述，不得填写诊断或治疗结论")
+        if _contains_private_profile_content(text):
+            raise ValueError("顾客原话请勿填写联系方式、消费能力或人格评价")
+        return text
+
+
+class ServiceReferenceV3CommunicationConsumption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision_priorities: list[V3DecisionPriority] = Field(default_factory=list, max_length=6)
+    budget_preference: V3BudgetPreference | None = None
+
+    @field_validator("decision_priorities")
+    @classmethod
+    def validate_unique_decision_priorities(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
+
+
+class ServiceReferenceV3CustomerReported(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    personal_context: ServiceReferenceV3PersonalContext = Field(default_factory=ServiceReferenceV3PersonalContext)
+    work_lifestyle: ServiceReferenceV3WorkLifestyle = Field(default_factory=ServiceReferenceV3WorkLifestyle)
+    service_related_context: ServiceReferenceV3ServiceRelatedContext = Field(default_factory=ServiceReferenceV3ServiceRelatedContext)
+    focus_areas: list[ServiceArea] = Field(default_factory=list, max_length=6)
+    avoid_areas: list[AvoidArea] = Field(default_factory=list, max_length=5)
+    force_preference: Literal["gentle", "medium", "strong"] | None = None
+    temperature_preference: Literal["lower", "medium", "higher"] | None = None
+    communication_consumption: ServiceReferenceV3CommunicationConsumption = Field(default_factory=ServiceReferenceV3CommunicationConsumption)
+
+    @field_validator("focus_areas", "avoid_areas")
+    @classmethod
+    def validate_unique_areas(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
+
+
+class ServiceReferenceV3SessionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    relaxation: V3Relaxation | None = None
+
+
+class ServiceReferenceV3TechnicianObserved(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_response: ServiceReferenceV3SessionResponse = Field(default_factory=ServiceReferenceV3SessionResponse)
+    service_feedback: Literal["suitable", "better_after_adjustment", "adjust_next_time"] | None = None
+
+
+class ServiceReferenceV3NextVisit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    plan: Literal["repeat_current", "confirm_on_arrival"] | None = None
+
+
+class ServiceReferenceV3Profile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[3]
+    taxonomy_version: Literal["service_reference_v2"]
+    customer_reported: ServiceReferenceV3CustomerReported = Field(default_factory=ServiceReferenceV3CustomerReported)
+    technician_observed: ServiceReferenceV3TechnicianObserved = Field(default_factory=ServiceReferenceV3TechnicianObserved)
+    next_visit: ServiceReferenceV3NextVisit = Field(default_factory=ServiceReferenceV3NextVisit)
+
+    def storage_payload(self) -> dict:
+        return self.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+
+    def has_content(self) -> bool:
+        def populated(value) -> bool:
+            if isinstance(value, dict):
+                return any(populated(child) for child in value.values())
+            if isinstance(value, list):
+                return any(populated(child) for child in value)
+            return isinstance(value, str) and bool(value.strip())
+
+        return populated(self.model_dump(exclude={"schema_version", "taxonomy_version"}))
+
+
 class CustomerProfileRecordIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -2077,10 +2201,10 @@ class CustomerProfileRecordIn(BaseModel):
     selection_session_id: str | None = None
     technician_id: int | None = None
     source: Literal["customer_statement", "service_observation", "both"] = "customer_statement"
-    schema_version: Literal[1, 2] = 1
-    taxonomy_version: Literal["service_reference_v1"] | None = None
+    schema_version: Literal[1, 2, 3] = 1
+    taxonomy_version: Literal["service_reference_v1", "service_reference_v2"] | None = None
     customer_confirmed: StrictBool = False
-    profile: dict[str, StrictStr] | ServiceReferenceProfile = Field(default_factory=dict)
+    profile: dict[str, StrictStr] | ServiceReferenceProfile | ServiceReferenceV3Profile = Field(default_factory=dict)
     signals: list[str] = Field(default_factory=list, max_length=30)
     note: str = Field(default="", max_length=500)
     correction_of_id: int | None = None
@@ -2088,8 +2212,8 @@ class CustomerProfileRecordIn(BaseModel):
 
     @field_validator("profile")
     @classmethod
-    def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile) -> dict[str, str] | ServiceReferenceProfile:
-        if isinstance(value, ServiceReferenceProfile):
+    def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile) -> dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile:
+        if isinstance(value, (ServiceReferenceProfile, ServiceReferenceV3Profile)):
             return value
         unknown_fields = set(value) - set(PROFILE_FIELD_OPTIONS)
         if unknown_fields:
@@ -2142,7 +2266,17 @@ class CustomerProfileRecordIn(BaseModel):
             if not self.profile.has_content():
                 raise ValueError("请至少记录一项服务参考")
             self.source = "both" if self.customer_confirmed else "service_observation"
-        elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, ServiceReferenceProfile):
+        elif self.schema_version == 3:
+            if self.taxonomy_version != "service_reference_v2" or not isinstance(self.profile, ServiceReferenceV3Profile):
+                raise ValueError("v3 服务参考必须使用 service_reference_v2 结构")
+            if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
+                raise ValueError("服务参考内外版本必须一致")
+            if self.signals or self.note:
+                raise ValueError("v3 服务参考不能混用旧版标签或备注")
+            if not self.profile.has_content():
+                raise ValueError("请至少记录一项服务参考")
+            self.source = "both" if self.customer_confirmed else "service_observation"
+        elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile)):
             raise ValueError("旧版画像不能携带 v2 服务参考元数据")
         return self
 
@@ -2231,7 +2365,7 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
 
 
 def _profile_payload(body: CustomerProfileRecordIn) -> dict:
-    if isinstance(body.profile, ServiceReferenceProfile):
+    if isinstance(body.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile)):
         return body.profile.storage_payload()
     return body.profile
 
@@ -2438,6 +2572,10 @@ def create_customer_profile_record(
     role = normalize_staff_role(staff.role, staff.technician_id)
     if role not in {"technician", "manager"}:
         raise HTTPException(status_code=403, detail="当前账号无权新增画像记录")
+    if body.schema_version == 3 and role != "technician":
+        raise HTTPException(status_code=403, detail="管理端仅可读取 v3 服务参考")
+    if body.schema_version == 3 and not body.selection_session_id:
+        raise HTTPException(status_code=422, detail="v3 服务参考必须关联已完成服务")
     idempotency_key = _require_profile_idempotency_key(idempotency_key)
     is_bound_technician = role == "technician" and bool(staff.technician_id)
     if is_bound_technician and body.schema_version == 1 and "source" not in body.model_fields_set:
@@ -2503,6 +2641,8 @@ def create_customer_profile_record(
         ))
         if not original:
             raise HTTPException(status_code=404, detail="原画像记录不存在")
+        if original.schema_version == 3:
+            raise HTTPException(status_code=403, detail="管理端不能更正 v3 服务参考")
         if not body.correction_reason.strip():
             raise HTTPException(status_code=422, detail="更正记录需要填写原因")
     record = CustomerProfileRecord(
