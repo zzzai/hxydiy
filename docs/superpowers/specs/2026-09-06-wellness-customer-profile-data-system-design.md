@@ -58,14 +58,14 @@
 新增 `customer_profile_current`：
 
 ```text
-id, customer_id, profile_code, profile_value_json
+id, customer_id, profile_code, profile_value_key, profile_value_json
 body_area_code, body_side, source_record_id
 first_confirmed_at, last_confirmed_at, confirmation_count
 valid_until, sensitivity_level, consent_id
 taxonomy_version, status, created_at, updated_at
 ```
 
-唯一维度为 `customer_id + profile_code + body_area_code + body_side`。无部位含义时部位为空；部位级偏好优先于全局偏好。
+唯一维度为 `customer_id + profile_code + profile_value_key + body_area_code + body_side`。`profile_value_key` 让重点部位等多值字段可以逐值保存；单值字段同一时刻只能保留一个值，由投影服务在重建时整体替换。无部位含义时部位为空；部位级偏好优先于全局偏好。
 
 ### 3.3 计算特征快照表
 
