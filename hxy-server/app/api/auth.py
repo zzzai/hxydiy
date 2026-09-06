@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Response
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -88,6 +88,23 @@ def _latest_code(db: Session, phone: str) -> CustomerVerificationCode | None:
     return db.scalar(select(CustomerVerificationCode).where(
         CustomerVerificationCode.phone == phone,
     ).order_by(CustomerVerificationCode.sent_at.desc()))
+
+
+def advance_customer_login_version(db: Session, user_id: int, now: datetime) -> int:
+    """原子推进顾客登录代次，避免并发登录签发同一份有效令牌。"""
+    result = db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(
+            last_login_at=now,
+            customer_login_version=func.coalesce(User.customer_login_version, 1) + 1,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        raise HTTPException(status_code=401, detail="登录用户不存在")
+    version = db.scalar(select(User.customer_login_version).where(User.id == user_id))
+    return int(version)
 
 
 @router.post("/h5/send-code", response_model=H5SendCodeResponse)
@@ -218,8 +235,7 @@ def h5_login(
         grant_new_user_coupons(db, user.id)
     else:
         user.phone = phone
-    user.last_login_at = now
-    user.customer_login_version = int(user.customer_login_version or 1) + 1
+    login_version = advance_customer_login_version(db, user.id, now)
     if selection_session:
         session = selection_session
         if session.status in {"draft", "submitted", "confirmed"}:
@@ -254,7 +270,7 @@ def h5_login(
                 refresh_session_pricing(db, session)
     db.commit()
     db.refresh(user)
-    return LoginResponse(token=create_access_token(str(user.id), openid, user.customer_login_version), user=UserOut.model_validate(user))
+    return LoginResponse(token=create_access_token(str(user.id), openid, login_version), user=UserOut.model_validate(user))
 
 
 @router.get("/h5/me", response_model=UserOut)
