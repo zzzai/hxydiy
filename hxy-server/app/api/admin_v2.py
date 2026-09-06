@@ -30,6 +30,7 @@ from app.models import (
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.occupancy import audit_occupancy, release_occupancy
+from app.services.customer_profile_projection import rebuild_customer_profile_current
 from app.models.operations import Room, Technician
 from app.models.room_assign import RoomAssignment
 from app.models.service import ServiceAssignment, ServiceOrder, Visit
@@ -2676,6 +2677,7 @@ def create_customer_profile_record(
         if existing and _same_profile_request(existing, body, technician_id):
             return _profile_record_view(existing, db)
         raise HTTPException(status_code=409, detail="该幂等键已用于内容不同的画像记录")
+    rebuild_customer_profile_current(db, customer_id=body.user_id)
     # 已存在的门店运营标签自动建立关联；画像原始信号仍保留在记录快照中，避免跨门店污染标签字典。
     for signal in body.signals:
         tag = db.scalar(select(CustomerTag).where(

@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, CustomerProfileRecord, Order, PositionOccupancy, SelectionSession, Staff, Store, User
+from app.models import AuditLog, CustomerProfileCurrent, CustomerProfileRecord, Order, PositionOccupancy, SelectionSession, Staff, Store, User
 from app.models.operations import Room, Technician
 
 
@@ -380,3 +380,47 @@ class TestTechnicianProfileV3Contract:
                 headers={**self.technician_headers, "Idempotency-Key": f"v3-taxonomy-path-{index:03d}"},
             )
             assert response.status_code == 200, response.text
+
+    def test_confirmed_v3_write_updates_current_profile(self):
+        payload = self.v3_payload()
+        payload["profile"]["customer_reported"]["force_preference"] = "medium"
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "current-profile-write-001"},
+        )
+        assert response.status_code == 200, response.text
+
+        with self.SessionLocal() as db:
+            rows = db.query(CustomerProfileCurrent).filter_by(customer_id=self.user_id).all()
+            assert {(row.profile_code, row.profile_value_key) for row in rows} >= {
+                ("age_band", "25_34"),
+                ("work_context", "desk_work"),
+                ("force_preference", "medium"),
+            }
+
+    def test_unconfirmed_v3_write_does_not_replace_confirmed_current_profile(self):
+        confirmed = self.v3_payload()
+        confirmed["profile"]["customer_reported"]["force_preference"] = "medium"
+        first = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=confirmed,
+            headers={**self.technician_headers, "Idempotency-Key": "current-profile-write-002"},
+        )
+        assert first.status_code == 200, first.text
+
+        pending = self.v3_payload(customer_confirmed=False)
+        pending["profile"]["customer_reported"]["force_preference"] = "strong"
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=pending,
+            headers={**self.technician_headers, "Idempotency-Key": "current-profile-write-003"},
+        )
+        assert response.status_code == 200, response.text
+
+        with self.SessionLocal() as db:
+            row = db.query(CustomerProfileCurrent).filter_by(
+                customer_id=self.user_id,
+                profile_code="force_preference",
+            ).one()
+            assert row.profile_value_key == "medium"
