@@ -127,8 +127,15 @@ docker exec "$db_container" psql -v ON_ERROR_STOP=1 -U "$db_user" -d postgres \
 docker exec -i "$db_container" pg_restore --exit-on-error -U "$db_user" -d "$rehearsal_db" < "$backup_file"
 docker exec "$db_container" psql -v ON_ERROR_STOP=1 -U "$db_user" -d "$rehearsal_db" -c 'SELECT 1' >/dev/null
 
-# Only the two reviewed additive customer membership migrations are permitted.
-# Any removed or unknown revision remains blocked.
+# Only explicitly reviewed additive migrations are permitted. Any removed or
+# unknown revision remains blocked. This permits a release that starts either
+# before or after an earlier approved migration without opening the gate to an
+# arbitrary new Alembic revision.
+approved_migrations=(
+  '20260905_customer_single_session.py'
+  '20260905_membership_verification.py'
+  '20260906_wellness_profile_current.py'
+)
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
   <(find "$workspace_root/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) >/dev/null; then
@@ -138,13 +145,23 @@ if ! diff -q \
   mapfile -t removed_migrations < <(comm -23 \
     <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
     <(find "$workspace_root/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort))
-  if [[ "${#added_migrations[@]}" -ne 2 ||
-        "${added_migrations[0]}" != '20260905_customer_single_session.py' ||
-        "${added_migrations[1]}" != '20260905_membership_verification.py' ||
-        "${#removed_migrations[@]}" -ne 0 ]]; then
+  if [[ "${#added_migrations[@]}" -eq 0 || "${#removed_migrations[@]}" -ne 0 ]]; then
     echo "Unapproved Alembic migration change detected." >&2
     exit 1
   fi
+  for migration in "${added_migrations[@]}"; do
+    approved=false
+    for allowed_migration in "${approved_migrations[@]}"; do
+      if [[ "$migration" == "$allowed_migration" ]]; then
+        approved=true
+        break
+      fi
+    done
+    if [[ "$approved" != true ]]; then
+      echo "Unapproved Alembic migration change detected." >&2
+      exit 1
+    fi
+  done
   migration_required=true
 fi
 
