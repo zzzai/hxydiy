@@ -85,7 +85,10 @@ class AlembicContractTests(unittest.TestCase):
     def test_production_sms_revision_upgrades_to_current_head(self):
         project_root = Path(__file__).resolve().parents[1]
         previous_metadata = MetaData()
-        excluded_tables = {"service_position_qrs", "customer_profile_records", "media_assets", "customer_trusted_devices", "membership_codes"}
+        excluded_tables = {
+            "service_position_qrs", "customer_profile_records", "customer_profile_consents",
+            "customer_profile_current", "media_assets", "customer_trusted_devices", "membership_codes",
+        }
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
                 continue
@@ -252,6 +255,8 @@ class AlembicContractTests(unittest.TestCase):
             "membership_benefit_grants",
             "service_position_qrs",
             "customer_profile_records",
+            "customer_profile_consents",
+            "customer_profile_current",
             "media_assets",
             "customer_trusted_devices",
             "membership_codes",
@@ -400,6 +405,10 @@ class AlembicContractTests(unittest.TestCase):
             engine = create_engine(database_url)
             inspector = inspect(engine)
             self.assertTrue(new_tables.issubset(set(inspector.get_table_names())))
+            current_profile_columns = {
+                column["name"] for column in inspector.get_columns("customer_profile_current")
+            }
+            self.assertTrue({"customer_id", "store_id", "source_record_id", "valid_until"}.issubset(current_profile_columns))
             qr_columns = {column["name"] for column in inspector.get_columns("service_position_qrs")}
             self.assertTrue({"public_id", "store_id", "room_id", "status", "replaced_by_id"}.issubset(qr_columns))
             qr_indexes = {index["name"] for index in inspector.get_indexes("service_position_qrs")}
