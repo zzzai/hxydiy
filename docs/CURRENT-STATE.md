@@ -1,22 +1,22 @@
 # hxy-diy 当前状态
 
-更新时间：2026-09-05 19:45（Asia/Shanghai）
+更新时间：2026-09-06 20:16（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
 
 - 服务器部署根目录：`/root/hxy-diy-20260811`
-- Release：`github-51db505150c6-33964908298`
-- 对应主干提交：`51db505`（顾客单设备掉线感知与“我的”刷新恢复）
-- Alembic head：`20260905_membership_verification`
-- 数据库备份：`pre-github-51db505150c6-33964908298-20260905T120358Z.dump`
+- Release：`github-810817dd91d1-34032430331`
+- 对应主干提交：`810817d`（画像迁移发布许可收口）
+- Alembic head：`20260906_wellness_current`
+- 数据库备份：发布前自动备份已校验（具体文件名见 GitHub 发布日志）
 - 备份恢复演练：通过
 - 公网 `/`、`/admin/`、`/technician/`、`/api/v1/health`：HTTP 200
 - API 与数据库容器：运行中，发布验收时重启次数均为 0，数据库健康
 - Release Manifest：发布脚本逐文件校验通过。
 
-顾客端入口加载 `index-BhzZQLv-.js` 与 `index-BoAeh19J.css`；本次未执行数据库迁移。
+本次已按“恢复演练库先升级、生产库再升级”的顺序完成剩余前置迁移和当前画像迁移；发布脚本完成 Manifest、原子切换和三入口健康检查。
 
 自动发布已通过专用受限密钥执行，复用当前 main CI 产物；纯文档变更保留静态门禁，不构建三端应用、不发布。发布脚本和说明见 `docs/customer-release-fast-path.md`。
 
@@ -43,6 +43,7 @@
 - 正式入口：`https://diy.hexiaoyue.com/technician/`
 - 快速服务参考已发布：重点部位、避让部位、力度、温度、服务反馈、下次建议、顾客确认和可选原话。
 - 技师可读取当前顾客最近一次已确认的安全摘要；跨店、非活动服务和隐私字段受后端限制。
+- 已发布当前画像底座：`customer_profile_current` 仅投影顾客已确认的 v3 安全字段，并按顾客与门店隔离；健康自述、原话和技师观察不进入当前画像投影。
 
 ## 当前跨端契约
 
