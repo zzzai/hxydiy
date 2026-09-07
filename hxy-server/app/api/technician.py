@@ -305,12 +305,28 @@ SERVICE_REFERENCE_V2_TAXONOMY = {
 }
 
 
+SERVICE_REFERENCE_V3_TAXONOMY = {
+    **SERVICE_REFERENCE_V2_TAXONOMY,
+    "body_service_notes": {
+        "areas": {
+            "neck_shoulder": "肩颈", "back": "背部", "waist_hip": "腰臀", "arm": "手臂",
+            "knee": "膝周", "leg": "腿部", "abdomen": "腹部", "feet": "足部", "skin": "皮肤",
+        },
+        "contexts": {
+            "old_injury": "顾客提及旧伤", "post_procedure_recovery": "顾客提及术后恢复",
+            "recent_discomfort": "顾客提及近期不适", "long_term_discomfort": "顾客提及长期不适",
+            "skin_sensitivity": "顾客提及皮肤敏感", "reconfirm": "下次服务前再确认",
+        },
+    },
+}
+
+
 @router.get("/service-reference-taxonomy")
 def get_service_reference_taxonomy(
     authorization: str | None = Header(None), db: Session = Depends(get_db)
 ) -> dict:
     current_technician(authorization, db)
-    return {"schema_version": 3, "taxonomy_version": "service_reference_v2", "groups": SERVICE_REFERENCE_V2_TAXONOMY}
+    return {"schema_version": 4, "taxonomy_version": "service_reference_v3", "groups": SERVICE_REFERENCE_V3_TAXONOMY}
 
 
 @router.get("/occupancies/{occupancy_id}/service-reference")
@@ -567,6 +583,7 @@ def _supported_reference_version():
     return or_(
         and_(CustomerProfileRecord.schema_version == 2, CustomerProfileRecord.taxonomy_version == "service_reference_v1"),
         and_(CustomerProfileRecord.schema_version == 3, CustomerProfileRecord.taxonomy_version == "service_reference_v2"),
+        and_(CustomerProfileRecord.schema_version == 4, CustomerProfileRecord.taxonomy_version == "service_reference_v3"),
     )
 
 

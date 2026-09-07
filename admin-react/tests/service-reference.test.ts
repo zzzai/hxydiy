@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildServiceReferenceV3Payload } from '../src/technician/serviceReference.ts';
+import { buildServiceReferenceV3Payload, buildServiceReferenceV4Payload } from '../src/technician/serviceReference.ts';
 
 test('服务参考 v3 载荷固定版本并保留可选字段的最小结构', () => {
   const payload = buildServiceReferenceV3Payload(12, 'session-v3', {
@@ -49,4 +49,19 @@ test('服务参考 v3 兼容旧原话入口但拒绝两个不同原话静默覆�
   assert.throws(() => buildServiceReferenceV3Payload(12, 'session-v3-two-quotes', {
     quote: '第一段', serviceRelatedContext: { quote: '第二段' },
   }), /只能填写一处/);
+});
+
+test('服务参考 v4 将顾客自述身体情况保存在服务记录且不混入普通画像字段', () => {
+  const payload = buildServiceReferenceV4Payload(12, 'session-v4-body', {
+    customerConfirmed: true,
+    bodyServiceNotes: [{ area: 'knee', context: 'old_injury', reconfirmNextVisit: true }],
+  });
+
+  assert.equal(payload.schema_version, 4);
+  assert.equal(payload.taxonomy_version, 'service_reference_v3');
+  assert.equal(payload.source, 'both');
+  assert.deepEqual(payload.profile.customer_reported, {
+    body_service_notes: [{ area: 'knee', context: 'old_injury', reconfirm_next_visit: true }],
+  });
+  assert.deepEqual(payload.profile.technician_observed, {});
 });

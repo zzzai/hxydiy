@@ -124,6 +124,63 @@ class TestTechnicianProfileV3Contract:
         payload.update(overrides)
         return payload
 
+    def v4_payload(self, body_service_notes, **overrides):
+        payload = {
+            "user_id": self.user_id,
+            "selection_session_id": self.session_id,
+            "schema_version": 4,
+            "taxonomy_version": "service_reference_v3",
+            "customer_confirmed": True,
+            "profile": {
+                "schema_version": 4,
+                "taxonomy_version": "service_reference_v3",
+                "customer_reported": {"body_service_notes": body_service_notes},
+                "technician_observed": {},
+                "next_visit": {},
+            },
+            "signals": [],
+            "note": "",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_v4_saves_customer_reported_body_note_without_current_profile_projection(self):
+        payload = self.v4_payload([{
+            "area": "knee", "context": "old_injury", "reconfirm_next_visit": True,
+        }])
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "v4-body-note-001"},
+        )
+        assert response.status_code == 200, response.text
+        with self.SessionLocal() as db:
+            record = db.query(CustomerProfileRecord).one()
+            assert record.profile["customer_reported"]["body_service_notes"] == [{
+                "area": "knee", "context": "old_injury", "reconfirm_next_visit": True,
+            }]
+            assert db.query(CustomerProfileCurrent).filter_by(customer_id=self.user_id).count() == 0
+
+    def test_v4_rejects_unknown_or_excess_body_notes(self):
+        invalid_code = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=self.v4_payload([{"area": "knee", "context": "diagnosis", "reconfirm_next_visit": True}]),
+            headers={**self.technician_headers, "Idempotency-Key": "v4-body-note-002"},
+        )
+        assert invalid_code.status_code == 422, invalid_code.text
+
+        excess = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=self.v4_payload([
+                {"area": "neck_shoulder", "context": "old_injury", "reconfirm_next_visit": True},
+                {"area": "back", "context": "recent_discomfort", "reconfirm_next_visit": True},
+                {"area": "waist_hip", "context": "long_term_discomfort", "reconfirm_next_visit": True},
+                {"area": "knee", "context": "reconfirm", "reconfirm_next_visit": True},
+            ]),
+            headers={**self.technician_headers, "Idempotency-Key": "v4-body-note-003"},
+        )
+        assert excess.status_code == 422, excess.text
+
     def test_v3_profile_accepts_confirmed_customer_context_and_rejects_unknown_codes(self):
         payload = self.v3_payload()
         response = self.client.post(
@@ -323,19 +380,21 @@ class TestTechnicianProfileV3Contract:
         assert rendered.returncode == 0, rendered.stderr
         assert json.loads(rendered.stdout) == expected_labels
 
-    def test_taxonomy_endpoint_exposes_v3_stable_codes(self):
+    def test_taxonomy_endpoint_exposes_v4_stable_codes_and_body_note_dictionary(self):
         response = self.client.get(
             "/api/v1/technician/service-reference-taxonomy",
             headers=self.technician_headers,
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["schema_version"] == 3
-        assert body["taxonomy_version"] == "service_reference_v2"
+        assert body["schema_version"] == 4
+        assert body["taxonomy_version"] == "service_reference_v3"
         assert "desk_work" in body["groups"]["occupation_contexts"]
         assert body["groups"]["personal_context"]["height_band"]["average"] == "适中"
         assert set(body["groups"]["personal_context"]["age_band"]) == {"18_24", "25_34", "35_44", "45_54", "55_64", "65_plus"}
         assert set(body["groups"]["communication_consumption"]["budget_preference"]) == {"value", "balanced", "experience", "unexpressed"}
+        assert body["groups"]["body_service_notes"]["areas"]["knee"] == "膝周"
+        assert body["groups"]["body_service_notes"]["contexts"]["old_injury"] == "顾客提及旧伤"
 
     def test_taxonomy_codes_submit_at_their_published_model_paths(self):
         taxonomy = self.client.get(
