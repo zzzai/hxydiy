@@ -1,12 +1,14 @@
 # 技师端工作流
 
-## 2026-09-07 人体标注服务参考 v5（本地开发中，未合并、未发布）
+## 2026-09-07 人体标注服务参考 v5（已发布生产，待现场验收）
 
 - 技师端将原有的文字“身体状况”快记升级为正反面人体点位与四步流程：选部位、选顾客自述情况、选当前状态、选本次处理；每次最多三条，可编辑和删除。
 - 新写入将使用 `schema_version=5`、`taxonomy_version=service_reference_v4`，保存 `region + side + context + current_state + session_handling + reconfirm_next_visit`；v1–v4 历史保持只读兼容。
 - 身体条目只属于服务连续性记录，技师和管理端安全摘要均只提示“服务前再确认”，不展示疾病、诊断、原话或具体身体细节；不进入当前画像、分群、定价或营销。
 - 合同与验收依据：`../contracts/service-reference-v4.md`、`../product/technician-body-map-prd.md`、`../operations/technician-body-map-field-acceptance.md`。
-- 当前仅完成本地开发与自动化验证；尚未推送、创建 PR、合并、发布或完成微信/门店现场验收。
+- PR #49 已合并至主干 `4b2764331c86d9dae02452d748d5f08dc1c5b402`；GitHub 可信 CI 与生产部署均成功。本次未执行数据库迁移。
+- 管理端接口对 v5 仅下发“服务前再确认”安全摘要，身体部位、侧别、顾客自述与本次处理不会进入管理员网络响应。
+- 微信/门店现场验收尚未完成；按 `../operations/technician-body-map-field-acceptance.md` 使用授权测试账号执行。
 
 ## 2026-09-05 会员动态码扫码方案（已发布生产）
 
