@@ -692,7 +692,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
                 if code in SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"]
             ],
             "budget_preference": SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["budget_preference"].get(consumption.get("budget_preference")),
-            "body_reconfirm_required": bool(reported.get("body_service_notes")),
+            **({"body_reconfirm_required": True} if record.schema_version == 4 and reported.get("body_service_notes") else {}),
         }
         return {key: value for key, value in summary.items() if value not in (None, [], "")}
     return None
