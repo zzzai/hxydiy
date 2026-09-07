@@ -28,6 +28,7 @@ export type TechnicianHistoryProfileSummary = {
   relaxation?: string | null;
   decision_priorities?: string[];
   budget_preference?: string | null;
+  body_reconfirm_required?: boolean;
 };
 
 const HISTORY_SUMMARY_VALUES = {
@@ -64,6 +65,7 @@ export function technicianHistorySummaryLines(summary: TechnicianHistoryProfileS
     force ? `力度：${force}` : '', temperature ? `温度：${temperature}` : '', feedback ? `反馈：${feedback}` : '', nextVisit ? `下次：${nextVisit}` : '',
     occupations.length ? `职业场景：${occupations.join('、')}` : '', relaxation ? `放松过程：${relaxation}` : '',
     decisions.length ? `决策关注：${decisions.join('、')}` : '', budget ? `预算倾向：${budget}` : '',
+    summary.body_reconfirm_required === true ? '身体情况：服务前再确认' : '',
   ];
   return lines.filter(Boolean);
 }

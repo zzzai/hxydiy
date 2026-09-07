@@ -662,7 +662,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
             ),
         }
         return summary
-    if record.schema_version == 3 and record.taxonomy_version == "service_reference_v2":
+    if (record.schema_version, record.taxonomy_version) in ((3, "service_reference_v2"), (4, "service_reference_v3")):
         reported = profile.get("customer_reported") or {}
         lifestyle = reported.get("work_lifestyle") or {}
         consumption = reported.get("communication_consumption") or {}
@@ -670,8 +670,8 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
         response = observed.get("session_response") or {}
         area_labels = SERVICE_REFERENCE_LABELS["areas"]
         summary = {
-            "schema_version": 3,
-            "taxonomy_version": "service_reference_v2",
+            "schema_version": record.schema_version,
+            "taxonomy_version": record.taxonomy_version,
             "focus_areas": [area_labels[code] for code in reported.get("focus_areas", []) if code in area_labels],
             "avoid_areas": [area_labels[code] for code in reported.get("avoid_areas", []) if code in area_labels],
             "force_preference": SERVICE_REFERENCE_LABELS["force"].get(reported.get("force_preference")),
@@ -692,6 +692,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
                 if code in SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"]
             ],
             "budget_preference": SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["budget_preference"].get(consumption.get("budget_preference")),
+            "body_reconfirm_required": bool(reported.get("body_service_notes")),
         }
         return {key: value for key, value in summary.items() if value not in (None, [], "")}
     return None
