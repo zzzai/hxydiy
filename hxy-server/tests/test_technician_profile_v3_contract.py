@@ -353,12 +353,29 @@ class TestTechnicianProfileV3Contract:
             db.add(manager)
             db.commit()
             headers = {"Authorization": f"Bearer {create_staff_token(manager.id, 'manager')}", "Idempotency-Key": "manager-v3-block"}
-        for payload in (self.v3_payload(), self.v3_payload(correction_of_id=saved.json()["id"], correction_reason="核对"), {
+        v5_notes = [{"region": "shoulder", "side": "right", "context": "long_term_discomfort_mentioned", "current_state": "occasional_discomfort", "session_handling": "lighter", "reconfirm_next_visit": True}]
+        for payload in (self.v3_payload(), self.v5_payload(v5_notes), self.v3_payload(correction_of_id=saved.json()["id"], correction_reason="核对"), self.v5_payload(v5_notes, correction_of_id=saved.json()["id"], correction_reason="核对"), {
             "user_id": self.user_id, "profile": {"age_range": "31-40"},
             "correction_of_id": saved.json()["id"], "correction_reason": "绕过版本",
         }):
             response = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=headers)
             assert response.status_code == 403, response.text
+
+    def test_manager_list_redacts_v5_body_details_and_retains_reconfirm_reminder(self):
+        notes = [{"region": "shoulder", "side": "right", "context": "long_term_discomfort_mentioned", "current_state": "occasional_discomfort", "session_handling": "lighter", "reconfirm_next_visit": True}]
+        saved = self.client.post("/api/v1/admin/v2/customer-profile-records", json=self.v5_payload(notes), headers=self.technician_headers)
+        assert saved.status_code == 200, saved.text
+        with self.SessionLocal() as db:
+            manager = Staff(username="v5-manager", name="店长", password_hash=hash_password("pass"), role="manager", status="active", store_id=1)
+            db.add(manager)
+            db.commit()
+            headers = {"Authorization": f"Bearer {create_staff_token(manager.id, 'manager')}"}
+        response = self.client.get(f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-records", headers=headers)
+        assert response.status_code == 200, response.text
+        record = response.json()["items"][0]
+        assert record["body_reconfirm_required"] is True
+        assert "body_service_notes" not in json.dumps(record, ensure_ascii=False)
+        assert "shoulder" not in response.text
 
     def test_v3_saved_record_is_visible_to_next_service_without_private_content(self):
         saved = self.client.post("/api/v1/admin/v2/customer-profile-records", json=self.v3_payload(), headers=self.technician_headers)
@@ -380,6 +397,29 @@ class TestTechnicianProfileV3Contract:
         assert response.json()["record"]["occupation_contexts"] == ["久坐办公"]
         assert "顾客自述正在用药" not in response.text
         assert "personal_context" not in response.text
+
+    def test_v5_body_notes_only_expose_reconfirm_reminder_to_next_service(self):
+        notes = [{"region": "shoulder", "side": "right", "context": "long_term_discomfort_mentioned", "current_state": "occasional_discomfort", "session_handling": "lighter", "reconfirm_next_visit": True}]
+        saved = self.client.post("/api/v1/admin/v2/customer-profile-records", json=self.v5_payload(notes), headers=self.technician_headers)
+        assert saved.status_code == 200, saved.text
+        with self.SessionLocal() as db:
+            old = db.query(PositionOccupancy).first()
+            old.active_room_id = None
+            old.active_session_id = None
+            db.flush()
+            session = SelectionSession(id="next-v5-body-session", store_id=1, customer_id=self.user_id, access_token_hash="next-v5-body", status="submitted", items=[])
+            db.add(session)
+            db.flush()
+            occupancy = PositionOccupancy(store_id=1, room_id=old.room_id, active_room_id=old.room_id, selection_session_id=session.id, active_session_id=session.id, status="waiting_service")
+            db.add(occupancy)
+            db.commit()
+            occupancy_id = occupancy.id
+        response = self.client.get(f"/api/v1/technician/occupancies/{occupancy_id}/service-reference", headers=self.technician_headers)
+        assert response.status_code == 200, response.text
+        record = response.json()["record"]
+        assert record["body_reconfirm_required"] is True
+        assert "body_service_notes" not in record
+        assert "shoulder" not in response.text
 
     @pytest.mark.parametrize(("reported", "expected_areas", "expected_labels"), [
         ({"force_preference": "gentle"}, ([], []), ["未记录", "未记录"]),

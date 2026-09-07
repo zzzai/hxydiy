@@ -657,6 +657,8 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
     if record is None:
         return None
     profile = _safe_reference_profile(record.profile)
+    raw_reported = record.profile.get("customer_reported") if isinstance(record.profile, dict) else None
+    has_body_notes = isinstance(raw_reported, dict) and isinstance(raw_reported.get("body_service_notes"), list) and bool(raw_reported["body_service_notes"])
     if record.schema_version == 2 and record.taxonomy_version == "service_reference_v1":
         reported = profile.get("customer_reported") or {}
         observed = profile.get("technician_observed") or {}
@@ -719,7 +721,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
                 if code in SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"]
             ],
             "budget_preference": SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["budget_preference"].get(consumption.get("budget_preference")),
-            **({"body_reconfirm_required": True} if record.schema_version in {4, 5} and reported.get("body_service_notes") else {}),
+            **({"body_reconfirm_required": True} if record.schema_version in {4, 5} and has_body_notes else {}),
         }
         return {key: value for key, value in summary.items() if value not in (None, [], "")}
     return None

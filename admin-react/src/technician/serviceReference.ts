@@ -205,6 +205,7 @@ export interface TechnicianServiceReferenceRecord {
   next_visit_plan: string | null;
   recorded_date: string | null;
   prompt: string;
+  body_reconfirm_required?: boolean;
 }
 
 export interface TechnicianServiceReferenceResponse {

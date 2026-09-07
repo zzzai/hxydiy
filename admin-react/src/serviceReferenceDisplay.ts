@@ -39,7 +39,7 @@ export function buildServiceReferenceDisplay(record: any): ServiceReferenceDispl
     ['服务偏好', [['本次重点', reported.focus_areas], ['避开或谨慎', reported.avoid_areas], ['力度', reported.force_preference], ['温度', reported.temperature_preference]]],
     ['本次反应', [['放松过程', observed.session_response?.relaxation], ['服务反馈', observed.service_feedback]]],
     ['下次与沟通', [['下次建议', profile.next_visit?.plan], ['决策关注', consumption.decision_priorities], ['预算倾向', consumption.budget_preference]]],
-    ...(record?.schema_version === 5 && record?.taxonomy_version === 'service_reference_v4' && Array.isArray(reported.body_service_notes) && reported.body_service_notes.length ? [['身体服务提醒', [['下次服务', 'body_reconfirm']]]] as Array<[string, Array<[string, unknown]>]> : []),
+    ...(record?.schema_version === 5 && record?.taxonomy_version === 'service_reference_v4' && (record?.body_reconfirm_required === true || (Array.isArray(reported.body_service_notes) && reported.body_service_notes.length)) ? [['身体服务提醒', [['下次服务', 'body_reconfirm']]]] as Array<[string, Array<[string, unknown]>]> : []),
   ];
   const groups = rows.map(([title, values]) => ({
     title,

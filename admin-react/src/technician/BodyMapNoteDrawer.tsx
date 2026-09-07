@@ -2,6 +2,7 @@ import { ArrowLeftOutlined, CheckCircleFilled, DeleteOutlined, EditOutlined } fr
 import { App, Button, Drawer, Radio, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import bodyMapImage from '../assets/technician-body-map.png';
+import { getTechnicianServiceReferenceTaxonomy } from '../api';
 import { bodyMapPointKey, toggleBodyMapPoint, type BodyMapPoint } from './bodyMap';
 import type { V5BodyContext, V5BodyCurrentState, V5BodyRegion, V5BodyServiceNote, V5BodySessionHandling, V5BodySide } from './serviceReference';
 
@@ -39,8 +40,20 @@ const POINTS: PointLayout[] = [
   { region: 'ankle', side: 'right', label: '右踝', x: 21, y: 91 }, { region: 'ankle', side: 'left', label: '左踝', x: 29, y: 91 },
   { region: 'foot', side: 'right', label: '右足', x: 20, y: 96 }, { region: 'foot', side: 'left', label: '左足', x: 30, y: 96 },
   { region: 'upper_back', side: 'center', label: '上背', x: 75, y: 33 }, { region: 'mid_back', side: 'center', label: '中背', x: 75, y: 42 }, { region: 'lower_back', side: 'center', label: '下背', x: 75, y: 49 },
-  { region: 'shoulder', side: 'right', label: '右肩', x: 66, y: 27 }, { region: 'shoulder', side: 'left', label: '左肩', x: 84, y: 27 },
-  { region: 'buttock', side: 'right', label: '右臀', x: 71, y: 56 }, { region: 'buttock', side: 'left', label: '左臀', x: 79, y: 56 },
+  // 背面图中画面右侧才是顾客本人右侧；所有侧别均按顾客身体左右保存。
+  { region: 'shoulder', side: 'left', label: '左肩', x: 66, y: 27 }, { region: 'shoulder', side: 'right', label: '右肩', x: 84, y: 27 },
+  { region: 'upper_arm', side: 'left', label: '左上臂', x: 62, y: 36 }, { region: 'upper_arm', side: 'right', label: '右上臂', x: 88, y: 36 },
+  { region: 'elbow', side: 'left', label: '左肘', x: 61, y: 48 }, { region: 'elbow', side: 'right', label: '右肘', x: 89, y: 48 },
+  { region: 'wrist', side: 'left', label: '左腕', x: 60, y: 59 }, { region: 'wrist', side: 'right', label: '右腕', x: 90, y: 59 },
+  { region: 'hand', side: 'left', label: '左手', x: 58, y: 64 }, { region: 'hand', side: 'right', label: '右手', x: 92, y: 64 },
+  { region: 'side_waist', side: 'left', label: '左侧腰', x: 70, y: 47 }, { region: 'side_waist', side: 'right', label: '右侧腰', x: 80, y: 47 },
+  { region: 'hip', side: 'left', label: '左髋', x: 71, y: 53 }, { region: 'hip', side: 'right', label: '右髋', x: 79, y: 53 },
+  { region: 'buttock', side: 'left', label: '左臀', x: 71, y: 56 }, { region: 'buttock', side: 'right', label: '右臀', x: 79, y: 56 },
+  { region: 'thigh', side: 'left', label: '左大腿', x: 71, y: 64 }, { region: 'thigh', side: 'right', label: '右大腿', x: 79, y: 64 },
+  { region: 'knee', side: 'left', label: '左膝', x: 71, y: 76 }, { region: 'knee', side: 'right', label: '右膝', x: 79, y: 76 },
+  { region: 'calf', side: 'left', label: '左小腿', x: 71, y: 84 }, { region: 'calf', side: 'right', label: '右小腿', x: 79, y: 84 },
+  { region: 'ankle', side: 'left', label: '左踝', x: 71, y: 91 }, { region: 'ankle', side: 'right', label: '右踝', x: 79, y: 91 },
+  { region: 'foot', side: 'left', label: '左足', x: 70, y: 96 }, { region: 'foot', side: 'right', label: '右足', x: 80, y: 96 },
 ];
 
 const description = (note: DraftNote) => {
@@ -54,6 +67,7 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
   const [step, setStep] = useState(1);
   const [notes, setNotes] = useState<DraftNote[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [taxonomy, setTaxonomy] = useState<any>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -61,6 +75,20 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
     setNotes(value.map((note) => ({ ...note })));
     setActiveKey(null);
   }, [open, value]);
+
+  // 服务端 taxonomy 是唯一权威；本地文案仅用于网络短暂失败时不中断当次服务记录。
+  useEffect(() => {
+    if (!open) return;
+    getTechnicianServiceReferenceTaxonomy().then((response) => {
+      const body = response.data;
+      if (body?.schema_version === 5 && body?.taxonomy_version === 'service_reference_v4') setTaxonomy(body.groups?.body_service_notes || null);
+    }).catch(() => undefined);
+  }, [open]);
+
+  const regionLabels = taxonomy?.regions || REGIONS;
+  const contexts = Object.entries(taxonomy?.contexts || Object.fromEntries(CONTEXTS.map((item) => [item.value, item.label]))).map(([value, label]) => ({ value: value as V5BodyContext, label: String(label) }));
+  const states = Object.entries(taxonomy?.current_states || Object.fromEntries(STATES.map((item) => [item.value, item.label]))).map(([value, label]) => ({ value: value as V5BodyCurrentState, label: String(label) }));
+  const handlings = Object.entries(taxonomy?.session_handlings || Object.fromEntries(HANDLINGS.map((item) => [item.value, item.label]))).map(([value, label]) => ({ value: value as V5BodySessionHandling, label: String(label) }));
 
   const active = notes.find((note) => bodyMapPointKey(note) === activeKey) || null;
   const selectedPoints = useMemo(() => notes.map(({ region, side }) => ({ region, side })), [notes]);
@@ -104,6 +132,6 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
       <div className="technician-body-map-selected"><Typography.Text strong>已选择 {notes.length} 个部位</Typography.Text>{notes.length > 0 && <Button type="link" onClick={() => setNotes([])}>清空</Button>}</div>
       {notes.map((note, index) => <div className="technician-body-map-note" key={bodyMapPointKey(note)}><span>{index + 1}</span><Typography.Text>{description(note)}</Typography.Text><Button type="text" aria-label={`编辑${description(note)}`} icon={<EditOutlined />} onClick={() => { setActiveKey(bodyMapPointKey(note)); setStep(2); }} /><Button danger type="text" aria-label={`删除${description(note)}`} icon={<DeleteOutlined />} onClick={() => remove(bodyMapPointKey(note))} /></div>)}
     </>}
-    {step > 1 && active && <section className="technician-body-map-choice"><Typography.Title level={4}>{REGIONS[active.region]}{active.side === 'left' ? '（左）' : active.side === 'right' ? '（右）' : ''}</Typography.Title>{step === 2 && <><Typography.Paragraph>顾客提及的情况</Typography.Paragraph><Radio.Group value={active.context} onChange={(event) => patchActive({ context: event.target.value })} options={CONTEXTS} optionType="button" buttonStyle="solid" /></>}{step === 3 && <><Typography.Paragraph>当前状态</Typography.Paragraph><Radio.Group value={active.currentState} onChange={(event) => patchActive({ currentState: event.target.value })} options={STATES} optionType="button" buttonStyle="solid" /></>}{step === 4 && <><Typography.Paragraph>本次处理</Typography.Paragraph><Radio.Group value={active.sessionHandling} onChange={(event) => patchActive({ sessionHandling: event.target.value })} options={HANDLINGS} optionType="button" buttonStyle="solid" /><Typography.Paragraph type="secondary">下次服务前仍需当面确认。</Typography.Paragraph></>}</section>}
+    {step > 1 && active && <section className="technician-body-map-choice"><Typography.Title level={4}>{regionLabels[active.region] || REGIONS[active.region]}{active.side === 'left' ? '（左）' : active.side === 'right' ? '（右）' : ''}</Typography.Title>{step === 2 && <><Typography.Paragraph>顾客提及的情况</Typography.Paragraph><Radio.Group value={active.context} onChange={(event) => patchActive({ context: event.target.value })} options={contexts} optionType="button" buttonStyle="solid" /></>}{step === 3 && <><Typography.Paragraph>当前状态</Typography.Paragraph><Radio.Group value={active.currentState} onChange={(event) => patchActive({ currentState: event.target.value })} options={states} optionType="button" buttonStyle="solid" /></>}{step === 4 && <><Typography.Paragraph>本次处理</Typography.Paragraph><Radio.Group value={active.sessionHandling} onChange={(event) => patchActive({ sessionHandling: event.target.value })} options={handlings} optionType="button" buttonStyle="solid" /><Typography.Paragraph type="secondary">下次服务前仍需当面确认。</Typography.Paragraph></>}</section>}
   </Drawer>;
 }

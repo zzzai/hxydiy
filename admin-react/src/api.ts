@@ -60,6 +60,7 @@ export const getTechnicianMe = () => client.get('/technician/me');
 export const getTechnicianTasks = () => client.get('/technician/tasks');
 export const getTechnicianServiceReference = (occupancyId: number) =>
   client.get<TechnicianServiceReferenceResponse>(`/technician/occupancies/${occupancyId}/service-reference`);
+export const getTechnicianServiceReferenceTaxonomy = () => client.get('/technician/service-reference-taxonomy');
 export const getTechnicianServiceHistory = (page = 1, pageSize = 20, profileStatus: 'all' | 'confirmed' | 'pending' = 'all') =>
   client.get('/technician/service-history', { params: { page, page_size: pageSize, profile_status: profileStatus } });
 export const getTechnicianServiceOrders = (status: 'in_progress' | 'history' = 'in_progress', page = 1, pageSize = 30) =>

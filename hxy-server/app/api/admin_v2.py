@@ -4,6 +4,7 @@
 """
 
 from datetime import UTC, datetime, timezone
+from copy import deepcopy
 import hashlib
 import json
 import re
@@ -2487,6 +2488,20 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
     }
 
 
+def _management_profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
+    """管理端历史只提供 v5 身体记录的安全提醒，绝不下发部位或自述细节。"""
+    view = _profile_record_view(record, db)
+    if record.schema_version != 5:
+        return view
+    profile = deepcopy(view["profile"])
+    reported = profile.get("customer_reported") if isinstance(profile, dict) else None
+    notes = reported.pop("body_service_notes", None) if isinstance(reported, dict) else None
+    if notes:
+        view["body_reconfirm_required"] = True
+    view["profile"] = profile
+    return view
+
+
 def _profile_payload(body: CustomerProfileRecordIn) -> dict:
     if isinstance(body.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile, ServiceReferenceV5Profile)):
         return body.profile.storage_payload()
@@ -2695,10 +2710,10 @@ def create_customer_profile_record(
     role = normalize_staff_role(staff.role, staff.technician_id)
     if role not in {"technician", "manager"}:
         raise HTTPException(status_code=403, detail="当前账号无权新增画像记录")
-    if body.schema_version == 3 and role != "technician":
-        raise HTTPException(status_code=403, detail="管理端仅可读取 v3 服务参考")
-    if body.schema_version == 3 and not body.selection_session_id:
-        raise HTTPException(status_code=422, detail="v3 服务参考必须关联已完成服务")
+    if body.schema_version in (3, 4, 5) and role != "technician":
+        raise HTTPException(status_code=403, detail="管理端仅可读取新版服务参考")
+    if body.schema_version in (3, 4, 5) and not body.selection_session_id:
+        raise HTTPException(status_code=422, detail="新版服务参考必须关联已完成服务")
     idempotency_key = _require_profile_idempotency_key(idempotency_key)
     is_bound_technician = role == "technician" and bool(staff.technician_id)
     if is_bound_technician and body.schema_version == 1 and "source" not in body.model_fields_set:
@@ -2709,7 +2724,7 @@ def create_customer_profile_record(
     if is_bound_technician:
         if not body.selection_session_id:
             raise HTTPException(status_code=403, detail="技师画像记录必须关联已完成服务")
-    if body.schema_version in (2, 3, 4) and not body.selection_session_id:
+    if body.schema_version in (2, 3, 4, 5) and not body.selection_session_id:
         raise HTTPException(status_code=422, detail="服务参考必须关联已完成服务")
     _require_store_user(db, body.user_id, staff)
     if not _profile_payload(body) and not body.signals and not body.note:
@@ -2764,7 +2779,7 @@ def create_customer_profile_record(
         ))
         if not original:
             raise HTTPException(status_code=404, detail="原画像记录不存在")
-        if original.schema_version in (3, 4):
+        if original.schema_version in (3, 4, 5):
             raise HTTPException(status_code=403, detail="管理端不能更正新版服务参考")
         if not body.correction_reason.strip():
             raise HTTPException(status_code=422, detail="更正记录需要填写原因")
@@ -2855,7 +2870,7 @@ def list_customer_profile_records(
         CustomerProfileRecord.store_id == _staff_store_id(staff),
         CustomerProfileRecord.user_id == user_id,
     ).order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc())).all()
-    return {"items": [_profile_record_view(record, db) for record in records]}
+    return {"items": [_management_profile_record_view(record, db) for record in records]}
 
 
 @router.get("/users/{user_id}/customer-profile-current")
