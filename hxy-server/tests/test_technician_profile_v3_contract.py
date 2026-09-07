@@ -144,6 +144,52 @@ class TestTechnicianProfileV3Contract:
         payload.update(overrides)
         return payload
 
+    def v5_payload(self, body_service_notes, **overrides):
+        payload = {
+            "user_id": self.user_id,
+            "selection_session_id": self.session_id,
+            "schema_version": 5,
+            "taxonomy_version": "service_reference_v4",
+            "customer_confirmed": True,
+            "profile": {
+                "schema_version": 5,
+                "taxonomy_version": "service_reference_v4",
+                "customer_reported": {"body_service_notes": body_service_notes},
+                "technician_observed": {},
+                "next_visit": {},
+            },
+            "signals": [],
+            "note": "",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_v5_body_map_note_preserves_side_and_service_handling_without_current_profile_projection(self):
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=self.v5_payload([{
+                "region": "shoulder",
+                "side": "right",
+                "context": "long_term_discomfort_mentioned",
+                "current_state": "occasional_discomfort",
+                "session_handling": "lighter",
+                "reconfirm_next_visit": True,
+            }]),
+            headers={**self.technician_headers, "Idempotency-Key": "v5-body-map-001"},
+        )
+        assert response.status_code == 200, response.text
+        with self.SessionLocal() as db:
+            record = db.query(CustomerProfileRecord).one()
+            assert record.profile["customer_reported"]["body_service_notes"] == [{
+                "region": "shoulder",
+                "side": "right",
+                "context": "long_term_discomfort_mentioned",
+                "current_state": "occasional_discomfort",
+                "session_handling": "lighter",
+                "reconfirm_next_visit": True,
+            }]
+            assert db.query(CustomerProfileCurrent).filter_by(customer_id=self.user_id).count() == 0
+
     def test_v4_saves_customer_reported_body_note_without_current_profile_projection(self):
         payload = self.v4_payload([{
             "area": "knee", "context": "old_injury", "reconfirm_next_visit": True,
@@ -380,21 +426,43 @@ class TestTechnicianProfileV3Contract:
         assert rendered.returncode == 0, rendered.stderr
         assert json.loads(rendered.stdout) == expected_labels
 
-    def test_taxonomy_endpoint_exposes_v4_stable_codes_and_body_note_dictionary(self):
+    def test_taxonomy_endpoint_exposes_v5_stable_codes_and_body_map_dictionary(self):
         response = self.client.get(
             "/api/v1/technician/service-reference-taxonomy",
             headers=self.technician_headers,
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["schema_version"] == 4
-        assert body["taxonomy_version"] == "service_reference_v3"
+        assert body["schema_version"] == 5
+        assert body["taxonomy_version"] == "service_reference_v4"
         assert "desk_work" in body["groups"]["occupation_contexts"]
         assert body["groups"]["personal_context"]["height_band"]["average"] == "适中"
         assert set(body["groups"]["personal_context"]["age_band"]) == {"18_24", "25_34", "35_44", "45_54", "55_64", "65_plus"}
         assert set(body["groups"]["communication_consumption"]["budget_preference"]) == {"value", "balanced", "experience", "unexpressed"}
-        assert body["groups"]["body_service_notes"]["areas"]["knee"] == "膝周"
-        assert body["groups"]["body_service_notes"]["contexts"]["old_injury"] == "顾客提及旧伤"
+        assert body["groups"]["body_service_notes"]["regions"]["knee"] == "膝部"
+        assert body["groups"]["body_service_notes"]["sides"]["right"] == "右"
+        assert body["groups"]["body_service_notes"]["contexts"]["previous_injury_mentioned"] == "顾客提及曾受伤"
+
+    @pytest.mark.parametrize(("note", "key"), [
+        ({"region": "shoulder", "side": "center", "context": "recent_discomfort_mentioned", "current_state": "currently_uncomfortable", "session_handling": "avoid", "reconfirm_next_visit": True}, "v5-invalid-side"),
+        ({"region": "knee", "side": "left", "context": "recent_discomfort_mentioned", "current_state": "currently_uncomfortable", "session_handling": "avoid", "reconfirm_next_visit": False}, "v5-no-reconfirm"),
+    ])
+    def test_v5_rejects_invalid_body_point_or_missing_next_visit_reconfirmation(self, note, key):
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=self.v5_payload([note]),
+            headers={**self.technician_headers, "Idempotency-Key": key},
+        )
+        assert response.status_code == 422, response.text
+
+    def test_v5_rejects_duplicate_body_points(self):
+        note = {"region": "knee", "side": "left", "context": "recent_discomfort_mentioned", "current_state": "currently_uncomfortable", "session_handling": "avoid", "reconfirm_next_visit": True}
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=self.v5_payload([note, note]),
+            headers={**self.technician_headers, "Idempotency-Key": "v5-duplicate-point"},
+        )
+        assert response.status_code == 422, response.text
 
     def test_taxonomy_codes_submit_at_their_published_model_paths(self):
         taxonomy = self.client.get(

@@ -2082,6 +2082,13 @@ V3DecisionPriority = Literal["price", "quality", "environment", "efficiency", "f
 V3BudgetPreference = Literal["value", "balanced", "experience", "unexpressed"]
 V4BodyArea = Literal["neck_shoulder", "back", "waist_hip", "arm", "knee", "leg", "abdomen", "feet", "skin"]
 V4BodyContext = Literal["old_injury", "post_procedure_recovery", "recent_discomfort", "long_term_discomfort", "skin_sensitivity", "reconfirm"]
+V5BodyRegion = Literal["head", "neck", "shoulder", "chest", "abdomen", "upper_back", "mid_back", "lower_back", "side_waist", "upper_arm", "elbow", "wrist", "hand", "hip", "buttock", "thigh", "knee", "calf", "ankle", "foot"]
+V5BodySide = Literal["left", "right", "center"]
+V5BodyContext = Literal["previous_injury_mentioned", "post_procedure_recovery_mentioned", "recent_discomfort_mentioned", "long_term_discomfort_mentioned", "skin_sensitivity_mentioned", "reconfirm_requested"]
+V5BodyCurrentState = Literal["currently_uncomfortable", "occasional_discomfort", "no_current_discomfort", "needs_reconfirmation"]
+V5BodySessionHandling = Literal["avoid", "lighter", "normal_after_confirmation", "observe_and_reconfirm"]
+V5_CENTER_BODY_REGIONS = {"head", "neck", "chest", "abdomen", "upper_back", "mid_back", "lower_back"}
+V5_LATERAL_BODY_REGIONS = {"shoulder", "side_waist", "upper_arm", "elbow", "wrist", "hand", "hip", "buttock", "thigh", "knee", "calf", "ankle", "foot"}
 
 
 class ServiceReferenceV3PersonalContext(BaseModel):
@@ -2233,6 +2240,63 @@ class ServiceReferenceV4Profile(BaseModel):
         ).has_content() or bool(self.customer_reported.body_service_notes)
 
 
+class ServiceReferenceV5BodyNote(BaseModel):
+    """A precise, customer-reported body point and the service action for this visit."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    region: V5BodyRegion
+    side: V5BodySide
+    context: V5BodyContext
+    current_state: V5BodyCurrentState
+    session_handling: V5BodySessionHandling
+    reconfirm_next_visit: StrictBool = True
+
+    @model_validator(mode="after")
+    def validate_point_and_reconfirmation(self):
+        if self.region in V5_CENTER_BODY_REGIONS and self.side != "center":
+            raise ValueError("中央部位必须使用 center 侧别")
+        if self.region in V5_LATERAL_BODY_REGIONS and self.side not in {"left", "right"}:
+            raise ValueError("左右部位必须使用 left 或 right 侧别")
+        if not self.reconfirm_next_visit:
+            raise ValueError("身体相关情况必须在下次服务前再次确认")
+        return self
+
+
+class ServiceReferenceV5CustomerReported(ServiceReferenceV3CustomerReported):
+    body_service_notes: list[ServiceReferenceV5BodyNote] = Field(default_factory=list, max_length=3)
+
+    @field_validator("body_service_notes")
+    @classmethod
+    def validate_unique_body_points(cls, value: list[ServiceReferenceV5BodyNote]) -> list[ServiceReferenceV5BodyNote]:
+        keys = [(note.region, note.side) for note in value]
+        if len(keys) != len(set(keys)):
+            raise ValueError("身体部位不能重复记录")
+        return value
+
+
+class ServiceReferenceV5Profile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[5]
+    taxonomy_version: Literal["service_reference_v4"]
+    customer_reported: ServiceReferenceV5CustomerReported = Field(default_factory=ServiceReferenceV5CustomerReported)
+    technician_observed: ServiceReferenceV3TechnicianObserved = Field(default_factory=ServiceReferenceV3TechnicianObserved)
+    next_visit: ServiceReferenceV3NextVisit = Field(default_factory=ServiceReferenceV3NextVisit)
+
+    def storage_payload(self) -> dict:
+        return self.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+
+    def has_content(self) -> bool:
+        return ServiceReferenceV3Profile(
+            schema_version=3,
+            taxonomy_version="service_reference_v2",
+            customer_reported=ServiceReferenceV3CustomerReported.model_validate(self.customer_reported.model_dump(exclude={"body_service_notes"})),
+            technician_observed=self.technician_observed,
+            next_visit=self.next_visit,
+        ).has_content() or bool(self.customer_reported.body_service_notes)
+
+
 class CustomerProfileRecordIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -2240,10 +2304,10 @@ class CustomerProfileRecordIn(BaseModel):
     selection_session_id: str | None = None
     technician_id: int | None = None
     source: Literal["customer_statement", "service_observation", "both"] = "customer_statement"
-    schema_version: Literal[1, 2, 3, 4] = 1
-    taxonomy_version: Literal["service_reference_v1", "service_reference_v2", "service_reference_v3"] | None = None
+    schema_version: Literal[1, 2, 3, 4, 5] = 1
+    taxonomy_version: Literal["service_reference_v1", "service_reference_v2", "service_reference_v3", "service_reference_v4"] | None = None
     customer_confirmed: StrictBool = False
-    profile: dict[str, StrictStr] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile = Field(default_factory=dict)
+    profile: dict[str, StrictStr] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile | ServiceReferenceV5Profile = Field(default_factory=dict)
     signals: list[str] = Field(default_factory=list, max_length=30)
     note: str = Field(default="", max_length=500)
     correction_of_id: int | None = None
@@ -2251,8 +2315,8 @@ class CustomerProfileRecordIn(BaseModel):
 
     @field_validator("profile")
     @classmethod
-    def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile) -> dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile:
-        if isinstance(value, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile)):
+    def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile | ServiceReferenceV5Profile) -> dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile | ServiceReferenceV5Profile:
+        if isinstance(value, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile, ServiceReferenceV5Profile)):
             return value
         unknown_fields = set(value) - set(PROFILE_FIELD_OPTIONS)
         if unknown_fields:
@@ -2325,7 +2389,17 @@ class CustomerProfileRecordIn(BaseModel):
             if not self.profile.has_content():
                 raise ValueError("请至少记录一项服务参考")
             self.source = "both" if self.customer_confirmed else "service_observation"
-        elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile)):
+        elif self.schema_version == 5:
+            if self.taxonomy_version != "service_reference_v4" or not isinstance(self.profile, ServiceReferenceV5Profile):
+                raise ValueError("v5 服务参考必须使用 service_reference_v4 结构")
+            if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
+                raise ValueError("服务参考内外版本必须一致")
+            if self.signals or self.note:
+                raise ValueError("v5 服务参考不能混用旧版标签或备注")
+            if not self.profile.has_content():
+                raise ValueError("请至少记录一项服务参考")
+            self.source = "both" if self.customer_confirmed else "service_observation"
+        elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile, ServiceReferenceV5Profile)):
             raise ValueError("旧版画像不能携带 v2 服务参考元数据")
         return self
 
@@ -2414,7 +2488,7 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
 
 
 def _profile_payload(body: CustomerProfileRecordIn) -> dict:
-    if isinstance(body.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile)):
+    if isinstance(body.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile, ServiceReferenceV5Profile)):
         return body.profile.storage_payload()
     return body.profile
 

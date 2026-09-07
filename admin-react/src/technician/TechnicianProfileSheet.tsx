@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { App, Button, Collapse, Drawer, Form, Input, List, Modal, Radio, Tag, Typography } from 'antd';
 import { createCustomerProfileRecord } from '../api';
 import { technicianOrderItemLabel } from './technicianMobile';
-import { SERVICE_REFERENCE_OPTIONS, buildServiceReferenceV4Payload, hasServiceReferenceInput, type ServiceReferenceInput, type V4BodyArea, type V4BodyContext } from './serviceReference';
+import BodyMapNoteDrawer from './BodyMapNoteDrawer';
+import { SERVICE_REFERENCE_OPTIONS, buildServiceReferenceV5Payload, hasServiceReferenceInput, type ServiceReferenceInput, type V5BodyServiceNote } from './serviceReference';
 
 const MORE_REFERENCE_OPTIONS = {
   ageBand: [{ label: '18–24 岁', value: '18_24' }, { label: '25–34 岁', value: '25_34' }, { label: '35–44 岁', value: '35_44' }, { label: '45–54 岁', value: '45_54' }, { label: '55–64 岁', value: '55_64' }, { label: '65 岁以上', value: '65_plus' }],
@@ -16,18 +17,11 @@ const MORE_REFERENCE_OPTIONS = {
   budgetPreference: [{ label: '实惠优先', value: 'value' }, { label: '平衡', value: 'balanced' }, { label: '体验优先', value: 'experience' }, { label: '未表达', value: 'unexpressed' }],
 } as const;
 
-const BODY_NOTE_AREAS: Array<{ label: string; value: V4BodyArea }> = [
-  ['肩颈', 'neck_shoulder'], ['背部', 'back'], ['腰臀', 'waist_hip'], ['手臂', 'arm'], ['膝周', 'knee'], ['腿部', 'leg'], ['腹部', 'abdomen'], ['足部', 'feet'], ['皮肤', 'skin'],
-].map(([label, value]) => ({ label, value: value as V4BodyArea }));
-const BODY_NOTE_CONTEXTS: Array<{ label: string; value: V4BodyContext }> = [
-  ['顾客提及旧伤', 'old_injury'], ['顾客提及术后恢复', 'post_procedure_recovery'], ['顾客提及近期不适', 'recent_discomfort'], ['顾客提及长期不适', 'long_term_discomfort'], ['顾客提及皮肤敏感', 'skin_sensitivity'], ['下次服务前再确认', 'reconfirm'],
-].map(([label, value]) => ({ label, value: value as V4BodyContext }));
-
 function hasV3Input(values: ServiceReferenceInput) {
   return Boolean(values.personalContext?.ageBand || values.personalContext?.build || values.personalContext?.heightBand
     || values.workLifestyle?.occupationContexts?.length || values.workLifestyle?.sleepQuality
     || values.serviceRelatedContext?.contexts?.length || values.serviceRelatedContext?.quote?.trim()
-    || values.bodyServiceNotes?.length
+    || values.bodyServiceNotes?.length || values.bodyMapNotes?.length
     || values.sessionResponse?.relaxation || values.communicationConsumption?.decisionPriorities?.length
     || values.communicationConsumption?.budgetPreference);
 }
@@ -55,7 +49,8 @@ function safeDraftSummary(values: ServiceReferenceInput): string[] {
     selectedLabels(values.communicationConsumption?.decisionPriorities, MORE_REFERENCE_OPTIONS.decisionPriorities) && `决策关注：${selectedLabels(values.communicationConsumption?.decisionPriorities, MORE_REFERENCE_OPTIONS.decisionPriorities)}`,
     selectedLabel(values.communicationConsumption?.budgetPreference, MORE_REFERENCE_OPTIONS.budgetPreference) && `预算倾向：${selectedLabel(values.communicationConsumption?.budgetPreference, MORE_REFERENCE_OPTIONS.budgetPreference)}`,
     values.serviceRelatedContext?.quote?.trim() && `顾客原话：${values.serviceRelatedContext.quote.trim()}`,
-    values.bodyServiceNotes?.length && `身体状况（顾客自述）：${values.bodyServiceNotes.map((note) => `${BODY_NOTE_AREAS.find((option) => option.value === note.area)?.label || note.area}·${BODY_NOTE_CONTEXTS.find((option) => option.value === note.context)?.label || note.context}`).join('；')}`,
+    values.bodyServiceNotes?.length && `身体状况（顾客自述）：${values.bodyServiceNotes.length} 个部位，下次服务前再确认`,
+    values.bodyMapNotes?.length && `身体状况（顾客自述）：${values.bodyMapNotes.length} 个部位，下次服务前再确认`,
   ];
   return lines.filter((line): line is string => Boolean(line));
 }
@@ -82,6 +77,7 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
   const [draft, setDraft] = useState<ServiceReferenceInput | null>(null);
   const [confirmation, setConfirmation] = useState<boolean | undefined>();
   const [bodyNoteOpen, setBodyNoteOpen] = useState(false);
+  const [bodyMapNotes, setBodyMapNotes] = useState<V5BodyServiceNote[]>([]);
   const idempotencyKey = useRef(makeIdempotencyKey());
   const lastPayloadSignature = useRef<string | null>(null);
 
@@ -92,6 +88,7 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
     setSaveFailed(false);
     setDraft(null);
     setConfirmation(undefined);
+    setBodyMapNotes([]);
   }, [form, task]);
 
   const save = async (values: ServiceReferenceInput) => {
@@ -104,7 +101,7 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
     setSaving(true);
     setSaveFailed(false);
     const confirmedValues = { ...values, customerConfirmed: confirmation === true };
-    const payload = buildServiceReferenceV4Payload(customerId, task.selection_session_id, confirmedValues);
+    const payload = buildServiceReferenceV5Payload(customerId, task.selection_session_id, confirmedValues);
     const payloadSignature = JSON.stringify(payload);
     if (lastPayloadSignature.current !== null && lastPayloadSignature.current !== payloadSignature) {
       idempotencyKey.current = makeIdempotencyKey();
@@ -153,8 +150,8 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
       <section className="technician-body-note-entry" aria-label="一分钟快记">
         <Typography.Text strong>身体状况</Typography.Text>
         <Typography.Paragraph type="secondary">仅记录顾客主动提及、与服务有关的情况；非诊断。</Typography.Paragraph>
-        <Form.Item noStyle shouldUpdate={(previous, current) => previous.bodyServiceNotes !== current.bodyServiceNotes}>{() => {
-          const notes = form.getFieldValue('bodyServiceNotes') || [];
+        <Form.Item noStyle shouldUpdate={(previous, current) => previous.bodyMapNotes !== current.bodyMapNotes}>{() => {
+          const notes = form.getFieldValue('bodyMapNotes') || [];
           return <Button block onClick={() => setBodyNoteOpen(true)}>{notes.length ? `已记录 ${notes.length} 条身体状况` : '记录身体状况'}</Button>;
         }}</Form.Item>
       </section>
@@ -173,20 +170,7 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
         <Typography.Paragraph type="secondary">不询问或保存具体收入、资产或负债；预算偏好不得用于差别定价。</Typography.Paragraph>
       </> }]} />
     </Form>
-    <Drawer title="身体状况" placement="bottom" height="min(72vh, 620px)" open={bodyNoteOpen} onClose={() => setBodyNoteOpen(false)}>
-      <Typography.Paragraph type="secondary">顾客自述，非诊断；每次服务最多记录 3 条，下次服务前需再次确认。</Typography.Paragraph>
-      <Form form={form} component={false}>
-        <Form.List name="bodyServiceNotes">{(fields, { add, remove }) => <>
-          {fields.map((field, index) => <section className="technician-body-note" key={field.key}>
-            <Typography.Text strong>第 {index + 1} 条</Typography.Text>
-            <Form.Item name={[field.name, 'area']} label="部位" rules={[{ required: true, message: '请选择部位' }]}><Radio.Group optionType="button" buttonStyle="solid" options={BODY_NOTE_AREAS} /></Form.Item>
-            <Form.Item name={[field.name, 'context']} label="顾客提及" rules={[{ required: true, message: '请选择相关情况' }]}><Radio.Group optionType="button" buttonStyle="solid" options={BODY_NOTE_CONTEXTS} /></Form.Item>
-            <Button danger type="text" onClick={() => remove(field.name)}>删除此条</Button>
-          </section>)}
-          {fields.length < 3 && <Button block onClick={() => add({ reconfirmNextVisit: true })}>添加一条身体状况</Button>}
-        </>}</Form.List>
-      </Form>
-    </Drawer>
+    <BodyMapNoteDrawer open={bodyNoteOpen} value={bodyMapNotes} onChange={(notes) => { setBodyMapNotes(notes); form.setFieldValue('bodyMapNotes', notes); }} onClose={() => setBodyNoteOpen(false)} context={`${position} · ${task?.customer?.nickname || '顾客'}`} />
     <Modal title="保存前确认摘要" open={!!draft} confirmLoading={saving} okText={confirmation === true ? '保存为长期摘要' : '保存本次观察'} cancelText="返回修改" okButtonProps={{ disabled: confirmation === undefined }} onCancel={() => !saving && setDraft(null)} onOk={() => draft && void save(draft)}>
       <Typography.Paragraph>请向顾客复述本次记录。只有顾客确认后，内容才会进入下次可见的长期摘要。</Typography.Paragraph>
       <Typography.Text strong>待保存摘要</Typography.Text>

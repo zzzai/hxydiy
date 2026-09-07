@@ -320,13 +320,39 @@ SERVICE_REFERENCE_V3_TAXONOMY = {
     },
 }
 
+SERVICE_REFERENCE_V4_TAXONOMY = {
+    **SERVICE_REFERENCE_V2_TAXONOMY,
+    "body_service_notes": {
+        "regions": {
+            "head": "头部", "neck": "颈部", "shoulder": "肩部", "chest": "胸部", "abdomen": "腹部",
+            "upper_back": "上背", "mid_back": "中背", "lower_back": "下背", "side_waist": "侧腰",
+            "upper_arm": "上臂", "elbow": "肘部", "wrist": "腕部", "hand": "手部", "hip": "髋部",
+            "buttock": "臀部", "thigh": "大腿", "knee": "膝部", "calf": "小腿", "ankle": "踝部", "foot": "足部",
+        },
+        "sides": {"left": "左", "right": "右", "center": "中央"},
+        "contexts": {
+            "previous_injury_mentioned": "顾客提及曾受伤", "post_procedure_recovery_mentioned": "顾客提及术后恢复中",
+            "recent_discomfort_mentioned": "顾客提及近期不适", "long_term_discomfort_mentioned": "顾客提及长期不适",
+            "skin_sensitivity_mentioned": "顾客提及皮肤敏感", "reconfirm_requested": "情况需到店确认",
+        },
+        "current_states": {
+            "currently_uncomfortable": "当前仍有不适", "occasional_discomfort": "偶尔不适",
+            "no_current_discomfort": "目前无明显不适", "needs_reconfirmation": "当前情况需再确认",
+        },
+        "session_handlings": {
+            "avoid": "本次避开", "lighter": "本次减轻力度",
+            "normal_after_confirmation": "确认后正常进行", "observe_and_reconfirm": "本次观察，下次再确认",
+        },
+    },
+}
+
 
 @router.get("/service-reference-taxonomy")
 def get_service_reference_taxonomy(
     authorization: str | None = Header(None), db: Session = Depends(get_db)
 ) -> dict:
     current_technician(authorization, db)
-    return {"schema_version": 4, "taxonomy_version": "service_reference_v3", "groups": SERVICE_REFERENCE_V3_TAXONOMY}
+    return {"schema_version": 5, "taxonomy_version": "service_reference_v4", "groups": SERVICE_REFERENCE_V4_TAXONOMY}
 
 
 @router.get("/occupancies/{occupancy_id}/service-reference")
@@ -584,6 +610,7 @@ def _supported_reference_version():
         and_(CustomerProfileRecord.schema_version == 2, CustomerProfileRecord.taxonomy_version == "service_reference_v1"),
         and_(CustomerProfileRecord.schema_version == 3, CustomerProfileRecord.taxonomy_version == "service_reference_v2"),
         and_(CustomerProfileRecord.schema_version == 4, CustomerProfileRecord.taxonomy_version == "service_reference_v3"),
+        and_(CustomerProfileRecord.schema_version == 5, CustomerProfileRecord.taxonomy_version == "service_reference_v4"),
     )
 
 
@@ -662,7 +689,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
             ),
         }
         return summary
-    if (record.schema_version, record.taxonomy_version) in ((3, "service_reference_v2"), (4, "service_reference_v3")):
+    if (record.schema_version, record.taxonomy_version) in ((3, "service_reference_v2"), (4, "service_reference_v3"), (5, "service_reference_v4")):
         reported = profile.get("customer_reported") or {}
         lifestyle = reported.get("work_lifestyle") or {}
         consumption = reported.get("communication_consumption") or {}
@@ -692,7 +719,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
                 if code in SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"]
             ],
             "budget_preference": SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["budget_preference"].get(consumption.get("budget_preference")),
-            **({"body_reconfirm_required": True} if record.schema_version == 4 and reported.get("body_service_notes") else {}),
+            **({"body_reconfirm_required": True} if record.schema_version in {4, 5} and reported.get("body_service_notes") else {}),
         }
         return {key: value for key, value in summary.items() if value not in (None, [], "")}
     return None

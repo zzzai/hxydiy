@@ -46,11 +46,12 @@ test('移动技师首页将同一房间的多活动占用显式显示为待核�
   assert.match(mobileSource, /conflict/);
 });
 
-test('移动技师服务参考提交完成服务关联和 v4 单一载荷', () => {
+test('移动技师服务参考提交完成服务关联和 v5 单一载荷', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /createCustomerProfileRecord/);
   assert.match(source, /selection_session_id/);
-  assert.match(source, /buildServiceReferenceV4Payload/);
+  assert.match(source, /buildServiceReferenceV5Payload/);
+  assert.match(source, /BodyMapNoteDrawer/);
   assert.match(source, /customerConfirmed/);
 });
 
@@ -169,4 +170,14 @@ test('管理端兼容 v2 嵌套服务参考而不退化为空摘要', () => {
     { title: '下次与沟通', items: [{ label: '下次建议', value: '延续本次' }] },
   ]);
   assert.equal(display.collapsedQuote, '顾客希望避开腹部');
+});
+
+test('管理端将 v5 身体记录降级为服务前再确认，不展示部位或敏感自述', () => {
+  const display = buildServiceReferenceDisplay({
+    schema_version: 5, taxonomy_version: 'service_reference_v4', customer_confirmed: true,
+    profile: { customer_reported: { body_service_notes: [{ region: 'shoulder', side: 'right', context: 'long_term_discomfort_mentioned' }] } },
+  });
+  assert.equal(display.version, 'v5 · service_reference_v4');
+  assert.deepEqual(display.groups, [{ title: '身体服务提醒', items: [{ label: '下次服务', value: '服务前再确认' }] }]);
+  assert.equal(display.collapsedQuote, '');
 });
