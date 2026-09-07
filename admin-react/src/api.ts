@@ -106,8 +106,8 @@ export const createCustomerProfileRecord = (data: {
   selection_session_id?: string;
   technician_id?: number;
   source?: 'customer_statement' | 'service_observation' | 'both';
-  schema_version?: 1 | 2 | 3;
-  taxonomy_version?: 'service_reference_v1' | 'service_reference_v2';
+  schema_version?: 1 | 2 | 3 | 4;
+  taxonomy_version?: 'service_reference_v1' | 'service_reference_v2' | 'service_reference_v3';
   customer_confirmed?: boolean;
   profile: Record<string, unknown>;
   signals: string[];

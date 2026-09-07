@@ -13,6 +13,9 @@ export type V3ServiceRelatedContext = 'long_term_condition' | 'recent_discomfort
 export type V3Relaxation = 'quick' | 'gradual' | 'tense';
 export type V3DecisionPriority = 'price' | 'quality' | 'environment' | 'efficiency' | 'fixed_technician' | 'fixed_time';
 export type V3BudgetPreference = 'value' | 'balanced' | 'experience' | 'unexpressed';
+export type V4BodyArea = 'neck_shoulder' | 'back' | 'waist_hip' | 'arm' | 'knee' | 'leg' | 'abdomen' | 'feet' | 'skin';
+export type V4BodyContext = 'old_injury' | 'post_procedure_recovery' | 'recent_discomfort' | 'long_term_discomfort' | 'skin_sensitivity' | 'reconfirm';
+export type V4BodyServiceNote = { area: V4BodyArea; context: V4BodyContext; reconfirmNextVisit: boolean };
 
 export interface ServiceReferenceInput {
   focusAreas?: ServiceArea[];
@@ -28,6 +31,7 @@ export interface ServiceReferenceInput {
   serviceRelatedContext?: { contexts?: V3ServiceRelatedContext[]; quote?: string };
   sessionResponse?: { relaxation?: V3Relaxation };
   communicationConsumption?: { decisionPriorities?: V3DecisionPriority[]; budgetPreference?: V3BudgetPreference };
+  bodyServiceNotes?: V4BodyServiceNote[];
 }
 
 const options = <T extends string>(entries: Array<[string, T]>) => entries.map(([label, value]) => ({ label, value }));
@@ -133,6 +137,29 @@ export function buildServiceReferenceV3Payload(userId: number, selectionSessionI
     },
     signals: [],
     note: '',
+  };
+}
+
+export function buildServiceReferenceV4Payload(userId: number, selectionSessionId: string, values: ServiceReferenceInput) {
+  const v3 = buildServiceReferenceV3Payload(userId, selectionSessionId, values);
+  const customerReported: Record<string, unknown> = { ...v3.profile.customer_reported };
+  if (values.bodyServiceNotes?.length) {
+    customerReported.body_service_notes = values.bodyServiceNotes.map((note) => ({
+      area: note.area,
+      context: note.context,
+      reconfirm_next_visit: note.reconfirmNextVisit,
+    }));
+  }
+  return {
+    ...v3,
+    schema_version: 4 as const,
+    taxonomy_version: 'service_reference_v3' as const,
+    profile: {
+      ...v3.profile,
+      schema_version: 4 as const,
+      taxonomy_version: 'service_reference_v3' as const,
+      customer_reported: customerReported,
+    },
   };
 }
 

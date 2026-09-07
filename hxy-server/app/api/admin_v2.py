@@ -2080,6 +2080,8 @@ V3ServiceRelatedContext = Literal["long_term_condition", "recent_discomfort_reco
 V3Relaxation = Literal["quick", "gradual", "tense"]
 V3DecisionPriority = Literal["price", "quality", "environment", "efficiency", "fixed_technician", "fixed_time"]
 V3BudgetPreference = Literal["value", "balanced", "experience", "unexpressed"]
+V4BodyArea = Literal["neck_shoulder", "back", "waist_hip", "arm", "knee", "leg", "abdomen", "feet", "skin"]
+V4BodyContext = Literal["old_injury", "post_procedure_recovery", "recent_discomfort", "long_term_discomfort", "skin_sensitivity", "reconfirm"]
 
 
 class ServiceReferenceV3PersonalContext(BaseModel):
@@ -2195,6 +2197,42 @@ class ServiceReferenceV3Profile(BaseModel):
         return populated(self.model_dump(exclude={"schema_version", "taxonomy_version"}))
 
 
+class ServiceReferenceV4BodyNote(BaseModel):
+    """A service-relevant fact the customer stated; never a technician diagnosis."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    area: V4BodyArea
+    context: V4BodyContext
+    reconfirm_next_visit: StrictBool = True
+
+
+class ServiceReferenceV4CustomerReported(ServiceReferenceV3CustomerReported):
+    body_service_notes: list[ServiceReferenceV4BodyNote] = Field(default_factory=list, max_length=3)
+
+
+class ServiceReferenceV4Profile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[4]
+    taxonomy_version: Literal["service_reference_v3"]
+    customer_reported: ServiceReferenceV4CustomerReported = Field(default_factory=ServiceReferenceV4CustomerReported)
+    technician_observed: ServiceReferenceV3TechnicianObserved = Field(default_factory=ServiceReferenceV3TechnicianObserved)
+    next_visit: ServiceReferenceV3NextVisit = Field(default_factory=ServiceReferenceV3NextVisit)
+
+    def storage_payload(self) -> dict:
+        return self.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+
+    def has_content(self) -> bool:
+        return ServiceReferenceV3Profile(
+            schema_version=3,
+            taxonomy_version="service_reference_v2",
+            customer_reported=ServiceReferenceV3CustomerReported.model_validate(self.customer_reported.model_dump(exclude={"body_service_notes"})),
+            technician_observed=self.technician_observed,
+            next_visit=self.next_visit,
+        ).has_content() or bool(self.customer_reported.body_service_notes)
+
+
 class CustomerProfileRecordIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -2202,10 +2240,10 @@ class CustomerProfileRecordIn(BaseModel):
     selection_session_id: str | None = None
     technician_id: int | None = None
     source: Literal["customer_statement", "service_observation", "both"] = "customer_statement"
-    schema_version: Literal[1, 2, 3] = 1
-    taxonomy_version: Literal["service_reference_v1", "service_reference_v2"] | None = None
+    schema_version: Literal[1, 2, 3, 4] = 1
+    taxonomy_version: Literal["service_reference_v1", "service_reference_v2", "service_reference_v3"] | None = None
     customer_confirmed: StrictBool = False
-    profile: dict[str, StrictStr] | ServiceReferenceProfile | ServiceReferenceV3Profile = Field(default_factory=dict)
+    profile: dict[str, StrictStr] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile = Field(default_factory=dict)
     signals: list[str] = Field(default_factory=list, max_length=30)
     note: str = Field(default="", max_length=500)
     correction_of_id: int | None = None
@@ -2213,8 +2251,8 @@ class CustomerProfileRecordIn(BaseModel):
 
     @field_validator("profile")
     @classmethod
-    def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile) -> dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile:
-        if isinstance(value, (ServiceReferenceProfile, ServiceReferenceV3Profile)):
+    def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile) -> dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile:
+        if isinstance(value, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile)):
             return value
         unknown_fields = set(value) - set(PROFILE_FIELD_OPTIONS)
         if unknown_fields:
@@ -2277,7 +2315,17 @@ class CustomerProfileRecordIn(BaseModel):
             if not self.profile.has_content():
                 raise ValueError("请至少记录一项服务参考")
             self.source = "both" if self.customer_confirmed else "service_observation"
-        elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile)):
+        elif self.schema_version == 4:
+            if self.taxonomy_version != "service_reference_v3" or not isinstance(self.profile, ServiceReferenceV4Profile):
+                raise ValueError("v4 服务参考必须使用 service_reference_v3 结构")
+            if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
+                raise ValueError("服务参考内外版本必须一致")
+            if self.signals or self.note:
+                raise ValueError("v4 服务参考不能混用旧版标签或备注")
+            if not self.profile.has_content():
+                raise ValueError("请至少记录一项服务参考")
+            self.source = "both" if self.customer_confirmed else "service_observation"
+        elif self.taxonomy_version is not None or self.customer_confirmed or isinstance(self.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile)):
             raise ValueError("旧版画像不能携带 v2 服务参考元数据")
         return self
 
@@ -2366,7 +2414,7 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
 
 
 def _profile_payload(body: CustomerProfileRecordIn) -> dict:
-    if isinstance(body.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile)):
+    if isinstance(body.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile)):
         return body.profile.storage_payload()
     return body.profile
 
@@ -2587,8 +2635,8 @@ def create_customer_profile_record(
     if is_bound_technician:
         if not body.selection_session_id:
             raise HTTPException(status_code=403, detail="技师画像记录必须关联已完成服务")
-    if body.schema_version == 2 and not body.selection_session_id:
-        raise HTTPException(status_code=422, detail="v2 服务参考必须关联已完成服务")
+    if body.schema_version in (2, 3, 4) and not body.selection_session_id:
+        raise HTTPException(status_code=422, detail="服务参考必须关联已完成服务")
     _require_store_user(db, body.user_id, staff)
     if not _profile_payload(body) and not body.signals and not body.note:
         raise HTTPException(status_code=422, detail="请至少记录一项服务参考")
@@ -2642,8 +2690,8 @@ def create_customer_profile_record(
         ))
         if not original:
             raise HTTPException(status_code=404, detail="原画像记录不存在")
-        if original.schema_version == 3:
-            raise HTTPException(status_code=403, detail="管理端不能更正 v3 服务参考")
+        if original.schema_version in (3, 4):
+            raise HTTPException(status_code=403, detail="管理端不能更正新版服务参考")
         if not body.correction_reason.strip():
             raise HTTPException(status_code=422, detail="更正记录需要填写原因")
     record = CustomerProfileRecord(
