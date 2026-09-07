@@ -142,7 +142,7 @@ export function buildServiceReferenceV3Payload(userId: number, selectionSessionI
 
 export function buildServiceReferenceV4Payload(userId: number, selectionSessionId: string, values: ServiceReferenceInput) {
   const v3 = buildServiceReferenceV3Payload(userId, selectionSessionId, values);
-  const customerReported = { ...v3.profile.customer_reported };
+  const customerReported: Record<string, unknown> = { ...v3.profile.customer_reported };
   if (values.bodyServiceNotes?.length) {
     customerReported.body_service_notes = values.bodyServiceNotes.map((note) => ({
       area: note.area,
