@@ -172,7 +172,7 @@ export default function TechnicianTodayPage() {
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
         <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
         <div className="technician-task-card-foot">
-          {selectedOccupancyId !== null && selectedOrder.customer?.id && <Button block size="large" icon={<EyeOutlined />} onClick={() => { setReferenceOccupancyId(selectedOccupancyId); setSelectedOrder(undefined); }}>查看上次服务参考</Button>}
+          {selectedActions.length > 0 && selectedOrder.customer?.id && <Button block size="large" icon={<EyeOutlined />} onClick={() => { setReferenceOccupancyId(selectedOccupancyId); setSelectedOrder(undefined); }}>查看上次服务参考</Button>}
           {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>确认服务</Button>}
           {selectedActions.includes('finish') && <Button type="primary" block size="large" icon={<CheckCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'finish')}>服务结束</Button>}
           {selectedOccupancyId === null && <Typography.Text type="secondary">当前服务单接口未提供服务位占用凭证，仅支持查看。</Typography.Text>}

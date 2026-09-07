@@ -80,6 +80,11 @@ test('活动顾客服务单显式打开安全服务参考摘要', () => {
   for (const sensitive of ['quote', 'note', 'phone', 'age_range', 'gender', 'occupation']) assert.doesNotMatch(drawer, new RegExp(sensitive));
 });
 
+test('已完成服务单不展示只能在活动服务位读取的上次服务参考入口', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /selectedActions\.length > 0 && selectedOrder\.customer\?\.id/);
+});
+
 test('画像写入请求附带幂等键', () => {
   const source = readFileSync(new URL('../src/api.ts', import.meta.url), 'utf8');
   const start = source.indexOf('export const createCustomerProfileRecord');
