@@ -16,6 +16,12 @@ export type V3BudgetPreference = 'value' | 'balanced' | 'experience' | 'unexpres
 export type V4BodyArea = 'neck_shoulder' | 'back' | 'waist_hip' | 'arm' | 'knee' | 'leg' | 'abdomen' | 'feet' | 'skin';
 export type V4BodyContext = 'old_injury' | 'post_procedure_recovery' | 'recent_discomfort' | 'long_term_discomfort' | 'skin_sensitivity' | 'reconfirm';
 export type V4BodyServiceNote = { area: V4BodyArea; context: V4BodyContext; reconfirmNextVisit: boolean };
+export type V5BodyRegion = 'head' | 'neck' | 'shoulder' | 'chest' | 'abdomen' | 'upper_back' | 'mid_back' | 'lower_back' | 'side_waist' | 'upper_arm' | 'elbow' | 'wrist' | 'hand' | 'hip' | 'buttock' | 'thigh' | 'knee' | 'calf' | 'ankle' | 'foot';
+export type V5BodySide = 'left' | 'right' | 'center';
+export type V5BodyContext = 'previous_injury_mentioned' | 'post_procedure_recovery_mentioned' | 'recent_discomfort_mentioned' | 'long_term_discomfort_mentioned' | 'skin_sensitivity_mentioned' | 'reconfirm_requested';
+export type V5BodyCurrentState = 'currently_uncomfortable' | 'occasional_discomfort' | 'no_current_discomfort' | 'needs_reconfirmation';
+export type V5BodySessionHandling = 'avoid' | 'lighter' | 'normal_after_confirmation' | 'observe_and_reconfirm';
+export type V5BodyServiceNote = { region: V5BodyRegion; side: V5BodySide; context: V5BodyContext; currentState: V5BodyCurrentState; sessionHandling: V5BodySessionHandling; reconfirmNextVisit: boolean };
 
 export interface ServiceReferenceInput {
   focusAreas?: ServiceArea[];
@@ -32,6 +38,7 @@ export interface ServiceReferenceInput {
   sessionResponse?: { relaxation?: V3Relaxation };
   communicationConsumption?: { decisionPriorities?: V3DecisionPriority[]; budgetPreference?: V3BudgetPreference };
   bodyServiceNotes?: V4BodyServiceNote[];
+  bodyMapNotes?: V5BodyServiceNote[];
 }
 
 const options = <T extends string>(entries: Array<[string, T]>) => entries.map(([label, value]) => ({ label, value }));
@@ -163,6 +170,32 @@ export function buildServiceReferenceV4Payload(userId: number, selectionSessionI
   };
 }
 
+export function buildServiceReferenceV5Payload(userId: number, selectionSessionId: string, values: ServiceReferenceInput) {
+  const v3 = buildServiceReferenceV3Payload(userId, selectionSessionId, values);
+  const customerReported: Record<string, unknown> = { ...v3.profile.customer_reported };
+  if (values.bodyMapNotes?.length) {
+    customerReported.body_service_notes = values.bodyMapNotes.map((note) => ({
+      region: note.region,
+      side: note.side,
+      context: note.context,
+      current_state: note.currentState,
+      session_handling: note.sessionHandling,
+      reconfirm_next_visit: note.reconfirmNextVisit,
+    }));
+  }
+  return {
+    ...v3,
+    schema_version: 5 as const,
+    taxonomy_version: 'service_reference_v4' as const,
+    profile: {
+      ...v3.profile,
+      schema_version: 5 as const,
+      taxonomy_version: 'service_reference_v4' as const,
+      customer_reported: customerReported,
+    },
+  };
+}
+
 export interface TechnicianServiceReferenceRecord {
   focus_areas: string[];
   avoid_areas: string[];
@@ -172,6 +205,7 @@ export interface TechnicianServiceReferenceRecord {
   next_visit_plan: string | null;
   recorded_date: string | null;
   prompt: string;
+  body_reconfirm_required?: boolean;
 }
 
 export interface TechnicianServiceReferenceResponse {

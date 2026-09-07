@@ -46,11 +46,12 @@ test('移动技师首页将同一房间的多活动占用显式显示为待核�
   assert.match(mobileSource, /conflict/);
 });
 
-test('移动技师服务参考提交完成服务关联和 v4 单一载荷', () => {
+test('移动技师服务参考提交完成服务关联和 v5 单一载荷', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /createCustomerProfileRecord/);
   assert.match(source, /selection_session_id/);
-  assert.match(source, /buildServiceReferenceV4Payload/);
+  assert.match(source, /buildServiceReferenceV5Payload/);
+  assert.match(source, /BodyMapNoteDrawer/);
   assert.match(source, /customerConfirmed/);
 });
 
@@ -169,4 +170,39 @@ test('管理端兼容 v2 嵌套服务参考而不退化为空摘要', () => {
     { title: '下次与沟通', items: [{ label: '下次建议', value: '延续本次' }] },
   ]);
   assert.equal(display.collapsedQuote, '顾客希望避开腹部');
+});
+
+test('查看上次服务参考只显示身体服务前再确认，不显示部位或自述', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianServiceReferenceDrawer.tsx', import.meta.url), 'utf8');
+  assert.match(source, /body_reconfirm_required/);
+  assert.match(source, /身体情况：服务前再确认/);
+  assert.doesNotMatch(source, /body_service_notes/);
+});
+
+test('背面人体图按顾客自身左右侧保存，并覆盖背面四肢与腿足点位', () => {
+  const source = readFileSync(new URL('../src/technician/BodyMapNoteDrawer.tsx', import.meta.url), 'utf8');
+  assert.match(source, /region: 'shoulder', side: 'left', label: '左肩', x: 66/);
+  assert.match(source, /region: 'shoulder', side: 'right', label: '右肩', x: 84/);
+  for (const region of ['upper_arm', 'elbow', 'wrist', 'hand', 'side_waist', 'hip', 'buttock', 'thigh', 'knee', 'calf', 'ankle', 'foot']) {
+    assert.match(source, new RegExp(`region: '${region}', side: 'left'`));
+    assert.match(source, new RegExp(`region: '${region}', side: 'right'`));
+  }
+});
+
+test('管理端将 v5 身体记录降级为服务前再确认，不展示部位或敏感自述', () => {
+  const display = buildServiceReferenceDisplay({
+    schema_version: 5, taxonomy_version: 'service_reference_v4', customer_confirmed: true,
+    profile: { customer_reported: { body_service_notes: [{ region: 'shoulder', side: 'right', context: 'long_term_discomfort_mentioned' }] } },
+  });
+  assert.equal(display.version, 'v5 · service_reference_v4');
+  assert.deepEqual(display.groups, [{ title: '身体服务提醒', items: [{ label: '下次服务', value: '服务前再确认' }] }]);
+  assert.equal(display.collapsedQuote, '');
+});
+
+test('管理端接收后端脱敏的 v5 身体提醒时仍显示服务前再确认', () => {
+  const display = buildServiceReferenceDisplay({
+    schema_version: 5, taxonomy_version: 'service_reference_v4', body_reconfirm_required: true,
+    profile: { customer_reported: {} },
+  });
+  assert.deepEqual(display.groups, [{ title: '身体服务提醒', items: [{ label: '下次服务', value: '服务前再确认' }] }]);
 });

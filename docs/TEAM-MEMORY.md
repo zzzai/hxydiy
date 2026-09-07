@@ -40,6 +40,8 @@
 
 ## 最近决策
 
+2026-09-07：人体标注服务参考的下一写入版本确定为 `schema_version=5`、`taxonomy_version=service_reference_v4`。每条使用 `region + side + context + current_state + session_handling + reconfirm_next_visit` 稳定编码，最多三条；身体情况在任何下次服务前仍须重新确认，不进入 `customer_profile_current`、运营标签、定价、营销或算法特征。v1–v4 只读兼容。该版本尚未合并或发布。
+
 2026-09-07：服务参考 v4 增加最多三条“部位 + 顾客自述情况 + 下次确认”的身体状况条目。它们仅属于服务连续性记录，不进入当前画像投影、自动分群、定价或营销；不得记录诊断、药品名或治疗结论。
 
 2026-09-06：当前顾客画像数据底座在本地分支实现，原始 `customer_profile_records` 仍是不可覆盖事实；仅顾客确认的 v3 安全字段可按 `customer_id + store_id` 投影至 `customer_profile_current`。未确认记录、技师观察、顾客原话、用药/孕产/健康相关自述暂不进入投影。店长只读接口按门店隔离，成功非空读取只审计字段编码与数量。实现未合并、未发布、未完成门店验收。

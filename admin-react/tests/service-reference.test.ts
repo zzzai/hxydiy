@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildServiceReferenceV3Payload, buildServiceReferenceV4Payload } from '../src/technician/serviceReference.ts';
+import { buildServiceReferenceV3Payload, buildServiceReferenceV4Payload, buildServiceReferenceV5Payload } from '../src/technician/serviceReference.ts';
 
 test('服务参考 v3 载荷固定版本并保留可选字段的最小结构', () => {
   const payload = buildServiceReferenceV3Payload(12, 'session-v3', {
@@ -64,4 +64,21 @@ test('服务参考 v4 将顾客自述身体情况保存在服务记录且不混�
     body_service_notes: [{ area: 'knee', context: 'old_injury', reconfirm_next_visit: true }],
   });
   assert.deepEqual(payload.profile.technician_observed, {});
+});
+
+test('服务参考 v5 将人体点位、侧别、当前状态和本次处理作为独立服务事实保存', () => {
+  const payload = buildServiceReferenceV5Payload(12, 'session-v5-body-map', {
+    customerConfirmed: true,
+    bodyMapNotes: [{
+      region: 'shoulder', side: 'right', context: 'long_term_discomfort_mentioned',
+      currentState: 'occasional_discomfort', sessionHandling: 'lighter', reconfirmNextVisit: true,
+    }],
+  });
+
+  assert.equal(payload.schema_version, 5);
+  assert.equal(payload.taxonomy_version, 'service_reference_v4');
+  assert.deepEqual(payload.profile.customer_reported.body_service_notes, [{
+    region: 'shoulder', side: 'right', context: 'long_term_discomfort_mentioned',
+    current_state: 'occasional_discomfort', session_handling: 'lighter', reconfirm_next_visit: true,
+  }]);
 });

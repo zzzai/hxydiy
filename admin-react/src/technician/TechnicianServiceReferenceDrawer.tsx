@@ -32,6 +32,7 @@ export default function TechnicianServiceReferenceDrawer({ occupancyId, open, on
         <Descriptions.Item label="下次">{record.next_visit_plan || '未记录'}</Descriptions.Item>
         <Descriptions.Item label="记录日期">{record.recorded_date || '未记录'}</Descriptions.Item>
       </Descriptions>
+      {record.body_reconfirm_required === true && <Alert type="warning" showIcon message="身体情况：服务前再确认" description="请向顾客当面确认本次服务是否需要调整；此处不展示身体部位或自述内容。" />}
       <Alert type="info" showIcon message={record.prompt || '请本次服务前再次确认'} />
     </div>}
   </Drawer>;

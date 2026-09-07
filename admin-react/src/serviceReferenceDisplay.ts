@@ -11,6 +11,7 @@ const LABELS: Record<string, string> = {
   neck_shoulder: '肩颈', waist_hip: '腰臀', legs: '腿部', abdomen: '腹部', feet: '足部', full_relaxation: '整体放松', gentle: '轻柔', medium: '适中', strong: '偏强', lower: '偏低', higher: '偏高',
   quick: '较快', gradual: '逐渐', tense: '始终较紧张', suitable: '本次合适', better_after_adjustment: '调整后更合适', adjust_next_time: '下次需调整', repeat_current: '延续本次', confirm_on_arrival: '到店再确认',
   price: '价格', quality: '品质', environment: '环境', efficiency: '效率', fixed_technician: '固定技师', fixed_time: '固定时段', value: '实惠优先', experience: '体验优先', unexpressed: '未表达',
+  body_reconfirm: '服务前再确认',
 };
 
 const labelValue = (field: string, value: unknown) => {
@@ -38,13 +39,15 @@ export function buildServiceReferenceDisplay(record: any): ServiceReferenceDispl
     ['服务偏好', [['本次重点', reported.focus_areas], ['避开或谨慎', reported.avoid_areas], ['力度', reported.force_preference], ['温度', reported.temperature_preference]]],
     ['本次反应', [['放松过程', observed.session_response?.relaxation], ['服务反馈', observed.service_feedback]]],
     ['下次与沟通', [['下次建议', profile.next_visit?.plan], ['决策关注', consumption.decision_priorities], ['预算倾向', consumption.budget_preference]]],
+    ...(record?.schema_version === 5 && record?.taxonomy_version === 'service_reference_v4' && (record?.body_reconfirm_required === true || (Array.isArray(reported.body_service_notes) && reported.body_service_notes.length)) ? [['身体服务提醒', [['下次服务', 'body_reconfirm']]]] as Array<[string, Array<[string, unknown]>]> : []),
   ];
   const groups = rows.map(([title, values]) => ({
     title,
     items: values.map(([label, value]) => ({ label, value: labelValue(label, value) })).filter(item => Boolean(item.value)),
   })).filter(group => group.items.length > 0);
   const knownVersion = (record?.schema_version === 3 && record?.taxonomy_version === 'service_reference_v2')
-    || (record?.schema_version === 2 && record?.taxonomy_version === 'service_reference_v1');
+    || (record?.schema_version === 2 && record?.taxonomy_version === 'service_reference_v1')
+    || (record?.schema_version === 5 && record?.taxonomy_version === 'service_reference_v4');
   return {
     version: knownVersion ? `v${record.schema_version} · ${record.taxonomy_version}` : '',
     groups,
