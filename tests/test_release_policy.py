@@ -17,6 +17,7 @@ class ReleasePolicyTests(unittest.TestCase):
         run = dict(head_sha=SHA, head_branch='main', event='push', path='.github/workflows/ci.yml',
                    status='completed', conclusion='success', head_repository={'full_name':'zzzai/hxydiy'})
         self.assertTrue(self.evaluate('eligibleRun', [run, SHA, SHA, 'zzzai/hxydiy']))
+        self.assertTrue(self.evaluate('eligibleRun', [dict(run, event='workflow_dispatch'), SHA, SHA, 'zzzai/hxydiy']))
         for key, value in [('head_sha','2'*40), ('event','pull_request'), ('path','other.yml'),
                            ('status','in_progress'), ('conclusion','failure'), ('head_repository',{'full_name':'other/repo'})]:
             self.assertFalse(self.evaluate('eligibleRun', [dict(run, **{key:value}), SHA, SHA, 'zzzai/hxydiy']))
