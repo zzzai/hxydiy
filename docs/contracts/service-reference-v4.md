@@ -16,7 +16,7 @@
 
 - 新写入固定使用 `schema_version=5`、`taxonomy_version=service_reference_v4`。
 - `schema_version=1` 至 `4` 继续只读兼容，不迁移、不覆盖、不补猜缺失字段。
-- v5 保留 v4 以前的高频服务参考字段；仅升级 `customer_reported.body_service_notes`。
+- v5 保留 v4 以前的高频服务参考字段；身体条目使用 `customer_reported.body_service_notes`，服务交接补充使用受限字段。
 - 中文文案可以优化，稳定英文编码在同一 taxonomy 版本内不得改义。
 - 未识别版本必须安全降级为“存在历史服务参考，请到店确认”，不得直接展示原始 JSON。
 
@@ -27,6 +27,7 @@
   "schema_version": 5,
   "taxonomy_version": "service_reference_v4",
   "customer_reported": {
+    "communication_preference": "quiet",
     "body_service_notes": [
       {
         "region": "shoulder",
@@ -38,11 +39,19 @@
       }
     ]
   },
+  "technician_observed": {
+    "service_note": "右肩减轻力度后表示合适",
+    "recording_outcome": null
+  },
   "customer_confirmed": true
 }
 ```
 
 `body_service_notes` 为可选数组，最多 3 条。同一记录中 `region + side` 必须唯一。每条五个字段均必填，不接收空字符串、未知编码或额外字段。
+
+`communication_preference` 仅接受顾客明确表达的 `quiet`（希望安静）、`chat`（愿意聊天）或 `explain_before_action`（动作前说明），是服务方式事实，不得由技师根据一次聊天、沉默或印象推断。
+
+`technician_observed.service_note` 是最多 200 字的本次交接补充，不是顾客原话；可记录当次来店原因、调整后反馈、未满足需求或明确的下次要求。`recording_outcome="no_additional_notes"` 表示本次没有新增服务信息，不能与任何标签、补充文字、身体条目或顾客确认同时提交。
 
 ## 4. 身体点位字典
 
@@ -119,6 +128,7 @@
 - `customer_confirmed=true` 仅表示技师已向顾客复述本次结构化摘要并获得确认。
 - 未确认记录可以作为当次追加事实保存，但不得进入当前画像、下次直接沿用或管理端运营统计。
 - 不提供身体状况自由文本字段；既有 `quote` 继续执行诊断词和敏感内容拦截，且不得进入安全摘要。
+- 补充文字只返回记录技师的本人历史；管理端、其他技师的下次服务摘要和当前画像均不返回或投影该文字。
 
 ## 6. 接口职责
 
@@ -148,7 +158,7 @@
 
 ## 8. 当前画像与分析
 
-v5 身体条目首期不写入 `customer_profile_current`，不进入计算特征、复购标签、算法训练集或自动营销。未来若要进入长期画像，必须另行增加敏感信息授权、有效期、撤回、更正、跨店范围和顾客侧查看能力，并发布新契约版本。
+v5 身体条目、交接补充文字与无新增完成结果首期不写入 `customer_profile_current`，不进入计算特征、复购标签、算法训练集或自动营销。未来若要进入长期画像，必须另行增加敏感信息授权、有效期、撤回、更正、跨店范围和顾客侧查看能力，并发布新契约版本。
 
 允许统计的仅为不含正文和具体部位的流程指标：打开、完成、失败、耗时分桶和下次确认动作。不得记录疾病名称、自由文本或单个顾客身体详情到埋点。
 

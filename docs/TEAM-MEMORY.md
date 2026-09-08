@@ -40,6 +40,8 @@
 
 ## 最近决策
 
+2026-09-08：服务结束后的技师记录确定为“服务交接卡”：只记录下一次服务可直接使用的明确服务方式、实际调整、顾客当次反馈或后续要求；允许“本次无新增”完成，不按标签数量、文字长度或顾客评分考核。v5 可增加 `communication_preference`、最多 200 字的 `technician_observed.service_note` 和 `recording_outcome=no_additional_notes`；补充文字只在记录技师本人历史可见，不进入管理端、当前画像、营销、定价、算法或跨技师摘要。家庭、职业、收入、年龄和体型不作为首期快捷采集字段；同一设备不证明匿名顾客身份连续。
+
 2026-09-07：人体标注服务参考的下一写入版本确定为 `schema_version=5`、`taxonomy_version=service_reference_v4`。每条使用 `region + side + context + current_state + session_handling + reconfirm_next_visit` 稳定编码，最多三条；身体情况在任何下次服务前仍须重新确认，不进入 `customer_profile_current`、运营标签、定价、营销或算法特征。v1–v4 只读兼容。该版本尚未合并或发布。
 
 2026-09-07：服务参考 v4 增加最多三条“部位 + 顾客自述情况 + 下次确认”的身体状况条目。它们仅属于服务连续性记录，不进入当前画像投影、自动分群、定价或营销；不得记录诊断、药品名或治疗结论。

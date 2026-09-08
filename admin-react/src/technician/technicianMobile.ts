@@ -24,6 +24,7 @@ export type TechnicianHistoryProfileSummary = {
   temperature_preference?: string | null;
   service_feedback?: string | null;
   next_visit_plan?: string | null;
+  communication_preference?: string | null;
   occupation_contexts?: string[];
   relaxation?: string | null;
   decision_priorities?: string[];
@@ -35,6 +36,7 @@ const HISTORY_SUMMARY_VALUES = {
   areas: ['肩颈', '腰臀', '腿部', '腹部', '足部', '整体放松'],
   force: ['轻柔', '适中', '偏强'], temperature: ['偏低', '适中', '偏高'],
   feedback: ['本次合适', '调整后更合适', '下次需调整'], nextVisit: ['延续本次', '到店再确认'],
+  communication: ['希望安静', '愿意聊天', '动作前说明'],
   occupations: ['久坐办公', '久站服务', '经常驾驶', '体力劳动', '照护家庭', '自由职业', '退休', '其他'],
   relaxation: ['较快', '逐渐', '始终较紧张'], decisions: ['价格', '品质', '环境', '效率', '固定技师', '固定时段'],
   budget: ['实惠优先', '平衡', '体验优先', '未表达'],
@@ -56,13 +58,14 @@ export function technicianHistorySummaryLines(summary: TechnicianHistoryProfileS
   const temperature = safeSummaryValue(summary.temperature_preference, HISTORY_SUMMARY_VALUES.temperature);
   const feedback = safeSummaryValue(summary.service_feedback, HISTORY_SUMMARY_VALUES.feedback);
   const nextVisit = safeSummaryValue(summary.next_visit_plan, HISTORY_SUMMARY_VALUES.nextVisit);
+  const communication = safeSummaryValue(summary.communication_preference, HISTORY_SUMMARY_VALUES.communication);
   const occupations = safeSummaryArray(summary.occupation_contexts, HISTORY_SUMMARY_VALUES.occupations);
   const relaxation = safeSummaryValue(summary.relaxation, HISTORY_SUMMARY_VALUES.relaxation);
   const decisions = safeSummaryArray(summary.decision_priorities, HISTORY_SUMMARY_VALUES.decisions);
   const budget = safeSummaryValue(summary.budget_preference, HISTORY_SUMMARY_VALUES.budget);
   const lines = [
     focusAreas.length ? `重点：${focusAreas.join('、')}` : '', avoidAreas.length ? `避开或谨慎：${avoidAreas.join('、')}` : '',
-    force ? `力度：${force}` : '', temperature ? `温度：${temperature}` : '', feedback ? `反馈：${feedback}` : '', nextVisit ? `下次：${nextVisit}` : '',
+    force ? `力度：${force}` : '', temperature ? `温度：${temperature}` : '', communication ? `沟通：${communication}` : '', feedback ? `反馈：${feedback}` : '', nextVisit ? `下次：${nextVisit}` : '',
     occupations.length ? `职业场景：${occupations.join('、')}` : '', relaxation ? `放松过程：${relaxation}` : '',
     decisions.length ? `决策关注：${decisions.join('、')}` : '', budget ? `预算倾向：${budget}` : '',
     summary.body_reconfirm_required === true ? '身体情况：服务前再确认' : '',

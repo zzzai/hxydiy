@@ -4,6 +4,7 @@ export type ForcePreference = 'gentle' | 'medium' | 'strong';
 export type TemperaturePreference = 'lower' | 'medium' | 'higher';
 export type ServiceFeedback = 'suitable' | 'better_after_adjustment' | 'adjust_next_time';
 export type NextVisitPlan = 'repeat_current' | 'confirm_on_arrival';
+export type CommunicationPreference = 'quiet' | 'chat' | 'explain_before_action';
 export type V3AgeBand = '18_24' | '25_34' | '35_44' | '45_54' | '55_64' | '65_plus';
 export type V3Build = 'slim' | 'balanced' | 'sturdy';
 export type V3HeightBand = 'shorter' | 'average' | 'taller';
@@ -24,6 +25,9 @@ export type V5BodySessionHandling = 'avoid' | 'lighter' | 'normal_after_confirma
 export type V5BodyServiceNote = { region: V5BodyRegion; side: V5BodySide; context: V5BodyContext; currentState: V5BodyCurrentState; sessionHandling: V5BodySessionHandling; reconfirmNextVisit: boolean };
 
 export interface ServiceReferenceInput {
+  serviceNote?: string;
+  recordingOutcome?: 'no_additional_notes';
+  communicationPreference?: CommunicationPreference;
   focusAreas?: ServiceArea[];
   avoidAreas?: AvoidArea[];
   forcePreference?: ForcePreference;
@@ -50,6 +54,7 @@ export const SERVICE_REFERENCE_OPTIONS = {
   temperature: options<TemperaturePreference>([['偏低', 'lower'], ['适中', 'medium'], ['偏高', 'higher']]),
   feedback: options<ServiceFeedback>([['本次合适', 'suitable'], ['调整后更合适', 'better_after_adjustment'], ['下次需调整', 'adjust_next_time']]),
   nextVisit: options<NextVisitPlan>([['延续本次', 'repeat_current'], ['到店再确认', 'confirm_on_arrival']]),
+  communication: options<CommunicationPreference>([['希望安静', 'quiet'], ['愿意聊天', 'chat'], ['动作前说明', 'explain_before_action']]),
 } as const;
 
 export function hasServiceReferenceInput(values: ServiceReferenceInput): boolean {
@@ -131,6 +136,7 @@ export function buildServiceReferenceV3Payload(userId: number, selectionSessionI
         ...(values.avoidAreas?.length ? { avoid_areas: values.avoidAreas } : {}),
         ...(values.forcePreference ? { force_preference: values.forcePreference } : {}),
         ...(values.temperaturePreference ? { temperature_preference: values.temperaturePreference } : {}),
+        ...(values.communicationPreference ? { communication_preference: values.communicationPreference } : {}),
         ...(Object.keys(personalContext).length ? { personal_context: personalContext } : {}),
         ...(Object.keys(workLifestyle).length ? { work_lifestyle: workLifestyle } : {}),
         ...(Object.keys(serviceRelatedContext).length ? { service_related_context: serviceRelatedContext } : {}),
@@ -171,6 +177,10 @@ export function buildServiceReferenceV4Payload(userId: number, selectionSessionI
 }
 
 export function buildServiceReferenceV5Payload(userId: number, selectionSessionId: string, values: ServiceReferenceInput) {
+  if (values.recordingOutcome && (hasServiceReferenceInput(values) || values.serviceNote?.trim() || values.bodyMapNotes?.length)) {
+    throw new Error('本次无补充不能与服务内容同时保存');
+  }
+  if (values.recordingOutcome && values.customerConfirmed) throw new Error('本次无补充不能作为顾客确认');
   const v3 = buildServiceReferenceV3Payload(userId, selectionSessionId, values);
   const customerReported: Record<string, unknown> = { ...v3.profile.customer_reported };
   if (values.bodyMapNotes?.length) {
@@ -192,6 +202,11 @@ export function buildServiceReferenceV5Payload(userId: number, selectionSessionI
       schema_version: 5 as const,
       taxonomy_version: 'service_reference_v4' as const,
       customer_reported: customerReported,
+      technician_observed: {
+        ...v3.profile.technician_observed,
+        ...(values.serviceNote?.trim() ? { service_note: values.serviceNote.trim() } : {}),
+        ...(values.recordingOutcome ? { recording_outcome: values.recordingOutcome } : {}),
+      },
     },
   };
 }

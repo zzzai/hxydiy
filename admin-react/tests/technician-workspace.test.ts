@@ -61,11 +61,11 @@ test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   for (const field of ['focusAreas', 'avoidAreas', 'forcePreference', 'temperaturePreference', 'serviceFeedback', 'nextVisitPlan']) assert.match(source, new RegExp(field));
   assert.match(source, /name="focusAreas"/);
   assert.match(source, /name="avoidAreas"/);
-  assert.match(source, /maxLength=\{100\}/);
+  assert.match(source, /maxLength=\{200\}/);
   assert.match(source, /confirmation === true/);
   assert.match(source, /saving/);
   assert.match(source, /disabled=\{saving\}/);
-  assert.match(source, /暂不记录/);
+  assert.match(source, /稍后记录/);
   assert.match(source, /lastPayloadSignature/);
   assert.match(source, /JSON\.stringify/);
 });

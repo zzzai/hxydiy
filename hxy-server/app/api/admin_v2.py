@@ -2266,6 +2266,7 @@ class ServiceReferenceV5BodyNote(BaseModel):
 
 class ServiceReferenceV5CustomerReported(ServiceReferenceV3CustomerReported):
     body_service_notes: list[ServiceReferenceV5BodyNote] = Field(default_factory=list, max_length=3)
+    communication_preference: Literal["quiet", "chat", "explain_before_action"] | None = None
 
     @field_validator("body_service_notes")
     @classmethod
@@ -2276,26 +2277,51 @@ class ServiceReferenceV5CustomerReported(ServiceReferenceV3CustomerReported):
         return value
 
 
+class ServiceReferenceV5TechnicianObserved(ServiceReferenceV3TechnicianObserved):
+    service_note: str = Field(default="", max_length=200)
+    recording_outcome: Literal["no_additional_notes"] | None = None
+
+    @field_validator("service_note")
+    @classmethod
+    def validate_service_note(cls, value: str) -> str:
+        return ServiceReferenceCustomerReported.validate_quote(value)
+
+
 class ServiceReferenceV5Profile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal[5]
     taxonomy_version: Literal["service_reference_v4"]
     customer_reported: ServiceReferenceV5CustomerReported = Field(default_factory=ServiceReferenceV5CustomerReported)
-    technician_observed: ServiceReferenceV3TechnicianObserved = Field(default_factory=ServiceReferenceV3TechnicianObserved)
+    technician_observed: ServiceReferenceV5TechnicianObserved = Field(default_factory=ServiceReferenceV5TechnicianObserved)
     next_visit: ServiceReferenceV3NextVisit = Field(default_factory=ServiceReferenceV3NextVisit)
 
     def storage_payload(self) -> dict:
         return self.model_dump(mode="json", exclude_unset=True, exclude_none=True)
 
+    @model_validator(mode="after")
+    def validate_no_additional_notes(self):
+        if self.technician_observed.recording_outcome:
+            content = self.model_dump(exclude={"schema_version", "taxonomy_version"})
+            content["technician_observed"].pop("recording_outcome", None)
+            def populated(value):
+                if isinstance(value, dict):
+                    return any(populated(child) for child in value.values())
+                if isinstance(value, list):
+                    return bool(value)
+                return isinstance(value, str) and bool(value.strip())
+            if populated(content):
+                raise ValueError("本次无补充不能与服务内容同时保存")
+        return self
+
     def has_content(self) -> bool:
         return ServiceReferenceV3Profile(
             schema_version=3,
             taxonomy_version="service_reference_v2",
-            customer_reported=ServiceReferenceV3CustomerReported.model_validate(self.customer_reported.model_dump(exclude={"body_service_notes"})),
-            technician_observed=self.technician_observed,
+            customer_reported=ServiceReferenceV3CustomerReported.model_validate(self.customer_reported.model_dump(exclude={"body_service_notes", "communication_preference"})),
+            technician_observed=ServiceReferenceV3TechnicianObserved.model_validate(self.technician_observed.model_dump(exclude={"service_note", "recording_outcome"})),
             next_visit=self.next_visit,
-        ).has_content() or bool(self.customer_reported.body_service_notes)
+        ).has_content() or bool(self.customer_reported.body_service_notes or self.customer_reported.communication_preference or self.technician_observed.service_note or self.technician_observed.recording_outcome)
 
 
 class CustomerProfileRecordIn(BaseModel):
@@ -2397,6 +2423,8 @@ class CustomerProfileRecordIn(BaseModel):
                 raise ValueError("服务参考内外版本必须一致")
             if self.signals or self.note:
                 raise ValueError("v5 服务参考不能混用旧版标签或备注")
+            if self.customer_confirmed and self.profile.technician_observed.recording_outcome:
+                raise ValueError("本次无补充仅表示技师完成记录，不能作为顾客确认")
             if not self.profile.has_content():
                 raise ValueError("请至少记录一项服务参考")
             self.source = "both" if self.customer_confirmed else "service_observation"
@@ -2496,6 +2524,9 @@ def _management_profile_record_view(record: CustomerProfileRecord, db: Session) 
     profile = deepcopy(view["profile"])
     reported = profile.get("customer_reported") if isinstance(profile, dict) else None
     notes = reported.pop("body_service_notes", None) if isinstance(reported, dict) else None
+    observed = profile.get("technician_observed") if isinstance(profile, dict) else None
+    if isinstance(observed, dict):
+        observed.pop("service_note", None)
     if notes:
         view["body_reconfirm_required"] = True
     view["profile"] = profile
