@@ -28,3 +28,9 @@ class ReleasePolicyTests(unittest.TestCase):
         for items in [[], artifacts[:1], [dict(item, expired=True) for item in artifacts]]:
             self.assertFalse(self.evaluate('hasBuilds', [items, SHA]))
         self.assertFalse(self.evaluate('hasBuilds', [artifacts, '2'*40]))
+
+    def test_manual_ci_requires_explicit_recovery_event_allowlist(self):
+        run = dict(head_sha=SHA, head_branch='main', event='workflow_dispatch', path='.github/workflows/ci.yml',
+                   status='completed', conclusion='success', head_repository={'full_name':'zzzai/hxydiy'})
+        self.assertFalse(self.evaluate('eligibleRun', [run, SHA, SHA, 'zzzai/hxydiy']))
+        self.assertTrue(self.evaluate('eligibleRun', [run, SHA, SHA, 'zzzai/hxydiy', ['push', 'workflow_dispatch']]))

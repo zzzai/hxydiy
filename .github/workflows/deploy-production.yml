@@ -11,6 +11,10 @@ on:
         description: Commit SHA on main to deploy after CI has passed
         required: true
         type: string
+      ci_run_id:
+        description: Optional successful CI run ID for an audited recovery deployment
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -40,15 +44,22 @@ jobs:
             const fromCi = context.eventName === 'workflow_run';
             let run = context.payload.workflow_run;
             const sha = fromCi ? run.head_sha : (context.payload.inputs?.commit_sha || '');
+            const requestedRunId = context.payload.inputs?.ci_run_id || '';
             const { eligibleRun, hasBuilds } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-policy.cjs`);
             const { data: latest } = await github.rest.repos.getCommit({ ...context.repo, ref: 'main' });
             if (!fromCi && /^[0-9a-f]{40}$/.test(sha)) {
-              const { data } = await github.rest.actions.listWorkflowRuns({
-                ...context.repo, workflow_id: 'ci.yml', head_sha: sha, event: 'push', status: 'success', per_page: 20,
-              });
-              run = data.workflow_runs.find((candidate) => eligibleRun(candidate, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`));
+              if (/^\d+$/.test(requestedRunId)) {
+                const { data } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: Number(requestedRunId) });
+                run = data;
+              } else {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  ...context.repo, workflow_id: 'ci.yml', head_sha: sha, event: 'push', status: 'success', per_page: 20,
+                });
+                run = data.workflow_runs.find((candidate) => eligibleRun(candidate, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`));
+              }
             }
-            let shouldDeploy = eligibleRun(run, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`);
+            const allowedEvents = fromCi ? ['push'] : ['push', 'workflow_dispatch'];
+            let shouldDeploy = eligibleRun(run, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`, allowedEvents);
             if (shouldDeploy) {
               const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
                 ...context.repo, run_id: run.id, per_page: 100,
