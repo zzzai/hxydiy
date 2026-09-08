@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Card, Spin, Empty, Button, Progress, DatePicker, Row, Col, Statistic, Table, Tag, Space } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
-import { getAnalytics, getOperationsSummary } from '../api';
+import { exportOperationsSummary, getAnalytics, getOperationsSummary } from '../api';
 
 const funnelKeys = ['diy_entry_view', 'project_view', 'project_config_save', 'selection_submit_success', 'feedback_submit_success'] as const;
 const funnelText: Record<string, string> = { diy_entry_view: '进入 DIY', project_view: '查看项目', project_config_save: '保存配置', selection_submit_success: '提交前台', feedback_submit_success: '完成评价' };
@@ -38,6 +38,23 @@ export default function AnalyticsPage() {
   };
   useEffect(() => { load(); }, []);
 
+  const download = async () => {
+    try {
+      const response = await exportOperationsSummary(
+        range[0].format('YYYY-MM-DD'),
+        range[1].format('YYYY-MM-DD'),
+      );
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'operations-summary.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Axios 的统一错误处理会显示服务端返回的权限或范围错误。
+    }
+  };
+
   if (loading && !summary) return <Spin style={{ display: 'block', margin: '40px auto' }} />;
   if (!summary || !behavior) return <Empty description="暂无数据" />;
 
@@ -67,6 +84,7 @@ export default function AnalyticsPage() {
             }}
           />
           <Button icon={<ReloadOutlined />} onClick={() => load()}>刷新</Button>
+          <Button icon={<DownloadOutlined />} onClick={download}>导出 CSV</Button>
         </Space>
       </div>
 
