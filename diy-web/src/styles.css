@@ -493,7 +493,8 @@ h1, h2, h3, p { margin-top: 0; }
 .selection-summary-sheet {
   display: flex;
   width: min(100%, 520px);
-  height: min(72dvh, 640px);
+  height: auto;
+  max-height: min(72dvh, 640px);
   overflow: hidden;
   flex-direction: column;
   border-radius: 18px 18px 0 0;
@@ -528,7 +529,7 @@ h1, h2, h3, p { margin-top: 0; }
 }
 .selection-sheet-scroll {
   min-height: 0;
-  flex: 1;
+  flex: 0 1 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 16px 8px;
