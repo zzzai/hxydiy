@@ -134,6 +134,8 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("head_sha", submit)
         self.assertIn("--watch", submit)
         self.assertIn('os.environ.get("GH_TOKEN")', submit)
+        self.assertIn('env["HXY_GIT_TOKEN"]', submit)
+        self.assertIn("credential.helper", submit)
         self.assertNotIn("/merge", submit)
 
 

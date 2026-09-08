@@ -20,6 +20,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def git(*args: str, input: str | None = None) -> str:
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="Never")
+    if env.get("GH_TOKEN"):
+        # Keep the token out of the remote URL and process arguments. Git invokes
+        # this helper only when HTTPS asks for credentials.
+        env["HXY_GIT_TOKEN"] = env["GH_TOKEN"]
+        env["GIT_CONFIG_COUNT"] = "1"
+        env["GIT_CONFIG_KEY_0"] = "credential.helper"
+        env["GIT_CONFIG_VALUE_0"] = "!f() { echo username=x-access-token; echo password=$HXY_GIT_TOKEN; }; f"
     result = subprocess.run(
         ["git", "-C", str(ROOT), *args],
         capture_output=True,

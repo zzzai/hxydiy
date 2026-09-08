@@ -28,7 +28,7 @@ pwsh -File tools/release/start-release-watch.ps1 -Commit <40位main-SHA>
 python tools/release/submit_pr.py --title "feat(admin): 简短标题" --watch
 ```
 
-脚本优先读取服务器环境变量 `GH_TOKEN`，否则读取已有 Git Credential Manager 凭据；令牌必须具备本仓库 Pull Request 读写权限，且不得写入 shell 历史、命令参数、报告或仓库。它不会暂存文件、创建 commit、自动 merge 或发布生产；工作区不干净、处于 `main`、远程仓库不匹配或已有 PR 的 head 与本地 commit 不一致时会停止并返回机器可读错误。需要更完整的 PR 描述时传入 `--body-file /安全路径/description.md`。
+脚本优先读取服务器环境变量 `GH_TOKEN`，否则读取已有 Git Credential Manager 凭据；`GH_TOKEN` 同时通过仅进程内的 Git credential helper 用于 HTTPS 推送，令牌不会出现在远程 URL、命令参数、报告或仓库。令牌必须具备本仓库 Contents 与 Pull Request 读写权限，且不得写入 shell 历史。它不会暂存文件、创建 commit、自动 merge 或发布生产；工作区不干净、处于 `main`、远程仓库不匹配或已有 PR 的 head 与本地 commit 不一致时会停止并返回机器可读错误。需要更完整的 PR 描述时传入 `--body-file /安全路径/description.md`。
 
 ## 输出与安全边界
 
