@@ -233,6 +233,9 @@ class AdminV2ContractTests(unittest.TestCase):
             cls.staff_auth_headers = {
                 "Authorization": f"Bearer {create_staff_token(read_only_staff.id, read_only_staff.role)}"
             }
+            cls.headquarters_auth_headers = {
+                "Authorization": f"Bearer {create_staff_token(headquarters_admin.id, headquarters_admin.role)}"
+            }
 
         def override_get_db():
             db = cls.SessionLocal()
@@ -935,6 +938,49 @@ class AdminV2ContractTests(unittest.TestCase):
             headers=self.staff_auth_headers,
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_operations_summary_export_is_scoped_redacted_and_audited(self):
+        response = self.client.get(
+            "/api/v1/admin/operations-summary/export",
+            params={"start_date": "2026-08-20", "end_date": "2026-08-20"},
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers["content-type"], "text/csv; charset=utf-8")
+        self.assertIn("运营汇总", response.text)
+        self.assertIn("统计区间", response.text)
+        self.assertNotIn("13800138000", response.text)
+        self.assertNotIn("openid", response.text)
+        with self.SessionLocal() as db:
+            audit = db.scalar(
+                select(AuditLog)
+                .where(
+                    AuditLog.action == "export_operations_summary",
+                    AuditLog.actor_id == str(self.staff_id),
+                )
+                .order_by(AuditLog.id.desc())
+            )
+            self.assertIsNotNone(audit)
+            self.assertEqual(audit.store_id, 1)
+            self.assertEqual(audit.detail["start_date"], "2026-08-20")
+            self.assertEqual(audit.detail["end_date"], "2026-08-20")
+
+    def test_headquarters_operations_export_requires_an_explicit_store(self):
+        missing_scope = self.client.get(
+            "/api/v1/admin/operations-summary/export",
+            headers=self.headquarters_auth_headers,
+        )
+        self.assertEqual(missing_scope.status_code, 400, missing_scope.text)
+        self.assertEqual(missing_scope.json()["detail"]["code"], "STORE_SCOPE_REQUIRED")
+
+        response = self.client.get(
+            "/api/v1/admin/operations-summary/export",
+            params={"store_id": self.other_store_id},
+            headers=self.headquarters_auth_headers,
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn(f",{self.other_store_id}", response.text)
 
     def test_operations_summary_reports_duration_turnover_exceptions_and_funnel_rates(self):
         self.addCleanup(self._cleanup_operations_duration_fixtures)

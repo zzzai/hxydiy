@@ -12,7 +12,7 @@ import time
 from collections import Counter, defaultdict
 from datetime import date as date_type, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import PlainTextResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -315,6 +315,33 @@ def _summary_period(
     return start, end, start_at, end_at
 
 
+def _operations_summary_store_scope(
+    staff: Staff,
+    requested_store_id: int | None,
+    db: Session,
+) -> int:
+    """Return the single store an operations report may cover."""
+    is_headquarters_admin = staff.role == "admin" and staff.store_id is None
+    if is_headquarters_admin:
+        if requested_store_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "STORE_SCOPE_REQUIRED", "message": "总部查询运营报表时必须选择门店"},
+            )
+        if db.get(Store, requested_store_id) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="门店不存在")
+        return requested_store_id
+
+    if staff.store_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "STORE_SCOPE_REQUIRED", "message": "必须绑定本店门店"},
+        )
+    if requested_store_id not in (None, staff.store_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="不能查询其他门店数据")
+    return staff.store_id
+
+
 @router.get("/operations-summary")
 def operations_summary(
     start_date: date_type | None = None,
@@ -325,11 +352,7 @@ def operations_summary(
 ) -> dict:
     """经营汇总：交易、顾客、去重漏斗、服务位和评价。"""
     staff = _require_admin(authorization, db)
-    if staff.store_id is None:
-        raise HTTPException(status_code=403, detail={"code": "STORE_SCOPE_REQUIRED", "message": "必须绑定本店门店"})
-    if staff.store_id is not None and store_id not in (None, staff.store_id):
-        raise HTTPException(status_code=403, detail="不能查询其他门店数据")
-    selected_store_id = staff.store_id if staff.store_id is not None else store_id
+    selected_store_id = _operations_summary_store_scope(staff, store_id, db)
     start, end, start_at, end_at = _summary_period(start_date, end_date)
 
     order_stmt = select(Order).where(
@@ -497,6 +520,73 @@ def operations_summary(
             "low_rating_count": sum(1 for rating in ratings if rating <= 2),
         },
     }
+
+
+def _operations_summary_csv(summary: dict) -> str:
+    """Create a fixed, aggregate-only CSV report without customer data."""
+    period = summary["period"]
+    transactions = summary["transactions"]
+    customers = summary["customers"]
+    positions = summary["service_positions"]
+    position_operations = positions["operations"]
+    feedback = summary["feedback"]
+
+    buffer = io.StringIO(newline="")
+    writer = csv.writer(buffer)
+    writer.writerow(["运营汇总"])
+    writer.writerow(["指标分类", "指标", "数值", "单位"])
+    writer.writerow(["统计范围", "统计区间", f"{period['start_date']} 至 {period['end_date']}", ""])
+    writer.writerow(["统计范围", "门店 ID", period["store_id"], ""])
+    writer.writerow(["交易", "订单数", transactions["orders_count"], "笔"])
+    writer.writerow(["交易", "实收订单数", transactions["paid_count"], "笔"])
+    writer.writerow(["交易", "订单金额", transactions["gross_amount_cents"] / 100, "元"])
+    writer.writerow(["交易", "实收金额", transactions["paid_amount_cents"] / 100, "元"])
+    writer.writerow(["交易", "优惠金额", transactions["discount_cents"] / 100, "元"])
+    writer.writerow(["顾客", "新增顾客数", customers["new_count"], "人"])
+    writer.writerow(["顾客", "复购顾客数", customers["repeat_count"], "人"])
+    writer.writerow(["顾客", "会员顾客数", customers["member_count"], "人"])
+    writer.writerow(["服务位", "服务位总数", positions["total_count"], "个"])
+    writer.writerow(["服务位", "已完成服务", position_operations["completed_services_count"], "次"])
+    writer.writerow(["服务位", "服务位利用率", position_operations["utilization_percent"], "%"])
+    writer.writerow(["评价", "评价数", feedback["count"], "条"])
+    writer.writerow(["评价", "平均评分", feedback["average_rating"] if feedback["average_rating"] is not None else "", "分"])
+    writer.writerow(["评价", "低分评价数", feedback["low_rating_count"], "条"])
+    return buffer.getvalue()
+
+
+@router.get("/operations-summary/export")
+def export_operations_summary(
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
+    store_id: int | None = None,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> PlainTextResponse:
+    """Export an aggregate-only operations CSV, scoped to exactly one store."""
+    staff = _require_admin(authorization, db)
+    summary = operations_summary(start_date, end_date, store_id, authorization, db)
+    period = summary["period"]
+    db.add(AuditLog(
+        actor_type="staff",
+        actor_id=str(staff.id),
+        store_id=period["store_id"],
+        action="export_operations_summary",
+        entity_type="operations_summary",
+        entity_id=f"{period['start_date']}:{period['end_date']}",
+        detail={
+            "store_id": period["store_id"],
+            "start_date": period["start_date"],
+            "end_date": period["end_date"],
+            "format": "csv",
+        },
+    ))
+    db.commit()
+    filename = f"operations-summary-{period['store_id']}-{period['start_date']}-{period['end_date']}.csv"
+    return PlainTextResponse(
+        _operations_summary_csv(summary),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _redact_audit_value(value, key: str = ""):

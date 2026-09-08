@@ -188,6 +188,11 @@ export const finishPositionService = (occupancyId: number) =>
 export const getAnalytics = (days = 7) => client.get('/admin/analytics', { params: { days } });
 export const getOperationsSummary = (startDate: string, endDate: string) =>
   client.get('/admin/operations-summary', { params: { start_date: startDate, end_date: endDate } });
+export const exportOperationsSummary = (startDate: string, endDate: string) =>
+  client.get('/admin/operations-summary/export', {
+    params: { start_date: startDate, end_date: endDate },
+    responseType: 'blob',
+  });
 export const getAuditLogs = (params: Record<string, string | number | undefined>) =>
   client.get('/admin/audit-logs', { params });
 export const exportAuditLogs = (params: Record<string, string | number | undefined>) =>
