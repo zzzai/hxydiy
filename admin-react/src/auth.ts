@@ -44,6 +44,10 @@ export function canManageConfiguration(role?: string): boolean {
   return role === 'admin' || role === 'manager';
 }
 
+export function canViewReadOnlyOperations(role?: string): boolean {
+  return role === 'staff';
+}
+
 export function canManageStoreMasterData(role?: string, storeId?: number | null): boolean {
   return role === 'admin' && !storeId;
 }

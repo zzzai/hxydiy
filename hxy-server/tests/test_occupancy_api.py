@@ -797,7 +797,7 @@ class OccupancyApiTests(unittest.TestCase):
             json={"operational_status": "inactive", "reason": "越权测试"},
         )
         self.assertEqual(response.status_code, 403, response.text)
-        self.assertEqual(response.json()["detail"]["code"], "ROLE_MIGRATION_REQUIRED")
+        self.assertEqual(response.json()["detail"]["code"], "STAFF_READ_ONLY")
 
     def test_position_disable_rejects_active_occupancy(self):
         self.release_if_active("sofa-06")

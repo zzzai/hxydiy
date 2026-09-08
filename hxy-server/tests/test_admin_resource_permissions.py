@@ -10,7 +10,7 @@ from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
 from app.api import admin_v2
-from app.models import Room, ServicePositionQr, Staff, Store
+from app.models import Room, SelectionSession, ServicePositionQr, Staff, Store, User
 from app.models.operations import Technician
 
 
@@ -51,11 +51,30 @@ class AdminResourcePermissionTests(unittest.TestCase):
             )
             db.add_all([manager, clerk])
             db.flush()
+            read_only_staff = Staff(
+                username="store-read-only", password_hash=hash_password("pass"),
+                name="门店员工", role="staff", store_id=store.id, status="active",
+            )
             db.add_all([
-                Staff(username="legacy-unbound", password_hash=hash_password("pass"), name="旧员工", role="staff", store_id=store.id, status="active"),
+                read_only_staff,
+                Staff(username="staff-unbound", password_hash=hash_password("pass"), name="未绑定员工", role="staff", status="active"),
                 Staff(username="tech-unbound", password_hash=hash_password("pass"), name="未绑定技师", role="technician", store_id=store.id, status="active"),
             ])
             db.flush()
+            customer = User(openid="read-only-customer", phone="13800138000", nickname="不应展示的顾客")
+            db.add(customer)
+            db.flush()
+            db.add(SelectionSession(
+                id="read-only-selection", access_token_hash="x", store_id=store.id, customer_id=customer.id,
+                source="store_qr", device_label="门店平板", status="submitted",
+                items=[{"name": "肩颈调理", "quantity": 1}],
+                diy_preferences={"private_note": "不应展示"},
+                pricing_snapshot={"payable_total_cents": 9999}, store_total_cents=9999, member_total_cents=8888,
+            ))
+            db.add(SelectionSession(
+                id="read-only-draft", access_token_hash="x", store_id=store.id, customer_id=customer.id,
+                source="store_qr", device_label="门店平板", status="draft", items=[], diy_preferences={},
+            ))
             db.connection().exec_driver_sql("PRAGMA ignore_check_constraints = ON")
             db.connection().exec_driver_sql("INSERT INTO staff (username,password_hash,name,role,store_id,status) VALUES ('unknown-role',:pw,'未知角色','superuser',:sid,'active')", {"pw": hash_password("pass"), "sid": store.id})
             qr = ServicePositionQr(
@@ -68,6 +87,7 @@ class AdminResourcePermissionTests(unittest.TestCase):
             cls.existing_room_id = existing_room.id
             cls.empty_room_id = empty_room.id
             cls.qr_id = qr.id
+            cls.read_only_staff_id = read_only_staff.id
             cls.clerk_headers = {
                 "Authorization": f"Bearer {create_staff_token(clerk.id, 'staff')}"
             }
@@ -132,10 +152,35 @@ class AdminResourcePermissionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 410)
         self.assertEqual(response.json()["detail"]["code"], "DIY_PHYSICAL_RESOURCE_FORBIDDEN")
 
-    def test_login_rejects_unbound_legacy_staff(self):
-        response = self.client.post("/api/v1/admin/login", json={"username": "legacy-unbound", "password": "pass"})
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"]["code"], "ROLE_MIGRATION_REQUIRED")
+    def test_active_store_staff_can_only_read_allowlisted_operations(self):
+        response = self.client.post("/api/v1/admin/login", json={"username": "store-read-only", "password": "pass"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["staff"]["role"], "staff")
+        self.assertEqual(response.json()["staff"]["store_id"], 1)
+
+        token = response.json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        allowed = self.client.get(
+            "/api/v1/admin/v2/selection-sessions",
+            headers=headers,
+        )
+        self.assertEqual(allowed.status_code, 200, allowed.text)
+        self.assertEqual(allowed.json()["total"], 1)
+        item = allowed.json()["items"][0]
+        self.assertEqual(set(item), {"id", "source", "device_label", "status", "items", "submitted_at"})
+        self.assertNotIn("customer", item)
+        self.assertNotIn("pricing_snapshot", item)
+
+        blocked = self.client.post(
+            "/api/v1/admin/v2/selection-sessions/missing/confirm",
+            headers=headers,
+        )
+        self.assertEqual(blocked.status_code, 403, blocked.text)
+        self.assertEqual(blocked.json()["detail"]["code"], "STAFF_READ_ONLY")
+
+        sensitive = self.client.get("/api/v1/admin/v2/feedback", headers=headers)
+        self.assertEqual(sensitive.status_code, 403, sensitive.text)
+        self.assertEqual(sensitive.json()["detail"]["code"], "STAFF_READ_ONLY")
 
     def test_login_rejects_unknown_role(self):
         response = self.client.post("/api/v1/admin/login", json={"username": "unknown-role", "password": "pass"})
@@ -146,6 +191,11 @@ class AdminResourcePermissionTests(unittest.TestCase):
         response = self.client.post("/api/v1/admin/login", json={"username": "tech-unbound", "password": "pass"})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"]["code"], "TECHNICIAN_BINDING_REQUIRED")
+
+    def test_login_rejects_unbound_store_staff(self):
+        response = self.client.post("/api/v1/admin/login", json={"username": "staff-unbound", "password": "pass"})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"]["code"], "STAFF_STORE_REQUIRED")
 
     def test_require_admin_rejects_legacy_role_with_structured_forbidden(self):
         """旧角色即使绕过登录层直达 endpoint helper，也不能冒泡成 500。"""

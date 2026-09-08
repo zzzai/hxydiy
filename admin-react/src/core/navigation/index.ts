@@ -27,7 +27,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
       { path: '/today', label: '今日运营', icon: 'ordered-list', roles: storeRoles },
       { path: '/service-positions', label: '服务位看板', icon: 'environment', roles: storeRoles },
       { path: '/selection-sessions', label: '到店服务选单', icon: 'project', roles: storeRoles },
-      { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: storeRoles },
+      { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles },
       { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles },
       { path: '/audit-logs', label: '审计日志', icon: 'file-search', roles: managementRoles },
       { path: '/feedback', label: '低分评价', icon: 'message', roles: managementRoles },
@@ -49,7 +49,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '人员与顾客',
     icon: 'team',
     items: [
-      { path: '/techs', label: '技师管理', icon: 'idcard', roles: storeRoles },
+      { path: '/techs', label: '技师管理', icon: 'idcard', roles: managementRoles },
       { path: '/users', label: '用户列表', icon: 'team', roles: managementRoles },
       { path: '/tags', label: '标签管理', icon: 'tags', roles: managementRoles },
       { path: '/segments', label: '用户分群', icon: 'pie-chart', roles: managementRoles },
@@ -61,7 +61,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     icon: 'desktop',
     items: [
       { path: '/stores', label: '门店主数据', icon: 'environment', roles: ['admin'], requiresUnboundAdmin: true },
-      { path: '/rooms', label: '房间/床位', icon: 'environment', roles: storeRoles },
+      { path: '/rooms', label: '房间/床位', icon: 'environment', roles: managementRoles },
     ],
   },
   {
@@ -96,7 +96,7 @@ export function getVisibleNavigationGroups(role?: string, storeId?: number | nul
 export function getNavigationPaths(role?: string, storeId?: number | null): string[] {
   const paths = getVisibleNavigationGroups(role, storeId).flatMap((group) => group.items.map((item) => item.path));
   if (role === 'staff') {
-    const legacyOrder = ['/today', '/service-positions', '/selection-sessions', '/orders', '/rooms', '/techs'];
+    const legacyOrder = ['/today', '/service-positions', '/selection-sessions'];
     return paths.sort((left, right) => legacyOrder.indexOf(left) - legacyOrder.indexOf(right));
   }
   return paths;

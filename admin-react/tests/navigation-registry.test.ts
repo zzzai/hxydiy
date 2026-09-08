@@ -27,9 +27,6 @@ test('导航路径从注册表生成，避免菜单和路由各自维护', () =>
     '/today',
     '/service-positions',
     '/selection-sessions',
-    '/orders',
-    '/rooms',
-    '/techs',
   ]);
   assert.equal(getNavigationPaths('technician').includes('/projects'), false);
 });

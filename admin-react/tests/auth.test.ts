@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   canManageConfiguration,
+  canViewReadOnlyOperations,
   canManageStoreMasterData,
   getDefaultPath,
   getEntryHomePath,
@@ -21,16 +22,20 @@ test('staff 只看到门店日常运营页面', () => {
     '/today',
     '/service-positions',
     '/selection-sessions',
-    '/orders',
-    '/rooms',
-    '/techs',
   ]);
+});
+
+test('只有普通员工进入只读的今日运营视图', () => {
+  assert.equal(canViewReadOnlyOperations('staff'), true);
+  assert.equal(canViewReadOnlyOperations('manager'), false);
+  assert.equal(canViewReadOnlyOperations('admin'), false);
 });
 
 test('staff 不能通过地址直接进入管理员页面', () => {
   assert.equal(isPathAllowed('staff', '/projects'), false);
   assert.equal(isPathAllowed('staff', '/users'), false);
-  assert.equal(isPathAllowed('staff', '/rooms/12'), true);
+  assert.equal(isPathAllowed('staff', '/orders'), false);
+  assert.equal(isPathAllowed('staff', '/rooms/12'), false);
 });
 
 test('admin 可以进入全部已注册页面', () => {

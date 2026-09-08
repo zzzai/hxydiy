@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api import admin, admin_catalog, admin_v2, auth, catalog, coupons, health, integrations, occupancies, operations, orders, payments, selections, technician, technician_admin, tracking, media
 from app.core.config import settings
+from app.core.staff_access import bind_staff_request_scope, reset_staff_request_scope
 from app.release_static import mount_release_static_files
 from app.services.occupancy_scheduler import start_occupancy_scheduler, stop_occupancy_scheduler
 
@@ -25,6 +26,15 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def bind_request_scope(request, call_next):
+    scope_token = bind_staff_request_scope(request.method, request.url.path)
+    try:
+        return await call_next(request)
+    finally:
+        reset_staff_request_scope(scope_token)
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")

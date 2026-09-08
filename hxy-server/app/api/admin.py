@@ -20,6 +20,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.staff_access import staff_read_only_request_allowed
 from app.db.session import get_db
 from app.models import (
     AuditLog,
@@ -85,6 +86,8 @@ def normalize_staff_role(role: str | None, technician_id: int | None = None) -> 
     """Return the public role contract while accepting legacy database values."""
     if role in {"admin", "manager"}:
         return "manager"
+    if role == "staff":
+        return "staff"
     if role == "technician" and technician_id:
         return "technician"
     raise ValueError("staff role is not normalized or technician binding is missing")
@@ -125,12 +128,14 @@ def _current_staff(authorization: str | None, db: Session) -> Staff:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         if datetime.now(timezone.utc) >= expires_at:
             raise HTTPException(status_code=401, detail={"code": "STAFF_ACCOUNT_EXPIRED", "message": "临时账号已过期，请联系管理员"})
-    if staff.role == "staff" and not staff.technician_id:
-        raise HTTPException(status_code=403, detail={"code": "ROLE_MIGRATION_REQUIRED", "message": "员工账号尚未完成角色迁移"})
-    if staff.role not in {"admin", "manager", "technician"}:
+    if staff.role not in {"admin", "manager", "staff", "technician"}:
         raise HTTPException(status_code=403, detail={"code": "INVALID_STAFF_ROLE", "message": "员工角色无效"})
     if staff.role == "technician" and not staff.technician_id:
         raise HTTPException(status_code=403, detail={"code": "TECHNICIAN_BINDING_REQUIRED", "message": "技师账号未绑定技师档案"})
+    if staff.role == "staff" and not staff.store_id:
+        raise HTTPException(status_code=403, detail={"code": "STAFF_STORE_REQUIRED", "message": "普通员工必须绑定门店"})
+    if staff.role == "staff" and not staff_read_only_request_allowed():
+        raise HTTPException(status_code=403, detail={"code": "STAFF_READ_ONLY", "message": "普通员工仅可查看本店运营信息"})
     return staff
 
 
@@ -193,12 +198,12 @@ def staff_login(body: dict, db: Session = Depends(get_db)) -> dict:
         if datetime.now(timezone.utc) >= expires_at:
             _record_login_fail(username)
             raise HTTPException(status_code=401, detail="临时账号已过期，请联系管理员")
-    if staff.role == "staff" and not staff.technician_id:
-        raise HTTPException(status_code=403, detail={"code": "ROLE_MIGRATION_REQUIRED", "message": "员工账号尚未完成角色迁移"})
-    if staff.role not in {"admin", "manager", "technician"}:
+    if staff.role not in {"admin", "manager", "staff", "technician"}:
         raise HTTPException(status_code=403, detail={"code": "INVALID_STAFF_ROLE", "message": "员工角色无效"})
     if staff.role == "technician" and not staff.technician_id:
         raise HTTPException(status_code=403, detail={"code": "TECHNICIAN_BINDING_REQUIRED", "message": "技师账号未绑定技师档案"})
+    if staff.role == "staff" and not staff.store_id:
+        raise HTTPException(status_code=403, detail={"code": "STAFF_STORE_REQUIRED", "message": "普通员工必须绑定门店"})
     store = db.get(Store, staff.store_id) if staff.store_id else None
     return {
         "token": create_staff_token(staff.id, staff.role, staff.credentials_version),

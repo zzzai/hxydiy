@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { App, Button, Card, Collapse, Descriptions, Drawer, Empty, Input, Segmented, Space, Table, Tag, Typography } from 'antd';
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
-import { approveSelectionChangeRequest, cancelSelectionSession, confirmSelectionSession, getCustomerProfileRecords, getSelectionChangeRequests, getSelectionSessions, rejectSelectionChangeRequest } from '../api';
+import { approveSelectionChangeRequest, cancelSelectionSession, confirmSelectionSession, getCustomerProfileRecords, getSelectionChangeRequests, getSelectionSessions, getStaff, rejectSelectionChangeRequest } from '../api';
 import { canApproveSelectionChange, canRejectSelectionChange, selectionChangeItemSummary } from '../selectionChanges';
 import { buildServiceReferenceDisplay } from '../serviceReferenceDisplay';
 
@@ -15,6 +15,7 @@ const dateText = (value?: string) => value ? new Date(value).toLocaleString('zh-
 
 export default function SelectionSessionsPage() {
   const { message, modal } = App.useApp();
+  const readOnly = getStaff()?.role === 'staff';
   const [status, setStatus] = useState('submitted');
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,11 +36,11 @@ export default function SelectionSessionsPage() {
     finally { setChangeLoading(false); }
   };
   useEffect(() => { void load(); }, [status]);
-  useEffect(() => { void loadChangeRequests(); }, []);
+  useEffect(() => { if (!readOnly) void loadChangeRequests(); }, [readOnly]);
   useEffect(() => {
-    if (!selected?.customer?.id) { setProfileRecords([]); return; }
+    if (readOnly || !selected?.customer?.id) { setProfileRecords([]); return; }
     void getCustomerProfileRecords(selected.customer.id).then((response) => setProfileRecords(response.data?.items || [])).catch(() => setProfileRecords([]));
-  }, [selected]);
+  }, [readOnly, selected]);
   const act = (record: any, action: 'confirm' | 'cancel') => modal.confirm({
     title: action === 'confirm' ? '确认接收这份选单？' : '取消这份选单？',
     content: action === 'confirm' ? '确认后可按此需求继续安排服务，仍不创建订单。' : '取消后本次需求不再进入门店处理队列。',
@@ -77,6 +78,15 @@ export default function SelectionSessionsPage() {
       },
     });
   };
+  if (readOnly) return <Space direction="vertical" size={18} style={{ width: '100%' }}>
+    <div className="page-heading"><div><Typography.Title level={3} style={{ margin: 0 }}>到店服务选单</Typography.Title><Typography.Text type="secondary">仅查看本店已提交的服务需求</Typography.Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
+    <Card>{!loading && !items.length ? <Empty description="暂无选单" /> : <Table rowKey="id" loading={loading} dataSource={items} pagination={{ pageSize: 20 }} columns={[
+      { title: '提交时间', dataIndex: 'submitted_at', width: 180, render: dateText },
+      { title: '来源', dataIndex: 'source', width: 180, render: (value: string, record: any) => <Tag>{sourceLabel(value)}{record.device_label ? ` · ${record.device_label}` : ''}</Tag> },
+      { title: '服务需求', dataIndex: 'items', render: (value: any[]) => <Typography.Text ellipsis style={{ maxWidth: 480, display: 'inline-block' }}>{itemSummary(value)}</Typography.Text> },
+      { title: '状态', dataIndex: 'status', width: 90, render: (value: string) => <Tag color={STATUS[value]?.color}>{STATUS[value]?.label || value}</Tag> },
+    ]} />}</Card>
+  </Space>;
   return <Space direction="vertical" size={18} style={{ width: '100%' }}>
     <div className="page-heading"><div><Typography.Title level={3} style={{ margin: 0 }}>到店服务选单</Typography.Title><Typography.Text type="secondary">顾客先选服务与偏好，门店确认后再进入现场服务流程</Typography.Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
     <Card><Segmented value={status} onChange={(value) => setStatus(String(value))} options={[{ label: '待确认', value: 'submitted' }, { label: '已确认', value: 'confirmed' }, { label: '已取消', value: 'cancelled' }, { label: '全部', value: 'all' }]} /></Card>

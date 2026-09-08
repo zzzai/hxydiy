@@ -77,6 +77,7 @@ export const scanMembershipCode = (codeToken: string) => client.post('/technicia
 export const consumeMembershipCode = (codeToken: string, selectionSessionId: string) => client.post('/technician/membership-verification/consume', { code_token: codeToken, selection_session_id: selectionSessionId, idempotency_key: `member-verify-${globalThis.crypto?.randomUUID?.() || Date.now()}` });
 
 export const getTodayStats = () => client.get('/admin/stats');
+export const getTodayAppointments = () => client.get('/admin/today-appointments');
 export const checkIn = (id: number) => client.post(`/admin/orders/${id}/check-in`);
 export const complete = (id: number) => client.post(`/admin/orders/${id}/complete`);
 
