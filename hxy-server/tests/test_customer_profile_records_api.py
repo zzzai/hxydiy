@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import PositionOccupancy, SelectionSession, Staff, Store, User
+from app.models import CustomerProfileRecord, PositionOccupancy, SelectionSession, Staff, Store, User
 
 
 class CustomerProfileRecordsApiTests(unittest.TestCase):
@@ -30,7 +30,7 @@ class CustomerProfileRecordsApiTests(unittest.TestCase):
             db.add(SelectionSession(id="profile-session", store_id=store.id, customer_id=user.id, access_token_hash="x", source="store_qr", device_label="测试", status="completed", items=[]))
             db.add(PositionOccupancy(store_id=store.id, room_id=1, selection_session_id="profile-session", status="released", actual_service_end_at=datetime.now(timezone.utc)))
             db.commit()
-            self.store_id, self.staff_id, self.user_id, self.other_user_id = store.id, staff.id, user.id, other_user.id
+            self.store_id, self.other_store_id, self.staff_id, self.user_id, self.other_user_id = store.id, other_store.id, staff.id, user.id, other_user.id
 
         def override_get_db():
             db = self.SessionLocal()
@@ -100,6 +100,44 @@ class CustomerProfileRecordsApiTests(unittest.TestCase):
         listed = self.client.get(f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-records", headers=self.headers)
         self.assertEqual(len(listed.json()["items"]), 2)
         self.assertEqual(listed.json()["items"][-1]["id"], original_id)
+
+    def test_service_reference_summary_is_store_scoped_and_excludes_superseded_records(self):
+        with self.SessionLocal() as db:
+            superseded = CustomerProfileRecord(
+                store_id=self.store_id, user_id=self.user_id, created_by_staff_id=self.staff_id,
+                schema_version=3, customer_confirmed=True, profile={"schema_version": 3},
+            )
+            current_confirmed = CustomerProfileRecord(
+                store_id=self.store_id, user_id=self.user_id, created_by_staff_id=self.staff_id,
+                schema_version=4, customer_confirmed=True, profile={"schema_version": 4},
+            )
+            legacy = CustomerProfileRecord(
+                store_id=self.store_id, user_id=self.user_id, created_by_staff_id=self.staff_id,
+                schema_version=2, customer_confirmed=True, profile={"schema_version": 2},
+            )
+            other_store = CustomerProfileRecord(
+                store_id=self.other_store_id, user_id=self.other_user_id, created_by_staff_id=self.staff_id,
+                schema_version=5, customer_confirmed=True, profile={"schema_version": 5},
+            )
+            db.add_all([superseded, current_confirmed, legacy, other_store])
+            db.flush()
+            correction = CustomerProfileRecord(
+                store_id=self.store_id, user_id=self.user_id, created_by_staff_id=self.staff_id,
+                schema_version=5, customer_confirmed=False, profile={"schema_version": 5},
+                correction_of_id=superseded.id,
+            )
+            db.add(correction)
+            db.commit()
+
+        response = self.client.get("/api/v1/admin/v2/service-reference-summary", headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {
+            "total": 2,
+            "confirmed": 1,
+            "confirmation_rate_percent": 50.0,
+            "corrected": 1,
+            "correction_rate_percent": 50.0,
+        })
 
 
 if __name__ == "__main__":

@@ -2904,6 +2904,37 @@ def list_customer_profile_records(
     return {"items": [_management_profile_record_view(record, db) for record in records]}
 
 
+@router.get("/service-reference-summary")
+def service_reference_summary(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    """门店结构化服务参考的隐私安全聚合，不返回任何单条记录。"""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    superseded_ids = select(CustomerProfileRecord.correction_of_id).where(
+        CustomerProfileRecord.store_id == store_id,
+        CustomerProfileRecord.correction_of_id.is_not(None),
+    )
+    records = list(db.scalars(select(CustomerProfileRecord).where(
+        CustomerProfileRecord.store_id == store_id,
+        CustomerProfileRecord.schema_version.in_([3, 4, 5]),
+        ~CustomerProfileRecord.id.in_(superseded_ids),
+    )))
+    total = len(records)
+    confirmed = sum(bool(record.customer_confirmed) for record in records)
+    corrected = sum(record.correction_of_id is not None for record in records)
+    percent = lambda value: round(value / total * 100, 2) if total else 0.0
+    return {
+        "total": total,
+        "confirmed": confirmed,
+        "confirmation_rate_percent": percent(confirmed),
+        "corrected": corrected,
+        "correction_rate_percent": percent(corrected),
+    }
+
+
 @router.get("/users/{user_id}/customer-profile-current")
 def get_customer_profile_current(
     user_id: int,
