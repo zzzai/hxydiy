@@ -35,7 +35,6 @@ test('选购清单采用紧凑购物车结构，减免不占用独立大卡片�
   const styles = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(sheet, /selection-sheet-scroll/);
   assert.match(sheet, /selection-sheet-promotion/);
-  assert.match(styles, /\.selection-summary-sheet[^{]*\{[\s\S]*\n\s+height: min\(72dvh/);
   assert.match(styles, /\.selection-sheet-promotion[^{]*\{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\) auto/);
   assert.match(styles, /\.selection-sheet-group \{ padding: 8px 0/);
 });
@@ -48,9 +47,12 @@ test('底部选购栏明确展示会员价，不再用极小的办卡提示替�
   assert.match(styles, /\.selection-summary-member-price \{[^}]*font-size: 11px/);
 });
 
-test('选购清单在手机上保持美团式固定大抽屉高度，不随三项内容收缩', () => {
+test('选购清单少项时随内容收起，多项时仅明细区在最大高度内滚动', () => {
   const styles = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-  assert.match(styles, /\.selection-summary-sheet[^{]*\{[\s\S]*?\n\s+height: min\(72dvh, 640px\);/);
+  assert.match(styles, /\.selection-summary-sheet[^{]*\{[\s\S]*?\n\s+height: auto;/);
+  assert.match(styles, /\.selection-summary-sheet[^{]*\{[\s\S]*?\n\s+max-height: min\(72dvh, 640px\);/);
+  assert.match(styles, /\.selection-sheet-scroll[^{]*\{[\s\S]*?\n\s+flex: 0 1 auto;/);
+  assert.match(styles, /\.selection-sheet-scroll[^{]*\{[\s\S]*?\n\s+overflow-y: auto;/);
 });
 
 function project(partial: Partial<Project> & Pick<Project, 'id' | 'code' | 'category' | 'name'>): Project {
