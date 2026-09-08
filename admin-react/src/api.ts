@@ -188,6 +188,15 @@ export const finishPositionService = (occupancyId: number) =>
 export const getAnalytics = (days = 7) => client.get('/admin/analytics', { params: { days } });
 export const getOperationsSummary = (startDate: string, endDate: string) =>
   client.get('/admin/operations-summary', { params: { start_date: startDate, end_date: endDate } });
+export type ServiceReferenceSummary = {
+  total: number;
+  confirmed: number;
+  confirmation_rate_percent: number;
+  corrected: number;
+  correction_rate_percent: number;
+};
+export const getServiceReferenceSummary = () =>
+  client.get<ServiceReferenceSummary>('/admin/v2/service-reference-summary');
 export const getAuditLogs = (params: Record<string, string | number | undefined>) =>
   client.get('/admin/audit-logs', { params });
 export const exportAuditLogs = (params: Record<string, string | number | undefined>) =>

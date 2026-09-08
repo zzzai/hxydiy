@@ -3,7 +3,7 @@ import { Card, Spin, Empty, Button, Progress, DatePicker, Row, Col, Statistic, T
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
-import { getAnalytics, getOperationsSummary } from '../api';
+import { getAnalytics, getOperationsSummary, getServiceReferenceSummary } from '../api';
 
 const funnelKeys = ['diy_entry_view', 'project_view', 'project_config_save', 'selection_submit_success', 'feedback_submit_success'] as const;
 const funnelText: Record<string, string> = { diy_entry_view: '进入 DIY', project_view: '查看项目', project_config_save: '保存配置', selection_submit_success: '提交前台', feedback_submit_success: '完成评价' };
@@ -20,6 +20,7 @@ export default function AnalyticsPage() {
   const navigate = useNavigate();
   const [behavior, setBehavior] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
+  const [serviceReference, setServiceReference] = useState<any>(null);
   const [range, setRange] = useState<[Dayjs, Dayjs]>([dayjs().subtract(6, 'day'), dayjs()]);
   const [loading, setLoading] = useState(true);
 
@@ -28,12 +29,14 @@ export default function AnalyticsPage() {
     try {
       const start = selectedRange[0].format('YYYY-MM-DD');
       const end = selectedRange[1].format('YYYY-MM-DD');
-      const [behaviorResponse, summaryResponse] = await Promise.all([
+      const [behaviorResponse, summaryResponse, serviceReferenceResponse] = await Promise.all([
         getAnalytics(Math.max(1, selectedRange[1].diff(selectedRange[0], 'day') + 1)),
         getOperationsSummary(start, end),
+        getServiceReferenceSummary(),
       ]);
       setBehavior(behaviorResponse.data);
       setSummary(summaryResponse.data);
+      setServiceReference(serviceReferenceResponse.data);
     } catch {} finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
@@ -98,6 +101,15 @@ export default function AnalyticsPage() {
           </Card>
         </Col>
       </Row>
+
+      <Card title="服务参考（门店汇总）" style={{ marginBottom: 16 }}>
+        <Row gutter={[8, 18]}>
+          <Col xs={12} md={6}><Statistic title="有效记录" value={serviceReference?.total || 0} /></Col>
+          <Col xs={12} md={6}><Statistic title="顾客确认" value={serviceReference?.confirmed || 0} /></Col>
+          <Col xs={12} md={6}><Statistic title="确认率" value={serviceReference?.confirmation_rate_percent || 0} suffix="%" /></Col>
+          <Col xs={12} md={6}><Statistic title="更正率" value={serviceReference?.correction_rate_percent || 0} suffix="%" /></Col>
+        </Row>
+      </Card>
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={12}>
