@@ -448,6 +448,18 @@ def _selection_view(session: SelectionSession, customer: User | None = None, fee
     }
 
 
+def _staff_selection_view(session: SelectionSession) -> dict:
+    """普通员工的现场只读选单不携带顾客、评价、偏好或计价信息。"""
+    return {
+        "id": session.id,
+        "source": session.source,
+        "device_label": session.device_label,
+        "status": session.status,
+        "items": session.items or [],
+        "submitted_at": session.submitted_at.isoformat() if session.submitted_at else None,
+    }
+
+
 class FeedbackFollowUpIn(BaseModel):
     follow_up_status: Literal["open", "in_progress", "resolved", "dismissed"]
     follow_up_note: str = ""
@@ -533,7 +545,9 @@ def list_selection_sessions(
     staff = _current_staff(authorization, db)
     store_id = _staff_store_id(staff)
     q = select(SelectionSession).where(SelectionSession.store_id == store_id)
-    if status:
+    if staff.role == "staff":
+        q = q.where(SelectionSession.status == "submitted")
+    elif status:
         q = q.where(SelectionSession.status == status)
     q = q.order_by(SelectionSession.created_at.desc())
     total = db.scalar(select(sa_func.count()).select_from(q.subquery())) or 0
@@ -545,7 +559,12 @@ def list_selection_sessions(
         .order_by(SelectionSession.created_at.desc())
         .offset((page - 1) * page_size).limit(page_size)
     ).all()
-    return {"items": [_selection_view(session, customer, feedback) for session, customer, feedback in rows], "total": total, "page": page, "page_size": page_size}
+    items = (
+        [_staff_selection_view(session) for session, _, _ in rows]
+        if staff.role == "staff"
+        else [_selection_view(session, customer, feedback) for session, customer, feedback in rows]
+    )
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 def _owned_selection(db: Session, session_id: str, staff: Staff) -> SelectionSession:
@@ -684,6 +703,7 @@ def list_selection_change_requests(
 @router.post("/selection-sessions/{session_id}/confirm")
 def confirm_selection_session(session_id: str, db: Session = Depends(get_db), authorization: str | None = Header(None)):
     staff = _current_staff(authorization, db)
+    _require_admin(staff)
     session = _locked_owned_selection(db, session_id, staff)
     if session.status == "confirmed":
         return _selection_view(session, db.get(User, session.customer_id) if session.customer_id else None)
@@ -777,6 +797,7 @@ def confirm_selection_session(session_id: str, db: Session = Depends(get_db), au
 @router.post("/selection-sessions/{session_id}/cancel")
 def cancel_selection_session(session_id: str, db: Session = Depends(get_db), authorization: str | None = Header(None)):
     staff = _current_staff(authorization, db)
+    _require_admin(staff)
     session = _owned_selection(db, session_id, staff)
     if session.status == "cancelled":
         return _selection_view(session, db.get(User, session.customer_id) if session.customer_id else None)
@@ -808,6 +829,7 @@ def approve_selection_change_request(
     authorization: str | None = Header(None),
 ):
     staff = _current_staff(authorization, db)
+    _require_admin(staff)
     change_ref = db.get(SelectionChangeRequest, request_id)
     if not change_ref:
         raise HTTPException(status_code=404, detail="加选请求不存在")
@@ -929,6 +951,7 @@ def reject_selection_change_request(
     authorization: str | None = Header(None),
 ):
     staff = _current_staff(authorization, db)
+    _require_admin(staff)
     change_ref = db.get(SelectionChangeRequest, request_id)
     if not change_ref:
         raise HTTPException(status_code=404, detail="加选请求不存在")

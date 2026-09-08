@@ -4,14 +4,15 @@ import test from 'node:test';
 
 const source = (path: string) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8');
 
-test('新管理端不暴露预约和派单入口', () => {
+test('新管理端不暴露预约看板或派单入口', () => {
   const navigation = source('layouts/MainLayout.tsx');
   const permissions = source('auth.ts');
   const today = source('pages/TodayPage.tsx');
 
   assert.doesNotMatch(navigation, /预约看板|\/reservations/);
   assert.doesNotMatch(permissions, /\/reservations/);
-  assert.doesNotMatch(today, /today-appointments|派钟|assignVisit|getTodayAppointments/);
+  assert.doesNotMatch(today, /预约看板|派钟|assignVisit/);
+  assert.match(today, /getTodayAppointments/);
 });
 
 test('新管理端不从房间或服务位调用物理资源操作', () => {

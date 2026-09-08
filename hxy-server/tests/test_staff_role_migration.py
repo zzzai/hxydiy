@@ -61,9 +61,8 @@ def test_legacy_audit_role_value_is_not_rewritten():
         assert conn.execute(text("SELECT detail FROM audit_logs WHERE id=1")).scalar_one() == '{"role":"admin"}'
 
 
-def test_unbound_legacy_staff_never_leaks_staff_as_a_public_role():
-    with pytest.raises(ValueError):
-        normalize_staff_role("staff")
+def test_formal_store_staff_is_a_public_read_only_role():
+    assert normalize_staff_role("staff") == "staff"
 
 
 def test_unknown_role_is_rejected_instead_of_falling_back():

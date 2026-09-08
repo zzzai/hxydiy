@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { App, Button, Col, Empty, Popconfirm, Result, Row, Space, Spin, Statistic, Table, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { finishService, getTodayStats, readyService } from '../api';
+import { finishService, getStaff, getTodayAppointments, getTodayStats, readyService } from '../api';
+import { canViewReadOnlyOperations } from '../auth';
 import { dataProvider } from '../core/dataProvider';
 import { resources } from '../core/resources';
 import { getNextOperation, getOperationConfirmation, getResourceStatus, type LiveBoard, type LiveVisit, makeIdempotencyKey, type OperationAction } from '../operations';
@@ -20,8 +21,10 @@ function boardFromResponse(value: unknown): LiveBoard {
 
 export default function TodayPage() {
   const { message } = App.useApp();
+  const readOnly = canViewReadOnlyOperations(getStaff()?.role);
   const [stats, setStats] = useState<Record<string, number>>({});
   const [board, setBoard] = useState<LiveBoard>(emptyBoard);
+  const [appointments, setAppointments] = useState<Array<{ id: number; order_no: string; status: string; booking_time?: string; items?: Array<{ name?: string; quantity?: number }> }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState('');
@@ -30,6 +33,11 @@ export default function TodayPage() {
     setLoading(true);
     setError(null);
     try {
+      if (readOnly) {
+        const response = await getTodayAppointments();
+        setAppointments(response.data?.items || []);
+        return;
+      }
       dataProvider.invalidate(resources.serviceOrders);
       const [statsResponse, boardResponse] = await Promise.all([
         getTodayStats(),
@@ -42,7 +50,7 @@ export default function TodayPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -71,7 +79,18 @@ export default function TodayPage() {
     { title: '下一步', key: 'action', width: 130, align: 'right' as const, render: (_: unknown, record: LiveVisit) => { const next = getNextOperation(record.status, record.service_order_status); if (!next) return <Text type="secondary">等待处理</Text>; return <Popconfirm title={getOperationConfirmation(next.label)} onConfirm={() => runServiceAction(record, next.action)}><Button loading={acting === `${next.action}-${record.service_order_id}`}>{next.label}</Button></Popconfirm>; } },
   ], [acting]);
 
+  const readOnlyColumns = useMemo(() => [
+    { title: '服务项目', key: 'service', render: (_: unknown, record: typeof appointments[number]) => itemNames(record.items || []) || '到店服务' },
+    { title: '预约时间', dataIndex: 'booking_time', width: 140, render: (value: string | undefined) => value || '-' },
+    { title: '状态', dataIndex: 'status', width: 120 },
+  ], []);
+
   if (error) return <Result status="error" title="今日运营数据加载失败" subTitle={error} extra={<Button type="primary" icon={<ReloadOutlined />} onClick={() => void load()}>重试</Button>} />;
+
+  if (readOnly) return <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>今日运营</Title><Text type="secondary">仅查看本店当日服务安排</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
+    <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>今日预约</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table rowKey="id" columns={readOnlyColumns} dataSource={appointments} pagination={false} locale={{ emptyText: <Empty description="当前没有今日预约" /> }} />}</section>
+  </Space>;
 
   return <Space direction="vertical" size={16} style={{ width: '100%' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>今日运营</Title><Text type="secondary">在店服务与结算实时状态</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
