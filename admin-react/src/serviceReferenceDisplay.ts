@@ -11,7 +11,9 @@ const LABELS: Record<string, string> = {
   neck_shoulder: '肩颈', waist_hip: '腰臀', legs: '腿部', abdomen: '腹部', feet: '足部', full_relaxation: '整体放松', gentle: '轻柔', medium: '适中', strong: '偏强', lower: '偏低', higher: '偏高',
   quick: '较快', gradual: '逐渐', tense: '始终较紧张', suitable: '本次合适', better_after_adjustment: '调整后更合适', adjust_next_time: '下次需调整', repeat_current: '延续本次', confirm_on_arrival: '到店再确认',
   price: '价格', quality: '品质', environment: '环境', efficiency: '效率', fixed_technician: '固定技师', fixed_time: '固定时段', value: '实惠优先', experience: '体验优先', unexpressed: '未表达',
+  quiet: '希望安静', chat: '愿意聊天', explain_before_action: '动作前说明',
   body_reconfirm: '服务前再确认',
+  no_additional_notes: '本次无补充（已完成记录）',
 };
 
 const labelValue = (field: string, value: unknown) => {
@@ -36,8 +38,9 @@ export function buildServiceReferenceDisplay(record: any): ServiceReferenceDispl
     ['个人概况', [['年龄段', personal.age_band], ['体型', personal.build], ['身高区间', personal.height_band]]],
     ['工作与生活', [['职业场景', work.occupation_contexts], ['睡眠自述', work.sleep_quality]]],
     ['服务相关情况', [['需再次确认', related.contexts]]],
-    ['服务偏好', [['本次重点', reported.focus_areas], ['避开或谨慎', reported.avoid_areas], ['力度', reported.force_preference], ['温度', reported.temperature_preference]]],
+    ['服务偏好', [['沟通方式', reported.communication_preference], ['本次重点', reported.focus_areas], ['避开或谨慎', reported.avoid_areas], ['力度', reported.force_preference], ['温度', reported.temperature_preference]]],
     ['本次反应', [['放松过程', observed.session_response?.relaxation], ['服务反馈', observed.service_feedback]]],
+    ['记录完成情况', [['完成情况', observed.recording_outcome]]],
     ['下次与沟通', [['下次建议', profile.next_visit?.plan], ['决策关注', consumption.decision_priorities], ['预算倾向', consumption.budget_preference]]],
     ...(record?.schema_version === 5 && record?.taxonomy_version === 'service_reference_v4' && (record?.body_reconfirm_required === true || (Array.isArray(reported.body_service_notes) && reported.body_service_notes.length)) ? [['身体服务提醒', [['下次服务', 'body_reconfirm']]]] as Array<[string, Array<[string, unknown]>]> : []),
   ];

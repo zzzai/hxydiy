@@ -99,6 +99,61 @@ class TestTechnicianProfileV3Contract:
         with self.SessionLocal() as db:
             yield db
 
+    def quick_note_payload(self, observed, **overrides):
+        payload = self.v5_payload([], customer_confirmed=False, source="service_observation")
+        payload["profile"]["technician_observed"] = observed
+        payload.update(overrides)
+        return payload
+
+    def test_minimal_note_saves_without_inventing_customer_statement_and_replays(self):
+        payload = self.quick_note_payload({"service_note": "顾客希望安静休息，本次减少交谈"})
+        saved = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=self.technician_headers)
+        assert saved.status_code == 200, saved.text
+        replay = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=self.technician_headers)
+        assert replay.json()["id"] == saved.json()["id"]
+        with self.SessionLocal() as db:
+            record = db.get(CustomerProfileRecord, saved.json()["id"])
+            assert record.profile["technician_observed"]["service_note"] == "顾客希望安静休息，本次减少交谈"
+            assert not record.customer_confirmed
+            assert not record.profile["customer_reported"].get("service_related_context")
+            occupancy = db.query(PositionOccupancy).first()
+            occupancy.serviced_by_technician_id = record.technician_id
+            db.commit()
+            from app.api.admin_v2 import _management_profile_record_view
+            assert "service_note" not in json.dumps(_management_profile_record_view(record, db))
+        history = self.client.get("/api/v1/technician/service-history", headers=self.technician_headers).json()["items"][0]
+        assert history["record_completed"] is True
+        assert history["service_note"] == "顾客希望安静休息，本次减少交谈"
+
+    def test_no_additional_notes_is_completed_without_satisfaction_or_confirmation(self):
+        payload = self.quick_note_payload({"recording_outcome": "no_additional_notes"})
+        saved = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=self.technician_headers)
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["customer_confirmed"] is False
+        assert "service_feedback" not in saved.json()["profile"]["technician_observed"]
+
+    @pytest.mark.parametrize("observed", [
+        {"service_note": "字" * 201}, {"service_note": "电话13800138000"},
+        {"service_note": "诊断结果"}, {"service_note": "   "},
+        {"recording_outcome": "no_additional_notes", "service_note": "已记录"},
+        {"recording_outcome": "no_additional_notes", "service_feedback": "suitable"},
+    ])
+    def test_invalid_minimal_note_is_rejected(self, observed):
+        response = self.client.post("/api/v1/admin/v2/customer-profile-records", json=self.quick_note_payload(observed), headers=self.technician_headers)
+        assert response.status_code == 422, response.text
+
+    def test_no_additional_notes_cannot_be_customer_confirmed(self):
+        payload = self.quick_note_payload({"recording_outcome": "no_additional_notes"}, customer_confirmed=True)
+        response = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=self.technician_headers)
+        assert response.status_code == 422, response.text
+
+    def test_explicit_communication_preference_is_preserved_as_customer_reported_fact(self):
+        payload = self.v5_payload([], customer_confirmed=False, source="service_observation")
+        payload["profile"]["customer_reported"]["communication_preference"] = "quiet"
+        response = self.client.post("/api/v1/admin/v2/customer-profile-records", json=payload, headers=self.technician_headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["profile"]["customer_reported"]["communication_preference"] == "quiet"
+
     def v3_payload(self, **overrides):
         profile = {
             "schema_version": 3,

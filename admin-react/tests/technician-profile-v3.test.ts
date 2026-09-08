@@ -8,14 +8,11 @@ const read = (path: string) => readFileSync(fileURLToPath(new URL(`../${path}`, 
 test('v3 快记默认展示高频项并把扩展维度放在折叠区', () => {
   const source = read('src/technician/TechnicianProfileSheet.tsx');
   assert.match(source, /本次重点/);
-  assert.match(source, /更多服务记忆/);
+  assert.match(source, /温度、避让与下次提醒/);
   assert.match(source, /已向顾客复述并确认/);
-  assert.match(source, /待保存摘要/);
-  assert.match(source, /预算倾向/);
-  assert.match(source, /决策关注/);
-  assert.equal(source.match(/label="相关情况原话"/g)?.length, 1);
-  assert.match(source, /最多选择 2 项/);
-  assert.match(source, /最多选择 1 项/);
+  assert.doesNotMatch(source, /预算倾向|决策关注|Modal/);
+  assert.match(source, /本次无补充，完成记录/);
+  assert.match(source, /name="serviceNote"/);
   assert.doesNotMatch(source, /保存失败，请检查网络后重试/);
 });
 

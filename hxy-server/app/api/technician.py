@@ -285,6 +285,7 @@ SERVICE_REFERENCE_LABELS = {
         "adjust_next_time": "下次需调整",
     },
     "next_visit": {"repeat_current": "延续本次", "confirm_on_arrival": "到店再确认"},
+    "communication": {"quiet": "希望安静", "chat": "愿意聊天", "explain_before_action": "动作前说明"},
 }
 
 
@@ -705,6 +706,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
             "avoid_areas": [area_labels[code] for code in reported.get("avoid_areas", []) if code in area_labels],
             "force_preference": SERVICE_REFERENCE_LABELS["force"].get(reported.get("force_preference")),
             "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(reported.get("temperature_preference")),
+            "communication_preference": SERVICE_REFERENCE_LABELS["communication"].get(reported.get("communication_preference")),
             "occupation_contexts": [
                 SERVICE_REFERENCE_V2_TAXONOMY["occupation_contexts"][code]
                 for code in lifestyle.get("occupation_contexts", [])
@@ -790,6 +792,17 @@ def service_history(
             .limit(1)
         )
         project_names = []
+        own_record = db.scalar(select(CustomerProfileRecord).where(
+            CustomerProfileRecord.store_id == technician.store_id,
+            CustomerProfileRecord.selection_session_id == session.id,
+            CustomerProfileRecord.technician_id == technician.id,
+            _supported_reference_version(), _not_superseded_reference(),
+        ).order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc()).limit(1))
+        own_profile = own_record.profile if own_record and isinstance(own_record.profile, dict) else {}
+        own_observed = own_profile.get("technician_observed") or {}
+        own_observed = own_observed if isinstance(own_observed, dict) else {}
+        service_note = own_observed.get("service_note")
+        service_note = service_note if own_record and own_record.schema_version == 5 and isinstance(service_note, str) and len(service_note) <= 200 else ""
         for selection_item in session.items or []:
             name = selection_item.get("name")
             if isinstance(name, str) and name.strip() and name.strip() not in project_names:
@@ -805,6 +818,10 @@ def service_history(
             "completed_at": occupancy.actual_service_end_at,
             "duration_minutes": duration_minutes,
             "profile_status": "confirmed" if record else "pending",
+            "record_completed": own_record is not None,
+            "own_record_summary": _history_profile_summary(own_record),
+            "recording_outcome": "no_additional_notes" if own_observed.get("recording_outcome") == "no_additional_notes" else None,
+            "service_note": service_note,
             "customer": {"display_name": f"顾客 #{customer.id}"} if customer else {"display_name": "匿名顾客"},
             "projects": project_names,
             "service_position": room.name,
