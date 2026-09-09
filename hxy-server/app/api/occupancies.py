@@ -774,7 +774,7 @@ def customer_move_occupancy(
     return occupancy_view(occupancy)
 
 
-def _admin_live_map(db: Session, store_id: int) -> dict:
+def _admin_live_map(db: Session, store_id: int, *, include_maintenance_note: bool = False) -> dict:
     expire_stale_holds(db, store_id)
     rooms = list(db.scalars(select(Room).where(
         Room.store_id == store_id,
@@ -799,6 +799,8 @@ def _admin_live_map(db: Session, store_id: int) -> dict:
     for room in rooms:
         occupancy = occupancies.get(room.id)
         view = position_view(room, occupancy)
+        if include_maintenance_note:
+            view["maintenance_note"] = room.note
         session = sessions.get(occupancy.selection_session_id) if occupancy else None
         view["selection"] = None if not session else {
             "id": session.id,
@@ -823,7 +825,11 @@ def admin_live_position_map(
     db: Session = Depends(get_db),
 ) -> dict:
     staff = _current_staff(authorization, db)
-    return _admin_live_map(db, _staff_store_id(staff))
+    return _admin_live_map(
+        db,
+        _staff_store_id(staff),
+        include_maintenance_note=normalize_staff_role(staff.role, staff.technician_id) == "manager",
+    )
 
 
 @router.post("/admin/kiosk-sessions")

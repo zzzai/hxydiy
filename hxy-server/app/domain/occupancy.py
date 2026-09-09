@@ -101,7 +101,6 @@ def position_view(room: Room, occupancy: PositionOccupancy | None = None, *, cur
         "is_current": current,
         "customer_selectable": room.customer_selectable,
         "operational_status": room.operational_status,
-        "maintenance_note": room.note,
         "map_x": room.map_x,
         "map_y": room.map_y,
         "map_width": room.map_width,

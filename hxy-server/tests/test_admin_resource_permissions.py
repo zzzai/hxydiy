@@ -182,6 +182,19 @@ class AdminResourcePermissionTests(unittest.TestCase):
         self.assertEqual(sensitive.status_code, 403, sensitive.text)
         self.assertEqual(sensitive.json()["detail"]["code"], "STAFF_READ_ONLY")
 
+    def test_active_store_staff_live_map_excludes_manager_maintenance_notes(self):
+        response = self.client.post("/api/v1/admin/login", json={"username": "store-read-only", "password": "pass"})
+        self.assertEqual(response.status_code, 200, response.text)
+
+        live_map = self.client.get(
+            "/api/v1/admin/live-service-position-map",
+            headers={"Authorization": f"Bearer {response.json()['token']}"},
+        )
+
+        self.assertEqual(live_map.status_code, 200, live_map.text)
+        self.assertTrue(live_map.json()["positions"])
+        self.assertTrue(all("maintenance_note" not in position for position in live_map.json()["positions"]))
+
     def test_login_rejects_unknown_role(self):
         response = self.client.post("/api/v1/admin/login", json={"username": "unknown-role", "password": "pass"})
         self.assertEqual(response.status_code, 403)
