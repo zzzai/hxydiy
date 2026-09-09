@@ -70,6 +70,26 @@ test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   assert.match(source, /JSON\.stringify/);
 });
 
+test('技师快记默认层只保留三项交接，身体记录必须按需进入', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  assert.match(source, /label="顾客怎么更舒服"/);
+  assert.match(source, /label="本次关键调整"/);
+  assert.match(source, /label="结果与下次"/);
+  assert.match(source, /label="交接一句话"/);
+  assert.match(source, /需要记录身体情况/);
+  assert.doesNotMatch(source, /<Collapse ghost[\s\S]{0,600}精确补充身体情况/);
+});
+
+test('快记文本仅引导服务交接，身体补充先选大部位再显示精确图', () => {
+  const quickNote = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  const bodyMap = readFileSync(new URL('../src/technician/BodyMapNoteDrawer.tsx', import.meta.url), 'utf8');
+  assert.match(quickNote, /左肩轻一点更舒服；下次先确认/);
+  assert.doesNotMatch(quickNote, /来店原因|未满足需求/);
+  assert.match(bodyMap, /肩颈/);
+  assert.match(bodyMap, /精确位置/);
+  assert.match(bodyMap, /showPreciseMap/);
+});
+
 test('活动顾客服务单显式打开安全服务参考摘要', () => {
   const today = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
   const drawer = readFileSync(new URL('../src/technician/TechnicianServiceReferenceDrawer.tsx', import.meta.url), 'utf8');

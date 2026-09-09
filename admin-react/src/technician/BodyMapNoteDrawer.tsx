@@ -23,6 +23,14 @@ const HANDLINGS: Array<{ value: V5BodySessionHandling; label: string }> = [
   { value: 'avoid', label: '本次避开' }, { value: 'lighter', label: '本次减轻力度' }, { value: 'normal_after_confirmation', label: '确认后正常进行' }, { value: 'observe_and_reconfirm', label: '本次观察，下次再确认' },
 ];
 
+const LARGE_AREAS: Array<{ label: string; regions: V5BodyRegion[] }> = [
+  { label: '肩颈', regions: ['neck', 'shoulder'] },
+  { label: '腰背', regions: ['upper_back', 'mid_back', 'lower_back', 'side_waist'] },
+  { label: '腿足', regions: ['hip', 'buttock', 'thigh', 'knee', 'calf', 'ankle', 'foot'] },
+  { label: '腹部', regions: ['abdomen'] },
+  { label: '其他', regions: ['head', 'chest', 'upper_arm', 'elbow', 'wrist', 'hand'] },
+];
+
 // x/y coordinates are percentage positions over the generated front/back silhouette image.
 const POINTS: PointLayout[] = [
   { region: 'head', side: 'center', label: '头部', x: 25, y: 13 }, { region: 'neck', side: 'center', label: '颈部', x: 25, y: 22 },
@@ -68,12 +76,16 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
   const [notes, setNotes] = useState<DraftNote[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [taxonomy, setTaxonomy] = useState<any>(null);
+  const [selectedLargeArea, setSelectedLargeArea] = useState<string | null>(null);
+  const [showPreciseMap, setShowPreciseMap] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setStep(1);
     setNotes(value.map((note) => ({ ...note })));
     setActiveKey(null);
+    setSelectedLargeArea(null);
+    setShowPreciseMap(false);
   }, [open, value]);
 
   // 服务端 taxonomy 是唯一权威；本地文案仅用于网络短暂失败时不中断当次服务记录。
@@ -92,6 +104,8 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
 
   const active = notes.find((note) => bodyMapPointKey(note) === activeKey) || null;
   const selectedPoints = useMemo(() => notes.map(({ region, side }) => ({ region, side })), [notes]);
+  const selectedArea = LARGE_AREAS.find((area) => area.label === selectedLargeArea) || null;
+  const visiblePoints = selectedArea ? POINTS.filter((point) => selectedArea.regions.includes(point.region)) : POINTS;
   const patchActive = (patch: Partial<DraftNote>) => activeKey && setNotes((current) => current.map((note) => bodyMapPointKey(note) === activeKey ? { ...note, ...patch } : note));
   const choosePoint = (point: BodyMapPoint) => {
     const key = bodyMapPointKey(point);
@@ -124,11 +138,15 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
     <div className="technician-profile-context"><Typography.Text strong>{context}</Typography.Text><Typography.Text type="secondary">只记录顾客自述，不作诊断</Typography.Text></div>
     <div className="technician-body-map-steps" aria-label={`当前第 ${step} 步，共 4 步`}><span className={step >= 1 ? 'active' : ''}>1<br />选部位</span><span className={step >= 2 ? 'active' : ''}>2<br />选情况</span><span className={step >= 3 ? 'active' : ''}>3<br />当前状态</span><span className={step >= 4 ? 'active' : ''}>4<br />本次处理</span></div>
     {step === 1 && <>
-      <Typography.Title level={4}>点击选择身体部位（可多选）</Typography.Title>
-      <div className="technician-body-map-canvas"><img src={bodyMapImage} alt="正面与背面人体轮廓" />{POINTS.map((point, index) => {
+      <Typography.Title level={4}>先选常用部位</Typography.Title>
+      <Typography.Paragraph type="secondary">先缩小范围；需要左右或精确位置时再打开人体图。</Typography.Paragraph>
+      <div className="technician-body-map-large-areas">{LARGE_AREAS.map((area) => <Button key={area.label} size="large" type={selectedLargeArea === area.label ? 'primary' : 'default'} onClick={() => { setSelectedLargeArea(area.label); setShowPreciseMap(false); }}>{area.label}</Button>)}</div>
+      <Button type="link" disabled={!selectedArea} onClick={() => setShowPreciseMap(true)}>精确位置</Button>
+      {showPreciseMap && <><Typography.Title level={5}>选择具体位置（可多选）</Typography.Title>
+      <div className="technician-body-map-canvas"><img src={bodyMapImage} alt="正面与背面人体轮廓" />{visiblePoints.map((point, index) => {
         const selected = selectedPoints.some((item) => bodyMapPointKey(item) === bodyMapPointKey(point));
         return <button className={`technician-body-map-point ${selected ? 'selected' : ''}`} key={`${bodyMapPointKey(point)}-${index}`} style={{ left: `${point.x}%`, top: `${point.y}%` }} aria-label={`选择${point.label}`} onClick={() => choosePoint(point)}>{selected ? <CheckCircleFilled /> : null}</button>;
-      })}</div>
+      })}</div></>}
       <div className="technician-body-map-selected"><Typography.Text strong>已选择 {notes.length} 个部位</Typography.Text>{notes.length > 0 && <Button type="link" onClick={() => setNotes([])}>清空</Button>}</div>
       {notes.map((note, index) => <div className="technician-body-map-note" key={bodyMapPointKey(note)}><span>{index + 1}</span><Typography.Text>{description(note)}</Typography.Text><Button type="text" aria-label={`编辑${description(note)}`} icon={<EditOutlined />} onClick={() => { setActiveKey(bodyMapPointKey(note)); setStep(2); }} /><Button danger type="text" aria-label={`删除${description(note)}`} icon={<DeleteOutlined />} onClick={() => remove(bodyMapPointKey(note))} /></div>)}
     </>}
