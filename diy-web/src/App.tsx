@@ -54,6 +54,7 @@ import SelectionSummarySheet from './components/SelectionSummarySheet';
 import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL_MS, readCustomerAuth, shouldOfferRecordBinding, writeCustomerAuth, type CustomerAuth } from './customerAuth';
 import { customerPageSubtitle, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
 import { customerServiceProgress, shouldPollCustomerServiceStatus } from './customerServiceStatus';
+import { shareProjectLink } from './projectShare';
 import ProjectDetailPage from './components/ProjectDetailPage';
 import LocalDetailPage from './components/LocalDetailPage';
 import {
@@ -143,6 +144,7 @@ function getQueryConfig() {
     qrToken: query.get('qr') || '',
     sessionId: query.get('session') || '',
     accessToken: query.get('token') || '',
+    projectCode: query.get('project') || '',
   };
 }
 
@@ -463,6 +465,20 @@ export default function App() {
     });
     setDetailProject(project);
     openOverlay('project-detail');
+  };
+
+  const shareProject = async (project: Project) => {
+    const outcome = await shareProjectLink({
+      currentUrl: window.location.href,
+      projectCode: project.code,
+      projectName: displayProjectName(project),
+    }, {
+      share: typeof navigator.share === 'function' ? navigator.share.bind(navigator) : undefined,
+      writeText: navigator.clipboard?.writeText ? navigator.clipboard.writeText.bind(navigator.clipboard) : undefined,
+    }).catch(() => 'unavailable' as const);
+    pageTracking.projectShare({ project_id: project.id, project_code: project.code, outcome });
+    if (outcome === 'copied') flash('分享链接已复制');
+    if (outcome === 'unavailable') flash('暂时无法分享，请复制浏览器地址发送给好友');
   };
 
   const openTeaDetail = () => {
@@ -807,6 +823,8 @@ export default function App() {
       setPositions(publicMap.positions);
       setCouponTemplates(coupons);
       setPageContent(content);
+      const sharedProject = query.projectCode ? catalog.find((project) => project.code === query.projectCode) : undefined;
+      if (sharedProject) openProjectDetail(sharedProject);
       if (query.sessionId && query.accessToken) {
         const linkedSession = await getSelectionSession(query.sessionId, query.accessToken);
         const linkedMap = await getServicePositionMap(query.storeId, linkedSession.id, query.accessToken);
@@ -1445,6 +1463,11 @@ export default function App() {
           submitted={Boolean(serviceStatus?.evaluated)}
           onClose={dismissTopOverlay}
           onSubmit={submitServiceFeedback}
+          onViewRecord={customerAuth ? () => { setFeedbackOpen(false); setProfileOpen(true); replaceTopOverlay('profile'); } : undefined}
+          onContinueShopping={() => {
+            dismissTopOverlay();
+            window.setTimeout(() => { void returnToProjectListAfterSubmit(); }, 0);
+          }}
         />
         <RecordLoginDialog
           open={recordLoginOpen}
@@ -1644,6 +1667,7 @@ export default function App() {
         onClose={dismissTopOverlay}
         onConfirm={saveProject}
         onCouponInfo={openCouponLogin}
+        onShare={shareProject}
         couponPrompt={pageContent?.coupon_prompt}
       />}
       </AnimatePresence>

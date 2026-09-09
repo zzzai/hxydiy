@@ -1294,6 +1294,8 @@ h1, h2, h3, p { margin-top: 0; }
 .mini-detail-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .mini-detail-title-row h1 { margin: 0; color: #1d2a25; font-size: 20px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
 .mini-detail-title-row svg { flex: none; color: #32ab89; }
+.detail-share-button { display: inline-flex; min-height: 36px; flex: none; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 18px; color: #176856; background: #eef8f3; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.detail-share-button:active { transform: scale(.96); }
 .mini-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .mini-detail-tags span { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 5px; color: #176856; background: #eef8f3; font-size: 9px; font-weight: 600; }
 .mini-detail-summary-card > p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -1708,19 +1710,28 @@ h1, h2, h3, p { margin-top: 0; }
 .feedback-header .icon-button { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border: 0; border-radius: 50%; color: #385148; background: transparent; }
 .feedback-form { display: grid; gap: 20px; padding: 26px 20px calc(24px + env(safe-area-inset-bottom)); }
 .feedback-lead { margin: 0; color: #163e34; font-size: 18px; font-weight: 700; text-align: center; }
+.feedback-rating-label { min-height: 18px; margin: -12px 0 -8px; color: #7e8983; font-size: 12px; text-align: center; }
+.feedback-rating-label.selected { color: #176856; font-weight: 700; }
 .feedback-stars { display: flex; justify-content: center; gap: 8px; color: #c8d4cf; }
 .feedback-stars button { display: inline-flex; padding: 2px; border: 0; color: inherit; background: transparent; }
 .feedback-stars button.active { color: #d59b36; }
+.feedback-tag-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: -12px; color: #385148; font-size: 13px; }
+.feedback-tag-heading span, .feedback-note small, .feedback-follow-up-note { color: #78867f; font-size: 11px; line-height: 1.5; }
 .feedback-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .feedback-tags button { padding: 8px 12px; border: 1px solid #dfe7e3; border-radius: 999px; color: #52635c; background: #fff; font: inherit; font-size: 12px; }
 .feedback-tags button.selected { border-color: #8ac5ae; color: #176856; background: #f0fcf7; }
-.feedback-form textarea { min-height: 96px; resize: vertical; padding: 12px; border: 1px solid #d8e3de; border-radius: 10px; outline: 0; color: #1d2a25; font: inherit; font-size: 13px; line-height: 1.6; }
+.feedback-follow-up-note { margin: -8px 0 -8px; padding: 9px 10px; border-radius: 8px; background: #fff8ed; }
+.feedback-note { display: grid; gap: 6px; color: #385148; font-size: 13px; font-weight: 700; }
+.feedback-note small { justify-self: end; font-weight: 400; }
+.feedback-form textarea { min-height: 96px; resize: vertical; padding: 12px; border: 1px solid #d8e3de; border-radius: 10px; outline: 0; color: #1d2a25; background: #fff; font: inherit; font-size: 13px; line-height: 1.6; }
 .feedback-form textarea:focus { border-color: #1f8f75; box-shadow: 0 0 0 3px rgba(31,143,117,.12); }
 .feedback-submit { width: 100%; min-height: 48px; }
+.feedback-submit:disabled { opacity: .48; cursor: not-allowed; }
 .feedback-complete { display: grid; justify-items: center; gap: 10px; padding: 54px 24px calc(42px + env(safe-area-inset-bottom)); text-align: center; }
 .feedback-complete > span { display: inline-flex; padding: 14px; border-radius: 50%; color: #176856; background: #f0fcf7; }
 .feedback-complete h2 { margin: 8px 0 0; color: #163e34; font-size: 20px; }
 .feedback-complete p { margin: 0 0 14px; color: #77817c; font-size: 13px; line-height: 1.6; }
+.feedback-complete-actions { display: grid; width: 100%; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (min-width: 768px) {
   .feedback-backdrop { align-items: center; padding: 24px; }
   .feedback-dialog { border-radius: 8px; }

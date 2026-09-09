@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import admin, admin_catalog, admin_v2, auth, catalog, coupons, health, integrations, occupancies, operations, orders, payments, selections, technician, technician_admin, tracking, media
+from app.api import admin, admin_catalog, admin_v2, auth, catalog, coupons, health, integrations, occupancies, operations, orders, payments, selections, share, technician, technician_admin, tracking, media
 from app.core.config import settings
 from app.core.staff_access import bind_staff_request_scope, reset_staff_request_scope
 from app.release_static import mount_release_static_files
@@ -53,4 +53,5 @@ app.include_router(selections.router, prefix="/api/v1")
 app.include_router(occupancies.router, prefix="/api/v1")
 app.include_router(technician.router, prefix="/api/v1")
 app.include_router(technician_admin.router, prefix="/api/v1")
+app.include_router(share.router)
 mount_release_static_files(app)

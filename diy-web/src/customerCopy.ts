@@ -2,6 +2,30 @@ import { formatMoney, type PricingPreview } from './domain.ts';
 
 export const FEEDBACK_TAGS = ['技术专业', '环境舒适', '技师细致', '力度合适', '整体放松'] as const;
 
+const FEEDBACK_NEUTRAL_TAGS = ['手法一般', '力度需调整', '沟通可更清楚', '环境一般', '项目预期不一致'] as const;
+const FEEDBACK_IMPROVEMENT_TAGS = ['力度不合适', '沟通体验不好', '等待较久', '环境问题', '项目与预期不符', '其他问题'] as const;
+
+export const MAX_FEEDBACK_TAGS = 3;
+
+export function feedbackRatingLabel(rating: number | null): string {
+  return ({ 1: '很不满意', 2: '不太满意', 3: '一般', 4: '满意', 5: '非常满意' } as Record<number, string>)[rating || 0] || '请选择评分';
+}
+
+export function feedbackTagsForRating(rating: number | null): readonly string[] {
+  if (rating === null) return [];
+  if (rating <= 2) return FEEDBACK_IMPROVEMENT_TAGS;
+  if (rating === 3) return FEEDBACK_NEUTRAL_TAGS;
+  return FEEDBACK_TAGS;
+}
+
+export function canSubmitFeedback(rating: number | null): rating is number {
+  return typeof rating === 'number' && rating >= 1 && rating <= 5;
+}
+
+export function isLowFeedbackRating(rating: number | null): boolean {
+  return rating !== null && rating <= 2;
+}
+
 const PREFERENCE_LABELS: Record<string, string> = {
   草本偏好: '泡脚液',
   草本配方: '泡脚液',
