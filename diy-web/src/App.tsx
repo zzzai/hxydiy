@@ -16,7 +16,7 @@ import {
   Sparkles,
   WifiOff,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -69,7 +69,7 @@ import {
   type OverlayHistoryKind,
 } from './overlayHistory';
 import { getEntrySource, getPositionSelectionDecision, resolveActivePositionCode, resolveEntryConflict, resolveRequestedPosition, shouldResumeCurrentPosition } from './positionSelection';
-import { detailMotion, fadeInMotion, sheetMotion, toastMotion } from './motionPresets';
+import { detailMotion, fadeInMotion, motionForPreference, promoStripMotion, sheetMotion, toastMotion, valueChangeMotion } from './motionPresets';
 import SeatMapDialog from './components/SeatMapDialog';
 import TeaDetailPage from './components/TeaDetailPage';
 import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision } from './selectionFlow';
@@ -266,6 +266,7 @@ function StatusScreen({ type, title, message, onRetry }: {
 }
 
 export default function App() {
+  const reducedMotion = useReducedMotion();
   const query = useMemo(getQueryConfig, []);
   const booted = useRef(false);
   const entryTracked = useRef(false);
@@ -1480,7 +1481,7 @@ export default function App() {
 
       {boot === 'ready' && hasSubmittedCustomerSession && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div>}
 
-      {showPromoStrip && <section data-motion="promo-strip" className="miniapp-promo-strip" aria-label="到店权益">
+      {showPromoStrip && <motion.section data-motion="promo-strip" {...motionForPreference(promoStripMotion, reducedMotion)} className="miniapp-promo-strip" aria-label="到店权益">
         <div className="miniapp-promo-scroll" role="list" tabIndex={0} aria-describedby="promo-strip-hint">
           {showMembershipPromos && <>
           <button type="button" role="listitem" className="miniapp-promo membership-promo annual primary" onClick={() => openMembership('annual')}>
@@ -1501,7 +1502,7 @@ export default function App() {
         </div>
         <span id="promo-strip-hint" className="sr-only">向左滑动查看更多到店权益</span>
         <span className="promo-strip-progress" aria-hidden="true"><i /><i /></span>
-      </section>}
+      </motion.section>}
 
       <div className="catalog-layout miniapp-catalog-layout">
         <nav className="category-nav" aria-label="项目分类">
@@ -1594,11 +1595,11 @@ export default function App() {
       </div>
 
       <AnimatePresence initial={false}>
-      {selectedCount > 0 && <motion.footer data-motion="selection-footer" {...sheetMotion} className="selection-footer">
+          {selectedCount > 0 && <motion.footer data-motion="selection-footer" {...motionForPreference(sheetMotion, reducedMotion)} className="selection-footer">
         <button className="selection-summary" type="button" aria-haspopup="dialog" aria-expanded={selectionSummaryOpen} onClick={openSelectionSummary}>
           <span className="selection-bag"><ShoppingBag size={27} /><span className="selection-count">{selectedCount}</span></span>
           <span className="selection-price-copy">
-            <span className="selection-summary-total"><small>{saving ? '正在更新' : '预计合计'}</small><strong>{formatMoney(payableTotal)}</strong></span>
+                <span className="selection-summary-total"><small>{saving ? '正在更新' : '预计合计'}</small><AnimatePresence initial={false} mode="wait"><motion.strong key={`selection-total-${selectedCount}-${payableTotal}`} {...motionForPreference(valueChangeMotion, reducedMotion)}>{formatMoney(payableTotal)}</motion.strong></AnimatePresence></span>
             <span className="selection-summary-meta">{isMember ? <>{priceDisplay.originalHint && <del>{priceDisplay.originalHint}</del>}{priceDisplay.realizedSavingCents > 0 && <b>已优惠 {formatMoney(priceDisplay.realizedSavingCents)}</b>}{!priceDisplay.realizedSavingCents && <span>已按会员价计算</span>}</> : priceDisplay.memberHint ? <><span className="selection-summary-member-price">{priceDisplay.memberHint}</span>{priceDisplay.savingCents > 0 && <b>可省 {formatMoney(priceDisplay.savingCents)}</b>}</> : <span>{priceDisplay.primaryLabel} · 查看清单</span>}</span>
           </span>
         </button>

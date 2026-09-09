@@ -5,6 +5,8 @@ import test from 'node:test';
 const app = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const sheet = fs.readFileSync(new URL('../src/components/SelectionSummarySheet.tsx', import.meta.url), 'utf8');
 const detail = fs.readFileSync(new URL('../src/components/ProjectDetailPage.tsx', import.meta.url), 'utf8');
+const localDetail = fs.readFileSync(new URL('../src/components/LocalDetailPage.tsx', import.meta.url), 'utf8');
+const teaDetail = fs.readFileSync(new URL('../src/components/TeaDetailPage.tsx', import.meta.url), 'utf8');
 
 test('权益区、底部选购栏和详情层声明轻动效标记', () => {
   assert.match(app, /data-motion=["']promo-strip["']/);
@@ -16,4 +18,14 @@ test('选购清单总价是可播报的并区分待提交语义', () => {
   assert.match(sheet, /本次待提交|已提交服务/);
   assert.match(sheet, /aria-live=["']polite["']/);
   assert.match(sheet, /data-motion=["']selection-sheet["']/);
+});
+
+test('详情、底栏和选购抽屉均使用统一的减少动态效果降级', () => {
+  for (const source of [app, sheet, detail, localDetail, teaDetail]) {
+    assert.match(source, /useReducedMotion/);
+    assert.match(source, /motionForPreference/);
+  }
+  assert.match(sheet, /sheetSectionMotion\(0\)/);
+  assert.match(sheet, /sheetSectionMotion\(3\)/);
+  assert.match(app, /key=\{`selection-total-\$\{selectedCount\}-\$\{payableTotal\}`\}/);
 });

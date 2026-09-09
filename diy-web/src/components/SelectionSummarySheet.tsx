@@ -1,9 +1,9 @@
 import { Minus, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 import { selectionSettlementNote } from '../customerCopy';
-import { sheetMotion } from '../motionPresets';
+import { motionForPreference, sheetMotion, sheetSectionMotion, valueChangeMotion } from '../motionPresets';
 import { formatMoney } from '../domain';
 import type {
   ActivePromotion,
@@ -143,6 +143,7 @@ export default function SelectionSummarySheet({
   onRemove,
   onQuantityChange,
 }: Props) {
+  const reducedMotion = useReducedMotion();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
 
@@ -167,25 +168,25 @@ export default function SelectionSummarySheet({
 
   return (
     <div className="selection-summary-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <motion.section data-motion="selection-sheet" {...sheetMotion} className="selection-summary-sheet" role="dialog" aria-modal="true" aria-labelledby="selection-summary-title" onMouseDown={(event) => event.stopPropagation()}>
-        <header className="selection-sheet-header">
+      <motion.section data-motion="selection-sheet" {...motionForPreference(sheetMotion, reducedMotion)} className="selection-summary-sheet" role="dialog" aria-modal="true" aria-labelledby="selection-summary-title" onMouseDown={(event) => event.stopPropagation()}>
+        <motion.header {...motionForPreference(sheetSectionMotion(0), reducedMotion)} className="selection-sheet-header">
           <div>
             <strong id="selection-summary-title">{readOnly ? '已提交服务' : '本次待提交'}</strong>
             <span>{summary.totalCount}项</span>
           </div>
           <button ref={closeButtonRef} type="button" aria-label="关闭本次已选" onClick={onClose}><X size={19} /></button>
-        </header>
+        </motion.header>
 
-        <div className="selection-sheet-context" aria-label="提交前确认信息">
+        <motion.div {...motionForPreference(sheetSectionMotion(1), reducedMotion)} className="selection-sheet-context" aria-label="提交前确认信息">
           <span><small>服务位置</small><strong>{positionLabel}</strong></span>
           <span><small>当前身份</small><strong>{identityLabel}</strong></span>
-        </div>
+        </motion.div>
 
-        <div className="selection-sheet-scroll">
+        <motion.div {...motionForPreference(sheetSectionMotion(2), reducedMotion)} className="selection-sheet-scroll">
           {summary.groups.map((group) => (
             <GroupLine key={group.key} group={group} readOnly={readOnly} onModify={onModify} onRemove={onRemove} onQuantityChange={onQuantityChange} />
           ))}
-        </div>
+        </motion.div>
 
         {promotion && (
           <div className="selection-sheet-promotion">
@@ -195,7 +196,7 @@ export default function SelectionSummarySheet({
           </div>
         )}
 
-        <footer className="selection-sheet-total" aria-live="polite">
+        <motion.footer {...motionForPreference(sheetSectionMotion(3), reducedMotion)} className="selection-sheet-total" aria-live="polite">
           <div className="selection-sheet-checkout">
             <div className="selection-sheet-breakdown">
               {originalHint && <span><small>门店价</small><del>{originalHint.replace('门店价 ', '')}</del></span>}
@@ -203,10 +204,10 @@ export default function SelectionSummarySheet({
               {memberHint && <span><small>办卡后可享</small><strong>{memberHint}</strong></span>}
               {savingCents > 0 && <span><small>预计可省</small><strong>{formatMoney(savingCents)}</strong></span>}
             </div>
-            <div className="selection-sheet-payable"><small>{saving ? '正在更新' : priceLabel}</small><span>预计合计</span><strong>{formatMoney(totalCents)}</strong></div>
+            <div className="selection-sheet-payable"><small>{saving ? '正在更新' : priceLabel}</small><span>预计合计</span><AnimatePresence initial={false} mode="wait"><motion.strong key={`selection-total-${summary.totalCount}-${totalCents}`} {...motionForPreference(valueChangeMotion, reducedMotion)}>{formatMoney(totalCents)}</motion.strong></AnimatePresence></div>
           </div>
           <p>{selectionSettlementNote(readOnly)}</p>
-        </footer>
+        </motion.footer>
       </motion.section>
     </div>
   );

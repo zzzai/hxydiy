@@ -2,8 +2,8 @@ import { ArrowLeft, Check, ChevronRight, Coffee } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { resolveTeaImage, TEAS, TEA_DETAIL_PROFILES } from '../domain';
-import { motion } from 'framer-motion';
-import { detailMotion } from '../motionPresets';
+import { motion, useReducedMotion } from 'framer-motion';
+import { detailMotion, motionForPreference } from '../motionPresets';
 import DetailIntroduction from './DetailIntroduction';
 
 type TeaOption = { name: string; note?: string; description?: string; image_url?: string; image?: string };
@@ -19,6 +19,7 @@ type Props = {
 };
 
 export default function TeaDetailPage({ open, selectedTea, positionLabel, readOnly = false, onClose, onConfirm, teaOptions }: Props) {
+  const reducedMotion = useReducedMotion();
   const options: TeaOption[] = teaOptions?.length ? teaOptions : TEAS.map((item) => ({ ...item, description: TEA_DETAIL_PROFILES[item.name].description }));
   const [draft, setDraft] = useState(selectedTea || options[0].name);
 
@@ -32,7 +33,7 @@ export default function TeaDetailPage({ open, selectedTea, positionLabel, readOn
   const activeProfile = { highlight: activeTea.note || fallback?.highlight || '到店可选', description: activeTea.description || fallback?.description || '实际供应以门店当日准备为准。' };
 
   return (
-    <motion.div data-motion="detail" {...detailMotion} className="project-detail-page mini-detail-page tea-detail-page" role="dialog" aria-modal="true" aria-labelledby="tea-detail-title">
+    <motion.div data-motion="detail" {...motionForPreference(detailMotion, reducedMotion)} className="project-detail-page mini-detail-page tea-detail-page" role="dialog" aria-modal="true" aria-labelledby="tea-detail-title">
       <header className="mini-detail-nav">
         <button type="button" aria-label="返回项目列表" onClick={onClose}><ArrowLeft size={22} /></button>
         <strong>茶饮详情</strong>

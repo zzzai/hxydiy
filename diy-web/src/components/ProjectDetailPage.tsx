@@ -18,8 +18,8 @@ import ProjectDetailVisualSections from './ProjectDetailVisualSections';
 import DetailIntroduction from './DetailIntroduction';
 import DetailPrice from './DetailPrice';
 import { projectDetailVisuals } from '../projectDetailVisuals';
-import { motion } from 'framer-motion';
-import { detailMotion } from '../motionPresets';
+import { motion, useReducedMotion } from 'framer-motion';
+import { detailMotion, motionForPreference } from '../motionPresets';
 import {
   LOCAL_PARTS,
   calculateDetailPreviewPricing,
@@ -94,6 +94,7 @@ export default function ProjectDetailPage({
   onCouponInfo,
   couponPrompt,
 }: Props) {
+  const reducedMotion = useReducedMotion();
   const groups = useMemo(() => {
     if (!project) return [];
     if (isDetailOnlyProject(project)) return [];
@@ -219,7 +220,7 @@ export default function ProjectDetailPage({
     : (isCatalogOptions && attachableAddons.length > 0) || (isFootbathOptions && Boolean(localProject)));
 
   return (
-    <motion.div data-motion="detail" {...detailMotion} className={`project-detail-page mini-detail-page ${isMember ? 'member-active' : ''}`} role="dialog" aria-modal="true" aria-labelledby="project-detail-title">
+    <motion.div data-motion="detail" {...motionForPreference(detailMotion, reducedMotion)} className={`project-detail-page mini-detail-page ${isMember ? 'member-active' : ''}`} role="dialog" aria-modal="true" aria-labelledby="project-detail-title">
       <header className="mini-detail-nav">
         <button type="button" aria-label="返回项目列表" onClick={onClose}><ArrowLeft size={22} /></button>
         <strong>项目详情</strong>

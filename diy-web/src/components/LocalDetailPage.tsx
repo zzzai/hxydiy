@@ -2,8 +2,8 @@ import { ArrowLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, displayProjectName, effectivePrice, formatMoney, priceOf, projectImage, type Project } from '../domain';
-import { motion } from 'framer-motion';
-import { detailMotion } from '../motionPresets';
+import { motion, useReducedMotion } from 'framer-motion';
+import { detailMotion, motionForPreference } from '../motionPresets';
 import DetailIntroduction from './DetailIntroduction';
 import DetailPrice from './DetailPrice';
 
@@ -19,6 +19,7 @@ type Props = {
 };
 
 export default function LocalDetailPage({ open, project, selectedParts, positionLabel, isMember, readOnly = false, onClose, onConfirm }: Props) {
+  const reducedMotion = useReducedMotion();
   const [draft, setDraft] = useState<string[]>(selectedParts);
   const [focusedPart, setFocusedPart] = useState<string>(selectedParts[0] || LOCAL_PARTS[0]);
 
@@ -39,7 +40,7 @@ export default function LocalDetailPage({ open, project, selectedParts, position
   const activeProfile = LOCAL_DETAIL_PROFILES[focusedPart as keyof typeof LOCAL_DETAIL_PROFILES];
 
   return (
-    <motion.div data-motion="detail" {...detailMotion} className="project-detail-page mini-detail-page local-preference-page" role="dialog" aria-modal="true" aria-labelledby="local-detail-title">
+    <motion.div data-motion="detail" {...motionForPreference(detailMotion, reducedMotion)} className="project-detail-page mini-detail-page local-preference-page" role="dialog" aria-modal="true" aria-labelledby="local-detail-title">
       <header className="mini-detail-nav">
         <button type="button" aria-label="返回项目列表" onClick={onClose}><ArrowLeft size={22} /></button>
         <strong>{displayProjectName(project)}</strong>
