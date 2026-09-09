@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     media_storage_backend: str = "local"
     media_storage_root: str = "./media"
     media_max_size_bytes: int = 5 * 1024 * 1024
+    media_max_pixels: int = 20_000_000
     media_public_base_url: str = ""
     qiniu_access_key: str = ""
     qiniu_secret_key: str = ""

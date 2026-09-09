@@ -1,11 +1,13 @@
 """管理端媒体上传与门店隔离访问。"""
 
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,6 +28,23 @@ def _is_headquarters_admin(staff: Staff) -> bool:
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
 ALLOWED_FILENAME_EXTENSIONS = {"image/jpeg": {".jpg", ".jpeg"}, "image/png": {".png"}, "image/webp": {".webp"}, "image/gif": {".gif"}}
+
+
+def _validate_image_content(content: bytes, content_type: str) -> tuple[int, int]:
+    try:
+        with Image.open(BytesIO(content)) as image:
+            detected_content_type = Image.MIME.get(image.format)
+            width, height = image.size
+            image.verify()
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=415, detail="图片内容无效") from exc
+    if detected_content_type != content_type:
+        raise HTTPException(status_code=415, detail="图片内容与声明类型不匹配")
+    if width < 1 or height < 1:
+        raise HTTPException(status_code=415, detail="图片像素无效")
+    if width * height > settings.media_max_pixels:
+        raise HTTPException(status_code=413, detail="图片像素超过限制")
+    return width, height
 
 
 def _require_media_writer(staff: Staff) -> None:
@@ -138,6 +157,7 @@ async def upload_media(
     content = await file.read(settings.media_max_size_bytes + 1)
     if len(content) > settings.media_max_size_bytes:
         raise HTTPException(status_code=413, detail="图片不能超过 5MB")
+    width, height = _validate_image_content(content, file.content_type)
     object_key = f"stores/{target_store_id}/media/{uuid4().hex}{EXTENSIONS[file.content_type]}"
     storage = _storage_or_http()
     try:
@@ -156,7 +176,13 @@ async def upload_media(
     )
     db.add(media)
     db.flush()
-    _audit(db, staff, "media_upload", "media", str(media.id), {"store_id": target_store_id, "purpose": purpose, "size_bytes": len(content)})
+    _audit(db, staff, "media_upload", "media", str(media.id), {
+        "store_id": target_store_id,
+        "purpose": purpose,
+        "size_bytes": len(content),
+        "width": width,
+        "height": height,
+    })
     db.commit()
     db.refresh(media)
     return _view(media, storage)
