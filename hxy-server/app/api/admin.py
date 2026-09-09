@@ -531,6 +531,7 @@ def operations_summary(
             "new_count": sum(1 for user in customer_users if user.id in customer_user_ids and start_at <= _summary_utc(user.created_at) < end_at),
             "repeat_count": len(customer_user_ids & previous_user_ids),
             "member_count": sum(1 for user in customer_users if user.id in customer_user_ids and user.is_member),
+            "non_member_count": sum(1 for user in customer_users if user.id in customer_user_ids and not user.is_member),
             "anonymous_to_logged_in_count": len(identity_events),
         },
         "funnel": funnel,

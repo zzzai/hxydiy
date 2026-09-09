@@ -86,10 +86,11 @@ export default function AnalyticsPage() {
         <Col xs={24} lg={12}>
           <Card title="顾客结构">
             <Row gutter={[8, 18]}>
-              <Col span={12}><Statistic title="新客" value={customers.new_count || 0} /></Col>
-              <Col span={12}><Statistic title="复购顾客" value={customers.repeat_count || 0} /></Col>
-              <Col span={12}><Statistic title="会员顾客" value={customers.member_count || 0} /></Col>
-              <Col span={12}><Statistic title="匿名转登录" value={customers.anonymous_to_logged_in_count || 0} /></Col>
+              <Col xs={12} md={8}><Statistic title="新客" value={customers.new_count || 0} /></Col>
+              <Col xs={12} md={8}><Statistic title="复购顾客" value={customers.repeat_count || 0} /></Col>
+              <Col xs={12} md={8}><Statistic title="会员顾客" value={customers.member_count || 0} /></Col>
+              <Col xs={12} md={8}><Statistic title="非会员顾客" value={customers.non_member_count || 0} /></Col>
+              <Col xs={12} md={8}><Statistic title="匿名转登录" value={customers.anonymous_to_logged_in_count || 0} /></Col>
             </Row>
           </Card>
         </Col>

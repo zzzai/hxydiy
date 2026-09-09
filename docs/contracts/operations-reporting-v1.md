@@ -17,6 +17,8 @@
 }
 ```
 
+`customers.non_member_count` 与既有 `member_count` 使用同一口径：仅计算本店、所选范围内有已支付订单的已登录且非匿名去重顾客；`is_member=false` 计为非会员。匿名顾客不混入该会员结构。
+
 ## 统计口径与隐私边界
 
 - 仅统计本店且 `actual_service_end_at` 在请求日期范围内的已结束服务位。

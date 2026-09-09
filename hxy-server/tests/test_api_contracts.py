@@ -923,6 +923,7 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertEqual(body["customers"]["new_count"], 1)
         self.assertEqual(body["customers"]["repeat_count"], 1)
         self.assertEqual(body["customers"]["member_count"], 1)
+        self.assertEqual(body["customers"]["non_member_count"], 1)
         self.assertEqual(body["customers"]["anonymous_to_logged_in_count"], 1)
         self.assertEqual(body["funnel"]["diy_entry_view"], 1)
         self.assertEqual(body["funnel"]["project_view"], 2)

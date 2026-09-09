@@ -23,3 +23,11 @@ test('经营分析展示完成服务的项目销量和技师服务量', () => {
   assert.match(page, /project_sales_top5/);
   assert.match(page, /technician_service_counts/);
 });
+
+test('顾客结构同时展示会员与非会员人数', () => {
+  const page = source('pages/AnalyticsPage.tsx');
+
+  assert.match(page, /会员顾客/);
+  assert.match(page, /非会员顾客/);
+  assert.match(page, /non_member_count/);
+});
