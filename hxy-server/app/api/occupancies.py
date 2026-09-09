@@ -9,6 +9,7 @@ import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -45,6 +46,23 @@ from app.schemas.selection import SelectionSessionOut
 
 
 router = APIRouter(tags=["service-position-occupancy"])
+
+
+class ServicePositionConfigurationIn(BaseModel):
+    """仅允许修改 DIY 实际服务位的静态展示配置。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    maintenance_note: StrictStr | None = Field(default=None, max_length=256)
+    display_order: StrictInt | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def require_a_non_null_change(self):
+        if not self.model_fields_set:
+            raise ValueError("至少提交一项服务位配置")
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("服务位配置不支持 null，请使用空字符串清空维修备注")
+        return self
 
 
 def _selection_view(session: SelectionSession) -> dict:
@@ -441,6 +459,45 @@ def update_service_position_operational_status(
     return position_view(room)
 
 
+@router.patch("/admin/service-positions/{room_id}/configuration")
+def update_service_position_configuration(
+    room_id: int,
+    body: ServicePositionConfigurationIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """更新本店实际服务位的维修备注和展示顺序，不改变现场状态。"""
+    staff = _current_staff(authorization, db)
+    if normalize_staff_role(staff.role, staff.technician_id) != "manager":
+        raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可维护服务位配置"})
+    room = db.scalar(select(Room).where(
+        Room.id == room_id,
+        Room.store_id == _staff_store_id(staff),
+    ).with_for_update())
+    if not room:
+        raise HTTPException(status_code=404, detail="服务位不存在")
+    if room.is_space_container or not room.is_service_position:
+        raise HTTPException(status_code=400, detail="仅实际服务位可维护维修备注和展示顺序")
+
+    before = {"maintenance_note": room.note, "display_order": room.sort_order}
+    if "maintenance_note" in body.model_fields_set:
+        room.note = body.maintenance_note
+    if "display_order" in body.model_fields_set:
+        room.sort_order = body.display_order
+    after = {"maintenance_note": room.note, "display_order": room.sort_order}
+    db.add(AuditLog(
+        actor_type="staff",
+        actor_id=str(staff.id),
+        store_id=room.store_id,
+        action="service_position_configuration_updated",
+        entity_type="service_position",
+        entity_id=str(room.id),
+        detail={"room_id": room.id, "before": before, "after": after},
+    ))
+    db.commit()
+    return {"id": room.id, **after}
+
+
 def _create_managed_qr(db: Session, room: Room, staff_id: int) -> ServicePositionQr:
     source = "room_qr" if room.room_type in {"room", "bed"} else "personal_qr"
     qr = ServicePositionQr(
@@ -717,7 +774,7 @@ def customer_move_occupancy(
     return occupancy_view(occupancy)
 
 
-def _admin_live_map(db: Session, store_id: int) -> dict:
+def _admin_live_map(db: Session, store_id: int, *, include_maintenance_note: bool = False) -> dict:
     expire_stale_holds(db, store_id)
     rooms = list(db.scalars(select(Room).where(
         Room.store_id == store_id,
@@ -742,6 +799,8 @@ def _admin_live_map(db: Session, store_id: int) -> dict:
     for room in rooms:
         occupancy = occupancies.get(room.id)
         view = position_view(room, occupancy)
+        if include_maintenance_note:
+            view["maintenance_note"] = room.note
         session = sessions.get(occupancy.selection_session_id) if occupancy else None
         view["selection"] = None if not session else {
             "id": session.id,
@@ -766,7 +825,11 @@ def admin_live_position_map(
     db: Session = Depends(get_db),
 ) -> dict:
     staff = _current_staff(authorization, db)
-    return _admin_live_map(db, _staff_store_id(staff))
+    return _admin_live_map(
+        db,
+        _staff_store_id(staff),
+        include_maintenance_note=normalize_staff_role(staff.role, staff.technician_id) == "manager",
+    )
 
 
 @router.post("/admin/kiosk-sessions")
