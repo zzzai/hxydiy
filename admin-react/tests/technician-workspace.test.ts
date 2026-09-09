@@ -70,14 +70,24 @@ test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   assert.match(source, /JSON\.stringify/);
 });
 
-test('技师快记默认层只保留三项交接，身体记录必须按需进入', () => {
+test('技师快记默认层先收集服务结果，身体记录必须按需进入', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
-  assert.match(source, /label="顾客怎么更舒服"/);
-  assert.match(source, /label="本次关键调整"/);
-  assert.match(source, /label="结果与下次"/);
-  assert.match(source, /label="交接一句话"/);
+  assert.match(source, /这次服务，顾客感觉怎么样？/);
+  assert.match(source, /顺利完成/);
   assert.match(source, /需要记录身体情况/);
-  assert.doesNotMatch(source, /<Collapse ghost[\s\S]{0,600}精确补充身体情况/);
+  assert.doesNotMatch(source, /Collapse|精确补充身体情况/);
+});
+
+test('技师服务收尾先判断结果，普通完成可一键结束', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  assert.match(source, /这次服务，顾客感觉怎么样？/);
+  assert.match(source, /顺利完成/);
+  assert.match(source, /调整后更舒服/);
+  assert.match(source, /下次需注意/);
+  assert.match(source, /recordingOutcome: 'no_additional_notes'/);
+  assert.match(source, /本次怎么调整更舒服/);
+  assert.match(source, /下次先留意什么/);
+  assert.doesNotMatch(source, /更多服务细节|Collapse/);
 });
 
 test('快记文本仅引导服务交接，身体补充先选大部位再显示精确图', () => {

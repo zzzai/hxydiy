@@ -5,13 +5,15 @@ import { fileURLToPath } from 'node:url';
 
 const read = (path: string) => readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), 'utf8');
 
-test('技师快记默认展示三项交接并把扩展维度放在折叠区', () => {
+test('技师快记按服务结果展示对应交接项而不使用折叠区', () => {
   const source = read('src/technician/TechnicianProfileSheet.tsx');
-  assert.match(source, /本次关键调整/);
-  assert.match(source, /温度、避让与下次提醒/);
+  assert.match(source, /这次服务，顾客感觉怎么样？/);
+  assert.match(source, /本次怎么调整更舒服/);
+  assert.match(source, /下次先留意什么/);
+  assert.doesNotMatch(source, /Collapse|更多服务细节/);
   assert.match(source, /已向顾客复述并确认/);
   assert.doesNotMatch(source, /预算倾向|决策关注|Modal/);
-  assert.match(source, /本次无补充，完成记录/);
+  assert.match(source, /顺利完成/);
   assert.match(source, /name="serviceNote"/);
   assert.doesNotMatch(source, /保存失败，请检查网络后重试/);
 });

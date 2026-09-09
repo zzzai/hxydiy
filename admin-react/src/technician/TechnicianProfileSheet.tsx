@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { App, Button, Checkbox, Collapse, Drawer, Form, Input, Space, Typography } from 'antd';
+import { App, Button, Checkbox, Drawer, Form, Input, Space, Typography } from 'antd';
 import { createCustomerProfileRecord } from '../api';
 import { technicianOrderItemLabel } from './technicianMobile';
 import BodyMapNoteDrawer from './BodyMapNoteDrawer';
@@ -73,6 +73,7 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
   const saveForm = (input: ServiceReferenceInput) => void save({ ...input, bodyMapNotes, customerConfirmed: confirmation === true });
   const summary = (task?.items || []).map(technicianOrderItemLabel).filter(Boolean).join('、');
   const position = task?.room_name || task?.room_code || task?.position_name || '当前服务位';
+  const outcome = values?.serviceFeedback;
   return <Drawer title="给下次服务留句话" placement="bottom" height="min(94vh, 820px)" open={!!task}
     onClose={saving ? undefined : onClose} maskClosable={!saving} keyboard={!saving}
     className="technician-profile-sheet" footer={<div className="technician-profile-sheet-actions">
@@ -81,27 +82,29 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
         onClick={() => saveFailed && lastValues.current ? void save(lastValues.current) : form.submit()}>{saveFailed ? '重试保存' : '保存快记'}</Button>
     </div>}>
     <Typography.Paragraph type="secondary">{position} · {summary || '本次服务'}</Typography.Paragraph>
-    <Typography.Paragraph>记录实际提出的偏好、调整和下次注意事项，选标签或写一句都可以。</Typography.Paragraph>
     <Form form={form} layout="vertical" disabled={saving} onFinish={saveForm}
       onValuesChange={() => setSaveFailed(false)} initialValues={{ focusAreas: [], avoidAreas: [] }}>
-      <Form.Item name="communicationPreference" label="顾客怎么更舒服"><Choices options={SERVICE_REFERENCE_OPTIONS.communication} /></Form.Item>
-      <Form.Item label="本次关键调整">
-        <Form.Item name="focusAreas" noStyle><Choices multiple options={SERVICE_REFERENCE_OPTIONS.focusAreas} /></Form.Item>
-        <Form.Item name="forcePreference" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.force} /></Form.Item>
-      </Form.Item>
-      <Form.Item name="serviceFeedback" label="结果与下次"><Choices options={SERVICE_REFERENCE_OPTIONS.feedback} /></Form.Item>
-      <Form.Item name="serviceNote" label="交接一句话">
-        <Input.TextArea rows={3} maxLength={200} showCount placeholder="例如：左肩轻一点更舒服；下次先确认" />
-      </Form.Item>
-      <Collapse ghost items={[{ key: 'more', label: '温度、避让与下次提醒', children: <>
-        <Form.Item name="temperaturePreference" label="顾客温度偏好"><Choices options={SERVICE_REFERENCE_OPTIONS.temperature} /></Form.Item>
-        <Form.Item name="avoidAreas" label="避开或谨慎"><Choices multiple options={SERVICE_REFERENCE_OPTIONS.avoidAreas} /></Form.Item>
-        <Form.Item name="nextVisitPlan" label="下次建议"><Choices options={SERVICE_REFERENCE_OPTIONS.nextVisit} /></Form.Item>
-      </> }]} />
-      <Button block size="large" disabled={saving} onClick={() => setBodyNoteOpen(true)} style={{ marginTop: 8 }}>{bodyMapNotes.length ? '查看 ' + bodyMapNotes.length + ' 条身体补充' : '需要记录身体情况'}</Button>
-      <Checkbox checked={confirmation} disabled={saving} onChange={event => { setConfirmation(event.target.checked); setSaveFailed(false); }} style={{ marginTop: 16 }}>已向顾客复述并确认</Checkbox>
-      <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>未勾选也可保存；补充文字仅留作本次服务记录。</Typography.Paragraph>
-      <Button block size="large" disabled={saving || hasInput} onClick={() => void save({ recordingOutcome: 'no_additional_notes', customerConfirmed: false })}>本次无补充，完成记录</Button>
+      <Form.Item name="serviceFeedback" hidden><Input /></Form.Item>
+      <Typography.Title level={4}>这次服务，顾客感觉怎么样？</Typography.Title>
+      <Space direction="vertical" style={{ display: 'flex' }} size={10}>
+        <Button block size="large" onClick={() => void save({ recordingOutcome: 'no_additional_notes', customerConfirmed: false })}>顺利完成</Button>
+        <Button block size="large" type={outcome === 'better_after_adjustment' ? 'primary' : 'default'} onClick={() => form.setFieldValue('serviceFeedback', 'better_after_adjustment')}>调整后更舒服</Button>
+        <Button block size="large" type={outcome === 'adjust_next_time' ? 'primary' : 'default'} onClick={() => form.setFieldValue('serviceFeedback', 'adjust_next_time')}>下次需注意</Button>
+      </Space>
+      {outcome && <>
+        <Form.Item label={outcome === 'better_after_adjustment' ? '本次怎么调整更舒服' : '下次先留意什么'} style={{ marginTop: 24 }}>
+          <Form.Item name="focusAreas" noStyle><Choices multiple options={SERVICE_REFERENCE_OPTIONS.focusAreas} /></Form.Item>
+          <Form.Item name="forcePreference" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.force} /></Form.Item>
+          {outcome === 'adjust_next_time' && <><Form.Item name="avoidAreas" noStyle><Choices multiple options={SERVICE_REFERENCE_OPTIONS.avoidAreas} /></Form.Item><Form.Item name="communicationPreference" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.communication} /></Form.Item><Form.Item name="nextVisitPlan" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.nextVisit} /></Form.Item></>}
+          {outcome === 'better_after_adjustment' && <Form.Item name="temperaturePreference" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.temperature} /></Form.Item>}
+        </Form.Item>
+        <Form.Item name="serviceNote" label="补一句（可不填)">
+          <Input.TextArea rows={2} maxLength={200} showCount placeholder="例如：左肩轻一点更舒服；下次先确认" />
+        </Form.Item>
+        <Button block size="large" disabled={saving} onClick={() => setBodyNoteOpen(true)}>{bodyMapNotes.length ? '查看 ' + bodyMapNotes.length + ' 条身体补充' : '需要记录身体情况'}</Button>
+        <Checkbox checked={confirmation} disabled={saving} onChange={event => { setConfirmation(event.target.checked); setSaveFailed(false); }} style={{ marginTop: 16 }}>已向顾客复述并确认</Checkbox>
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>未勾选也可保存；补充文字仅留作本次服务记录。</Typography.Paragraph>
+      </>}
     </Form>
     <BodyMapNoteDrawer open={bodyNoteOpen && !!task} value={bodyMapNotes}
       onChange={notes => { setBodyMapNotes(notes); setSaveFailed(false); }} onClose={() => setBodyNoteOpen(false)} context={position + ' · 顾客'} />
