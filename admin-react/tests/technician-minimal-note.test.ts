@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildServiceReferenceV5Payload } from '../src/technician/serviceReference.ts';
+import { buildServiceReferenceV5Payload, hasServiceReferenceInput } from '../src/technician/serviceReference.ts';
 
 test('技师补充文字保持观察来源，不写入顾客原话', () => {
   const result = buildServiceReferenceV5Payload(12, 'service-1', { serviceNote: '  安静休息  ', forcePreference: 'gentle' });
@@ -20,6 +20,7 @@ test('无补充不自动生成满意或顾客确认，不能与实际记录混�
 });
 
 test('顾客明确要求安静时保存为可复用的服务沟通偏好', () => {
+  assert.equal(hasServiceReferenceInput({ communicationPreference: 'quiet' }), true);
   const result = buildServiceReferenceV5Payload(12, 'service-1', { communicationPreference: 'quiet' });
   assert.deepEqual(result.profile.customer_reported, { communication_preference: 'quiet' });
   assert.deepEqual(result.profile.technician_observed, {});

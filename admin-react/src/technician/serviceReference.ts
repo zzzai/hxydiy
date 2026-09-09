@@ -59,7 +59,8 @@ export const SERVICE_REFERENCE_OPTIONS = {
 
 export function hasServiceReferenceInput(values: ServiceReferenceInput): boolean {
   return Boolean(
-    values.focusAreas?.length
+    values.communicationPreference
+    || values.focusAreas?.length
     || values.avoidAreas?.length
     || values.forcePreference
     || values.temperaturePreference

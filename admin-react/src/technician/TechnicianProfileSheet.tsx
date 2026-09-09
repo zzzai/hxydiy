@@ -3,6 +3,7 @@ import { App, Button, Checkbox, Drawer, Form, Input, Space, Typography } from 'a
 import { createCustomerProfileRecord } from '../api';
 import { technicianOrderItemLabel } from './technicianMobile';
 import BodyMapNoteDrawer from './BodyMapNoteDrawer';
+import './service-notebook.css';
 import { SERVICE_REFERENCE_OPTIONS, buildServiceReferenceV5Payload, hasServiceReferenceInput, type ServiceReferenceInput, type V5BodyServiceNote } from './serviceReference';
 
 function Choices({ value, onChange, options, multiple = false }: {
@@ -21,7 +22,7 @@ function Choices({ value, onChange, options, multiple = false }: {
 export default function TechnicianProfileSheet({ task, onClose, onSaved }: { task: any; onClose: () => void; onSaved: () => void }) {
   const [form] = Form.useForm<ServiceReferenceInput>();
   const values = Form.useWatch([], form) as ServiceReferenceInput | undefined;
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -45,6 +46,11 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
   }, [form, taskKey]);
 
   const hasInput = Boolean(values && (hasServiceReferenceInput(values) || values.serviceNote?.trim()) || bodyMapNotes.length);
+  const requestClose = () => {
+    if (savingRef.current) return;
+    if (!hasInput) { onClose(); return; }
+    modal.confirm({ title: '笔记还没有保存', content: '返回后可以继续填写；放弃将清除本次未保存的内容。', okText: '继续填写', cancelText: '放弃内容', onCancel: onClose, maskClosable: false, closable: false });
+  };
   const save = async (input: ServiceReferenceInput) => {
     const customerId = task?.customer?.id ?? task?.user_id;
     if (!customerId || !task?.selection_session_id || savingRef.current) return;
@@ -73,38 +79,39 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
   const saveForm = (input: ServiceReferenceInput) => void save({ ...input, bodyMapNotes, customerConfirmed: confirmation === true });
   const summary = (task?.items || []).map(technicianOrderItemLabel).filter(Boolean).join('、');
   const position = task?.room_name || task?.room_code || task?.position_name || '当前服务位';
-  const outcome = values?.serviceFeedback;
-  return <Drawer title="给下次服务留句话" placement="bottom" height="min(94vh, 820px)" open={!!task}
-    onClose={saving ? undefined : onClose} maskClosable={!saving} keyboard={!saving}
-    className="technician-profile-sheet" footer={<div className="technician-profile-sheet-actions">
-      <Button size="large" onClick={onClose} disabled={saving}>稍后记录</Button>
+  return <Drawer title="服务笔记" placement="bottom" height="94dvh" open={!!task}
+    onClose={requestClose} maskClosable={false} keyboard={!saving}
+    className="technician-profile-sheet technician-notebook" footer={<div className="technician-profile-sheet-actions">
+      <Button size="large" disabled={saving || hasInput} onClick={() => void save({ recordingOutcome: 'no_additional_notes', customerConfirmed: false })}>本次无补充</Button>
       <Button type="primary" block size="large" loading={saving} disabled={saving || (!hasInput && !saveFailed)}
         onClick={() => saveFailed && lastValues.current ? void save(lastValues.current) : form.submit()}>{saveFailed ? '重试保存' : '保存快记'}</Button>
     </div>}>
     <Typography.Paragraph type="secondary">{position} · {summary || '本次服务'}</Typography.Paragraph>
     <Form form={form} layout="vertical" disabled={saving} onFinish={saveForm}
       onValuesChange={() => setSaveFailed(false)} initialValues={{ focusAreas: [], avoidAreas: [] }}>
-      <Form.Item name="serviceFeedback" hidden><Input /></Form.Item>
-      <Typography.Title level={4}>这次服务，顾客感觉怎么样？</Typography.Title>
-      <Space direction="vertical" style={{ display: 'flex' }} size={10}>
-        <Button block size="large" onClick={() => void save({ recordingOutcome: 'no_additional_notes', customerConfirmed: false })}>顺利完成</Button>
-        <Button block size="large" type={outcome === 'better_after_adjustment' ? 'primary' : 'default'} onClick={() => form.setFieldValue('serviceFeedback', 'better_after_adjustment')}>调整后更舒服</Button>
-        <Button block size="large" type={outcome === 'adjust_next_time' ? 'primary' : 'default'} onClick={() => form.setFieldValue('serviceFeedback', 'adjust_next_time')}>下次需注意</Button>
-      </Space>
-      {outcome && <>
-        <Form.Item label={outcome === 'better_after_adjustment' ? '本次怎么调整更舒服' : '下次先留意什么'} style={{ marginTop: 24 }}>
-          <Form.Item name="focusAreas" noStyle><Choices multiple options={SERVICE_REFERENCE_OPTIONS.focusAreas} /></Form.Item>
-          <Form.Item name="forcePreference" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.force} /></Form.Item>
-          {outcome === 'adjust_next_time' && <><Form.Item name="avoidAreas" noStyle><Choices multiple options={SERVICE_REFERENCE_OPTIONS.avoidAreas} /></Form.Item><Form.Item name="communicationPreference" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.communication} /></Form.Item><Form.Item name="nextVisitPlan" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.nextVisit} /></Form.Item></>}
-          {outcome === 'better_after_adjustment' && <Form.Item name="temperaturePreference" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.temperature} /></Form.Item>}
+      <section className="notebook-writing">
+        <h2>记住这次，下次更好。</h2>
+        <p>记下顾客的要求、有效的调整，或还没解决的事。</p>
+        <Form.Item name="serviceNote" label="本次笔记">
+          <Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} maxLength={200} showCount placeholder="例如：顾客说左肩轻一点更舒服，下次先问问是否还需要调整。" />
         </Form.Item>
-        <Form.Item name="serviceNote" label="补一句（可不填)">
-          <Input.TextArea rows={2} maxLength={200} showCount placeholder="例如：左肩轻一点更舒服；下次先确认" />
-        </Form.Item>
+      </section>
+      <section className="notebook-preferences">
+        <h3>顾客明确提出的要求</h3><p>有提到就选，没有可以留空。</p>
+        <Form.Item name="communicationPreference" label="聊天"><Choices options={SERVICE_REFERENCE_OPTIONS.communication.filter(item => item.value !== 'explain_before_action')} /></Form.Item>
+        <Form.Item name="forcePreference" label="力度"><Choices options={SERVICE_REFERENCE_OPTIONS.force} /></Form.Item>
+        <Form.Item name="temperaturePreference" label="温度"><Choices options={SERVICE_REFERENCE_OPTIONS.temperature} /></Form.Item>
+        <Form.Item name="focusAreas" label="重点照顾"><Choices multiple options={SERVICE_REFERENCE_OPTIONS.focusAreas} /></Form.Item>
+        <Form.Item name="avoidAreas" label="需要避开"><Choices multiple options={SERVICE_REFERENCE_OPTIONS.avoidAreas} /></Form.Item>
+      </section>
+      <section className="notebook-followup">
+        <h3>本次反馈与下次安排</h3>
+        <Form.Item name="serviceFeedback" label="顾客反馈"><Choices options={SERVICE_REFERENCE_OPTIONS.feedback} /></Form.Item>
+        <Form.Item name="nextVisitPlan" label="下次服务"><Choices options={SERVICE_REFERENCE_OPTIONS.nextVisit} /></Form.Item>
         <Button block size="large" disabled={saving} onClick={() => setBodyNoteOpen(true)}>{bodyMapNotes.length ? '查看 ' + bodyMapNotes.length + ' 条身体补充' : '需要记录身体情况'}</Button>
         <Checkbox checked={confirmation} disabled={saving} onChange={event => { setConfirmation(event.target.checked); setSaveFailed(false); }} style={{ marginTop: 16 }}>已向顾客复述并确认</Checkbox>
         <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>未勾选也可保存；补充文字仅留作本次服务记录。</Typography.Paragraph>
-      </>}
+      </section>
     </Form>
     <BodyMapNoteDrawer open={bodyNoteOpen && !!task} value={bodyMapNotes}
       onChange={notes => { setBodyMapNotes(notes); setSaveFailed(false); }} onClose={() => setBodyNoteOpen(false)} context={position + ' · 顾客'} />

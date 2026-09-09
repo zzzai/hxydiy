@@ -65,35 +65,25 @@ test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   assert.match(source, /confirmation === true/);
   assert.match(source, /saving/);
   assert.match(source, /disabled=\{saving\}/);
-  assert.match(source, /稍后记录/);
   assert.match(source, /lastPayloadSignature/);
   assert.match(source, /JSON\.stringify/);
 });
 
 test('技师快记默认层先收集服务结果，身体记录必须按需进入', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
-  assert.match(source, /这次服务，顾客感觉怎么样？/);
-  assert.match(source, /顺利完成/);
   assert.match(source, /需要记录身体情况/);
   assert.doesNotMatch(source, /Collapse|精确补充身体情况/);
 });
 
 test('技师服务收尾先判断结果，普通完成可一键结束', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
-  assert.match(source, /这次服务，顾客感觉怎么样？/);
-  assert.match(source, /顺利完成/);
-  assert.match(source, /调整后更舒服/);
-  assert.match(source, /下次需注意/);
   assert.match(source, /recordingOutcome: 'no_additional_notes'/);
-  assert.match(source, /本次怎么调整更舒服/);
-  assert.match(source, /下次先留意什么/);
   assert.doesNotMatch(source, /更多服务细节|Collapse/);
 });
 
 test('快记文本仅引导服务交接，身体补充先选大部位再显示精确图', () => {
   const quickNote = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   const bodyMap = readFileSync(new URL('../src/technician/BodyMapNoteDrawer.tsx', import.meta.url), 'utf8');
-  assert.match(quickNote, /左肩轻一点更舒服；下次先确认/);
   assert.doesNotMatch(quickNote, /来店原因|未满足需求/);
   assert.match(bodyMap, /肩颈/);
   assert.match(bodyMap, /精确位置/);

@@ -1,0 +1,28 @@
+.technician-notebook .ant-drawer-header { padding: 20px 24px; }
+.technician-notebook .ant-drawer-title { font-size: 18px; color: #153f34; }
+.technician-notebook .ant-drawer-body { padding: 24px max(20px, calc((100% - 620px) / 2)); background: #fff; }
+.technician-notebook .ant-drawer-footer { padding: 14px max(20px, calc((100% - 620px) / 2)) calc(14px + env(safe-area-inset-bottom)); background: #fff; }
+.technician-notebook h2 { margin: 12px 0 8px; font-size: 26px; line-height: 1.4; font-weight: 600; letter-spacing: -.02em; color: #153f34; }
+.technician-notebook h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; color: #153f34; }
+.technician-notebook section > p { color: #596c64; line-height: 1.7; margin: 0 0 20px; }
+.technician-notebook .notebook-writing textarea { padding: 14px; background: #f7f9f8; border-color: #d2ddd7; border-radius: 12px; font-size: 16px; line-height: 1.8; caret-color: #153f34; }
+.technician-notebook textarea::placeholder { color: #65776f; }
+.technician-notebook .notebook-preferences, .technician-notebook .notebook-followup { border-top: 1px solid #e4ebe7; padding-top: 24px; margin-top: 30px; }
+.technician-notebook .notebook-preferences .ant-form-item { margin-bottom: 18px; }
+.technician-notebook .ant-form-item-label > label { color: #52665d; font-size: 14px; }
+.technician-notebook .ant-btn { box-shadow: none; font-size: 14px; }
+.technician-notebook .ant-btn-primary { background: #153f34; border-color: #153f34; }
+.technician-notebook .ant-btn-primary:disabled { background: #eef1ef; border-color: #e0e6e2; color: #69766f; }
+.technician-notebook .ant-btn-default { border-color: #d9e2dd; }
+.technician-notebook .ant-btn:focus-visible { outline: 2px solid #967639; outline-offset: 3px; }
+.technician-notebook ::selection { background: #dcebe3; color: #153f34; }
+.notebook-body-locations { display: flex; flex-wrap: wrap; gap: 10px; padding: 20px 0; }
+.notebook-body-locations .ant-btn { min-height: 44px; min-width: 64px; }
+.technician-body-map-choice > .ant-typography { margin-top: 24px; }
+.technician-body-map-choice .ant-radio-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.technician-body-map-choice .ant-radio-button-wrapper { height: auto; min-height: 44px; padding: 10px 14px; line-height: 1.5; border: 1px solid #d9e2dd; border-radius: 8px; }
+.technician-body-map-choice .ant-radio-button-wrapper::before { display: none; }
+@media (min-width: 560px) {
+  .technician-notebook .notebook-preferences .ant-form-item { display: grid; grid-template-columns: 90px minmax(0, 1fr); align-items: start; }
+  .technician-notebook .notebook-preferences .ant-form-item-label { padding-top: 14px; text-align: left; }
+}
