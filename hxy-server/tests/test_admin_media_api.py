@@ -130,7 +130,7 @@ class AdminMediaApiTests(unittest.TestCase):
             self.assertIsNotNone(media)
             self.assertIsNotNone(media.deleted_at)
 
-    def test_qiniu_backend_uses_storage_adapter_and_cdn_url(self):
+    def test_qiniu_backend_returns_stable_content_url(self):
         storage = _FakeStorage()
         with patch("app.api.media.get_media_storage", return_value=storage), patch.object(
             __import__("app.core.config", fromlist=["settings"]).settings,
@@ -145,7 +145,7 @@ class AdminMediaApiTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 201, response.text)
             body = response.json()
-            self.assertEqual(body["url"], f"https://img.hexiaoyue.com/{storage.put_calls[0][0]}")
+            self.assertEqual(body["url"], f"/api/v1/admin/media/{body['id']}/content")
             self.client.delete(f"/api/v1/admin/media/{body['id']}", headers=self._headers(self.manager_id))
         self.assertEqual(len(storage.put_calls), 1)
         self.assertEqual(storage.delete_calls, [storage.put_calls[0][0]])
