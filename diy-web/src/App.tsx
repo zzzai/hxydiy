@@ -415,6 +415,8 @@ export default function App() {
   const selectedCount = selectionSummary.totalCount;
   const featuredCoupon = couponTemplates.find((coupon) => coupon.claimable) || couponTemplates[0] || null;
   const featured = featuredProjects(projects);
+  const showMembershipPromos = shouldShowMembershipPromos(isMember);
+  const showPromoStrip = showMembershipPromos || featured.length > 0;
 
   const flash = (message: string) => {
     setToast(message);
@@ -1478,24 +1480,28 @@ export default function App() {
 
       {boot === 'ready' && hasSubmittedCustomerSession && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div>}
 
-      <section className="miniapp-promo-strip" aria-label="门店推荐">
-        {shouldShowMembershipPromos(isMember) && <>
-        <button type="button" className="miniapp-promo membership-promo annual" onClick={() => openMembership('annual')}>
-          <span className="promo-copy"><small>年度权益 · 全年会员价</small><strong>99元会员年度权益卡</strong><em>到店办理<i>开通后生效</i></em></span>
-          <span className="membership-promo-badge">99</span>
-        </button>
-        <button type="button" className="miniapp-promo membership-promo monthly" onClick={() => openMembership('monthly')}>
-          <span className="promo-copy"><small>不限次泡脚</small><strong>泡脚月卡 30 天</strong><em>到店办理<i>仅限本人</i></em></span>
-          <span className="membership-promo-badge">499</span>
-        </button>
-        </>}
-        {featured.map((project, index) => (
-          <button key={project.id} type="button" className={`miniapp-promo ${index === 0 ? 'primary' : ''}`} onClick={() => openProjectDetail(project)}>
-            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}<i>起</i></em></span>
-            <img src={projectImage(project)} alt="" loading="lazy" decoding="async" />
+      {showPromoStrip && <section data-motion="promo-strip" className="miniapp-promo-strip" aria-label="到店权益">
+        <div className="miniapp-promo-scroll" role="list" tabIndex={0} aria-describedby="promo-strip-hint">
+          {showMembershipPromos && <>
+          <button type="button" role="listitem" className="miniapp-promo membership-promo annual primary" onClick={() => openMembership('annual')}>
+            <span className="promo-copy"><small>年度权益 · 全年会员价</small><strong>99元会员年度权益卡</strong><em>到店办理<i>开通后生效</i></em></span>
+            <span className="membership-promo-badge">99</span>
           </button>
-        ))}
-      </section>
+          <button type="button" role="listitem" className="miniapp-promo membership-promo monthly" onClick={() => openMembership('monthly')}>
+            <span className="promo-copy"><small>不限次泡脚</small><strong>泡脚月卡 30 天</strong><em>到店办理<i>仅限本人</i></em></span>
+            <span className="membership-promo-badge">499</span>
+          </button>
+          </>}
+          {featured.map((project, index) => (
+            <button key={project.id} type="button" role="listitem" className={`miniapp-promo ${!showMembershipPromos && index === 0 ? 'primary' : ''}`} onClick={() => openProjectDetail(project)}>
+              <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}<i>起</i></em></span>
+              <img src={projectImage(project)} alt="" loading="lazy" decoding="async" />
+            </button>
+          ))}
+        </div>
+        <span id="promo-strip-hint" className="sr-only">向左滑动查看更多到店权益</span>
+        <span className="promo-strip-progress" aria-hidden="true"><i /><i /></span>
+      </section>}
 
       <div className="catalog-layout miniapp-catalog-layout">
         <nav className="category-nav" aria-label="项目分类">

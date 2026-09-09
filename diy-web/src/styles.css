@@ -1036,9 +1036,11 @@ h1, h2, h3, p { margin-top: 0; }
 .miniapp-store small { flex: none; color: var(--green-700); font-size: 10px; }
 .miniapp-store svg:last-child { flex: none; color: var(--soft); }
 .miniapp-coupon-entry { display: inline-flex; min-height: 30px; align-items: center; gap: 5px; flex: none; padding: 0 9px; border: 1px solid #ead4a5; border-radius: 6px; color: #946622; background: #fffaf0; font-size: 11px; font-weight: 700; cursor: pointer; }
-.miniapp-promo-strip { display: flex; gap: 10px; overflow-x: auto; padding: 11px 16px 13px; scrollbar-width: none; background: #fff; }
-.miniapp-promo-strip::-webkit-scrollbar { display: none; }
-.miniapp-promo { position: relative; display: inline-flex; width: 216px; min-width: 216px; height: 86px; overflow: hidden; align-items: stretch; padding: 0; border: 0; border-radius: 8px; color: var(--ink); background: #f7faf8; text-align: left; cursor: pointer; }
+.miniapp-promo-strip { position: relative; overflow: hidden; padding: 10px 0 12px; background: #fff; }
+.miniapp-promo-scroll { display: flex; gap: 10px; overflow-x: auto; padding: 0 16px 8px; scroll-snap-type: x proximity; scroll-padding-left: 16px; scrollbar-width: none; }
+.miniapp-promo-scroll::-webkit-scrollbar { display: none; }
+.miniapp-promo-scroll:focus-visible { outline: 3px solid rgba(31,143,117,.35); outline-offset: -3px; }
+.miniapp-promo { position: relative; display: flex; flex: 0 0 min(78vw, 300px); height: 96px; overflow: hidden; align-items: stretch; padding: 0; border: 0; border-radius: 16px; color: var(--ink); background: #f7faf8; scroll-snap-align: start; text-align: left; cursor: pointer; }
 .miniapp-promo.primary { color: #fff; background: #176856; }
 .miniapp-promo .promo-copy { position: relative; z-index: 1; display: flex; width: 100%; flex-direction: column; justify-content: center; gap: 2px; padding: 10px 78px 10px 13px; }
 .miniapp-promo .promo-copy small { align-self: flex-start; padding: 2px 6px; border-radius: 4px; color: var(--green-700); background: #eaf5ef; font-size: 9px; font-weight: 700; }
@@ -1049,6 +1051,9 @@ h1, h2, h3, p { margin-top: 0; }
 .miniapp-promo .promo-copy em i { margin-left: 2px; color: var(--soft); font-size: 9px; font-style: normal; font-weight: 500; }
 .miniapp-promo.primary .promo-copy em i { color: rgba(255,255,255,.7); }
 .miniapp-promo img { position: absolute; top: 0; right: 0; width: 82px; height: 100%; object-fit: cover; }
+.promo-strip-progress { display: flex; gap: 4px; justify-content: center; height: 4px; }
+.promo-strip-progress i { display: block; width: 4px; height: 4px; border-radius: 4px; background: #c7d8d1; }
+.promo-strip-progress i:first-child { width: 16px; background: #176856; }
 .miniapp-catalog-layout { grid-template-columns: 72px minmax(0, 1fr); border-top: 1px solid #f0f4ef; }
 .catalog-linked-group .mini-addon-grid button,
 .catalog-local-group .mini-local-grid button { min-height: 58px; }
@@ -1078,8 +1083,8 @@ h1, h2, h3, p { margin-top: 0; }
 
 @media (min-width: 768px) and (pointer: coarse), (min-width: 768px) and (hover: none) {
   .miniapp-context-bar { min-height: 56px; padding-right: 28px; padding-left: 28px; }
-  .miniapp-promo-strip { padding-right: 28px; padding-left: 28px; }
-  .miniapp-promo { width: 250px; min-width: 250px; height: 94px; }
+  .miniapp-promo-scroll { padding-right: 28px; padding-left: 28px; }
+  .miniapp-promo { height: 94px; }
   .miniapp-catalog-layout { grid-template-columns: 88px minmax(0, 1fr); }
   .miniapp-catalog-layout .category-nav { top: 56px; height: calc(100dvh - 56px - 76px); width: 88px; }
   .miniapp-catalog-layout .category-nav button { min-height: 78px; }
@@ -1119,15 +1124,8 @@ h1, h2, h3, p { margin-top: 0; }
   font-size: 11px;
 }
 .miniapp-coupon-entry { min-height: 28px; padding: 0 8px; }
-.miniapp-promo-strip {
-  height: 112px;
-  gap: 12px;
-  padding: 12px 16px;
-}
+.miniapp-promo-strip { padding-top: 10px; }
 .miniapp-promo {
-  width: 224px;
-  min-width: 224px;
-  height: 88px;
   border-radius: 12px;
   background: #f8faf7;
 }
@@ -1138,7 +1136,7 @@ h1, h2, h3, p { margin-top: 0; }
 .miniapp-promo .promo-copy em { font-size: 15px; }
 .miniapp-promo img { width: 88px; }
 .miniapp-catalog-layout {
-  height: calc(100dvh - 156px);
+  height: calc(100dvh - 182px);
   min-height: 0;
   border-top: 1px solid #eef3f0;
 }
@@ -1424,7 +1422,7 @@ h1, h2, h3, p { margin-top: 0; }
 .local-part-choice-grid > button.active { border-color: #1f8f75; background: #f0fcf7; box-shadow: inset 0 0 0 1px rgba(31,143,117,.1); }
 
 @media (min-width: 768px) and (pointer: coarse), (min-width: 768px) and (hover: none) {
-  .miniapp-catalog-layout { height: calc(100dvh - 164px); }
+  .miniapp-catalog-layout { height: calc(100dvh - 192px); }
   .miniapp-catalog-layout .category-nav { width: 88px; flex-basis: 88px; }
   .miniapp-catalog-layout .catalog-main { padding-right: 28px; padding-left: 28px; }
   .miniapp-catalog-layout .project-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
@@ -1517,14 +1515,18 @@ h1, h2, h3, p { margin-top: 0; }
 .membership-card.primary li svg, .membership-card.primary .membership-price strong { color: #9a7220; }
 .membership-note { display: flex; gap: 5px; align-items: center; margin: 8px 2px 0; color: #8a968f; font-size: 11px; }
 
-.miniapp-promo.membership-promo { position: relative; overflow: hidden; border: 1px solid #d8bd79; border-radius: 8px; background: #fff; box-shadow: inset 0 3px 0 #c69b3c; }
+.miniapp-promo.membership-promo { position: relative; overflow: hidden; border: 1px solid rgba(226,196,122,.64); border-radius: 16px; background: #fff; box-shadow: none; }
+.miniapp-promo.membership-promo.annual { border-color: transparent; background: linear-gradient(135deg, #176856, #0e4d40); }
 .miniapp-promo.membership-promo .promo-copy { padding-right: 72px; }
 .miniapp-promo.membership-promo .promo-copy strong { display: -webkit-box; overflow: hidden; color: #163e34; font-size: 14px; line-height: 1.25; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .miniapp-promo.membership-promo .promo-copy small { color: #765814; background: #f8edcf; }
 .miniapp-promo.membership-promo .promo-copy em { color: #176856; }
+.miniapp-promo.membership-promo.annual .promo-copy strong, .miniapp-promo.membership-promo.annual .promo-copy em { color: #fff; }
+.miniapp-promo.membership-promo.annual .promo-copy small { color: #d9eee4; background: rgba(255,255,255,.14); }
 .miniapp-promo.membership-promo.monthly { border-color: #d3e1da; background: #fbfdfc; }
-.membership-promo-badge { position: absolute; right: -6px; bottom: -10px; display: flex; width: 74px; height: 74px; align-items: center; justify-content: center; border-radius: 50%; color: #fff; background: #b88a2e; font-size: 17px; font-weight: 700; opacity: .94; }
-.membership-promo.monthly .membership-promo-badge { background: #5b8f7e; }
+.membership-promo-badge { position: absolute; right: 15px; bottom: 14px; color: #d7b15f; font-size: 24px; font-weight: 800; letter-spacing: -.06em; line-height: 1; }
+.membership-promo.annual .membership-promo-badge { color: #eed593; }
+.membership-promo.monthly .membership-promo-badge { color: #5b8f7e; }
 
 .membership-detail-page { position: fixed; z-index: 130; inset: 0; display: flex; flex-direction: column; background: #f6f9f7; color: #1d2a25; }
 .membership-detail-scroll { width: min(520px, 100%); margin: 0 auto; padding-bottom: 24px; }
