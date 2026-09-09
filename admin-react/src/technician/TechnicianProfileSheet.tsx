@@ -84,19 +84,21 @@ export default function TechnicianProfileSheet({ task, onClose, onSaved }: { tas
     <Typography.Paragraph>记录实际提出的偏好、调整和下次注意事项，选标签或写一句都可以。</Typography.Paragraph>
     <Form form={form} layout="vertical" disabled={saving} onFinish={saveForm}
       onValuesChange={() => setSaveFailed(false)} initialValues={{ focusAreas: [], avoidAreas: [] }}>
-      <Form.Item name="communicationPreference" label="沟通方式"><Choices options={SERVICE_REFERENCE_OPTIONS.communication} /></Form.Item>
-      <Form.Item name="focusAreas" label="本次重点"><Choices multiple options={SERVICE_REFERENCE_OPTIONS.focusAreas} /></Form.Item>
-      <Form.Item name="forcePreference" label="顾客觉得什么力度合适？"><Choices options={SERVICE_REFERENCE_OPTIONS.force} /></Form.Item>
-      <Form.Item name="serviceFeedback" label="本次反馈"><Choices options={SERVICE_REFERENCE_OPTIONS.feedback} /></Form.Item>
-      <Form.Item name="serviceNote" label="还有什么值得下次知道？">
-        <Input.TextArea rows={3} maxLength={200} showCount placeholder="可记来店原因、调整后是否合适、未满足需求或下次要求" />
+      <Form.Item name="communicationPreference" label="顾客怎么更舒服"><Choices options={SERVICE_REFERENCE_OPTIONS.communication} /></Form.Item>
+      <Form.Item label="本次关键调整">
+        <Form.Item name="focusAreas" noStyle><Choices multiple options={SERVICE_REFERENCE_OPTIONS.focusAreas} /></Form.Item>
+        <Form.Item name="forcePreference" noStyle><Choices options={SERVICE_REFERENCE_OPTIONS.force} /></Form.Item>
+      </Form.Item>
+      <Form.Item name="serviceFeedback" label="结果与下次"><Choices options={SERVICE_REFERENCE_OPTIONS.feedback} /></Form.Item>
+      <Form.Item name="serviceNote" label="交接一句话">
+        <Input.TextArea rows={3} maxLength={200} showCount placeholder="例如：左肩轻一点更舒服；下次先确认" />
       </Form.Item>
       <Collapse ghost items={[{ key: 'more', label: '温度、避让与下次提醒', children: <>
         <Form.Item name="temperaturePreference" label="顾客温度偏好"><Choices options={SERVICE_REFERENCE_OPTIONS.temperature} /></Form.Item>
         <Form.Item name="avoidAreas" label="避开或谨慎"><Choices multiple options={SERVICE_REFERENCE_OPTIONS.avoidAreas} /></Form.Item>
         <Form.Item name="nextVisitPlan" label="下次建议"><Choices options={SERVICE_REFERENCE_OPTIONS.nextVisit} /></Form.Item>
-        <Button block size="large" disabled={saving} onClick={() => setBodyNoteOpen(true)}>{bodyMapNotes.length ? '查看 ' + bodyMapNotes.length + ' 条身体补充' : '精确补充身体情况'}</Button>
       </> }]} />
+      <Button block size="large" disabled={saving} onClick={() => setBodyNoteOpen(true)} style={{ marginTop: 8 }}>{bodyMapNotes.length ? '查看 ' + bodyMapNotes.length + ' 条身体补充' : '需要记录身体情况'}</Button>
       <Checkbox checked={confirmation} disabled={saving} onChange={event => { setConfirmation(event.target.checked); setSaveFailed(false); }} style={{ marginTop: 16 }}>已向顾客复述并确认</Checkbox>
       <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>未勾选也可保存；补充文字仅留作本次服务记录。</Typography.Paragraph>
       <Button block size="large" disabled={saving || hasInput} onClick={() => void save({ recordingOutcome: 'no_additional_notes', customerConfirmed: false })}>本次无补充，完成记录</Button>
