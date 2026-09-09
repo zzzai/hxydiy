@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
+  Share2,
   TicketPercent,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -73,6 +74,7 @@ type Props = {
   onClose: () => void;
   onConfirm: (payload: ConfirmPayload) => void;
   onCouponInfo: () => void;
+  onShare: (project: Project) => void;
   couponPrompt?: { title?: string; body?: string };
 };
 
@@ -92,6 +94,7 @@ export default function ProjectDetailPage({
   onClose,
   onConfirm,
   onCouponInfo,
+  onShare,
   couponPrompt,
 }: Props) {
   const groups = useMemo(() => {
@@ -230,7 +233,7 @@ export default function ProjectDetailPage({
         <img className="mini-detail-hero" src={projectImage(project)} alt={`${displayName}服务场景`} />
 
         <section className="mini-detail-card mini-detail-summary-card">
-          <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1></div>
+          <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
           <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
           <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} />
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
