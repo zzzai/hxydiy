@@ -103,6 +103,14 @@ class AdminMediaApiTests(unittest.TestCase):
         )
         self.assertEqual(too_large.status_code, 413)
 
+    def test_upload_rejects_extension_that_does_not_match_declared_image_type(self):
+        response = self.client.post(
+            "/api/v1/admin/media",
+            headers=self._headers(self.manager_id),
+            files={"file": ("cover.jpg", io.BytesIO(b"png-bytes"), "image/png")},
+        )
+        self.assertEqual(response.status_code, 415)
+
     def test_regular_staff_cannot_upload_media(self):
         with self.SessionLocal() as db:
             staff = Staff(username="media-staff", password_hash=hash_password("pass"), name="员工", role="staff", store_id=1, status="active")

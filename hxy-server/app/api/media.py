@@ -25,6 +25,7 @@ def _is_headquarters_admin(staff: Staff) -> bool:
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+ALLOWED_FILENAME_EXTENSIONS = {"image/jpeg": {".jpg", ".jpeg"}, "image/png": {".png"}, "image/webp": {".webp"}, "image/gif": {".gif"}}
 
 
 def _require_media_writer(staff: Staff) -> None:
@@ -132,6 +133,8 @@ async def upload_media(
     original_name = Path(file.filename or "upload").name
     if not original_name or len(original_name) > 255:
         raise HTTPException(status_code=400, detail="文件名无效")
+    if Path(original_name).suffix.lower() not in ALLOWED_FILENAME_EXTENSIONS[file.content_type]:
+        raise HTTPException(status_code=415, detail="文件扩展名与图片类型不匹配")
     content = await file.read(settings.media_max_size_bytes + 1)
     if len(content) > settings.media_max_size_bytes:
         raise HTTPException(status_code=413, detail="图片不能超过 5MB")
