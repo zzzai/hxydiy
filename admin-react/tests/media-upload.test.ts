@@ -20,5 +20,6 @@ test('媒体上传控件调用门店隔离的上传 API 并支持删除', () => 
   assert.match(component, /uploadMedia\(file as File, purpose, storeId\)/);
   assert.match(component, /disabled=.*requireStoreId/);
   assert.match(component, /deleteMedia\(/);
+  assert.match(component, /catch \{\s*\/\* API 拦截器已显示具体失败原因。 \*\/\s*\}/);
   assert.match(source('api.ts'), /client\.post\('\/admin\/media'/);
 });

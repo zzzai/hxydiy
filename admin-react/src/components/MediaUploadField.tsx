@@ -63,7 +63,15 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
     {previewUrl && <Image src={previewUrl} width={120} height={90} style={{ objectFit: 'cover' }} />}
     <Space>
       <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading} disabled={requireStoreId && !storeId}>{url ? '替换图片' : '上传图片'}</Button></Upload>
-      {mediaId && <Button danger type="text" icon={<DeleteOutlined />} onClick={async () => { await deleteMedia(mediaId); onChange?.(''); message.success('图片已删除'); }}>删除</Button>}
+      {mediaId && <Button danger type="text" icon={<DeleteOutlined />} onClick={async () => {
+        try {
+          await deleteMedia(mediaId);
+          onChange?.('');
+          message.success('图片已删除');
+        } catch {
+          /* API 拦截器已显示具体失败原因。 */
+        }
+      }}>删除</Button>}
     </Space>
   </Space>;
 }
