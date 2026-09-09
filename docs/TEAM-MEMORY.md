@@ -80,3 +80,4 @@
 | 2026-08-31 | `bound_qr` 是服务端在验证真实服务位二维码后写入的审计来源，不是顾客端可声明的入口来源；匿名入口伪造该值必须返回 `403 ENTRY_SOURCE_FORBIDDEN`，不得创建选单会话或服务位占用。 | 顾客端入口、后端安全契约 |
 | 2026-08-31 | 可撤销的服务位二维码最低版本为 v2；生产环境必须拒绝不关联二维码记录的 v1 凭证（`403 QR_VERSION_EXPIRED`），以保证停用、重新生成和换绑可立即失效。v2 与新生成的 v3 保持兼容。 | 顾客端入口、管理端、后端安全契约 |
 | 2026-09-01 | 房间配置页必须展示服务位 DIY 运营状态；店长仅可对无活动占用的本店服务位执行停用/重新启用，复用 `/api/v1/admin/service-positions/{room_id}/operational-status`；房间列表响应补充 `operational_status` 字段 | 管理端、管理端 API |
+| 2026-09-09 | 实际服务位的维修备注与展示顺序复用 `Room.note`、`Room.sort_order`，由严格 `PATCH /api/v1/admin/service-positions/{room_id}/configuration` 更新；仅绑定门店店长可操作本店，普通员工没有写入口且实时服务位地图不接收备注字段。请求审计前后值，不新建迁移，不改变启停、占用、二维码或智慧宝物理资源。详见 `contracts/service-position-configuration-v1.md`。 | 管理端、后端 |
