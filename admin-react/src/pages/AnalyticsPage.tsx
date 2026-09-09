@@ -51,6 +51,8 @@ export default function AnalyticsPage() {
   const operations = positions.operations || {};
   const feedback = summary.feedback || {};
   const statusRows = Object.entries(positions.status_counts || {}).map(([status, count]) => ({ key: status, status, count }));
+  const projectSalesRows = (summary.project_sales_top5 || []).map((item: any) => ({ key: item.name, ...item }));
+  const technicianServiceRows = (summary.technician_service_counts || []).map((item: any) => ({ key: item.technician_id, ...item }));
 
   return (
     <div>
@@ -145,6 +147,25 @@ export default function AnalyticsPage() {
                 </span>
               </div>
             ))}
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[12, 12]} style={{ marginTop: 16 }}>
+        <Col xs={24} lg={12}>
+          <Card title="项目销量 Top5" style={{ height: '100%' }}>
+            {projectSalesRows.length ? <Table size="small" pagination={false} dataSource={projectSalesRows} columns={[
+              { title: '项目', dataIndex: 'name' },
+              { title: '完成数量', dataIndex: 'quantity' },
+            ]} /> : <Empty description="暂无完成服务项目" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="技师服务量 Top5" style={{ height: '100%' }}>
+            {technicianServiceRows.length ? <Table size="small" pagination={false} dataSource={technicianServiceRows} columns={[
+              { title: '技师', dataIndex: 'name' },
+              { title: '完成服务', dataIndex: 'completed_services_count' },
+            ]} /> : <Empty description="暂无已归属技师的完成服务" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
           </Card>
         </Col>
       </Row>

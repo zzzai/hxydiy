@@ -1027,6 +1027,57 @@ class AdminV2ContractTests(unittest.TestCase):
             db.query(SelectionSession).filter(SelectionSession.id.like("metric-duration-%")).delete(synchronize_session=False)
             db.commit()
 
+    def test_operations_summary_reports_project_sales_and_technician_volume(self):
+        self.addCleanup(self._cleanup_operations_reporting_fixtures)
+        period_start = datetime(2026, 8, 20, tzinfo=timezone.utc)
+        with self.SessionLocal() as db:
+            alpha = Technician(store_id=1, code="METRIC-ALPHA", name="阿尔法")
+            beta = Technician(store_id=1, code="METRIC-BETA", name="贝塔")
+            other_technician = Technician(store_id=self.other_store_id, code="METRIC-OTHER", name="其他技师")
+            db.add_all([alpha, beta, other_technician])
+            db.flush()
+            db.add_all([
+                SelectionSession(id="metric-reporting-session-1", access_token_hash="metric-reporting-token-1", store_id=1, status="confirmed", items=[{"name": "肩颈调理", "quantity": 2}]),
+                SelectionSession(id="metric-reporting-session-2", access_token_hash="metric-reporting-token-2", store_id=1, status="confirmed", items=[{"name": "肩颈调理", "quantity": 1}, {"name": "草本泡脚", "quantity": 2}]),
+                SelectionSession(id="metric-reporting-session-3", access_token_hash="metric-reporting-token-3", store_id=1, status="confirmed", items=[{"name": "未认领项目", "quantity": 5}]),
+                SelectionSession(id="metric-reporting-session-4", access_token_hash="metric-reporting-token-4", store_id=self.other_store_id, status="confirmed", items=[{"name": "其他门店项目", "quantity": 99}]),
+                SelectionSession(id="metric-reporting-session-5", access_token_hash="metric-reporting-token-5", store_id=1, status="confirmed", items=[{"name": "未结束项目", "quantity": 99}]),
+            ])
+            db.flush()
+            db.add_all([
+                PositionOccupancy(store_id=1, room_id=self.room_id, selection_session_id="metric-reporting-session-1", serviced_by_technician_id=alpha.id, status="released", created_at=period_start, actual_start_at=period_start, actual_service_end_at=period_start + timedelta(hours=1), released_at=period_start + timedelta(hours=1)),
+                PositionOccupancy(store_id=1, room_id=self.room_id + 1, selection_session_id="metric-reporting-session-2", serviced_by_technician_id=beta.id, status="released", created_at=period_start, actual_start_at=period_start, actual_service_end_at=period_start + timedelta(hours=2), released_at=period_start + timedelta(hours=2)),
+                PositionOccupancy(store_id=1, room_id=self.room_id, selection_session_id="metric-reporting-session-3", status="released", created_at=period_start, actual_start_at=period_start, actual_service_end_at=period_start + timedelta(hours=3), released_at=period_start + timedelta(hours=3)),
+                PositionOccupancy(store_id=self.other_store_id, room_id=self.other_room_id, selection_session_id="metric-reporting-session-4", serviced_by_technician_id=other_technician.id, status="released", created_at=period_start, actual_start_at=period_start, actual_service_end_at=period_start + timedelta(hours=4), released_at=period_start + timedelta(hours=4)),
+                PositionOccupancy(store_id=1, room_id=self.room_id, selection_session_id="metric-reporting-session-5", serviced_by_technician_id=alpha.id, status="released", created_at=period_start, released_at=period_start + timedelta(hours=5)),
+            ])
+            db.commit()
+
+        response = self.client.get(
+            "/api/v1/admin/operations-summary",
+            params={"start_date": "2026-08-20", "end_date": "2026-08-20"},
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["project_sales_top5"], [
+            {"name": "未认领项目", "quantity": 5},
+            {"name": "肩颈调理", "quantity": 3},
+            {"name": "草本泡脚", "quantity": 2},
+        ])
+        self.assertEqual(body["technician_service_counts"], [
+            {"technician_id": beta.id, "name": "贝塔", "completed_services_count": 1},
+            {"technician_id": alpha.id, "name": "阿尔法", "completed_services_count": 1},
+        ])
+
+    def _cleanup_operations_reporting_fixtures(self):
+        with self.SessionLocal() as db:
+            db.query(PositionOccupancy).filter(PositionOccupancy.selection_session_id.like("metric-reporting-%")).delete(synchronize_session=False)
+            db.query(SelectionSession).filter(SelectionSession.id.like("metric-reporting-%")).delete(synchronize_session=False)
+            db.query(Technician).filter(Technician.code.like("METRIC-%")).delete(synchronize_session=False)
+            db.commit()
+
     def test_audit_logs_are_paginated_scoped_and_redacted(self):
         with self.SessionLocal() as db:
             db.add_all([

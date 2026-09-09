@@ -34,6 +34,7 @@ from app.models import (
     SelectionSession,
     Staff,
     Store,
+    Technician,
     User,
 )
 
@@ -443,6 +444,59 @@ def operations_summary(
     capacity_minutes = len(rooms) * (end_at - start_at).total_seconds() / 60
     utilization_percent = round(utilization_minutes / capacity_minutes * 100, 2) if capacity_minutes else 0
 
+    report_occupancies = [
+        occupancy for occupancy in completed_occupancies
+        if start_at <= _summary_utc(occupancy.actual_service_end_at) < end_at
+    ]
+    report_session_ids = {occupancy.selection_session_id for occupancy in report_occupancies}
+    report_sessions = {
+        session.id: session
+        for session in db.scalars(select(SelectionSession).where(
+            SelectionSession.id.in_(report_session_ids),
+            SelectionSession.store_id == selected_store_id,
+        ))
+    } if report_session_ids else {}
+    project_sales = Counter()
+    for occupancy in report_occupancies:
+        session = report_sessions.get(occupancy.selection_session_id)
+        if not session or not isinstance(session.items, list):
+            continue
+        for item in session.items:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            quantity = item.get("quantity")
+            if isinstance(name, str) and name.strip() and isinstance(quantity, int) and not isinstance(quantity, bool) and quantity > 0:
+                project_sales[name.strip()] += quantity
+    project_sales_top5 = [
+        {"name": name, "quantity": quantity}
+        for name, quantity in sorted(project_sales.items(), key=lambda item: (-item[1], item[0]))[:5]
+    ]
+
+    technician_counts = Counter(
+        occupancy.serviced_by_technician_id
+        for occupancy in report_occupancies
+        if occupancy.serviced_by_technician_id is not None
+    )
+    technicians = {
+        technician.id: technician
+        for technician in db.scalars(select(Technician).where(
+            Technician.id.in_(technician_counts),
+            Technician.store_id == selected_store_id,
+        ))
+    } if technician_counts else {}
+    technician_service_counts = [
+        {
+            "technician_id": technician.id,
+            "name": technician.name,
+            "completed_services_count": technician_counts[technician.id],
+        }
+        for technician in sorted(
+            technicians.values(),
+            key=lambda technician: (-technician_counts[technician.id], technician.name, technician.id),
+        )[:5]
+    ]
+
     funnel_rates = {}
     for previous_name, current_name in zip(funnel_events, funnel_events[1:]):
         previous_count = funnel[previous_name]
@@ -481,6 +535,8 @@ def operations_summary(
         },
         "funnel": funnel,
         "funnel_rates": funnel_rates,
+        "project_sales_top5": project_sales_top5,
+        "technician_service_counts": technician_service_counts,
         "service_positions": {
             "total_count": len(rooms),
             "status_counts": dict(room_statuses),
