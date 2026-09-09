@@ -1,4 +1,4 @@
-import { ArrowLeftOutlined, CheckCircleFilled, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { CheckCircleFilled, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { App, Button, Drawer, Radio, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import bodyMapImage from '../assets/technician-body-map.png';
@@ -71,7 +71,7 @@ const description = (note: DraftNote) => {
 const complete = (note: DraftNote): note is V5BodyServiceNote => Boolean(note.context && note.currentState && note.sessionHandling && note.reconfirmNextVisit);
 
 export default function BodyMapNoteDrawer({ open, value, onChange, onClose, context }: { open: boolean; value: V5BodyServiceNote[]; onChange: (value: V5BodyServiceNote[]) => void; onClose: () => void; context: string }) {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [step, setStep] = useState(1);
   const [notes, setNotes] = useState<DraftNote[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -114,16 +114,18 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
     setNotes((current) => nextPoints.map((next) => current.find((item) => bodyMapPointKey(item) === bodyMapPointKey(next)) || { ...next, reconfirmNextVisit: true }));
   };
   const startDetails = () => {
-    if (!notes.length) { message.warning('请先选择身体部位'); return; }
+    if (!notes.length) {
+      if (value.length) { onChange([]); onClose(); return; }
+      message.warning('请先选择身体部位'); return;
+    }
     const first = notes.find((note) => !complete(note)) || notes[0];
     setActiveKey(bodyMapPointKey(first));
     setStep(2);
   };
   const advance = () => {
     if (!active) return;
-    if (step === 2 && !active.context) { message.warning('请选择顾客自述情况'); return; }
-    if (step === 3 && !active.currentState) { message.warning('请选择当前状态'); return; }
-    if (step < 4) { setStep((current) => current + 1); return; }
+    if (!active.context) { message.warning('请选择顾客自述情况'); return; }
+    if (!active.currentState) { message.warning('请选择当前状态'); return; }
     if (!active.sessionHandling) { message.warning('请选择本次处理'); return; }
     const next = notes.find((note) => bodyMapPointKey(note) !== activeKey && !complete(note));
     if (next) { setActiveKey(bodyMapPointKey(next)); setStep(2); return; }
@@ -132,15 +134,20 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
   };
   const remove = (key: string) => setNotes((current) => current.filter((note) => bodyMapPointKey(note) !== key));
 
-  const footer = step === 1 ? <Button type="primary" block size="large" onClick={startDetails}>下一步：填写顾客自述</Button> : <div className="technician-body-map-footer"><Button size="large" onClick={() => setStep((current) => current - 1)}>上一步</Button><Button type="primary" size="large" onClick={advance}>{step === 4 ? '保存此部位' : '下一步'}</Button></div>;
+  const requestClose = () => {
+    if (JSON.stringify(notes) === JSON.stringify(value)) { onClose(); return; }
+    modal.confirm({ title: '身体补充尚未保存', content: '继续填写，或放弃本次修改。', okText: '继续填写', cancelText: '放弃修改', onCancel: onClose, maskClosable: false, closable: false });
+  };
+  const hasNext = notes.some(note => bodyMapPointKey(note) !== activeKey && !complete(note));
+  const footer = step === 1 ? <Button type="primary" block size="large" disabled={!notes.length && !value.length} onClick={startDetails}>{!notes.length && value.length ? '清除身体补充' : '填写所选部位'}</Button> : <div className="technician-body-map-footer"><Button size="large" onClick={() => setStep(1)}>返回部位</Button><Button type="primary" size="large" onClick={advance}>{hasNext ? '填写下一部位' : '完成身体补充'}</Button></div>;
 
-  return <Drawer title={step === 1 ? '记录身体相关情况' : `记录身体相关情况 · 第 ${step} 步`} placement="bottom" height="100vh" open={open} onClose={onClose} className="technician-body-map-drawer" footer={footer} closeIcon={step === 1 ? undefined : <ArrowLeftOutlined onClick={() => setStep((current) => current - 1)} />}>
+  return <Drawer title="身体注意事项" placement="bottom" height="100dvh" open={open} onClose={requestClose} maskClosable={false} className="technician-body-map-drawer" footer={footer}>
     <div className="technician-profile-context"><Typography.Text strong>{context}</Typography.Text><Typography.Text type="secondary">只记录顾客自述，不作诊断</Typography.Text></div>
-    <div className="technician-body-map-steps" aria-label={`当前第 ${step} 步，共 4 步`}><span className={step >= 1 ? 'active' : ''}>1<br />选部位</span><span className={step >= 2 ? 'active' : ''}>2<br />选情况</span><span className={step >= 3 ? 'active' : ''}>3<br />当前状态</span><span className={step >= 4 ? 'active' : ''}>4<br />本次处理</span></div>
     {step === 1 && <>
       <Typography.Title level={4}>先选常用部位</Typography.Title>
-      <Typography.Paragraph type="secondary">先缩小范围；需要左右或精确位置时再打开人体图。</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">左右以顾客本人为准。选择部位后，记录顾客说了什么和本次如何处理。</Typography.Paragraph>
       <div className="technician-body-map-large-areas">{LARGE_AREAS.map((area) => <Button key={area.label} size="large" type={selectedLargeArea === area.label ? 'primary' : 'default'} onClick={() => { setSelectedLargeArea(area.label); setShowPreciseMap(false); }}>{area.label}</Button>)}</div>
+      {selectedArea && <div className="notebook-body-locations">{visiblePoints.filter((point, index, all) => all.findIndex(other => bodyMapPointKey(other) === bodyMapPointKey(point)) === index).map(point => <Button key={bodyMapPointKey(point)} aria-pressed={selectedPoints.some(item => bodyMapPointKey(item) === bodyMapPointKey(point))} type={selectedPoints.some(item => bodyMapPointKey(item) === bodyMapPointKey(point)) ? 'primary' : 'default'} onClick={() => choosePoint(point)}>{point.label}</Button>)}</div>}
       <Button type="link" disabled={!selectedArea} onClick={() => setShowPreciseMap(true)}>精确位置</Button>
       {showPreciseMap && <><Typography.Title level={5}>选择具体位置（可多选）</Typography.Title>
       <div className="technician-body-map-canvas"><img src={bodyMapImage} alt="正面与背面人体轮廓" />{visiblePoints.map((point, index) => {
@@ -150,6 +157,12 @@ export default function BodyMapNoteDrawer({ open, value, onChange, onClose, cont
       <div className="technician-body-map-selected"><Typography.Text strong>已选择 {notes.length} 个部位</Typography.Text>{notes.length > 0 && <Button type="link" onClick={() => setNotes([])}>清空</Button>}</div>
       {notes.map((note, index) => <div className="technician-body-map-note" key={bodyMapPointKey(note)}><span>{index + 1}</span><Typography.Text>{description(note)}</Typography.Text><Button type="text" aria-label={`编辑${description(note)}`} icon={<EditOutlined />} onClick={() => { setActiveKey(bodyMapPointKey(note)); setStep(2); }} /><Button danger type="text" aria-label={`删除${description(note)}`} icon={<DeleteOutlined />} onClick={() => remove(bodyMapPointKey(note))} /></div>)}
     </>}
-    {step > 1 && active && <section className="technician-body-map-choice"><Typography.Title level={4}>{regionLabels[active.region] || REGIONS[active.region]}{active.side === 'left' ? '（左）' : active.side === 'right' ? '（右）' : ''}</Typography.Title>{step === 2 && <><Typography.Paragraph>顾客提及的情况</Typography.Paragraph><Radio.Group value={active.context} onChange={(event) => patchActive({ context: event.target.value })} options={contexts} optionType="button" buttonStyle="solid" /></>}{step === 3 && <><Typography.Paragraph>当前状态</Typography.Paragraph><Radio.Group value={active.currentState} onChange={(event) => patchActive({ currentState: event.target.value })} options={states} optionType="button" buttonStyle="solid" /></>}{step === 4 && <><Typography.Paragraph>本次处理</Typography.Paragraph><Radio.Group value={active.sessionHandling} onChange={(event) => patchActive({ sessionHandling: event.target.value })} options={handlings} optionType="button" buttonStyle="solid" /><Typography.Paragraph type="secondary">下次服务前仍需当面确认。</Typography.Paragraph></>}</section>}
+    {step > 1 && active && <section className="technician-body-map-choice">
+      <Typography.Title level={4}>{regionLabels[active.region] || REGIONS[active.region]}{active.side === 'left' ? '（左）' : active.side === 'right' ? '（右）' : ''}</Typography.Title>
+      <Typography.Paragraph>顾客提及的情况</Typography.Paragraph><Radio.Group value={active.context} onChange={event => patchActive({ context: event.target.value })} options={contexts} optionType="button" buttonStyle="solid" />
+      <Typography.Paragraph>当前状态</Typography.Paragraph><Radio.Group value={active.currentState} onChange={event => patchActive({ currentState: event.target.value })} options={states} optionType="button" buttonStyle="solid" />
+      <Typography.Paragraph>本次处理</Typography.Paragraph><Radio.Group value={active.sessionHandling} onChange={event => patchActive({ sessionHandling: event.target.value })} options={handlings} optionType="button" buttonStyle="solid" />
+      <Typography.Paragraph type="secondary">完成后返回服务笔记统一保存。下次服务前仍需当面确认。</Typography.Paragraph>
+    </section>}
   </Drawer>;
 }
