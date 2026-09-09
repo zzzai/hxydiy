@@ -799,6 +799,128 @@ class OccupancyApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(response.json()["detail"]["code"], "STAFF_READ_ONLY")
 
+    def test_manager_configures_service_position_note_and_display_order_with_audit(self):
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-01"))
+
+        response = self.client.patch(
+            f"/api/v1/admin/service-positions/{room.id}/configuration",
+            headers=self.admin_headers,
+            json={"maintenance_note": "靠窗插座待检修", "display_order": 3},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {
+            "id": room.id,
+            "maintenance_note": "靠窗插座待检修",
+            "display_order": 3,
+        })
+        with self.SessionLocal() as db:
+            updated = db.get(Room, room.id)
+            audit = db.scalar(select(AuditLog).where(
+                AuditLog.action == "service_position_configuration_updated",
+                AuditLog.entity_id == str(room.id),
+            ))
+            self.assertEqual(updated.note, "靠窗插座待检修")
+            self.assertEqual(updated.sort_order, 3)
+            self.assertIsNotNone(audit)
+            self.assertEqual(audit.detail["before"], {"maintenance_note": "", "display_order": 1})
+            self.assertEqual(audit.detail["after"], {"maintenance_note": "靠窗插座待检修", "display_order": 3})
+
+        cleared = self.client.patch(
+            f"/api/v1/admin/service-positions/{room.id}/configuration",
+            headers=self.admin_headers,
+            json={"maintenance_note": ""},
+        )
+        self.assertEqual(cleared.status_code, 200, cleared.text)
+        self.assertEqual(cleared.json()["maintenance_note"], "")
+
+    def test_service_position_configuration_rejects_invalid_payloads_and_non_positions(self):
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-02"))
+            container = Room(
+                store_id=self.store_id,
+                code="configuration-container",
+                name="配置测试房间",
+                room_type="room",
+                is_space_container=True,
+                is_service_position=False,
+            )
+            other = Room(
+                store_id=self.store_id,
+                code="configuration-non-position",
+                name="配置测试非服务位",
+                room_type="room",
+                is_space_container=False,
+                is_service_position=False,
+            )
+            db.add_all([container, other])
+            db.commit()
+            container_id, other_id = container.id, other.id
+
+        url = f"/api/v1/admin/service-positions/{room.id}/configuration"
+        for payload in (
+            {},
+            {"maintenance_note": None},
+            {"maintenance_note": "x" * 257},
+            {"display_order": -1},
+            {"display_order": 1.5},
+            {"operational_status": "inactive"},
+        ):
+            with self.subTest(payload=payload):
+                response = self.client.patch(url, headers=self.admin_headers, json=payload)
+                self.assertEqual(response.status_code, 422, response.text)
+
+        for room_id in (container_id, other_id):
+            with self.subTest(room_id=room_id):
+                response = self.client.patch(
+                    f"/api/v1/admin/service-positions/{room_id}/configuration",
+                    headers=self.admin_headers,
+                    json={"display_order": 2},
+                )
+                self.assertEqual(response.status_code, 400, response.text)
+
+    def test_staff_and_cross_store_manager_cannot_configure_service_position(self):
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-03"))
+            staff = Staff(
+                username="configuration-staff",
+                password_hash=hash_password("pass"),
+                name="普通员工",
+                role="staff",
+                store_id=self.store_id,
+                status="active",
+            )
+            other_store = Store(store_code="configuration-other-store", name="隔离门店", address="测试地址")
+            db.add_all([staff, other_store])
+            db.flush()
+            other_room = Room(
+                store_id=other_store.id,
+                code="configuration-other-position",
+                name="隔离服务位",
+                room_type="sofa",
+                is_service_position=True,
+                is_space_container=False,
+            )
+            db.add(other_room)
+            db.commit()
+            staff_id, other_room_id = staff.id, other_room.id
+
+        staff_response = self.client.patch(
+            f"/api/v1/admin/service-positions/{room.id}/configuration",
+            headers={"Authorization": f"Bearer {create_staff_token(staff_id, 'staff')}"},
+            json={"display_order": 2},
+        )
+        self.assertEqual(staff_response.status_code, 403, staff_response.text)
+        self.assertEqual(staff_response.json()["detail"]["code"], "STAFF_READ_ONLY")
+
+        cross_store = self.client.patch(
+            f"/api/v1/admin/service-positions/{other_room_id}/configuration",
+            headers=self.admin_headers,
+            json={"display_order": 2},
+        )
+        self.assertEqual(cross_store.status_code, 404, cross_store.text)
+
     def test_position_disable_rejects_active_occupancy(self):
         self.release_if_active("sofa-06")
         entry = self.entry("sofa-06")
