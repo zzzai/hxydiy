@@ -38,6 +38,7 @@ import {
   rebindPositionQr,
   regeneratePositionQr,
   startPositionService,
+  updateServicePositionConfiguration,
   updateServicePositionOperationalStatus,
   updatePositionQr,
   type PositionQr,
@@ -59,6 +60,7 @@ import {
   type ServicePosition,
 } from '../servicePositions';
 import { canManageConfiguration } from '../auth';
+import { buildServicePositionConfigurationPayload, canManageServicePositionConfiguration } from '../servicePositionConfiguration';
 import { getServicePositionQrPermissions, servicePositionQrActions, servicePositionQrRenderOptions } from '../servicePositionQr';
 
 type ActionMode = 'start_service' | 'kiosk' | null;
@@ -139,7 +141,7 @@ export default function ServicePositionsPage() {
   const { message, modal } = App.useApp();
   const staff = getStaff();
   const qrPermissions = getServicePositionQrPermissions(staff?.role);
-  const canManageServicePosition = canManageConfiguration(staff?.role);
+  const canManageServicePosition = canManageConfiguration(staff?.role) && Boolean(staff?.store_id);
   const [positions, setPositions] = useState<ServicePosition[]>([]);
   const [updatedAt, setUpdatedAt] = useState('');
   const [selected, setSelected] = useState<ServicePosition | null>(null);
@@ -156,6 +158,8 @@ export default function ServicePositionsPage() {
   const [qrTargetRoomId, setQrTargetRoomId] = useState<number>();
   const [qrBusy, setQrBusy] = useState(false);
   const [positionConfigBusy, setPositionConfigBusy] = useState(false);
+  const [maintenanceNote, setMaintenanceNote] = useState('');
+  const [displayOrder, setDisplayOrder] = useState(0);
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -182,6 +186,11 @@ export default function ServicePositionsPage() {
       window.clearInterval(ticker);
     };
   }, []);
+
+  useEffect(() => {
+    setMaintenanceNote(selected?.maintenance_note || '');
+    setDisplayOrder(selected?.sort_order || 0);
+  }, [selected?.id]);
 
 
   const counts = useMemo(() => countPositionStates(positions), [positions]);
@@ -349,6 +358,24 @@ export default function ServicePositionsPage() {
     });
   };
 
+  const saveServicePositionConfiguration = async () => {
+    if (!selected || !canManageServicePositionConfiguration(staff?.role) || !staff?.store_id) return;
+    setPositionConfigBusy(true);
+    try {
+      const response = await updateServicePositionConfiguration(
+        selected.id,
+        buildServicePositionConfigurationPayload(maintenanceNote, displayOrder),
+      );
+      setSelected((current) => current?.id === selected.id
+        ? { ...current, maintenance_note: response.data.maintenance_note, sort_order: response.data.display_order }
+        : current);
+      message.success('服务位配置已保存');
+      await load(true);
+    } finally {
+      setPositionConfigBusy(false);
+    }
+  };
+
   const downloadPositionQr = () => {
     if (!selected || !positionQrImage) return;
     const link = document.createElement('a');
@@ -498,6 +525,14 @@ export default function ServicePositionsPage() {
               <div className="available-position-state"><CheckCircleOutlined /><div><strong>当前可接待</strong><span>可由顾客扫码进入，也可先绑定共享 iPad。</span></div></div>
             )}
 
+            <Divider />
+            {canManageServicePosition && (
+              <div className="inline-action-panel">
+                <div><strong>服务位配置</strong><span>仅调整后台展示顺序和维修备注，不改变服务位现场状态或智慧宝资源。</span></div>
+                <Input.TextArea value={maintenanceNote} onChange={(event) => setMaintenanceNote(event.target.value)} maxLength={256} placeholder="维修备注（可留空）" autoSize={{ minRows: 2, maxRows: 4 }} />
+                <Space align="center" wrap><span>展示顺序</span><InputNumber min={0} precision={0} value={displayOrder} onChange={(value) => setDisplayOrder(typeof value === 'number' ? value : 0)} /><Button type="primary" loading={positionConfigBusy} onClick={() => void saveServicePositionConfiguration()}>保存配置</Button></Space>
+              </div>
+            )}
             <Divider />
             <div className="position-actions">
               <div className="position-actions-title"><strong>现场操作</strong><span>系统会记录每次状态变更</span></div>

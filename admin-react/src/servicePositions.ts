@@ -67,6 +67,7 @@ export type ServicePosition = {
   is_current: boolean;
   customer_selectable: boolean;
   operational_status: string;
+  maintenance_note: string;
   map_x: number;
   map_y: number;
   map_width: number;
@@ -92,7 +93,7 @@ export function normalizeServicePositions(positions: ServicePosition[]): Service
       id: -(index + 1), code: item.code, name: item.name, customer_label: item.name,
       type: item.type, state: 'unavailable' as const, is_current: false, customer_selectable: false,
       operational_status: 'inactive', map_x: 0, map_y: 0, map_width: 1, map_height: 1,
-      sort_order: 1000 + index, occupancy: null, selection: null,
+      maintenance_note: '', sort_order: 1000 + index, occupancy: null, selection: null,
     });
 }
 
