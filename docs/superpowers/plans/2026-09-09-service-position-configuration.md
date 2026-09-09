@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 为店长和总部管理员提供实际服务位的维修备注与展示顺序编辑能力，同时保持门店隔离、普通员工只读和智慧宝物理资源边界。
+**Goal:** 为绑定门店的店长提供实际服务位的维修备注与展示顺序编辑能力，同时保持门店隔离、普通员工只读和智慧宝物理资源边界。
 
 **Architecture:** `Room.note` 和 `Room.sort_order` 已存在，因此后端在 occupancy 路由新增一个严格的 Pydantic 请求模型和服务位专用 PATCH，将公开字段映射为现有存储字段。管理端在既有服务位详情抽屉中调用该 PATCH；实时地图继续按已有 `sort_order, id` 查询，只需接收并展示备注与顺序。
 
@@ -12,7 +12,7 @@
 
 - 仅实际服务位可编辑；空间容器与非服务位拒绝。
 - `maintenance_note` 为空字符串时清空，最大 256 字；`display_order` 是不小于 0 的整数。
-- 总部管理员和店长可写；普通员工无写入口且后端拒绝；跨店目标返回 404。
+- 仅绑定门店的店长可写；普通员工无写入口且后端拒绝；跨店目标返回 404；总部跨店选店与配置不在本期范围。
 - 不变更 `operational_status`、占用、服务单、二维码、顾客扫码、地图布局或智慧宝物理资源。
 - 不新增数据库列或 Alembic 迁移；保留旧 `note`、`sort_order` 数据。
 - 同一 PR 更新合同测试、`docs/TEAM-MEMORY.md` 和服务位契约文档。
