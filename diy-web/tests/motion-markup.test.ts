@@ -6,7 +6,8 @@ const app = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 const sheet = fs.readFileSync(new URL('../src/components/SelectionSummarySheet.tsx', import.meta.url), 'utf8');
 const detail = fs.readFileSync(new URL('../src/components/ProjectDetailPage.tsx', import.meta.url), 'utf8');
 
-test('顾客端底部选购栏和详情层声明轻动效标记', () => {
+test('权益区、底部选购栏和详情层声明轻动效标记', () => {
+  assert.match(app, /data-motion=["']promo-strip["']/);
   assert.match(app, /data-motion=["']selection-footer["']/);
   assert.match(detail, /data-motion=["']detail["']/);
 });
