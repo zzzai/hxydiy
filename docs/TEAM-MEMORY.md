@@ -86,4 +86,4 @@
 | 2026-09-01 | 房间配置页必须展示服务位 DIY 运营状态；店长仅可对无活动占用的本店服务位执行停用/重新启用，复用 `/api/v1/admin/service-positions/{room_id}/operational-status`；房间列表响应补充 `operational_status` 字段 | 管理端、管理端 API |
 | 2026-09-09 | 实际服务位的维修备注与展示顺序复用 `Room.note`、`Room.sort_order`，由严格 `PATCH /api/v1/admin/service-positions/{room_id}/configuration` 更新；仅绑定门店店长可操作本店，普通员工没有写入口且实时服务位地图不接收备注字段。请求审计前后值，不新建迁移，不改变启停、占用、二维码或智慧宝物理资源。详见 `contracts/service-position-configuration-v1.md`。 | 管理端、后端 |
 | 2026-09-09 | 经营分析在既有门店范围内新增已结束服务的项目销量 Top5 与技师服务量 Top5：项目使用选单保存的名称和正整数数量，技师只按明确 `serviced_by_technician_id` 归属；未归属、跨店、缺结束时间或缺失档案均不猜测计入。顾客结构同时提供会员与非会员人数，二者都只统计已支付、已登录且非匿名的去重顾客。响应不携带顾客、价格、提成或服务参考。详见 `contracts/operations-reporting-v1.md`。 | 管理端、后端 |
-| 2026-09-09 | 管理端媒体上传和列表只返回稳定 `/api/v1/admin/media/{id}/content` 引用；对象存储的短期签名 URL 仅在受门店权限控制的内容读取请求中生成，目录不得保存会过期的 CDN 地址。详见 `contracts/media-delivery-v1.md`。 | 管理端、后端 |
+| 2026-09-09 | 管理端媒体上传和列表只返回稳定 `/api/v1/admin/media/{id}/content` 引用；对象存储的短期签名 URL 仅在受门店权限控制的内容读取请求中生成，目录不得保存会过期的 CDN 地址。删除先检查同店已发布项目、加项、商品及项目详情模块的稳定引用；命中时返回 `409 MEDIA_IN_USE`，未命中时仅软删除元数据，物理对象清理另行设计。详见 `contracts/media-delivery-v1.md`。 | 管理端、后端 |

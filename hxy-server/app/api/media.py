@@ -13,7 +13,7 @@ from app.api.admin import _current_staff, normalize_staff_role
 from app.api.admin_v2 import _audit, _staff_store_id
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import MediaAsset, Staff, Store
+from app.models import Addon, MediaAsset, Product, Project, Staff, Store
 from app.services.media_storage import MediaStorageError, get_media_storage as _build_media_storage
 
 router = APIRouter(prefix="/admin/media", tags=["admin-media"])
@@ -75,6 +75,41 @@ def _view(media: MediaAsset, storage=None) -> dict:
         "url": f"/api/v1/admin/media/{media.id}/content",
         "created_at": media.created_at.isoformat() if media.created_at else None,
     }
+
+
+def _contains_media_url(value: object, media_url: str) -> bool:
+    if value == media_url:
+        return True
+    if isinstance(value, dict):
+        return any(_contains_media_url(item, media_url) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_media_url(item, media_url) for item in value)
+    return False
+
+
+def _published_catalog_references(db: Session, media: MediaAsset) -> list[str]:
+    """仅保护当前已发布目录；历史快照和外部 URL 不在本期推断范围内。"""
+    media_url = f"/api/v1/admin/media/{media.id}/content"
+    references: list[str] = []
+    projects = db.scalars(select(Project).where(
+        Project.store_id == media.store_id,
+        Project.publication_status == "published",
+    ))
+    if any(project.image_url == media_url or _contains_media_url(project.detail_modules, media_url) for project in projects):
+        references.append("project")
+    if db.scalar(select(Addon.id).where(
+        Addon.store_id == media.store_id,
+        Addon.publication_status == "published",
+        Addon.image_url == media_url,
+    ).limit(1)) is not None:
+        references.append("addon")
+    if db.scalar(select(Product.id).where(
+        Product.store_id == media.store_id,
+        Product.publication_status == "published",
+        Product.image_url == media_url,
+    ).limit(1)) is not None:
+        references.append("product")
+    return references
 
 
 @router.post("", status_code=201)
@@ -167,11 +202,13 @@ def delete_media(media_id: int, db: Session = Depends(get_db), authorization: st
     media = db.get(MediaAsset, media_id)
     if not media or media.deleted_at or (not _is_headquarters_admin(staff) and media.store_id != _media_store_id(staff, None)):
         raise HTTPException(status_code=404, detail="媒体不存在")
-    storage = _storage_or_http()
-    try:
-        storage.delete(media.object_key)
-    except MediaStorageError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    references = _published_catalog_references(db, media)
+    if references:
+        raise HTTPException(status_code=409, detail={
+            "code": "MEDIA_IN_USE",
+            "message": "媒体仍被已发布目录引用，请先解除引用",
+            "references": references,
+        })
     media.deleted_at = datetime.now(timezone.utc)
     _audit(db, staff, "media_delete", "media", str(media.id), {"store_id": media.store_id})
     db.commit()

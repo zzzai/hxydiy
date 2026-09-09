@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, Staff, Store
+from app.models import Addon, AuditLog, Product, Project, Staff, Store
 from app.services.media_storage import MediaStorageError
 
 
@@ -51,6 +51,7 @@ class AdminMediaApiTests(unittest.TestCase):
             headquarters = Staff(username="media-headquarters", password_hash=hash_password("pass"), name="总部", role="admin", store_id=None, status="active")
             db.add_all([manager, other_manager, headquarters])
             db.commit()
+            cls.store_id = store.id
             cls.manager_id, cls.other_manager_id, cls.headquarters_id = manager.id, other_manager.id, headquarters.id
         app.dependency_overrides[get_db] = cls._get_db
         cls.client = TestClient(app)
@@ -130,6 +131,36 @@ class AdminMediaApiTests(unittest.TestCase):
             self.assertIsNotNone(media)
             self.assertIsNotNone(media.deleted_at)
 
+    def test_media_delete_rejects_published_catalog_references(self):
+        uploaded = self.client.post(
+            "/api/v1/admin/media",
+            headers=self._headers(self.manager_id),
+            files={"file": ("cover.jpg", io.BytesIO(b"jpg-bytes"), "image/jpeg")},
+        ).json()
+        with self.SessionLocal() as db:
+            db.add_all([
+                Project(
+                    store_id=self.store_id, code="media-project", category="care", name="媒体项目",
+                    image_url=uploaded["url"], publication_status="published",
+                ),
+                Addon(
+                    store_id=self.store_id, code="media-addon", name="媒体加项", image_url=uploaded["url"],
+                    price_cents=0, publication_status="published",
+                ),
+                Product(
+                    store_id=self.store_id, code="media-product", name="媒体商品", product_type="gift",
+                    price_cents=0, image_url=uploaded["url"], publication_status="published",
+                ),
+            ])
+            db.commit()
+
+        response = self.client.delete(f"/api/v1/admin/media/{uploaded['id']}", headers=self._headers(self.manager_id))
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "MEDIA_IN_USE")
+        with self.SessionLocal() as db:
+            media = db.get(__import__("app.models", fromlist=["MediaAsset"]).MediaAsset, uploaded["id"])
+            self.assertIsNone(media.deleted_at)
+
     def test_qiniu_backend_returns_stable_content_url(self):
         storage = _FakeStorage()
         with patch("app.api.media.get_media_storage", return_value=storage), patch.object(
@@ -148,9 +179,9 @@ class AdminMediaApiTests(unittest.TestCase):
             self.assertEqual(body["url"], f"/api/v1/admin/media/{body['id']}/content")
             self.client.delete(f"/api/v1/admin/media/{body['id']}", headers=self._headers(self.manager_id))
         self.assertEqual(len(storage.put_calls), 1)
-        self.assertEqual(storage.delete_calls, [storage.put_calls[0][0]])
+        self.assertEqual(storage.delete_calls, [])
 
-    def test_storage_delete_failure_does_not_soft_delete_database_record(self):
+    def test_soft_delete_does_not_depend_on_storage_delete(self):
         uploaded = self.client.post(
             "/api/v1/admin/media",
             headers=self._headers(self.manager_id),
@@ -159,10 +190,10 @@ class AdminMediaApiTests(unittest.TestCase):
         storage = _FailingDeleteStorage()
         with patch("app.api.media.get_media_storage", return_value=storage):
             response = self.client.delete(f"/api/v1/admin/media/{uploaded['id']}", headers=self._headers(self.manager_id))
-        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.status_code, 204)
         with self.SessionLocal() as db:
             media = db.get(__import__("app.models", fromlist=["MediaAsset"]).MediaAsset, uploaded["id"])
-            self.assertIsNone(media.deleted_at)
+            self.assertIsNotNone(media.deleted_at)
 
 
 if __name__ == "__main__":
