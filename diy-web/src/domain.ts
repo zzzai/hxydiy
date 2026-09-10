@@ -157,8 +157,15 @@ export function resolveStoreTotalCents(
   const lines = Array.isArray(data.lines) ? data.lines : [];
   const lineTotal = lines.reduce((sum, line) => {
     if (!line || typeof line !== 'object') return sum;
-    const value = Number((line as Record<string, unknown>).store_line_total_cents);
-    return Number.isFinite(value) && value >= 0 ? sum + value : sum;
+    const pricingLine = line as Record<string, unknown>;
+    const total = Number(pricingLine.store_line_total_cents);
+    if (Number.isFinite(total) && total > 0) return sum + total;
+
+    // 某些历史快照缺少整单和行总额，但仍保存了门店单价。
+    // 只使用明确的门店价格带，绝不把会员/团购应付价改标为门店价。
+    const unitStore = Number(pricingLine.unit_store_price_cents);
+    const quantity = Math.max(1, Number(pricingLine.quantity) || 1);
+    return Number.isFinite(unitStore) && unitStore > 0 ? sum + unitStore * quantity : sum;
   }, 0);
   if (lineTotal > 0) return lineTotal;
   if (Number.isFinite(snapshotTotal) && snapshotTotal >= 0) return snapshotTotal;
