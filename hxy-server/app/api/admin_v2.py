@@ -3,7 +3,7 @@
 权限：admin 可读写，staff 只读。所有写操作记录 AuditLog。
 """
 
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from copy import deepcopy
 import hashlib
 import json
@@ -3184,6 +3184,216 @@ def _ensure_annual_cycle_grant(
         if grant is None:
             raise
     return grant
+
+
+class MembershipPaymentIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    payment_channel: StrictStr = Field(min_length=2, max_length=32)
+    payment_reference: StrictStr = Field(min_length=2, max_length=64)
+    rights_confirmed: StrictBool
+
+    @field_validator("payment_channel", "payment_reference")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def _rights_confirmed(self):
+        if not self.rights_confirmed:
+            raise ValueError("rights_confirmed must be true")
+        return self
+
+
+class MembershipCancellationIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cycle_id: StrictStr = Field(min_length=1, max_length=64)
+    reason: StrictStr = Field(min_length=2, max_length=200)
+    refund_disposition: StrictStr = Field(min_length=2, max_length=64)
+
+
+class MembershipRecoveryIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cycle_id: StrictStr = Field(min_length=1, max_length=64)
+    reason: StrictStr = Field(min_length=2, max_length=200)
+    idempotency_key: StrictStr = Field(min_length=1, max_length=64)
+
+
+def _next_annual_expiry(started_at: datetime) -> datetime:
+    try:
+        return started_at.replace(year=started_at.year + 1)
+    except ValueError:  # 2 月 29 日续至非闰年时固定为 2 月 28 日的同一时刻。
+        return started_at.replace(year=started_at.year + 1, month=2, day=28)
+
+
+def _payment_reference_for_storage(channel: str, reference: str) -> str:
+    # 线下人工收据是门店凭据；其余支付渠道仅留末六位，不能存完整流水。
+    return reference if channel == "manual_receipt" else f"***{reference[-6:]}"
+
+
+def _membership_cycle_view(user: User, grant: MembershipBenefitGrant) -> dict:
+    return {
+        "ok": True,
+        "is_member": user.is_member,
+        "cycle_id": grant.membership_cycle_id,
+        "member_started_at": grant.membership_started_at.isoformat(),
+        "member_expire_at": grant.membership_expires_at.isoformat() if grant.membership_expires_at else None,
+        "cycle_state": grant.cycle_state,
+        "benefit_status": grant.status,
+    }
+
+
+def _locked_membership_cycle(db: Session, user_id: int, cycle_id: str) -> MembershipBenefitGrant | None:
+    return db.scalar(
+        select(MembershipBenefitGrant)
+        .where(
+            MembershipBenefitGrant.user_id == user_id,
+            MembershipBenefitGrant.membership_cycle_id == cycle_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+@router.post("/users/{user_id}/membership/enroll")
+def enroll_annual_membership(
+    user_id: int,
+    body: MembershipPaymentIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    user = _locked_store_user(db, user_id, staff)
+    now = datetime.now(UTC)
+    if user.is_member and user.member_expire_at and _utc_time(user.member_expire_at) > now:
+        raise HTTPException(status_code=409, detail="当前会员有效，请使用续费")
+    cycle_id = f"annual-{user.id}-{uuid.uuid4().hex[:16]}"
+    grant = _ensure_annual_cycle_grant(db, user, cycle_id, now)
+    grant.membership_expires_at = _next_annual_expiry(now)
+    grant.store_id = _staff_store_id(staff)
+    grant.cycle_state = "active"
+    grant.payment_channel = body.payment_channel
+    grant.payment_reference = _payment_reference_for_storage(body.payment_channel, body.payment_reference)
+    grant.rights_confirmed = body.rights_confirmed
+    user.is_member = True
+    user.member_type = "annual"
+    user.member_expire_at = grant.membership_expires_at
+    user.annual_membership_cycle_id = cycle_id
+    user.membership_store_id = _staff_store_id(staff)
+    _audit(db, staff, "enroll_annual_membership", "user", str(user.id), {
+        "cycle_id": cycle_id, "payment_channel": body.payment_channel,
+        "payment_reference": grant.payment_reference, "rights_confirmed": True,
+    })
+    db.commit()
+    return _membership_cycle_view(user, grant)
+
+
+@router.post("/users/{user_id}/membership/renew")
+def renew_annual_membership(
+    user_id: int,
+    body: MembershipPaymentIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    user = _locked_store_user(db, user_id, staff)
+    now = datetime.now(UTC)
+    if not user.is_member or not user.annual_membership_cycle_id or not user.member_expire_at:
+        raise HTTPException(status_code=409, detail="当前没有可续费的年度会员")
+    previous_expiry = _utc_time(user.member_expire_at)
+    if previous_expiry - now > timedelta(days=90):
+        raise HTTPException(status_code=409, detail="仅可在到期前90天内续费")
+    cycle_id = f"annual-{user.id}-{uuid.uuid4().hex[:16]}"
+    grant = _ensure_annual_cycle_grant(db, user, cycle_id, previous_expiry)
+    grant.membership_expires_at = _next_annual_expiry(previous_expiry)
+    grant.store_id = _staff_store_id(staff)
+    grant.cycle_state = "scheduled"
+    grant.payment_channel = body.payment_channel
+    grant.payment_reference = _payment_reference_for_storage(body.payment_channel, body.payment_reference)
+    grant.rights_confirmed = body.rights_confirmed
+    # 价格引擎以新的到期时间判断有效性；新的赠送权益仍按 scheduled 周期受控管理。
+    user.member_expire_at = grant.membership_expires_at
+    user.annual_membership_cycle_id = cycle_id
+    _audit(db, staff, "renew_annual_membership", "user", str(user.id), {
+        "previous_expire_at": previous_expiry.isoformat(), "cycle_id": cycle_id,
+        "payment_channel": body.payment_channel, "payment_reference": grant.payment_reference,
+    })
+    db.commit()
+    return _membership_cycle_view(user, grant)
+
+
+@router.post("/users/{user_id}/membership/cancel")
+def cancel_annual_membership(
+    user_id: int,
+    body: MembershipCancellationIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    user = _locked_store_user(db, user_id, staff)
+    grant = _locked_membership_cycle(db, user.id, body.cycle_id)
+    if grant is None or grant.store_id not in {None, _staff_store_id(staff)}:
+        raise HTTPException(status_code=404, detail="会员周期不存在")
+    if grant.cycle_state == "cancelled":
+        return _membership_cycle_view(user, grant)
+    grant.cycle_state = "cancelled"
+    grant.cancelled_at = datetime.now(UTC)
+    grant.cancellation_reason = body.reason.strip()
+    grant.refund_disposition = body.refund_disposition.strip()
+    if grant.status == "available":
+        grant.status = "voided"
+    if user.annual_membership_cycle_id == grant.membership_cycle_id:
+        user.is_member = False
+        user.member_type = None
+    _audit(db, staff, "cancel_annual_membership", "user", str(user.id), {
+        "cycle_id": grant.membership_cycle_id, "reason": grant.cancellation_reason,
+        "refund_disposition": grant.refund_disposition, "benefit_status": grant.status,
+    })
+    db.commit()
+    return _membership_cycle_view(user, grant)
+
+
+@router.post("/users/{user_id}/membership/recover")
+def recover_annual_membership(
+    user_id: int,
+    body: MembershipRecoveryIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    user = _locked_store_user(db, user_id, staff)
+    grant = _locked_membership_cycle(db, user.id, body.cycle_id)
+    if grant is None or grant.store_id not in {None, _staff_store_id(staff)}:
+        raise HTTPException(status_code=404, detail="会员周期不存在")
+    if grant.recovery_idempotency_key not in {None, body.idempotency_key}:
+        raise HTTPException(status_code=409, detail="该周期已由其他异常恢复请求处理")
+    if grant.cycle_state != "cancelled" and grant.recovery_idempotency_key is None:
+        raise HTTPException(status_code=409, detail="仅已取消周期可异常恢复")
+    grant.recovery_idempotency_key = body.idempotency_key
+    grant.cycle_state = "active" if _utc_time(grant.membership_started_at) <= datetime.now(UTC) else "scheduled"
+    if grant.status == "voided":
+        grant.status = "available"
+    if grant.membership_expires_at and _utc_time(grant.membership_expires_at) > datetime.now(UTC):
+        user.is_member = True
+        user.member_type = "annual"
+        user.member_expire_at = grant.membership_expires_at
+        user.annual_membership_cycle_id = grant.membership_cycle_id
+        user.membership_store_id = _staff_store_id(staff)
+    _audit(db, staff, "recover_annual_membership", "user", str(user.id), {
+        "cycle_id": grant.membership_cycle_id, "reason": body.reason.strip(),
+        "idempotency_key": body.idempotency_key, "benefit_status": grant.status,
+    })
+    db.commit()
+    return _membership_cycle_view(user, grant)
 
 
 @router.patch("/users/{user_id}/membership")
