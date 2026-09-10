@@ -124,6 +124,20 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("find \"$workspace_root/$required\" -type l", create)
         self.assertIn("find \"$target\" -type l", activate)
 
+    def test_pr_submission_script_pushes_a_clean_branch_and_never_merges_implicitly(self):
+        submit = (REPO_ROOT / "tools" / "release" / "submit_pr.py").read_text(encoding="utf-8")
+
+        self.assertIn('git("status", "--porcelain")', submit)
+        self.assertIn('git("push", "--set-upstream", "origin", branch)', submit)
+        self.assertIn("/pulls?state=open", submit)
+        self.assertIn("/pulls", submit)
+        self.assertIn("head_sha", submit)
+        self.assertIn("--watch", submit)
+        self.assertIn('os.environ.get("GH_TOKEN")', submit)
+        self.assertIn('env["HXY_GIT_TOKEN"]', submit)
+        self.assertIn("credential.helper", submit)
+        self.assertNotIn("/merge", submit)
+
 
 if __name__ == "__main__":
     unittest.main()
