@@ -155,7 +155,7 @@ def consume_membership_code(body: MembershipVerificationIn, authorization: str |
 @router.get("/membership-verification/selections")
 def membership_verification_selections(authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
     staff = current_membership_verifier(authorization, db)
-    rows = db.execute(select(SelectionSession, PositionOccupancy, Room).join(PositionOccupancy, PositionOccupancy.selection_session_id == SelectionSession.id).join(Room, Room.id == PositionOccupancy.room_id).where(SelectionSession.store_id == staff.store_id, PositionOccupancy.status.in_(["held", "waiting_service", "in_service"])).order_by(PositionOccupancy.id.desc())).all()
+    rows = db.execute(select(SelectionSession, PositionOccupancy, Room).join(PositionOccupancy, PositionOccupancy.selection_session_id == SelectionSession.id).join(Room, Room.id == PositionOccupancy.active_room_id).where(SelectionSession.store_id == staff.store_id, PositionOccupancy.active_room_id.is_not(None), PositionOccupancy.status.in_(["held", "waiting_service", "in_service"])).order_by(PositionOccupancy.id.desc())).all()
     by_room: dict[int, list[tuple[SelectionSession, PositionOccupancy, Room]]] = {}
     for row in rows:
         by_room.setdefault(row[2].id, []).append(row)
@@ -242,6 +242,7 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             .join(Room, Room.id == PositionOccupancy.room_id)
             .where(
                 PositionOccupancy.store_id == technician.store_id,
+                PositionOccupancy.active_room_id.is_not(None),
                 PositionOccupancy.status.in_(("waiting_service", "in_service", "post_service_present")),
                 SelectionSession.status.in_(("submitted", "confirmed")),
             )

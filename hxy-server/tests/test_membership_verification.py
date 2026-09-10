@@ -33,7 +33,7 @@ class TestMembershipVerification:
             db.add_all([tech_staff, manager, other_manager, room]); db.flush()
             selection = SelectionSession(id="member-selection", access_token_hash=hashlib.sha256(b"member-selection-token").hexdigest(), store_id=store.id, status="draft", items=[], diy_preferences={})
             db.add(selection); db.flush()
-            db.add(PositionOccupancy(store_id=store.id, room_id=room.id, selection_session_id=selection.id, status="held", source="diy"))
+            db.add(PositionOccupancy(store_id=store.id, room_id=room.id, active_room_id=room.id, selection_session_id=selection.id, active_session_id=selection.id, status="held", source="diy"))
             db.commit()
             self.member_id, self.store_id, self.selection_id = member.id, store.id, selection.id
             self.tech_id, self.manager_id, self.other_manager_id = tech_staff.id, manager.id, other_manager.id
@@ -75,9 +75,13 @@ class TestMembershipVerification:
         with self.SessionLocal() as db:
             assert db.scalar(select(MembershipCode).where(MembershipCode.user_id == self.member_id)).status == "scanned_pending"
 
-    def test_membership_binding_candidates_exclude_ambiguous_service_positions(self):
+    def test_membership_binding_candidates_ignore_completed_history_without_active_position(self):
         with self.SessionLocal() as db:
             original = db.get(SelectionSession, self.selection_id)
+            old_occupancy = db.scalar(select(PositionOccupancy).where(PositionOccupancy.selection_session_id == original.id))
+            old_occupancy.status = "post_service_present"
+            old_occupancy.active_room_id = None
+            old_occupancy.active_session_id = None
             duplicate = SelectionSession(
                 id="member-selection-duplicate",
                 access_token_hash=hashlib.sha256(b"member-selection-duplicate-token").hexdigest(),
@@ -88,15 +92,15 @@ class TestMembershipVerification:
             )
             db.add(duplicate); db.flush()
             room_id = db.scalar(select(PositionOccupancy.room_id).where(PositionOccupancy.selection_session_id == original.id))
-            db.add(PositionOccupancy(store_id=self.store_id, room_id=room_id, selection_session_id=duplicate.id, status="held", source="diy"))
+            db.add(PositionOccupancy(store_id=self.store_id, room_id=room_id, active_room_id=room_id, selection_session_id=duplicate.id, active_session_id=duplicate.id, status="held", source="diy"))
             db.commit()
 
         headers = {"Authorization": f"Bearer {create_staff_token(self.tech_id, 'technician')}"}
         response = self.client.get("/api/v1/technician/membership-verification/selections", headers=headers)
 
         assert response.status_code == 200, response.text
-        assert response.json()["items"] == []
-        assert response.json()["blocked_positions"] == [{"position_label": "会员沙发", "active_count": 2}]
+        assert response.json()["items"] == [{"selection_session_id": "member-selection-duplicate", "position_label": "会员沙发", "status": "held", "item_count": 0}]
+        assert response.json()["blocked_positions"] == []
 
     def test_technician_consumes_once_and_cross_store_is_rejected(self):
         self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())

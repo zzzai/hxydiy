@@ -25,7 +25,7 @@ issued/scanned_pending -> expired | revoked | rejected
 - `POST /auth/h5/trusted-device/enroll`：仅在会员没有活动可信设备时首次绑定。
 - `POST /auth/h5/member-code`：仅可信设备签发动态码。
 - `POST /technician/membership-verification/scan`：技师或店长预检并锁定动态码。
-- `GET /technician/membership-verification/selections`：只返回当前门店待服务/服务中的、服务位唯一的最小选单摘要；同一服务位存在多条活动记录时，该服务位不在 `items` 中，而以 `blocked_positions` 返回名称和活动记录数。
+- `GET /technician/membership-verification/selections`：只返回当前门店待服务/服务中的、仍持有活动服务位关联的最小选单摘要；同一服务位存在多条活动关联时，该服务位不在 `items` 中，而以 `blocked_positions` 返回名称和活动记录数。服务结束后为下一单保留的历史记录不参与候选。
 - `POST /technician/membership-verification/consume`：将已核验会员绑定本店选单并由服务端重算价格。
 - `GET /admin/v2/users/{id}/trusted-device`：店长查看最小设备状态。
 - `POST /admin/v2/users/{id}/trusted-device/revoke`：店长填写原因后撤销设备和未消费码并写审计。

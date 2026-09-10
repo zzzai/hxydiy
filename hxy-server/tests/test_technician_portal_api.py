@@ -511,6 +511,30 @@ class TestTechnicianPortalApi:
         assert items[0]["selection_status"] == "submitted"
         assert items[0]["items"][0]["name"] == "舒享精油 SPA"
 
+    def test_technician_tasks_ignore_post_service_history_after_next_selection_starts(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-board-history", password_hash=hash_password("tech-pass"), name="看板技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            room = Room(store_id=self.store_id, code="SOFA-HISTORY", name="大厅沙发 06", room_type="sofa", status="occupied")
+            old_session = SelectionSession(id="tech-board-old", access_token_hash="hash-old", store_id=self.store_id, status="submitted", items=[{"name": "旧服务", "quantity": 1}])
+            current_session = SelectionSession(id="tech-board-current", access_token_hash="hash-current", store_id=self.store_id, status="submitted", items=[{"name": "当前服务", "quantity": 1}])
+            db.add_all([staff, room, old_session, current_session]); db.flush()
+            db.add_all([
+                PositionOccupancy(store_id=self.store_id, room_id=room.id, selection_session_id=old_session.id, status="post_service_present"),
+                PositionOccupancy(store_id=self.store_id, room_id=room.id, active_room_id=room.id, selection_session_id=current_session.id, active_session_id=current_session.id, status="waiting_service"),
+            ])
+            db.commit()
+            staff_id = staff.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/tasks", headers=headers)
+
+        assert response.status_code == 200, response.text
+        item = next(item for item in response.json()["items"] if item["room_name"] == "大厅沙发 06")
+        assert item["occupancy_id"] is not None
+        assert item["occupancy_status"] == "waiting_service"
+        assert item["conflict"] is False
+        assert item["items"] == [{"name": "当前服务", "quantity": 1}]
+
     def test_technician_tasks_show_one_room_card_instead_of_its_beds(self):
         with self.SessionLocal() as db:
             staff = Staff(username="tech-empty-board", password_hash=hash_password("tech-pass"), name="空位看板技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
