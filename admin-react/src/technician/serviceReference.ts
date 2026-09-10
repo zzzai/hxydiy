@@ -213,6 +213,7 @@ export function buildServiceReferenceV5Payload(userId: number, selectionSessionI
 }
 
 export interface TechnicianServiceReferenceRecord {
+  service_lines?: string[];
   focus_areas: string[];
   avoid_areas: string[];
   force_preference: string | null;

@@ -3,7 +3,7 @@ import { Alert, Descriptions, Drawer, Empty, Spin, Tag, Typography } from 'antd'
 import { getTechnicianServiceReference } from '../api';
 import type { TechnicianServiceReferenceResponse } from './serviceReference';
 
-export default function TechnicianServiceReferenceDrawer({ occupancyId, open, onClose }: { occupancyId: number | null; open: boolean; onClose: () => void }) {
+export default function TechnicianServiceReferenceDrawer({ occupancyId, open, onClose, inline = false }: { occupancyId: number | null; open: boolean; onClose: () => void; inline?: boolean }) {
   const [data, setData] = useState<TechnicianServiceReferenceResponse>();
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -20,10 +20,10 @@ export default function TechnicianServiceReferenceDrawer({ occupancyId, open, on
   }, [occupancyId, open]);
 
   const record = data?.record;
-  return <Drawer title="上次服务参考" placement="bottom" height="min(72vh, 560px)" open={open} onClose={onClose}>
+  const content = <>
     {loading ? <div className="technician-reference-state"><Spin /><Typography.Text type="secondary">正在读取已确认记录…</Typography.Text></div> : failed ? <Alert type="error" showIcon message="服务参考加载失败" description="请关闭后重试，或直接向顾客现场确认。" /> : !record ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data?.message || '暂无顾客确认的历史服务参考，请现场询问'} /> : <div className="technician-reference-card">
       <Tag color="green">顾客已确认</Tag>
-      <Descriptions column={1} size="small">
+      {record.service_lines ? <>{record.service_lines.map((line,index)=><Typography.Paragraph key={index}>{line}</Typography.Paragraph>)}<Typography.Paragraph type="secondary">{record.recorded_date} · 本店技师记录</Typography.Paragraph></> : <Descriptions column={1} size="small">
         <Descriptions.Item label="重点">{record.focus_areas.join('、') || '未记录'}</Descriptions.Item>
         <Descriptions.Item label="避开">{record.avoid_areas.join('、') || '未记录'}</Descriptions.Item>
         <Descriptions.Item label="力度">{record.force_preference || '未记录'}</Descriptions.Item>
@@ -31,9 +31,10 @@ export default function TechnicianServiceReferenceDrawer({ occupancyId, open, on
         <Descriptions.Item label="反馈">{record.service_feedback || '未记录'}</Descriptions.Item>
         <Descriptions.Item label="下次">{record.next_visit_plan || '未记录'}</Descriptions.Item>
         <Descriptions.Item label="记录日期">{record.recorded_date || '未记录'}</Descriptions.Item>
-      </Descriptions>
+      </Descriptions>}
       {record.body_reconfirm_required === true && <Alert type="warning" showIcon message="身体情况：服务前再确认" description="请向顾客当面确认本次服务是否需要调整；此处不展示身体部位或自述内容。" />}
       <Alert type="info" showIcon message={record.prompt || '请本次服务前再次确认'} />
     </div>}
-  </Drawer>;
+  </>;
+  return inline ? <section className="technician-inline-reference"><Typography.Title level={5}>上次服务参考</Typography.Title>{content}</section> : <Drawer title="上次服务参考" placement="bottom" height="min(72vh, 560px)" open={open} onClose={onClose}>{content}</Drawer>;
 }

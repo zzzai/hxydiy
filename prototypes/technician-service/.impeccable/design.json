@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-10T10:20:00Z",
+  "title": "Design System: 荷小悦技师服务记录本地原型",
+  "extensions": {
+    "shadows": [],
+    "motion": [{ "name": "success-feedback", "value": "appear .2s ease-out", "purpose": "仅 prefers-reduced-motion: no-preference 时，从 #d8e9dc 过渡到 var(--wash)。" }],
+    "breakpoints": [{ "name": "mobile", "value": "640px" }]
+  },
+  "components": [
+    {
+      "name": "主要操作", "kind": "button", "refersTo": "button-primary",
+      "description": "保存和进入填写的主要操作。",
+      "html": "<button class=\"ds-primary\">保存记录</button>",
+      "css": ".ds-primary{font:16px/1.6 system-ui,'Microsoft YaHei',sans-serif;min-height:44px;background:var(--ink,#193e33);color:white;border:1px solid var(--ink,#193e33);border-radius:8px;padding:9px 14px;cursor:pointer}.ds-primary:hover{background:#285b48}.ds-primary:focus-visible{outline:2px solid #8a6b29;outline-offset:3px}"
+    },
+    {
+      "name": "次要操作", "kind": "button", "refersTo": "button-secondary",
+      "description": "白底边框按钮。",
+      "html": "<button class=\"ds-secondary\">查看历史</button>",
+      "css": ".ds-secondary{font:16px/1.6 system-ui,'Microsoft YaHei',sans-serif;min-height:44px;background:white;color:var(--ink,#193e33);border:1px solid var(--line,#dbe4de);border-radius:8px;padding:9px 14px;cursor:pointer}.ds-secondary:hover{background:var(--wash,#edf4ef)}.ds-secondary:focus-visible{outline:2px solid #8a6b29;outline-offset:3px}"
+    },
+    {
+      "name": "已选要求", "kind": "chip",
+      "description": "选中状态同时用 aria-pressed 表达。",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">希望低一点</button>",
+      "css": ".ds-chip{font:16px/1.6 system-ui,'Microsoft YaHei',sans-serif;min-height:44px;background:var(--ink,#193e33);color:white;border:1px solid var(--ink,#193e33);border-radius:8px;padding:9px 14px;cursor:pointer}.ds-chip:focus-visible{outline:2px solid #8a6b29;outline-offset:3px}"
+    },
+    {
+      "name": "补充文字", "kind": "input",
+      "description": "可选的多行输入。",
+      "html": "<label for=\"ds-note\">补充文字</label><textarea id=\"ds-note\" class=\"ds-input\" placeholder=\"选填\"></textarea>",
+      "css": ".ds-input{font:16px/1.6 system-ui,'Microsoft YaHei',sans-serif;border:1px solid #bacabf;border-radius:8px;background:white;color:var(--ink,#193e33);padding:10px;width:100%;min-height:100px;resize:vertical;caret-color:var(--ink,#193e33)}.ds-input::placeholder{color:#65766c}.ds-input:focus-visible{outline:2px solid #8a6b29;outline-offset:3px}"
+    },
+    {
+      "name": "页面导航", "kind": "nav",
+      "description": "文字导航以底边标记当前页。",
+      "html": "<nav class=\"ds-nav\" aria-label=\"原型页面\"><button aria-current=\"page\">服务前参考</button><button>记录本次</button><button>历史记录</button></nav>",
+      "css": ".ds-nav{display:flex;gap:24px;border-bottom:1px solid var(--line,#dbe4de)}.ds-nav button{font:16px/1.6 system-ui,'Microsoft YaHei',sans-serif;color:var(--ink,#193e33);min-height:44px;background:none;border:0;padding:12px 0;cursor:pointer}.ds-nav button[aria-current=page]{border-bottom:3px solid var(--ink,#193e33);font-weight:650}.ds-nav button:focus-visible{outline:2px solid #8a6b29;outline-offset:3px}"
+    }
+  ],
+  "narrative": {
+    "overview": "本记录仅约束本目录原型，以现有 index.html 为提取依据。沿用白色内容区域和深绿色操作，文字直接、信息紧凑；没有另行批准的视觉效果图或新品牌方案。",
+    "dos": ["Do 保持白色内容区域、深绿色主要操作及明确的键盘焦点。", "Do 从原型实际代码复核尺寸和状态，修改视觉实现时同步本记录。"],
+    "donts": ["Don't 将此原型视为生产组件库或全仓库视觉规范。", "Don't 将虚构参考、模拟保存或示意权限描述为已上线能力。"]
+  }
+}

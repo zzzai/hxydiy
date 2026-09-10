@@ -2,10 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Empty, Pagination, Segmented, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getTechnicianServiceHistory } from '../api';
+import ProjectRecordHistory from './ProjectRecordHistory';
+import TechnicianProfileSheet from './TechnicianProfileSheet';
 import { technicianHistoryEmptyState, technicianHistorySummaryLines, technicianProfileStatusLabel, type TechnicianHistoryProfileSummary } from './technicianMobile';
 
 type ProfileStatus = 'all' | 'confirmed' | 'pending';
 type HistoryItem = {
+  own_record_id?: number | null;
   occupancy_id: number;
   completed_at: string;
   duration_minutes: number | null;
@@ -21,6 +24,8 @@ type HistoryItem = {
 };
 
 export default function TechnicianServiceHistoryPage() {
+  const [recordId, setRecordId] = useState<number|null>(null);
+  const [editTask, setEditTask] = useState<any>();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -66,10 +71,13 @@ export default function TechnicianServiceHistoryPage() {
               <span>{item.customer?.display_name || '匿名顾客'} · {item.projects?.join('、') || '项目未记录'}</span>
               <Tag color={item.record_completed ? 'green' : 'default'}>{item.record_completed ? (item.recording_outcome === 'no_additional_notes' ? '已记录 · 本次无补充' : '已完成记录') : '待记录'}</Tag>
               {item.service_note && <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.service_note}</Typography.Paragraph>}
+              {item.own_record_id && <Button onClick={()=>setRecordId(item.own_record_id!)}>查看记录与更正</Button>}
               <Typography.Paragraph className="technician-history-summary">{technicianHistorySummaryLines(item.own_record_summary || item.profile_summary).join(' · ') || (item.record_completed ? '本次记录已保存' : '本次尚未记录')}</Typography.Paragraph>
             </div>
           </article>)}</div>
           {total > 20 && <Pagination current={page} pageSize={20} total={total} showSizeChanger={false} onChange={setPage} />}
         </>}
+    <ProjectRecordHistory recordId={recordId} onClose={()=>setRecordId(null)} onEdit={task=>{setRecordId(null);setEditTask(task);}} />
+    <TechnicianProfileSheet task={editTask} onClose={()=>setEditTask(undefined)} onSaved={()=>{setEditTask(undefined);void load();}} />
   </section>;
 }

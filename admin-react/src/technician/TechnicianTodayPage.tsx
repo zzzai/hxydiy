@@ -59,7 +59,6 @@ export default function TechnicianTodayPage() {
   const [acting, setActing] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>();
   const [profileOrder, setProfileOrder] = useState<any>();
-  const [referenceOccupancyId, setReferenceOccupancyId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const activeLoads = useRef(0);
   const latestLoadRequest = useRef(0);
@@ -171,8 +170,8 @@ export default function TechnicianTodayPage() {
         <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">顾客服务单</span><h2>#{selectedOrder.id}</h2></div><Tag color={statusColor(selectedOrder.status)}>{orderStatusLabel(selectedOrder.status)}</Tag></div>
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
         <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
+        {selectedActions.length > 0 && selectedOrder.customer?.id && <TechnicianServiceReferenceDrawer inline occupancyId={selectedOccupancyId} open onClose={()=>{}} />}
         <div className="technician-task-card-foot">
-          {selectedActions.length > 0 && selectedOrder.customer?.id && <Button block size="large" icon={<EyeOutlined />} onClick={() => { setReferenceOccupancyId(selectedOccupancyId); setSelectedOrder(undefined); }}>查看上次服务参考</Button>}
           {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>确认服务</Button>}
           {selectedActions.includes('finish') && <Button type="primary" block size="large" icon={<CheckCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'finish')}>服务结束</Button>}
           {selectedOccupancyId === null && <Typography.Text type="secondary">当前服务单接口未提供服务位占用凭证，仅支持查看。</Typography.Text>}
@@ -182,6 +181,5 @@ export default function TechnicianTodayPage() {
       </div>}
     </Drawer>
     <TechnicianProfileSheet task={profileOrder} onClose={() => setProfileOrder(undefined)} onSaved={() => { setProfileOrder(undefined); void load(); }} />
-    <TechnicianServiceReferenceDrawer occupancyId={referenceOccupancyId} open={referenceOccupancyId !== null} onClose={() => setReferenceOccupancyId(null)} />
   </div>;
 }

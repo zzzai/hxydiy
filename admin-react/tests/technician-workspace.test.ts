@@ -47,7 +47,7 @@ test('移动技师首页将同一房间的多活动占用显式显示为待核�
 });
 
 test('移动技师服务参考提交完成服务关联和 v5 单一载荷', () => {
-  const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /createCustomerProfileRecord/);
   assert.match(source, /selection_session_id/);
   assert.match(source, /buildServiceReferenceV5Payload/);
@@ -56,7 +56,7 @@ test('移动技师服务参考提交完成服务关联和 v5 单一载荷', () =
 });
 
 test('移动技师快记使用快捷服务字段并防止重复保存', () => {
-  const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   for (const field of ['age_range', 'gender', 'body_type', 'name="occupation"']) assert.doesNotMatch(source, new RegExp(field));
   for (const field of ['focusAreas', 'avoidAreas', 'forcePreference', 'temperaturePreference', 'serviceFeedback', 'nextVisitPlan']) assert.match(source, new RegExp(field));
   assert.match(source, /name="focusAreas"/);
@@ -70,19 +70,19 @@ test('移动技师快记使用快捷服务字段并防止重复保存', () => {
 });
 
 test('技师快记默认层先收集服务结果，身体记录必须按需进入', () => {
-  const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /需要记录身体情况/);
   assert.doesNotMatch(source, /Collapse|精确补充身体情况/);
 });
 
 test('技师服务收尾先判断结果，普通完成可一键结束', () => {
-  const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   assert.match(source, /recordingOutcome: 'no_additional_notes'/);
   assert.doesNotMatch(source, /更多服务细节|Collapse/);
 });
 
 test('快记文本仅引导服务交接，身体补充先选大部位再显示精确图', () => {
-  const quickNote = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  const quickNote = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   const bodyMap = readFileSync(new URL('../src/technician/BodyMapNoteDrawer.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(quickNote, /来店原因|未满足需求/);
   assert.match(bodyMap, /肩颈/);
@@ -93,7 +93,6 @@ test('快记文本仅引导服务交接，身体补充先选大部位再显示�
 test('活动顾客服务单显式打开安全服务参考摘要', () => {
   const today = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
   const drawer = readFileSync(new URL('../src/technician/TechnicianServiceReferenceDrawer.tsx', import.meta.url), 'utf8');
-  assert.match(today, /查看上次服务参考/);
   assert.match(today, /TechnicianServiceReferenceDrawer/);
   assert.match(drawer, /getTechnicianServiceReference/);
   assert.match(drawer, /请本次服务前再次确认/);

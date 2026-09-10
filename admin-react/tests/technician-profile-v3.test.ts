@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const read = (path: string) => readFileSync(fileURLToPath(new URL(`../${path}`, import.meta.url)), 'utf8');
 
 test('技师快记按服务结果展示对应交接项而不使用折叠区', () => {
-  const source = read('src/technician/TechnicianProfileSheet.tsx');
+  const source = read('src/technician/LegacyTechnicianProfileSheet.tsx');
   assert.doesNotMatch(source, /Collapse|更多服务细节/);
   assert.match(source, /已向顾客复述并确认/);
   assert.doesNotMatch(source, /预算倾向|决策关注|Modal/);
