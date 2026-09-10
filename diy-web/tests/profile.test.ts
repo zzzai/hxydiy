@@ -42,6 +42,8 @@ test('会员卡提供动态会员码且明确30秒刷新和可信设备边界', 
   assert.match(source, /30 秒/);
   assert.match(source, /issueMemberCode/);
   assert.match(source, /enrollTrustedDevice/);
+  assert.match(source, /微信内置浏览器和手机浏览器会被视为两个独立浏览器/);
+  assert.match(source, /请在原浏览器打开；若原浏览器不可用，请联系门店店长办理换绑/);
 });
 
 test('到店记录可按待评价和服务状态筛选', () => {

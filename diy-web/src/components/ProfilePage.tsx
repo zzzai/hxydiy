@@ -246,8 +246,10 @@ function MemberCodeDialog({ token, onClose }: { token: string; onClose: () => vo
   const [code, setCode] = useState('');
   const [seconds, setSeconds] = useState(30);
   const [error, setError] = useState('');
+  const [needsRebind, setNeedsRebind] = useState(false);
   const load = useCallback(async () => {
     setError('');
+    setNeedsRebind(false);
     try {
       let result;
       try { result = await issueMemberCode(token); }
@@ -256,11 +258,17 @@ function MemberCodeDialog({ token, onClose }: { token: string; onClose: () => vo
         else throw reason;
       }
       setCode(result.code_token); setSeconds(Math.max(1, Math.ceil((new Date(result.expires_at).getTime() - Date.now()) / 1000)));
-    } catch (reason) { setCode(''); setError(reason instanceof Error ? reason.message : '会员码生成失败'); }
+    } catch (reason) {
+      setCode('');
+      if (reason instanceof ApiError && reason.code === 'DEVICE_ALREADY_BOUND') {
+        setNeedsRebind(true);
+        setError('当前浏览器尚未绑定会员核验');
+      } else setError(reason instanceof Error ? reason.message : '会员码生成失败');
+    }
   }, [token]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (!code) return; const timer = window.setInterval(() => setSeconds((value) => { if (value <= 1) { window.clearInterval(timer); void load(); return 0; } return value - 1; }), 1000); return () => window.clearInterval(timer); }, [code, load]);
-  return <div className="profile-detail-backdrop" role="presentation" onClick={onClose}><section className="profile-member-code-dialog" role="dialog" aria-modal="true" aria-labelledby="member-code-title" onClick={(event) => event.stopPropagation()}><header><strong id="member-code-title">会员本人核验</strong><button type="button" aria-label="关闭会员码" onClick={onClose}><X size={20} /></button></header>{code ? <><QRCodeSVG value={code} size={220} level="M" /><strong>请向技师或店长出示</strong><p>{seconds} 秒后自动刷新</p><small>动态码每 30 秒更新，仅限本机当次使用，请勿截图或转发。</small></> : <><p>{error || '正在生成会员码…'}</p>{error && <button type="button" onClick={() => void load()}>重新生成</button>}</>}</section></div>;
+  return <div className="profile-detail-backdrop" role="presentation" onClick={onClose}><section className="profile-member-code-dialog" role="dialog" aria-modal="true" aria-labelledby="member-code-title" onClick={(event) => event.stopPropagation()}><header><strong id="member-code-title">会员本人核验</strong><button type="button" aria-label="关闭会员码" onClick={onClose}><X size={20} /></button></header>{code ? <><QRCodeSVG value={code} size={220} level="M" /><strong>请向技师或店长出示</strong><p>{seconds} 秒后自动刷新</p><small>动态码每 30 秒更新，仅限本机当次使用，请勿截图或转发。</small></> : <><p>{error || '正在生成会员码…'}</p>{needsRebind ? <small>微信内置浏览器和手机浏览器会被视为两个独立浏览器。请在原浏览器打开；若原浏览器不可用，请联系门店店长办理换绑。</small> : error && <button type="button" onClick={() => void load()}>重新生成</button>}</>}</section></div>;
 }
 
 function SelectionList({ sessions, onContinue, onOpen, onFeedback }: { sessions: Awaited<ReturnType<typeof getMySelectionSessions>>; onContinue: () => void; onOpen: (record: SelectionSession) => void; onFeedback: (record: SelectionSession) => void }) {
