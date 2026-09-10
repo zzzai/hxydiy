@@ -82,6 +82,8 @@ class ProjectSharePageTests(unittest.TestCase):
         self.assertIn("project=share-published", response.text)
         self.assertNotIn("seat=", response.text)
         self.assertNotIn("token=", response.text)
+        self.assertIn('<meta http-equiv="refresh"', response.text)
+        self.assertNotIn("<script>", response.text)
 
     def test_share_page_hides_draft_projects_and_cross_store_requests(self):
         self.assertEqual(self.client.get("/share/project/share-draft", params={"store": self.primary_store_id}).status_code, 404)

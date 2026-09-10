@@ -1,7 +1,6 @@
 """Public, crawler-readable project share pages for the customer H5."""
 
 from html import escape
-from json import dumps
 from urllib.parse import quote, urlencode, urljoin, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -88,7 +87,6 @@ def project_share_page(
     escaped_image = escape(image_url, quote=True)
     escaped_share_url = escape(share_url, quote=True)
     escaped_detail_url = escape(detail_url, quote=True)
-    redirect_json = dumps(detail_url).replace("<", "\\u003c")
     body = f"""<!doctype html>
 <html lang=\"zh-CN\">
   <head>
@@ -106,11 +104,11 @@ def project_share_page(
     <meta name=\"twitter:title\" content=\"{escaped_title}\" />
     <meta name=\"twitter:description\" content=\"{escaped_description}\" />
     <meta name=\"twitter:image\" content=\"{escaped_image}\" />
+    <meta http-equiv=\"refresh\" content=\"0;url={escaped_detail_url}\" />
     <title>{escaped_title}</title>
   </head>
   <body>
     <p>正在打开项目详情… <a href=\"{escaped_detail_url}\">点击继续</a></p>
-    <script>window.location.replace({redirect_json});</script>
   </body>
 </html>"""
     return HTMLResponse(body, headers={"Cache-Control": "no-store"})
