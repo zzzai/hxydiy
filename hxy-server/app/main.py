@@ -29,6 +29,26 @@ app = FastAPI(
 
 
 @app.middleware("http")
+async def add_browser_security_headers(request, call_next):
+    """Apply one conservative browser-security baseline to every public surface."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; "
+        "script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; "
+        "font-src 'self' data:; connect-src 'self'; form-action 'self'",
+    )
+    if request.url.path.startswith("/api/v1/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    if settings.environment == "production":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+
+@app.middleware("http")
 async def bind_request_scope(request, call_next):
     scope_token = bind_staff_request_scope(request.method, request.url.path)
     try:
