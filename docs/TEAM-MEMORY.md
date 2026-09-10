@@ -41,6 +41,8 @@
 
 ## 最近决策
 
+2026-09-10：匿名顾客再次通过同一浏览器进入服务位时，入口会话可返回 `returning_browser=true`，仅用于“本机曾有到店选购记录”的非打扰提示。此信号不等同于同一自然人、手机号或会员身份，不改变价格、不会自动登录/恢复旧单、不会跨设备同步；首次、失效和历史误绑账号后轮换的凭证一律为 `false`。详见 `contracts/customer-browser-identity.md`。
+
 2026-09-08：服务结束后的技师记录确定为“服务交接卡”：只记录下一次服务可直接使用的明确服务方式、实际调整、顾客当次反馈或后续要求；允许“本次无新增”完成，不按标签数量、文字长度或顾客评分考核。v5 可增加 `communication_preference`、最多 200 字的 `technician_observed.service_note` 和 `recording_outcome=no_additional_notes`；补充文字只在记录技师本人历史可见，不进入管理端、当前画像、营销、定价、算法或跨技师摘要。家庭、职业、收入、年龄和体型不作为首期快捷采集字段；同一设备不证明匿名顾客身份连续。
 
 2026-09-07：人体标注服务参考的下一写入版本确定为 `schema_version=5`、`taxonomy_version=service_reference_v4`。每条使用 `region + side + context + current_state + session_handling + reconfirm_next_visit` 稳定编码，最多三条；身体情况在任何下次服务前仍须重新确认，不进入 `customer_profile_current`、运营标签、定价、营销或算法特征。v1–v4 只读兼容。该版本尚未合并或发布。

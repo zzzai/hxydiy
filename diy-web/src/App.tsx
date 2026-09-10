@@ -52,7 +52,7 @@ import RecordLoginDialog from './components/RecordLoginDialog';
 import SavingHintDialog from './components/SavingHintDialog';
 import SelectionSummarySheet from './components/SelectionSummarySheet';
 import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL_MS, readCustomerAuth, shouldOfferRecordBinding, writeCustomerAuth, type CustomerAuth } from './customerAuth';
-import { customerPageSubtitle, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
+import { anonymousBrowserEntryHint, customerPageSubtitle, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
 import { customerServiceProgress, shouldPollCustomerServiceStatus } from './customerServiceStatus';
 import { shareProjectLink } from './projectShare';
 import ProjectDetailPage from './components/ProjectDetailPage';
@@ -770,7 +770,16 @@ export default function App() {
       }
       hydrated.current = true;
       setBoot(canEditSelection(entry.session.status, entry.occupancy.status) ? 'ready' : 'submitted');
-      if (recovered) flash(`已恢复${entry.position.customer_label}的本次选单`);
+      if (recovered || entry.resumed) {
+        flash(`已恢复${entry.position.customer_label}的本次选单`);
+      } else {
+        const browserHint = anonymousBrowserEntryHint({
+          returningBrowser: entry.returning_browser,
+          isAnonymous: !customerAuth,
+          resumed: false,
+        });
+        if (browserHint) flash(browserHint);
+      }
     } catch (error) {
       if (startNewAfterService) {
         setBoot('ready');

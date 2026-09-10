@@ -214,7 +214,7 @@ def _active_occupancy_for_room(db: Session, room_id: int) -> PositionOccupancy |
     return db.scalar(select(PositionOccupancy).where(PositionOccupancy.active_room_id == room_id))
 
 
-def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[SelectionSession, PositionOccupancy, Room, str, bool, str]:
+def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[SelectionSession, PositionOccupancy, Room, str, bool, str, bool]:
     if body.entry_token:
         _verify_position_qr_token(db, body.entry_token, body.store_id, body.position_code, body.source)
     elif settings.environment == "production" and body.source in {"personal_qr", "room_qr"}:
@@ -229,7 +229,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
     ).with_for_update())
     if not room or room.operational_status != "active" or not room.is_service_position or room.is_space_container:
         raise HTTPException(status_code=404, detail="服务位不存在或暂不可用")
-    anonymous_customer_id, browser_token, _ = _browser_customer(db, request)
+    anonymous_customer_id, browser_token, returning_browser = _browser_customer(db, request)
     browser_occupancy = db.scalar(
         select(PositionOccupancy)
         .join(SelectionSession, SelectionSession.id == PositionOccupancy.active_session_id)
@@ -283,7 +283,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
             existing_session.access_token_hash = _hash_token(token)
             db.commit()
             db.refresh(existing_session)
-            return existing_session, existing, room, token, True, browser_token
+            return existing_session, existing, room, token, True, browser_token, returning_browser
         raise HTTPException(status_code=409, detail={
             "code": "POSITION_OCCUPIED",
             "message": "该服务位已有顾客，请核对二维码或联系前台",
@@ -343,7 +343,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
     db.commit()
     db.refresh(session)
     db.refresh(occupancy)
-    return session, occupancy, room, token, False, browser_token
+    return session, occupancy, room, token, False, browser_token, returning_browser
 
 
 @router.post("/entry-sessions")
@@ -358,7 +358,7 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
             "code": "ENTRY_SOURCE_FORBIDDEN",
             "message": "该入口来源仅由服务端在验证二维码后记录",
         })
-    session, occupancy, room, token, resumed, browser_token = _create_entry(db, body, request)
+    session, occupancy, room, token, resumed, browser_token, returning_browser = _create_entry(db, body, request)
     response.set_cookie(
         ANONYMOUS_COOKIE,
         browser_token,
@@ -374,6 +374,7 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
         "position": position_view(room, occupancy, current=True),
         "access_token": token,
         "resumed": resumed,
+        "returning_browser": returning_browser,
     }
 
 
@@ -843,7 +844,7 @@ def create_kiosk_session(
     room = db.get(Room, body.room_id)
     if not room or room.store_id != store_id:
         raise HTTPException(status_code=404, detail="服务位不存在")
-    session, occupancy, room, token, _, _ = _create_entry(db, EntrySessionIn(
+    session, occupancy, room, token, _, _, _ = _create_entry(db, EntrySessionIn(
         store_id=store_id,
         position_code=room.code,
         source="kiosk",
