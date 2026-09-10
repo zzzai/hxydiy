@@ -12,6 +12,8 @@
 
 上传仅接受 JPG/JPEG、PNG、WebP 或 GIF；声明的 MIME 类型、文件扩展名与经服务端解析的实际图像格式必须对应。单文件上限为 5MB，默认最大像素数为 20,000,000（可由部署环境配置）。上传审计记录字节数与解析出的宽高。
 
+上传用途仅允许 `general`、`project_cover`、`project_detail`、`addon`、`product`。对象键按 `stores/{store_id}/media/{purpose}/{uuid}.{extension}` 隔离；未知用途返回 `422`，调用方不可借用途字段拼接任意对象路径。
+
 ## 读取与权限
 
 `GET /api/v1/admin/media/{media_id}/content` 继续校验当前员工的门店范围和软删除状态。对象存储支持签名 URL 时，服务端在该请求中生成并以跳转返回短期 URL；本地存储继续代理内容。该实现不扩大媒体读取权限。

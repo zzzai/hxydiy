@@ -96,6 +96,17 @@ class AdminMediaApiTests(unittest.TestCase):
             audit = db.scalar(select(AuditLog).where(AuditLog.entity_type == "media", AuditLog.action == "media_upload"))
             self.assertIsNotNone(audit)
             self.assertEqual(audit.store_id, body["store_id"])
+            media = db.get(__import__("app.models", fromlist=["MediaAsset"]).MediaAsset, body["id"])
+            self.assertTrue(media.object_key.startswith(f"stores/{body['store_id']}/media/project_cover/"))
+
+    def test_upload_rejects_unknown_media_purpose(self):
+        response = self.client.post(
+            "/api/v1/admin/media",
+            headers=self._headers(self.manager_id),
+            files={"file": ("cover.png", _image_bytes(), "image/png")},
+            data={"purpose": "../catalog"},
+        )
+        self.assertEqual(response.status_code, 422)
 
     def test_upload_rejects_non_image_and_oversized_files(self):
         bad_type = self.client.post(

@@ -28,6 +28,7 @@ def _is_headquarters_admin(staff: Staff) -> bool:
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
 ALLOWED_FILENAME_EXTENSIONS = {"image/jpeg": {".jpg", ".jpeg"}, "image/png": {".png"}, "image/webp": {".webp"}, "image/gif": {".gif"}}
+MEDIA_PURPOSES = {"general", "project_cover", "project_detail", "addon", "product"}
 
 
 def _validate_image_content(content: bytes, content_type: str) -> tuple[int, int]:
@@ -147,6 +148,8 @@ async def upload_media(
         raise HTTPException(status_code=503, detail="生产媒体存储必须配置七牛云")
     if not db.get(Store, target_store_id):
         raise HTTPException(status_code=404, detail="门店不存在")
+    if purpose not in MEDIA_PURPOSES:
+        raise HTTPException(status_code=422, detail="不支持的媒体用途")
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=415, detail="仅支持 JPG、PNG、WebP 或 GIF 图片")
     original_name = Path(file.filename or "upload").name
@@ -158,7 +161,7 @@ async def upload_media(
     if len(content) > settings.media_max_size_bytes:
         raise HTTPException(status_code=413, detail="图片不能超过 5MB")
     width, height = _validate_image_content(content, file.content_type)
-    object_key = f"stores/{target_store_id}/media/{uuid4().hex}{EXTENSIONS[file.content_type]}"
+    object_key = f"stores/{target_store_id}/media/{purpose}/{uuid4().hex}{EXTENSIONS[file.content_type]}"
     storage = _storage_or_http()
     try:
         storage.put(object_key, content, file.content_type)
