@@ -12,11 +12,11 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.core.customer_auth import current_customer_id
 from app.db.session import get_db
-from app.models import CouponTemplate, CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
+from app.models import AuditLog, CouponTemplate, CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
 from app.models.service import Visit
 from app.schemas.auth import (
     BindPhoneRequest, H5LoginRequest, H5SendCodeRequest, H5SendCodeResponse,
-    LoginRequest, LoginResponse, UserOut,
+    LoginRequest, LoginResponse, TrustedDeviceRebindRequest, UserOut,
 )
 from app.services.aliyun_pnvs import AliyunPnvsError, send_sms_code as send_pnvs_code, verify_sms_code
 from app.services.aliyun_sms import AliyunSmsError, send_sms_code as send_standard_sms_code
@@ -54,6 +54,43 @@ def enroll_trusted_device(response: Response, authorization: str | None = Header
     token = secrets.token_urlsafe(32)
     device = CustomerTrustedDevice(user_id=user_id, token_hash=_hash_code(token), last_seen_at=datetime.now(timezone.utc))
     db.add(device); db.commit()
+    response.set_cookie(TRUSTED_DEVICE_COOKIE, token, max_age=31536000, httponly=True, secure=settings.environment == "production", samesite="lax", path="/")
+    return {"trusted": True}
+
+
+@router.post("/h5/trusted-device/rebind")
+def rebind_trusted_device(body: TrustedDeviceRebindRequest, response: Response, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
+    """Allow the currently logged-in phone holder to replace a lost browser binding."""
+    user_id = current_customer_id(authorization, db)
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+    if not user or not user.is_member or not user.phone:
+        raise HTTPException(status_code=403, detail={"code": "MEMBERSHIP_REQUIRED", "message": "仅有效会员可切换会员核验入口"})
+    now = datetime.now(timezone.utc)
+    record = _latest_code(db, user.phone)
+    if not record or record.used_at is not None:
+        raise HTTPException(status_code=400, detail="请先获取本人短信验证码")
+    expires_at = record.expires_at.replace(tzinfo=timezone.utc) if record.expires_at.tzinfo is None else record.expires_at
+    if now >= expires_at or record.attempts >= settings.h5_sms_max_attempts:
+        raise HTTPException(status_code=400, detail="验证码已失效，请重新获取")
+    if record.code_hash.startswith("aliyun:"):
+        try:
+            verified = verify_sms_code(user.phone, body.code)
+        except AliyunPnvsError as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+    else:
+        verified = secrets.compare_digest(record.code_hash, _hash_code(body.code))
+    if not verified:
+        record.attempts += 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="验证码错误")
+    record.used_at = now
+    for device in db.scalars(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == user_id, CustomerTrustedDevice.status == "active").with_for_update()):
+        device.status, device.revoked_at = "revoked", now
+    db.query(MembershipCode).filter(MembershipCode.user_id == user_id, MembershipCode.status.in_(["issued", "scanned_pending"])).update({"status": "revoked"}, synchronize_session=False)
+    token = secrets.token_urlsafe(32)
+    db.add(CustomerTrustedDevice(user_id=user_id, token_hash=_hash_code(token), last_seen_at=now))
+    db.add(AuditLog(actor_type="customer", actor_id=str(user_id), store_id=user.membership_store_id, action="customer_trusted_device_rebound", entity_type="user", entity_id=str(user_id), detail={"method": "sms"}))
+    db.commit()
     response.set_cookie(TRUSTED_DEVICE_COOKIE, token, max_age=31536000, httponly=True, secure=settings.environment == "production", samesite="lax", path="/")
     return {"trusted": True}
 

@@ -42,6 +42,8 @@ test('会员卡提供动态会员码且明确30秒刷新和可信设备边界', 
   assert.match(source, /30 秒/);
   assert.match(source, /issueMemberCode/);
   assert.match(source, /enrollTrustedDevice/);
+  assert.match(source, /rebindTrustedDevice/);
+  assert.match(source, /验证并在此浏览器启用/);
 });
 
 test('到店记录可按待评价和服务状态筛选', () => {

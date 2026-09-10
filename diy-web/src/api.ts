@@ -367,6 +367,10 @@ export function enrollTrustedDevice(token: string) {
   return request<{ trusted: boolean }>('/auth/h5/trusted-device/enroll', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
 }
 
+export function rebindTrustedDevice(token: string, code: string) {
+  return request<{ trusted: boolean }>('/auth/h5/trusted-device/rebind', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ code }) });
+}
+
 export function issueMemberCode(token: string) {
   return request<{ code_token: string; expires_at: string }>('/auth/h5/member-code', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
 }
