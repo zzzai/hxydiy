@@ -1028,6 +1028,35 @@ class AdminV2ContractTests(unittest.TestCase):
             db.query(SelectionSession).filter(SelectionSession.id.like("metric-duration-%")).delete(synchronize_session=False)
             db.commit()
 
+    def test_operations_summary_excludes_unreleased_occupancy_from_turnover(self):
+        self.addCleanup(self._cleanup_operations_unreleased_fixture)
+        period_start = datetime(2026, 8, 20, tzinfo=timezone.utc)
+        with self.SessionLocal() as db:
+            db.add(SelectionSession(
+                id="metric-unreleased-session", access_token_hash="metric-unreleased-token", store_id=1,
+                status="confirmed", items=[], created_at=period_start,
+            ))
+            db.add(PositionOccupancy(
+                store_id=1, room_id=self.room_id, selection_session_id="metric-unreleased-session",
+                status="in_service", created_at=period_start, actual_start_at=period_start,
+            ))
+            db.commit()
+
+        response = self.client.get(
+            "/api/v1/admin/operations-summary",
+            params={"start_date": "2026-08-20", "end_date": "2026-08-20"},
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["service_positions"]["operations"]["turnover_count"], 0)
+
+    def _cleanup_operations_unreleased_fixture(self):
+        with self.SessionLocal() as db:
+            db.query(PositionOccupancy).filter(PositionOccupancy.selection_session_id == "metric-unreleased-session").delete(synchronize_session=False)
+            db.query(SelectionSession).filter(SelectionSession.id == "metric-unreleased-session").delete(synchronize_session=False)
+            db.commit()
+
     def test_operations_summary_reports_project_sales_and_technician_volume(self):
         self.addCleanup(self._cleanup_operations_reporting_fixtures)
         period_start = datetime(2026, 8, 20, tzinfo=timezone.utc)

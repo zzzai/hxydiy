@@ -424,7 +424,7 @@ def operations_summary(
     ]
     turnover_count = sum(
         1 for occupancy in occupancies
-        if start_at <= _summary_utc(occupancy.released_at) < end_at
+        if (released_at := _summary_utc(occupancy.released_at)) and start_at <= released_at < end_at
     )
     occupancy_ids = {str(occupancy.id) for occupancy in occupancies}
     exception_audit_stmt = select(AuditLog).where(
