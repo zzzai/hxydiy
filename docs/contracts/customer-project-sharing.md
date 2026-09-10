@@ -14,7 +14,7 @@
 
 - 仅返回该门店下 `publication_status=published` 的项目；草稿、下架项目和跨门店请求返回 `404`。
 - 返回 HTML，而非 JSON，包含 `og:title`、`og:description`、`og:image`、`og:url` 和 Twitter 同等元数据，供微信及其他分享平台抓取缩略图。
-- `og:image` 使用项目已发布主图的公开 HTTPS URL；缺图时使用品牌兜底图。
+- `og:image` 使用项目已发布主图的公开 HTTPS URL；对顾客 H5 已指定专属插画的项目，必须与项目详情页主图使用同一公开插画 URL，不能回退到数据库中的历史占位照片；其他项目缺图时使用品牌兜底图。
 - 页面以 `Cache-Control: no-store` 返回，防止顾客浏览器把已更新的标题、简介或主图长期缓存。
 - 顾客打开后只跳转至 `/?store={store_id}&source=project_share&project={project_code}`；该地址仍没有服务位或身份凭证。
 
