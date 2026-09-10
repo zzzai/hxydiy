@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions } from 'antd';
+import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { getUsers, getTags, addUserTag, setUserMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice } from '../api';
+import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 
@@ -18,6 +18,9 @@ export default function UsersPage() {
   const [profileCustomerId, setProfileCustomerId] = useState<number>();
   const [deviceCustomer, setDeviceCustomer] = useState<any>();
   const [deviceState, setDeviceState] = useState<any>();
+  const [membershipCustomer, setMembershipCustomer] = useState<any>();
+  const [membershipMode, setMembershipMode] = useState<'enroll' | 'renew' | 'cancel' | 'recover'>('enroll');
+  const [membershipForm] = Form.useForm();
   const canCreateProfile = getStaff()?.role === 'manager' || getStaff()?.role === 'admin';
   const canManageDevice = getStaff()?.role === 'manager';
 
@@ -41,11 +44,26 @@ export default function UsersPage() {
     message.success('已打标'); load();
   };
 
-  const doToggleMembership = async (user: any) => {
-    const next = !user.is_member;
+  const openMembership = (user: any, mode: 'enroll' | 'renew' | 'cancel' | 'recover') => {
+    setMembershipCustomer(user);
+    setMembershipMode(mode);
+    membershipForm.setFieldsValue({
+      payment_channel: 'cash',
+      rights_confirmed: false,
+      refund_disposition: 'refunded',
+      cycle_id: user.membership_cycle_id,
+    });
+  };
+  const submitMembership = async () => {
+    if (!membershipCustomer) return;
     try {
-      await setUserMembership(user.id, next);
-      message.success(next ? '已开通会员（线下收款后操作）' : '已取消会员');
+      const values = await membershipForm.validateFields();
+      if (membershipMode === 'enroll') await enrollAnnualMembership(membershipCustomer.id, values);
+      if (membershipMode === 'renew') await renewAnnualMembership(membershipCustomer.id, values);
+      if (membershipMode === 'cancel') await cancelAnnualMembership(membershipCustomer.id, values);
+      if (membershipMode === 'recover') await recoverAnnualMembership(membershipCustomer.id, values);
+      message.success(membershipMode === 'cancel' ? '会员周期已取消，未用赠送权益已作废' : '会员周期操作已完成');
+      setMembershipCustomer(undefined);
       load();
     } catch (e: any) {
       message.error(e?.response?.data?.detail || '操作失败');
@@ -77,20 +95,38 @@ export default function UsersPage() {
                 <Button size="small" onClick={() => doAddTag(r.id)}>打标</Button>
                 {canCreateProfile && <Button size="small" style={{ marginLeft: 6 }} onClick={() => setProfileCustomerId(r.id)}>画像记录</Button>}
                 {r.is_member && canManageDevice && <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openDevice(r)}>可信设备</Button>}
-                <Popconfirm
-                  title={r.is_member ? '确认取消该用户会员身份？' : '确认开通会员？（请先确认已线下收款）'}
-                  onConfirm={() => doToggleMembership(r)}
-                >
-                  <Button size="small" type={r.is_member ? 'default' : 'primary'} style={{ marginLeft: 6 }}>
-                    {r.is_member ? '取消会员' : '设为会员'}
-                  </Button>
-                </Popconfirm>
+                {r.is_member ? <>
+                  <Button size="small" style={{ marginLeft: 6 }} onClick={() => openMembership(r, 'renew')}>续费</Button>
+                  <Popconfirm title="确认取消/退款？未使用年度赠送权益会作废，已核销权益不会回退。" onConfirm={() => openMembership(r, 'cancel')}>
+                    <Button size="small" danger style={{ marginLeft: 6 }}>取消/退款</Button>
+                  </Popconfirm>
+                </> : <>
+                  <Button size="small" type="primary" style={{ marginLeft: 6 }} onClick={() => openMembership(r, 'enroll')}>办理会员</Button>
+                  {r.membership_cycle_id && <Button size="small" style={{ marginLeft: 6 }} onClick={() => openMembership(r, 'recover')}>异常恢复</Button>}
+                </>}
               </>
             ),
           },
         ]}
       />
       <ProfileRecordForm customerId={profileCustomerId} open={profileCustomerId !== undefined} onClose={() => setProfileCustomerId(undefined)} onSaved={() => load(page)} />
+      <Modal title={{ enroll: '办理年度会员', renew: '续费年度会员', cancel: '取消/退款年度会员', recover: '异常恢复会员周期' }[membershipMode]} open={Boolean(membershipCustomer)} onCancel={() => setMembershipCustomer(undefined)} onOk={() => void submitMembership()} okText="确认提交" destroyOnClose>
+        <p>{membershipCustomer?.nickname || membershipCustomer?.phone_masked || '顾客'}{membershipCustomer?.member_expire_at ? `，当前到期：${membershipCustomer.member_expire_at.slice(0, 10)}` : ''}</p>
+        <Form form={membershipForm} layout="vertical">
+          {(membershipMode === 'enroll' || membershipMode === 'renew') && <>
+            <Form.Item name="payment_channel" label="支付渠道" rules={[{ required: true, message: '请选择支付渠道' }]}><Select options={[{ value: 'cash', label: '现金' }, { value: 'wechat', label: '微信支付' }, { value: 'alipay', label: '支付宝' }, { value: 'manual_receipt', label: '人工收据' }]} /></Form.Item>
+            <Form.Item name="payment_reference" label="流水尾号或人工收据号" rules={[{ required: true, min: 2, message: '请填写至少 2 位凭据' }]}><Input maxLength={64} /></Form.Item>
+            <Form.Item name="rights_confirmed" valuePropName="checked" rules={[{ validator: (_rule, value) => value ? Promise.resolve() : Promise.reject(new Error('请确认已说明会员权益')) }]}><Checkbox>已向顾客说明并确认会员权益</Checkbox></Form.Item>
+          </>}
+          {(membershipMode === 'cancel' || membershipMode === 'recover') && <>
+            <Form.Item name="cycle_id" hidden rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name="reason" label="原因" rules={[{ required: true, min: 2, message: '请填写原因' }]}><Input.TextArea maxLength={200} /></Form.Item>
+          </>}
+          {membershipMode === 'cancel' && <Form.Item name="refund_disposition" label="退款处置" rules={[{ required: true, message: '请选择退款处置' }]}><Select options={[{ value: 'refunded', label: '已退款' }, { value: 'cancelled_before_payment', label: '收款前取消' }, { value: 'other', label: '其他已登记处置' }]} /></Form.Item>}
+          {membershipMode === 'recover' && <Form.Item name="idempotency_key" label="异常恢复编号" rules={[{ required: true, min: 1, message: '请填写可追溯编号' }]}><Input maxLength={64} placeholder="例如：recover-20260910-001" /></Form.Item>}
+        </Form>
+        <p>日常会员核验请使用技师端扫码；电脑后台不能通过手机号直接给予会员价。</p>
+      </Modal>
       <Modal title="会员可信设备" open={Boolean(deviceCustomer)} onCancel={() => { setDeviceCustomer(undefined); setDeviceState(undefined); }} footer={deviceState?.bound ? <Popconfirm title="确认已核实顾客换机申请？撤销后旧设备和旧会员码立即失效。" onConfirm={() => void revokeDevice()}><Button danger>撤销旧设备</Button></Popconfirm> : null}><Descriptions column={1} items={[{ label: '会员', children: deviceCustomer?.nickname || deviceCustomer?.phone_masked || '-' }, { label: '设备状态', children: deviceState?.bound ? <Tag color="green">已绑定</Tag> : <Tag>未绑定</Tag> }, { label: '绑定时间', children: deviceState?.created_at?.slice(0, 19) || '-' }, { label: '最近使用', children: deviceState?.last_seen_at?.slice(0, 19) || '-' }]} /><p>管理后台只处理受控换绑与审计，日常会员核验请使用技师端扫码。</p></Modal>
     </div>
   );

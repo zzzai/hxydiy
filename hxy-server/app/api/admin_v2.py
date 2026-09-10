@@ -3083,6 +3083,8 @@ def list_users(
             "phone_tail": u.phone[-4:] if u.phone else "",
             "phone_masked": _masked_phone(u.phone),
             "is_member": u.is_member, "member_type": u.member_type,
+            "membership_cycle_id": u.annual_membership_cycle_id,
+            "member_expire_at": u.member_expire_at.isoformat() if u.member_expire_at else None,
             "balance_cents": u.balance_cents,
             "tags": tag_info,
             "created_at": u.created_at.isoformat() if u.created_at else None,

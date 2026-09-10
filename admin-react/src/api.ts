@@ -312,18 +312,19 @@ export const getCustomerTrustedDevice = (userId: number) => client.get(`/admin/v
 export const revokeCustomerTrustedDevice = (userId: number, reason: string) => client.post(`/admin/v2/users/${userId}/trusted-device/revoke`, { reason });
 export const addUserTag = (userId: number, tagId: number) =>
   client.post(`/admin/v2/users/${userId}/tags`, { tag_id: tagId });
-export const setUserMembership = (userId: number, isMember: boolean) => {
-  if (!isMember) return client.patch(`/admin/v2/users/${userId}/membership`, { is_member: false });
-  const started = new Date();
-  const expire = new Date(started);
-  expire.setFullYear(expire.getFullYear() + 1);
-  return client.patch(`/admin/v2/users/${userId}/membership`, {
-    member_type: 'annual',
-    cycle_id: `manual-${userId}-${started.getTime()}`,
-    member_started_at: started.toISOString(),
-    member_expire_at: expire.toISOString(),
-  });
+export type MembershipPaymentPayload = {
+  payment_channel: string;
+  payment_reference: string;
+  rights_confirmed: boolean;
 };
+export const enrollAnnualMembership = (userId: number, data: MembershipPaymentPayload) =>
+  client.post(`/admin/v2/users/${userId}/membership/enroll`, data);
+export const renewAnnualMembership = (userId: number, data: MembershipPaymentPayload) =>
+  client.post(`/admin/v2/users/${userId}/membership/renew`, data);
+export const cancelAnnualMembership = (userId: number, data: { cycle_id: string; reason: string; refund_disposition: string }) =>
+  client.post(`/admin/v2/users/${userId}/membership/cancel`, data);
+export const recoverAnnualMembership = (userId: number, data: { cycle_id: string; reason: string; idempotency_key: string }) =>
+  client.post(`/admin/v2/users/${userId}/membership/recover`, data);
 
 // Segments
 export const getSegments = () => client.get('/admin/v2/segments');
