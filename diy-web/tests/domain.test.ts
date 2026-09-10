@@ -201,6 +201,19 @@ test('无促销时门店总价优先采用快照整单小计，避免旧会话�
   }, 5900), 61200);
 });
 
+test('已提交快照缺少整单总价时，匿名门店价从门店明细还原，不能显示为 0 元', () => {
+  assert.equal(resolveStoreTotalCents({
+    applied_price_type: 'store',
+    store_total_cents: 0,
+    lines: [{
+      quantity: 1,
+      unit_store_price_cents: 11900,
+      unit_payable_price_cents: 11900,
+      price_basis: 'store',
+    }],
+  }, 0), 11900);
+});
+
 test('详情页主价格始终是当前项目基础门店价与会员价，不包含已选加购合计', () => {
   const current = project({ id: 2, code: 'hxy-xiangxiang-60', category: 'bath', prices: [
     { price_type: 'store', amount_cents: 8900 },
