@@ -16,6 +16,23 @@ from app.models import Project
 
 router = APIRouter(tags=["share"])
 
+CURATED_PROJECT_MAIN_ARTWORK_CODES = frozenset({
+    "hxy-qiqing-30",
+    "hxy-xiangxiang-60",
+    "hxy-xiaoqi-90",
+    "hxy-tuina-70",
+    "hxy-spa-60",
+    "hxy-spa-90",
+    "hxy-taoke-60",
+    "hxy-caier-30",
+    "hxy-baguan-1",
+    "hxy-guasha-1",
+    "hxy-head-30",
+    "hxy-jubu-30",
+    "hxy-foot-refine-1",
+    "hxy-nvshen-60",
+})
+
 
 def _public_url(path: str) -> str:
     base_url = settings.h5_public_base_url.rstrip("/") + "/"
@@ -25,6 +42,12 @@ def _public_url(path: str) -> str:
     if parsed.netloc:  # Do not turn a protocol-relative admin value into an external card image.
         return urljoin(base_url, "assets/hxy-mascot.webp")
     return urljoin(base_url, path.lstrip("/"))
+
+
+def _share_image_url(project: Project) -> str:
+    if project.code in CURATED_PROJECT_MAIN_ARTWORK_CODES:
+        return _public_url(f"assets/projects/{quote(project.code, safe='')}.webp")
+    return _public_url(project.image_url or "assets/hxy-mascot.webp")
 
 
 def _share_urls(project: Project, store_id: int | None) -> tuple[str, str]:
@@ -59,7 +82,7 @@ def project_share_page(
     share_url, detail_url = _share_urls(project, store)
     title = f"荷小悦 · {project.name}"
     description = (project.summary or "荷小悦到店项目").strip()[:120]
-    image_url = _public_url(project.image_url or "assets/hxy-mascot.webp")
+    image_url = _share_image_url(project)
     escaped_title = escape(title, quote=True)
     escaped_description = escape(description, quote=True)
     escaped_image = escape(image_url, quote=True)

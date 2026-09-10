@@ -33,6 +33,15 @@ class ProjectSharePageTests(unittest.TestCase):
                 ),
                 Project(
                     store_id=primary_store.id,
+                    code="hxy-qiqing-30",
+                    category="bath",
+                    name="现煮草本泡",
+                    summary="体质检测+现煮草本泡脚+养生茶饮",
+                    image_url="/assets/services/service-foot-bath.jpg",
+                    publication_status="published",
+                ),
+                Project(
+                    store_id=primary_store.id,
                     code="share-draft",
                     category="bath",
                     name="草稿项目",
@@ -77,6 +86,15 @@ class ProjectSharePageTests(unittest.TestCase):
     def test_share_page_hides_draft_projects_and_cross_store_requests(self):
         self.assertEqual(self.client.get("/share/project/share-draft", params={"store": self.primary_store_id}).status_code, 404)
         self.assertEqual(self.client.get("/share/project/share-published", params={"store": self.secondary_store_id}).status_code, 404)
+
+    def test_curated_customer_project_uses_the_same_public_main_artwork_as_h5(self):
+        response = self.client.get("/share/project/hxy-qiqing-30", params={"store": self.primary_store_id})
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn(
+            'property="og:image" content="https://diy.hexiaoyue.com/assets/projects/hxy-qiqing-30.webp"',
+            response.text,
+        )
 
 
 if __name__ == "__main__":
