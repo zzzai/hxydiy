@@ -21,6 +21,10 @@ class H5LoginRequest(BaseModel):
     selection_session_id: str | None = Field(default=None, max_length=36)
 
 
+class TrustedDeviceRebindRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
 class UserOut(BaseModel):
     id: int
     openid: str

@@ -10,7 +10,7 @@ from app.api.admin import create_staff_token, hash_password
 from app.core.security import create_access_token
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import MembershipCode, PositionOccupancy, SelectionSession, Staff, Store, User
+from app.models import CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, PositionOccupancy, SelectionSession, Staff, Store, User
 from app.models.operations import Room, Technician
 
 
@@ -64,6 +64,28 @@ class TestMembershipVerification:
         response = self.client.post("/api/v1/auth/h5/member-code", headers=self.customer_headers())
         assert response.status_code == 403
         assert response.json()["detail"]["code"] == "DEVICE_NOT_TRUSTED"
+
+    def test_member_can_rebind_current_browser_after_a_fresh_sms_code(self):
+        self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())
+        self.client.post("/api/v1/auth/h5/member-code", headers=self.customer_headers())
+        with self.SessionLocal() as db:
+            db.add(CustomerVerificationCode(
+                phone="13800138999",
+                code_hash=hashlib.sha256(b"123456").hexdigest(),
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            ))
+            db.commit()
+
+        current_browser = TestClient(app)
+        response = current_browser.post("/api/v1/auth/h5/trusted-device/rebind", headers=self.customer_headers(), json={"code": "123456"})
+
+        assert response.status_code == 200, response.text
+        assert response.json()["trusted"] is True
+        with self.SessionLocal() as db:
+            devices = list(db.scalars(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == self.member_id)))
+            assert [device.status for device in devices].count("active") == 1
+            assert any(device.status == "revoked" for device in devices)
+            assert db.scalar(select(MembershipCode).where(MembershipCode.user_id == self.member_id)).status == "revoked"
 
     def test_scan_reserves_code_before_binding(self):
         self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())
