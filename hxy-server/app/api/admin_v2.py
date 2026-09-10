@@ -2347,6 +2347,9 @@ class ServiceReferenceV5Profile(BaseModel):
         ).has_content() or bool(self.customer_reported.body_service_notes or self.customer_reported.communication_preference or self.technician_observed.service_note or self.technician_observed.recording_outcome)
 
 
+from app.schemas.service_record import ProjectServiceRecord
+
+
 class CustomerProfileRecordIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -2354,10 +2357,10 @@ class CustomerProfileRecordIn(BaseModel):
     selection_session_id: str | None = None
     technician_id: int | None = None
     source: Literal["customer_statement", "service_observation", "both"] = "customer_statement"
-    schema_version: Literal[1, 2, 3, 4, 5] = 1
-    taxonomy_version: Literal["service_reference_v1", "service_reference_v2", "service_reference_v3", "service_reference_v4"] | None = None
+    schema_version: Literal[1, 2, 3, 4, 5, 6] = 1
+    taxonomy_version: Literal["service_reference_v1", "service_reference_v2", "service_reference_v3", "service_reference_v4", "service_record_v1"] | None = None
     customer_confirmed: StrictBool = False
-    profile: dict[str, StrictStr] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile | ServiceReferenceV5Profile = Field(default_factory=dict)
+    profile: dict[str, StrictStr] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile | ServiceReferenceV5Profile | ProjectServiceRecord = Field(default_factory=dict)
     signals: list[str] = Field(default_factory=list, max_length=30)
     note: str = Field(default="", max_length=500)
     correction_of_id: int | None = None
@@ -2366,7 +2369,7 @@ class CustomerProfileRecordIn(BaseModel):
     @field_validator("profile")
     @classmethod
     def validate_profile(cls, value: dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile | ServiceReferenceV5Profile) -> dict[str, str] | ServiceReferenceProfile | ServiceReferenceV3Profile | ServiceReferenceV4Profile | ServiceReferenceV5Profile:
-        if isinstance(value, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile, ServiceReferenceV5Profile)):
+        if isinstance(value, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile, ServiceReferenceV5Profile, ProjectServiceRecord)):
             return value
         unknown_fields = set(value) - set(PROFILE_FIELD_OPTIONS)
         if unknown_fields:
@@ -2409,7 +2412,19 @@ class CustomerProfileRecordIn(BaseModel):
 
     @model_validator(mode="after")
     def validate_service_reference_version(self):
-        if self.schema_version == 2:
+        if self.schema_version == 6:
+            if self.taxonomy_version != 'service_record_v1' or not isinstance(self.profile, ProjectServiceRecord):
+                raise ValueError('新版服务记录内外版本必须一致')
+            if self.signals or self.note:
+                raise ValueError('新版记录不能混用旧版标签或备注')
+            if self.customer_confirmed and self.profile.recording_outcome:
+                raise ValueError('本次没有新情况不代表顾客确认')
+            for text in (self.profile.service_note, self.profile.heat_note):
+                ServiceReferenceCustomerReported.validate_quote(text)
+            self.source = 'both' if self.customer_confirmed else 'service_observation'
+        elif isinstance(self.profile, ProjectServiceRecord):
+            raise ValueError('新版服务记录内外版本必须一致')
+        elif self.schema_version == 2:
             if self.taxonomy_version != "service_reference_v1" or not isinstance(self.profile, ServiceReferenceProfile):
                 raise ValueError("v2 服务参考必须使用 service_reference_v1 结构")
             if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
@@ -2542,6 +2557,12 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
 def _management_profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
     """管理端历史只提供 v5 身体记录的安全提醒，绝不下发部位或自述细节。"""
     view = _profile_record_view(record, db)
+    if record.schema_version == 6:
+        view['profile'] = {'schema_version': 6, 'taxonomy_version': 'service_record_v1'}
+        view['note'] = ''
+        view['signals'] = []
+        view['correction_reason'] = ''
+        return view
     if record.schema_version != 5:
         return view
     profile = deepcopy(view["profile"])
@@ -2557,6 +2578,8 @@ def _management_profile_record_view(record: CustomerProfileRecord, db: Session) 
 
 
 def _profile_payload(body: CustomerProfileRecordIn) -> dict:
+    if isinstance(body.profile, ProjectServiceRecord):
+        return body.profile.storage_payload()
     if isinstance(body.profile, (ServiceReferenceProfile, ServiceReferenceV3Profile, ServiceReferenceV4Profile, ServiceReferenceV5Profile)):
         return body.profile.storage_payload()
     return body.profile
@@ -2764,21 +2787,24 @@ def create_customer_profile_record(
     role = normalize_staff_role(staff.role, staff.technician_id)
     if role not in {"technician", "manager"}:
         raise HTTPException(status_code=403, detail="当前账号无权新增画像记录")
-    if body.schema_version in (3, 4, 5) and role != "technician":
+    if body.schema_version in (3, 4, 5, 6) and role != "technician":
         raise HTTPException(status_code=403, detail="管理端仅可读取新版服务参考")
-    if body.schema_version in (3, 4, 5) and not body.selection_session_id:
+    if body.schema_version == 6:
+        from app.api.technician import current_technician
+        current_technician(authorization, db)
+    if body.schema_version in (3, 4, 5, 6) and not body.selection_session_id:
         raise HTTPException(status_code=422, detail="新版服务参考必须关联已完成服务")
     idempotency_key = _require_profile_idempotency_key(idempotency_key)
     is_bound_technician = role == "technician" and bool(staff.technician_id)
     if is_bound_technician and body.schema_version == 1 and "source" not in body.model_fields_set:
         raise HTTPException(status_code=422, detail="技师记录必须明确选择记录来源")
-    if is_bound_technician and (body.technician_id is not None or body.correction_of_id is not None):
+    if is_bound_technician and (body.technician_id is not None or (body.correction_of_id is not None and body.schema_version != 6)):
         raise HTTPException(status_code=403, detail="技师不能代填他人画像或更正历史记录")
     technician_id = staff.technician_id if is_bound_technician else body.technician_id
     if is_bound_technician:
         if not body.selection_session_id:
             raise HTTPException(status_code=403, detail="技师画像记录必须关联已完成服务")
-    if body.schema_version in (2, 3, 4, 5) and not body.selection_session_id:
+    if body.schema_version in (2, 3, 4, 5, 6) and not body.selection_session_id:
         raise HTTPException(status_code=422, detail="服务参考必须关联已完成服务")
     _require_store_user(db, body.user_id, staff)
     if not _profile_payload(body) and not body.signals and not body.note:
@@ -2803,6 +2829,9 @@ def create_customer_profile_record(
         session = db.get(SelectionSession, body.selection_session_id)
         if not session or session.store_id != store_id or session.customer_id != body.user_id:
             raise HTTPException(status_code=404, detail="本次服务记录不存在")
+        if body.schema_version == 6 and body.profile.template == 'herbal_signature_v1':
+            if not any(item.get('code') == 'hxy-xiaoqi-90' or not item.get('code') and item.get('name') == '招牌草本泡' for item in (session.items or [])):
+                raise HTTPException(status_code=422, detail='本次服务不包含招牌草本泡，请重新打开记录')
         occupancy = db.scalar(select(PositionOccupancy).where(
             PositionOccupancy.selection_session_id == session.id,
         ).order_by(PositionOccupancy.id.desc()))
@@ -2833,7 +2862,13 @@ def create_customer_profile_record(
         ))
         if not original:
             raise HTTPException(status_code=404, detail="原画像记录不存在")
-        if original.schema_version in (3, 4, 5):
+        if body.schema_version == 6:
+            original = db.scalar(select(CustomerProfileRecord).where(CustomerProfileRecord.id == original.id).with_for_update())
+            if original.schema_version != 6 or original.created_by_staff_id != staff.id or original.technician_id != technician_id or original.selection_session_id != body.selection_session_id:
+                raise HTTPException(status_code=403, detail='只能更正本人本次服务的新版记录')
+            if db.scalar(select(CustomerProfileRecord.id).where(CustomerProfileRecord.correction_of_id == original.id)):
+                raise HTTPException(status_code=409, detail='这条记录已有新版本，请重新打开历史记录')
+        elif original.schema_version in (3, 4, 5, 6):
             raise HTTPException(status_code=403, detail="管理端不能更正新版服务参考")
         if not body.correction_reason.strip():
             raise HTTPException(status_code=422, detail="更正记录需要填写原因")
@@ -2868,7 +2903,8 @@ def create_customer_profile_record(
         if existing and _same_profile_request(existing, body, technician_id):
             return _profile_record_view(existing, db)
         raise HTTPException(status_code=409, detail="该幂等键已用于内容不同的画像记录")
-    rebuild_customer_profile_current(db, customer_id=body.user_id, store_id=store_id)
+    if body.schema_version != 6:
+        rebuild_customer_profile_current(db, customer_id=body.user_id, store_id=store_id)
     # 已存在的门店运营标签自动建立关联；画像原始信号仍保留在记录快照中，避免跨门店污染标签字典。
     for signal in body.signals:
         tag = db.scalar(select(CustomerTag).where(

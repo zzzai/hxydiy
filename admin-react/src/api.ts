@@ -103,13 +103,15 @@ export const settleService = (serviceOrderId: number, idempotencyKey: string) =>
 export const getOrders = (status?: string) => client.get('/admin/orders', { params: { status } });
 export const getSelectionSessions = (status?: string) => client.get('/admin/v2/selection-sessions', { params: { status } });
 export const getCustomerProfileRecords = (userId: number) => client.get(`/admin/v2/users/${userId}/customer-profile-records`);
+export const getProjectRecordOptions = () => client.get('/technician/service-record-options');
+export const getOwnRecordVersions = (id: number, page = 1) => client.get(`/technician/service-records/${id}/versions`, {params:{page}});
 export const createCustomerProfileRecord = (data: {
   user_id: number;
   selection_session_id?: string;
   technician_id?: number;
   source?: 'customer_statement' | 'service_observation' | 'both';
-  schema_version?: 1 | 2 | 3 | 4 | 5;
-  taxonomy_version?: 'service_reference_v1' | 'service_reference_v2' | 'service_reference_v3' | 'service_reference_v4';
+  schema_version?: 1 | 2 | 3 | 4 | 5 | 6;
+  taxonomy_version?: 'service_reference_v1' | 'service_reference_v2' | 'service_reference_v3' | 'service_reference_v4' | 'service_record_v1';
   customer_confirmed?: boolean;
   profile: Record<string, unknown>;
   signals: string[];

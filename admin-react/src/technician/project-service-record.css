@@ -1,0 +1,28 @@
+.project-record-sheet .ant-drawer-body { background:#fff; padding:24px 20px; }
+.project-record-content { max-width:620px; margin:auto; color:#193e33; font-size:16px; line-height:1.65; }
+.project-record-content fieldset { border:0; margin:0; padding:0; min-width:0; }
+.project-record-content section { padding:24px 0; border-bottom:1px solid #dbe4de; }
+.project-record-content h2 { font-size:18px; margin:0 0 14px; color:#193e33; line-height:1.5; }
+.project-record-content h3 { font-size:15px; font-weight:500; margin:20px 0 8px; }
+.project-record-content p { margin:12px 0; }
+.project-record-content section p,.project-record-context { font-size:14px; color:#596b63; }
+.project-record-content button { min-height:44px; padding:9px 14px; background:white; border:1px solid #bacabf; border-radius:8px; font:inherit; color:#193e33; cursor:pointer; }
+.project-record-content button:hover { background:#edf4ef; }
+.project-record-content button[aria-pressed=true] { background:#193e33; color:#fff; border-color:#193e33; }
+.project-record-content button:disabled,.project-record-content fieldset:disabled button { color:#657269; background:#eef0ee; cursor:default; }
+.project-record-content :focus-visible { outline:2px solid #8a6b29; outline-offset:3px; }
+.project-record-content ::selection { background:#d4e6da; }
+.project-record-choices { display:flex; flex-wrap:wrap; gap:8px; }
+.project-record-adjustment { background:#f5f8f5; padding:1px 16px 10px; margin-top:18px; border-radius:8px; }
+.project-record-entry { padding:0 0 22px; margin-bottom:22px; border-bottom:1px solid #dbe4de; }
+.project-record-locations { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.project-record-locations select { width:100%; min-height:44px; margin-top:8px; font:inherit; background:#fff; color:#193e33; border:1px solid #bacabf; border-radius:8px; padding:8px; }
+.project-record-content .project-record-delete { border:0; margin-top:12px; text-decoration:underline; text-underline-offset:4px; padding-left:0; }
+.project-record-text-label { display:block; margin:20px 0 10px; font-size:14px; }
+.project-record-content textarea { font-size:16px; caret-color:#193e33; }
+.project-record-content textarea::placeholder { color:#65766c; }
+.project-record-sheet .ant-drawer-footer { background:white; padding:14px 20px calc(14px + env(safe-area-inset-bottom)); }
+.project-record-actions { max-width:620px; margin:auto; display:flex; flex-wrap:wrap; gap:10px; }
+.project-record-actions .ant-btn-primary { flex:1; background:#193e33; }
+.project-record-actions .ant-btn-primary:disabled { background:#eef0ee; border-color:#dbe4de; color:#657269; }
+.project-record-actions .ant-btn { height:auto; min-height:44px; }

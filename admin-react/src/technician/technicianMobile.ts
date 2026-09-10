@@ -18,6 +18,7 @@ export function technicianProfileStatusLabel(status: string): string {
 }
 
 export type TechnicianHistoryProfileSummary = {
+  service_lines?: string[];
   focus_areas?: string[];
   avoid_areas?: string[];
   force_preference?: string | null;
@@ -52,6 +53,7 @@ function safeSummaryValue(value: unknown, allowed: readonly string[]): string {
 
 export function technicianHistorySummaryLines(summary: TechnicianHistoryProfileSummary | Record<string, unknown> | null): string[] {
   if (!summary) return [];
+  if (Array.isArray(summary.service_lines)) return summary.service_lines.filter((line): line is string => typeof line === 'string' && line.length <= 300).slice(0, 10);
   const focusAreas = safeSummaryArray(summary.focus_areas, HISTORY_SUMMARY_VALUES.areas);
   const avoidAreas = safeSummaryArray(summary.avoid_areas, HISTORY_SUMMARY_VALUES.areas);
   const force = safeSummaryValue(summary.force_preference, HISTORY_SUMMARY_VALUES.force);

@@ -16,6 +16,7 @@ from app.models.operations import Room, Technician
 from app.models.catalog import Addon, Project
 from app.models.service import StateTransition
 from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
+from app.schemas.service_record import ProjectServiceRecord, safe_service_lines
 
 router = APIRouter(prefix="/technician", tags=["technician"])
 
@@ -608,6 +609,7 @@ def finish_service(occupancy_id: int, body: ActionIn, authorization: str | None 
 
 def _supported_reference_version():
     return or_(
+        and_(CustomerProfileRecord.schema_version == 6, CustomerProfileRecord.taxonomy_version == 'service_record_v1'),
         and_(CustomerProfileRecord.schema_version == 2, CustomerProfileRecord.taxonomy_version == "service_reference_v1"),
         and_(CustomerProfileRecord.schema_version == 3, CustomerProfileRecord.taxonomy_version == "service_reference_v2"),
         and_(CustomerProfileRecord.schema_version == 4, CustomerProfileRecord.taxonomy_version == "service_reference_v3"),
@@ -655,6 +657,8 @@ def _safe_reference_profile(value) -> dict:
 
 
 def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | None:
+    if record and record.schema_version == 6 and record.taxonomy_version == 'service_record_v1':
+        return {'schema_version': 6, 'service_lines': safe_service_lines(record.profile)}
     if record is None:
         return None
     profile = _safe_reference_profile(record.profile)
@@ -737,7 +741,7 @@ def service_history(
     authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ) -> dict:
-    _, technician = current_technician(authorization, db)
+    staff, technician = current_technician(authorization, db)
     if profile_status not in {"all", "confirmed", "pending"}:
         raise HTTPException(status_code=422, detail="画像状态筛选值不合法")
 
@@ -815,12 +819,13 @@ def service_history(
             )
         items.append({
             "occupancy_id": occupancy.id,
+            'own_record_id': own_record.id if own_record and own_record.schema_version == 6 and own_record.created_by_staff_id == staff.id else None,
             "completed_at": occupancy.actual_service_end_at,
             "duration_minutes": duration_minutes,
             "profile_status": "confirmed" if record else "pending",
             "record_completed": own_record is not None,
             "own_record_summary": _history_profile_summary(own_record),
-            "recording_outcome": "no_additional_notes" if own_observed.get("recording_outcome") == "no_additional_notes" else None,
+            "recording_outcome": "no_additional_notes" if (own_profile if own_record and own_record.schema_version == 6 else own_observed).get("recording_outcome") == "no_additional_notes" else None,
             "service_note": service_note,
             "customer": {"display_name": f"顾客 #{customer.id}"} if customer else {"display_name": "匿名顾客"},
             "projects": project_names,
@@ -828,6 +833,49 @@ def service_history(
             "profile_summary": _history_profile_summary(record),
         })
     return {"items": items, "total": total, "page": page, "page_size": page_size, "unassigned_legacy_count": unassigned_legacy_count}
+
+
+@router.get('/service-records/{record_id}/versions')
+def own_service_record_versions(record_id: int, page: int = Query(1, ge=1),
+                                authorization: str | None = Header(None), db: Session = Depends(get_db)):
+    staff, technician = current_technician(authorization, db)
+    ownership = (
+        CustomerProfileRecord.store_id == technician.store_id,
+        CustomerProfileRecord.technician_id == technician.id,
+        CustomerProfileRecord.created_by_staff_id == staff.id,
+        CustomerProfileRecord.schema_version == 6,
+    )
+    record = db.scalar(select(CustomerProfileRecord).where(CustomerProfileRecord.id == record_id, *ownership))
+    if not record:
+        raise HTTPException(404, '记录不存在或无权查看')
+    session = db.get(SelectionSession, record.selection_session_id)
+    if not session or session.store_id != technician.store_id or session.customer_id != record.user_id:
+        raise HTTPException(404, '服务记录不存在')
+    query = select(CustomerProfileRecord).where(*ownership, CustomerProfileRecord.selection_session_id == session.id)
+    records = db.scalars(query.order_by(CustomerProfileRecord.id.desc()).offset((page - 1) * 20).limit(21)).all()
+    from app.api.admin_v2 import _profile_record_view
+    return {'items': [{**_profile_record_view(item, db), 'service_lines': safe_service_lines(item.profile)} for item in records[:20]],
+            'has_more': len(records) > 20,
+            'task': {'selection_session_id': session.id, 'user_id': record.user_id, 'items': session.items}}
+
+
+@router.get('/service-record-options')
+def service_record_options(authorization: str | None = Header(None), db: Session = Depends(get_db)):
+    current_technician(authorization, db)
+    groups = {
+        'water_request': [('lower', '希望低一点'), ('suitable', '现在就合适'), ('higher', '希望高一点')],
+        'water_action': [('lowered', '已调低水温'), ('raised', '已调高水温')],
+        'water_feedback': [('suitable', '水温合适了'), ('still_unsuitable', '仍不合适')],
+        'region': [('shoulder', '肩部'), ('neck', '颈部'), ('back', '背部'), ('waist', '腰部'), ('abdomen', '腹部'), ('arm', '手臂'), ('leg', '腿部'), ('foot', '足部')],
+        'side': [('unspecified', '未区分左右'), ('left', '左侧'), ('right', '右侧'), ('both', '两侧')],
+        'massage_request': [('lighter', '轻一点'), ('stronger', '重一点'), ('longer', '多按一会儿'), ('avoid', '不要按这里')],
+        'massage_action': [('lighter', '已减轻力度'), ('stronger', '已加重力度'), ('longer', '已增加按摩时间'), ('avoided', '已避开')],
+        'massage_feedback': [('suitable', '调整后合适'), ('still_unsuitable', '仍不合适')],
+        'heat': [('too_hot', '顾客觉得太烫'), ('suitable', '顾客表示温度合适'), ('end_early', '顾客要求提前结束')],
+        'communication': [('quiet', '想安静休息'), ('chat', '愿意聊天')],
+    }
+    return {'schema_version': 6, 'taxonomy_version': 'service_record_v1',
+            'groups': {key: [{'value': value, 'label': label} for value, label in items] for key, items in groups.items()}}
 
 
 @router.post("/leave-requests")
