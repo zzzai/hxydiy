@@ -22,7 +22,7 @@ export default function ProjectBasicFields({ form, editing }: { form: FormInstan
     <Form.Item name="summary" label="简介"><Input.TextArea rows={2} /></Form.Item>
     <div className="admin-subtitle">详情模块</div>
     <Form.List name="detail_modules">
-      {(fields, { add, remove }) => <>
+      {(fields, { add, remove, move }) => <>
         {fields.map(({ key, name, ...restField }) => <Space key={key} align="start" style={{ display: 'flex', width: '100%' }}>
           <Form.Item {...restField} name={[name, 'type']} initialValue="text"><Select style={{ width: 100 }} options={[{ value: 'text', label: '文字' }, { value: 'image', label: '图片' }, { value: 'highlight', label: '亮点' }]} /></Form.Item>
           <Form.Item {...restField} name={[name, 'title']}><Input placeholder="标题" /></Form.Item>
@@ -31,7 +31,11 @@ export default function ProjectBasicFields({ form, editing }: { form: FormInstan
               ? <Form.Item {...restField} name={[name, 'body']} label="图片"><MediaUploadField purpose="project_detail" /></Form.Item>
               : <Form.Item {...restField} name={[name, 'body']}><Input placeholder="内容" /></Form.Item>}
           </Form.Item>
-          <Button danger type="text" onClick={() => remove(name)}>删除</Button>
+          <Space size={0}>
+            <Button type="text" disabled={name === 0} onClick={() => move(name, name - 1)}>上移</Button>
+            <Button type="text" disabled={name === fields.length - 1} onClick={() => move(name, name + 1)}>下移</Button>
+            <Button danger type="text" onClick={() => remove(name)}>删除</Button>
+          </Space>
         </Space>)}
         <Button type="dashed" onClick={() => add({ type: 'text' })} block>增加详情模块</Button>
       </>}

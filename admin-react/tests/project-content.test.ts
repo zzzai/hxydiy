@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { projectFormPayload, projectToForm, supportsDiyOptions } from '../src/projectContent.ts';
@@ -47,4 +48,11 @@ test('历史误分类的套盒编码 hxy-taoke-60 同样清空 DIY 选项', () =
   assert.equal(supportsDiyOptions('balance', 'hxy-taoke-60'), false);
   assert.equal(supportsDiyOptions('balance', 'hxy-tuina-70'), true);
   assert.deepEqual(payload.diy_options, []);
+});
+
+test('项目详情模块提供上移和下移排序操作', () => {
+  const fields = readFileSync(new URL('../src/components/project-options/ProjectBasicFields.tsx', import.meta.url), 'utf8');
+  assert.match(fields, /\{ add, remove, move \}/);
+  assert.match(fields, /move\(name, name - 1\)/);
+  assert.match(fields, /move\(name, name \+ 1\)/);
 });
