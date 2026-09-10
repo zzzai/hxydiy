@@ -156,7 +156,18 @@ def consume_membership_code(body: MembershipVerificationIn, authorization: str |
 def membership_verification_selections(authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
     staff = current_membership_verifier(authorization, db)
     rows = db.execute(select(SelectionSession, PositionOccupancy, Room).join(PositionOccupancy, PositionOccupancy.selection_session_id == SelectionSession.id).join(Room, Room.id == PositionOccupancy.room_id).where(SelectionSession.store_id == staff.store_id, PositionOccupancy.status.in_(["held", "waiting_service", "in_service"])).order_by(PositionOccupancy.id.desc())).all()
-    return {"items": [{"selection_session_id": session.id, "position_label": room.name, "status": occupancy.status, "item_count": len(session.items or [])} for session, occupancy, room in rows]}
+    by_room: dict[int, list[tuple[SelectionSession, PositionOccupancy, Room]]] = {}
+    for row in rows:
+        by_room.setdefault(row[2].id, []).append(row)
+    items = []
+    blocked_positions = []
+    for room_rows in by_room.values():
+        if len(room_rows) != 1:
+            blocked_positions.append({"position_label": room_rows[0][2].name, "active_count": len(room_rows)})
+            continue
+        session, occupancy, room = room_rows[0]
+        items.append({"selection_session_id": session.id, "position_label": room.name, "status": occupancy.status, "item_count": len(session.items or [])})
+    return {"items": items, "blocked_positions": sorted(blocked_positions, key=lambda item: item["position_label"])}
 
 
 @router.post("/activate")

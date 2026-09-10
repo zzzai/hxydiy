@@ -75,6 +75,29 @@ class TestMembershipVerification:
         with self.SessionLocal() as db:
             assert db.scalar(select(MembershipCode).where(MembershipCode.user_id == self.member_id)).status == "scanned_pending"
 
+    def test_membership_binding_candidates_exclude_ambiguous_service_positions(self):
+        with self.SessionLocal() as db:
+            original = db.get(SelectionSession, self.selection_id)
+            duplicate = SelectionSession(
+                id="member-selection-duplicate",
+                access_token_hash=hashlib.sha256(b"member-selection-duplicate-token").hexdigest(),
+                store_id=self.store_id,
+                status="draft",
+                items=[],
+                diy_preferences={},
+            )
+            db.add(duplicate); db.flush()
+            room_id = db.scalar(select(PositionOccupancy.room_id).where(PositionOccupancy.selection_session_id == original.id))
+            db.add(PositionOccupancy(store_id=self.store_id, room_id=room_id, selection_session_id=duplicate.id, status="held", source="diy"))
+            db.commit()
+
+        headers = {"Authorization": f"Bearer {create_staff_token(self.tech_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/membership-verification/selections", headers=headers)
+
+        assert response.status_code == 200, response.text
+        assert response.json()["items"] == []
+        assert response.json()["blocked_positions"] == [{"position_label": "会员沙发", "active_count": 2}]
+
     def test_technician_consumes_once_and_cross_store_is_rejected(self):
         self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())
         issued = self.client.post("/api/v1/auth/h5/member-code", headers=self.customer_headers()).json()
