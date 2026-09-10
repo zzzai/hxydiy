@@ -18,6 +18,7 @@ import {
   feedbackTagsForRating,
   footBathBundleCopy,
   preferenceSummary,
+  anonymousBrowserEntryHint,
   selectionPriceDisplay,
   serviceFeedbackAction,
   selectionSettlementNote,
@@ -25,6 +26,13 @@ import {
 
 test('顾客端副标题不显示自由搭配内部话术', () => {
   assert.equal(customerPageSubtitle('按需要，自由搭配'), '到店先一杯');
+});
+
+test('匿名浏览器回访只给出本机提示，不宣称识别自然人', () => {
+  assert.equal(anonymousBrowserEntryHint({ returningBrowser: false, isAnonymous: true, resumed: false }), null);
+  assert.equal(anonymousBrowserEntryHint({ returningBrowser: true, isAnonymous: false, resumed: false }), null);
+  assert.equal(anonymousBrowserEntryHint({ returningBrowser: true, isAnonymous: true, resumed: true }), null);
+  assert.equal(anonymousBrowserEntryHint({ returningBrowser: true, isAnonymous: true, resumed: false }), '本机曾有到店选购记录；登录后可跨设备查看服务记录');
 });
 
 test('会员首页不展示会员卡推荐，非会员保留自愿办理入口', () => {

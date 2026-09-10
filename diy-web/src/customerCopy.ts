@@ -51,6 +51,15 @@ export function customerPageSubtitle(subtitle: string | null | undefined): strin
   return /^按需要[,，]自由搭配$/.test(normalized) ? '到店先一杯' : normalized || '到店先一杯';
 }
 
+export function anonymousBrowserEntryHint(input: {
+  returningBrowser: boolean;
+  isAnonymous: boolean;
+  resumed: boolean;
+}): string | null {
+  if (!input.returningBrowser || !input.isAnonymous || input.resumed) return null;
+  return '本机曾有到店选购记录；登录后可跨设备查看服务记录';
+}
+
 function normalizedParts(parts: string[]): string[] {
   return [...new Set(parts.map((part) => part.normalize('NFKC').trim()).filter(Boolean))];
 }
