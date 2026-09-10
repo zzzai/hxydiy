@@ -302,12 +302,14 @@ class OccupancyApiTests(unittest.TestCase):
             "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr", "device_label": "测试手机",
         })
         self.assertEqual(first.status_code, 200, first.text)
+        self.assertFalse(first.json()["returning_browser"])
         second = browser.post("/api/v1/entry-sessions", json={
             "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr", "device_label": "测试手机",
         })
         self.assertEqual(second.status_code, 200, second.text)
         self.assertEqual(second.json()["session"]["id"], first.json()["session"]["id"])
         self.assertTrue(second.json()["resumed"])
+        self.assertTrue(second.json()["returning_browser"])
 
         other_browser = TestClient(app)
         blocked = other_browser.post("/api/v1/entry-sessions", json={
@@ -348,6 +350,7 @@ class OccupancyApiTests(unittest.TestCase):
             "store_id": self.store_id, "position_code": "sofa-06", "source": "personal_qr", "device_label": "测试手机",
         })
         self.assertEqual(second.status_code, 200, second.text)
+        self.assertFalse(second.json()["returning_browser"])
         with self.SessionLocal() as db:
             second_session = db.get(SelectionSession, second.json()["session"]["id"])
             anonymous = db.get(User, second_session.customer_id)
