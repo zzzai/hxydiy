@@ -231,6 +231,7 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             .join(Room, Room.id == PositionOccupancy.room_id)
             .where(
                 PositionOccupancy.store_id == technician.store_id,
+                PositionOccupancy.active_room_id.is_not(None),
                 PositionOccupancy.status.in_(("waiting_service", "in_service", "post_service_present")),
                 SelectionSession.status.in_(("submitted", "confirmed")),
             )
@@ -439,6 +440,7 @@ def _reject_conflicted_room_action(db: Session, occupancy: PositionOccupancy) ->
         .join(Room, Room.id == PositionOccupancy.room_id)
         .where(
             PositionOccupancy.store_id == occupancy.store_id,
+            PositionOccupancy.active_room_id.is_not(None),
             PositionOccupancy.status.in_(("waiting_service", "in_service", "post_service_present")),
             SelectionSession.status.in_(("submitted", "confirmed")),
             (Room.id == display_room_id) | (Room.parent_room_id == display_room_id),
