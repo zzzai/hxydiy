@@ -13,7 +13,7 @@
 | 命令 | 请求 | 约束 |
 | --- | --- | --- |
 | `POST /admin/v2/users/{user_id}/membership/enroll` | `payment_channel`、`payment_reference`、`rights_confirmed=true` | 服务端生成年度周期和起止时间。|
-| `POST /admin/v2/users/{user_id}/membership/renew` | 同开通 | 仅旧周期到期前 90 天内；新周期从旧到期瞬间开始，状态为 `scheduled`。|
+| `POST /admin/v2/users/{user_id}/membership/renew` | 同开通 | 仅旧周期到期前 90 天内；新周期从旧到期瞬间开始，状态为 `scheduled`，顾客当前周期仍保持为旧周期。|
 | `POST /admin/v2/users/{user_id}/membership/cancel` | `cycle_id`、`reason`、`refund_disposition` | 未用赠送变 `voided`；已用权益不回退。|
 | `POST /admin/v2/users/{user_id}/membership/recover` | `cycle_id`、`reason`、`idempotency_key` | 仅已取消周期；同一幂等键只恢复一次并写审计。|
 
@@ -24,6 +24,8 @@
 请求体必须包含 `cycle_id`、`service_line_id`、`idempotency_key`。服务端在同一事务中锁定选单、顾客、会员周期和服务行；仅接受当前门店、已确认且已绑定顾客的选单，以及未开始的一项单次服务行。服务行还必须同时满足：项目已发布、属于当前门店、当前有效门店价不高于 9900 分、无任何加项或收费选项。
 
 成功后服务端将该服务行标记为年度赠送、将应收价冻结为 0、把权益从 `available` 改为 `used`、记录服务行和审计，并在关联账单仍未收款且未结算时同步账单。相同 `idempotency_key` 和同一服务行可安全重试；不同幂等键或不满足资格的请求不得改价或消耗权益。
+
+当核销命令发生在已排期周期的固定起点之后，服务端先在同一事务内将该周期从 `scheduled` 激活为 `active`，再判断权益资格；在起点之前不得提前激活或核销。
 
 `POST /admin/v2/selection-sessions/{session_id}/service-lines/{service_line_id}/cancel`
 

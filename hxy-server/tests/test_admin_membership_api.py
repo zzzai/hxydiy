@@ -179,6 +179,27 @@ class AdminMembershipTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["member_started_at"], expires_at.isoformat())
+        renewed_cycle_id = response.json()["cycle_id"]
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            source = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.membership_cycle_id == "renew-source-cycle"))
+            renewed = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.membership_cycle_id == renewed_cycle_id))
+        self.assertEqual(user.annual_membership_cycle_id, "renew-source-cycle")
+        self.assertEqual(user.member_expire_at, renewed.membership_expires_at)
+        self.assertEqual(source.cycle_state, "active")
+        self.assertEqual(renewed.cycle_state, "scheduled")
+
+        cancelled = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/cancel",
+            headers=self.headers,
+            json={"cycle_id": "renew-source-cycle", "reason": "顾客申请退款", "refund_disposition": "refunded"},
+        )
+        self.assertEqual(cancelled.status_code, 200, cancelled.text)
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            renewed = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.membership_cycle_id == renewed_cycle_id))
+        self.assertFalse(user.is_member)
+        self.assertEqual(renewed.cycle_state, "scheduled")
 
     def test_annual_gift_redemption_reprices_one_eligible_service_line_and_cancellation_releases_it(self):
         customer_id = self._new_customer("gift-redeem")
@@ -251,6 +272,43 @@ class AdminMembershipTests(unittest.TestCase):
         with self.SessionLocal() as db:
             grant = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.user_id == customer_id))
         self.assertEqual(grant.status, "available")
+
+    def test_due_renewal_activates_before_its_gift_can_be_redeemed(self):
+        customer_id = self._new_customer("due-renewal-gift")
+        cycle_id = "due-renewal-cycle"
+        now = datetime.now(timezone.utc)
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            user.is_member = False
+            user.member_type = None
+            user.annual_membership_cycle_id = "expired-source-cycle"
+            user.member_expire_at = now - timedelta(seconds=1)
+            db.add(MembershipBenefitGrant(
+                user_id=user.id,
+                store_id=self.store_id,
+                benefit_type="annual_project_gift",
+                membership_cycle_id=cycle_id,
+                membership_started_at=now - timedelta(seconds=1),
+                membership_expires_at=now + timedelta(days=364),
+                status="available",
+                cycle_state="scheduled",
+            ))
+            db.commit()
+        session_id, service_line_id = self._confirmed_gift_selection(customer_id, 9900)
+
+        response = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/annual-gift/redeem",
+            headers=self.headers,
+            json={"cycle_id": cycle_id, "service_line_id": service_line_id, "idempotency_key": "due-renewal-gift-1"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            grant = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.membership_cycle_id == cycle_id))
+        self.assertTrue(user.is_member)
+        self.assertEqual(user.annual_membership_cycle_id, cycle_id)
+        self.assertEqual(grant.cycle_state, "active")
+        self.assertEqual(grant.status, "used")
 
     def test_setting_same_annual_membership_twice_issues_one_gift(self):
         with self.SessionLocal() as db:
@@ -584,7 +642,8 @@ class AdminMembershipTests(unittest.TestCase):
 
     def _new_customer(self, suffix: str) -> int:
         with self.SessionLocal() as db:
-            customer = User(openid=f"membership-{suffix}", phone=f"139{len(suffix):08d}")
+            sequence = int(db.scalar(select(func.count()).select_from(User)) or 0)
+            customer = User(openid=f"membership-{suffix}", phone=f"139{sequence:08d}")
             db.add(customer)
             db.flush()
             db.add(Order(

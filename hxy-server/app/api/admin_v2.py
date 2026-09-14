@@ -922,10 +922,12 @@ def redeem_annual_gift(
     if session.status != "confirmed" or not session.customer_id:
         raise HTTPException(status_code=409, detail="仅已确认且已绑定顾客的选单可核销赠送权益")
     user = _locked_store_user(db, session.customer_id, staff)
+    now = datetime.now(UTC)
+    _activate_due_annual_cycle(db, user, now)
+    db.flush()
     grant = _locked_membership_cycle(db, user.id, body.cycle_id)
     if grant is None or grant.store_id != session.store_id:
         raise HTTPException(status_code=404, detail="会员周期不存在")
-    now = datetime.now(UTC)
     expires_at = _utc_time(grant.membership_expires_at) if grant.membership_expires_at else None
     if grant.redemption_idempotency_key not in {None, body.idempotency_key}:
         raise HTTPException(status_code=409, detail="该赠送权益已由其他核销请求处理")
@@ -3515,6 +3517,46 @@ def _locked_membership_cycle(db: Session, user_id: int, cycle_id: str) -> Member
     )
 
 
+def _activate_due_annual_cycle(db: Session, user: User, now: datetime) -> MembershipBenefitGrant | None:
+    """Activate a paid renewal only at its fixed start instant."""
+    grants = list(db.scalars(
+        select(MembershipBenefitGrant)
+        .where(
+            MembershipBenefitGrant.user_id == user.id,
+            MembershipBenefitGrant.benefit_type == "annual_project_gift",
+        )
+        .order_by(MembershipBenefitGrant.membership_started_at.asc(), MembershipBenefitGrant.id.asc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ))
+    for grant in grants:
+        if (
+            grant.cycle_state == "scheduled"
+            and _utc_time(grant.membership_started_at) <= now
+            and grant.membership_expires_at is not None
+            and _utc_time(grant.membership_expires_at) > now
+        ):
+            grant.cycle_state = "active"
+    active = [
+        grant for grant in grants
+        if grant.cycle_state == "active"
+        and _utc_time(grant.membership_started_at) <= now
+        and grant.membership_expires_at is not None
+        and _utc_time(grant.membership_expires_at) > now
+    ]
+    if not active:
+        return None
+    current = active[-1]
+    current_expiry = _utc_time(current.membership_expires_at)
+    existing_expiry = _utc_time(user.member_expire_at) if user.member_expire_at else None
+    user.is_member = True
+    user.member_type = "annual"
+    user.member_expire_at = max(current_expiry, existing_expiry) if existing_expiry else current_expiry
+    user.annual_membership_cycle_id = current.membership_cycle_id
+    user.membership_store_id = current.store_id or user.membership_store_id
+    return current
+
+
 @router.post("/users/{user_id}/membership/enroll")
 def enroll_annual_membership(
     user_id: int,
@@ -3573,9 +3615,9 @@ def renew_annual_membership(
     grant.payment_channel = body.payment_channel
     grant.payment_reference = _payment_reference_for_storage(body.payment_channel, body.payment_reference)
     grant.rights_confirmed = body.rights_confirmed
-    # 价格引擎以新的到期时间判断有效性；新的赠送权益仍按 scheduled 周期受控管理。
+    # 会员资格延展至新到期时间，但当前周期仍是正在生效的旧周期。
+    # 新周期在固定起点到达前保持 scheduled，不能提前核销或误伤旧周期。
     user.member_expire_at = grant.membership_expires_at
-    user.annual_membership_cycle_id = cycle_id
     _audit(db, staff, "renew_annual_membership", "user", str(user.id), {
         "previous_expire_at": previous_expiry.isoformat(), "cycle_id": cycle_id,
         "payment_channel": body.payment_channel, "payment_reference": grant.payment_reference,
@@ -3599,13 +3641,14 @@ def cancel_annual_membership(
         raise HTTPException(status_code=404, detail="会员周期不存在")
     if grant.cycle_state == "cancelled":
         return _membership_cycle_view(user, grant)
+    was_active = grant.cycle_state == "active"
     grant.cycle_state = "cancelled"
     grant.cancelled_at = datetime.now(UTC)
     grant.cancellation_reason = body.reason.strip()
     grant.refund_disposition = body.refund_disposition.strip()
     if grant.status == "available":
         grant.status = "voided"
-    if user.annual_membership_cycle_id == grant.membership_cycle_id:
+    if was_active:
         user.is_member = False
         user.member_type = None
     _audit(db, staff, "cancel_annual_membership", "user", str(user.id), {
@@ -3633,14 +3676,16 @@ def recover_annual_membership(
         raise HTTPException(status_code=409, detail="该周期已由其他异常恢复请求处理")
     if grant.cycle_state != "cancelled" and grant.recovery_idempotency_key is None:
         raise HTTPException(status_code=409, detail="仅已取消周期可异常恢复")
+    now = datetime.now(UTC)
     grant.recovery_idempotency_key = body.idempotency_key
-    grant.cycle_state = "active" if _utc_time(grant.membership_started_at) <= datetime.now(UTC) else "scheduled"
+    grant.cycle_state = "active" if _utc_time(grant.membership_started_at) <= now else "scheduled"
     if grant.status == "voided":
         grant.status = "available"
-    if grant.membership_expires_at and _utc_time(grant.membership_expires_at) > datetime.now(UTC):
+    if grant.cycle_state == "active" and grant.membership_expires_at and _utc_time(grant.membership_expires_at) > now:
         user.is_member = True
         user.member_type = "annual"
-        user.member_expire_at = grant.membership_expires_at
+        previous_expiry = _utc_time(user.member_expire_at) if user.member_expire_at else None
+        user.member_expire_at = max(_utc_time(grant.membership_expires_at), previous_expiry) if previous_expiry else grant.membership_expires_at
         user.annual_membership_cycle_id = grant.membership_cycle_id
         user.membership_store_id = _staff_store_id(staff)
     _audit(db, staff, "recover_annual_membership", "user", str(user.id), {
