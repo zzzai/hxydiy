@@ -13,7 +13,7 @@ from app.api.admin import _current_staff, normalize_staff_role
 from app.api.admin_v2 import _audit, _staff_store_id
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import MediaAsset, Staff, Store
+from app.models import Addon, MediaAsset, PageContent, Product, Project, Staff, Store
 from app.services.media_storage import MediaStorageError, get_media_storage as _build_media_storage
 
 router = APIRouter(prefix="/admin/media", tags=["admin-media"])
@@ -25,6 +25,41 @@ def _is_headquarters_admin(staff: Staff) -> bool:
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+
+
+def _value_references_media(value: object, reference_values: tuple[str, ...]) -> bool:
+    """Return whether a catalog or page-content value still refers to media."""
+
+    if isinstance(value, str):
+        return any(reference in value for reference in reference_values)
+    if isinstance(value, dict):
+        return any(_value_references_media(item, reference_values) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_value_references_media(item, reference_values) for item in value)
+    return False
+
+
+def _media_references(db: Session, media: MediaAsset) -> list[dict[str, int | str]]:
+    """Find same-store catalog/page-content records that still use a media object.
+
+    The object key catches historical signed CDN URLs, while the controlled path
+    catches local-storage URLs. Do not expose the referenced content itself in
+    the deletion response.
+    """
+
+    reference_values = (media.object_key, f"/api/v1/admin/media/{media.id}/content")
+    references: list[dict[str, int | str]] = []
+    candidates = (
+        (Project, "project", ("image_url", "detail_modules")),
+        (Addon, "addon", ("image_url",)),
+        (Product, "product", ("image_url",)),
+        (PageContent, "page_content", ("promo_banners", "tea_options", "coupon_prompt", "brand_story")),
+    )
+    for model, resource_type, fields in candidates:
+        for record in db.scalars(select(model).where(model.store_id == media.store_id)):
+            if any(_value_references_media(getattr(record, field), reference_values) for field in fields):
+                references.append({"resource_type": resource_type, "resource_id": record.id})
+    return references
 
 
 def _require_media_writer(staff: Staff) -> None:
@@ -167,6 +202,16 @@ def delete_media(media_id: int, db: Session = Depends(get_db), authorization: st
     media = db.get(MediaAsset, media_id)
     if not media or media.deleted_at or (not _is_headquarters_admin(staff) and media.store_id != _media_store_id(staff, None)):
         raise HTTPException(status_code=404, detail="媒体不存在")
+    references = _media_references(db, media)
+    if references:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "MEDIA_IN_USE",
+                "message": "媒体仍被内容引用，请先解除引用后再删除",
+                "reference_count": len(references),
+            },
+        )
     storage = _storage_or_http()
     try:
         storage.delete(media.object_key)
