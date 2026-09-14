@@ -1,16 +1,18 @@
 import React from 'react';
 import type { ProjectDetailVisualSection } from '../projectDetailVisuals';
 
-export default function ProjectDetailVisualSections({ sections }: {
+export default function ProjectDetailVisualSections({ sections, eyebrow, title }: {
   sections: ProjectDetailVisualSection[];
+  eyebrow?: string;
+  title?: string;
 }) {
   if (sections.length === 0) return null;
 
   return (
     <section className="project-detail-visuals" aria-label="项目体验介绍">
       <header>
-        <span>招牌体验</span>
-        <h2>这一程，会怎样慢慢放松</h2>
+        <span>{eyebrow || '招牌体验'}</span>
+        <h2>{title || '这一程，会怎样慢慢放松'}</h2>
       </header>
       <div>
         {sections.map((section) => (

@@ -319,7 +319,11 @@ export default function ProjectDetailPage({
 
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
 
-        <ProjectDetailVisualSections sections={detailVisualSections} />
+        <ProjectDetailVisualSections
+          sections={detailVisualSections}
+          eyebrow={project.code === 'hxy-qiqing-30' ? '荷小悦的慢时光' : undefined}
+          title={project.code === 'hxy-qiqing-30' ? '一桶草本，慢慢把自己照顾好' : undefined}
+        />
 
         {!detailOnly && !isFootBath && !catalogPublished && groups.length === 0 && <div className="mini-standard-card"><Check size={18} />项目按门店标准服务，到店后可向技师说明偏好。</div>}
 

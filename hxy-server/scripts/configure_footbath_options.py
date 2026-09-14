@@ -26,6 +26,7 @@ from app.models import (
     ProjectOptionChoice,
     ProjectOptionGroup,
 )
+from scripts.configure_herbal_formulas import FORMULAS
 
 
 FOOTBATH_CODES_IN_ORDER = ("hxy-qiqing-30", "hxy-xiangxiang-60", "hxy-xiaoqi-90")
@@ -41,13 +42,6 @@ LOCAL_BODY_PART_CHOICES = (
     ("local-leg", "腿部"),
     ("local-abdomen", "腹部"),
     ("local-foot", "足部"),
-)
-FOOTBATH_LIQUID_CHOICES = (
-    ("liquid-ginger", "老姜", "暖足舒缓"),
-    ("liquid-mugwort", "艾草", "草本泡浴"),
-    ("liquid-rose", "玫瑰", "清香放松"),
-    ("liquid-lavender", "薰衣草", "舒缓香气"),
-    ("liquid-vinegar", "老醋", "清爽净足"),
 )
 PRESSURE_CHOICES = (
     ("pressure-light", "轻柔", "轻缓放松"),
@@ -298,10 +292,10 @@ def _specs_for_target(
     if target.code in FOOTBATH_CODES:
         return (
             _GroupSpec(
-                code="footbath-liquid",
-                name="泡脚液",
+                code="footbath-formula",
+                name="草本方",
                 display_order=10,
-                preferences=FOOTBATH_LIQUID_CHOICES,
+                preferences=FORMULAS,
                 selection_mode="single",
                 required=True,
                 min_select=1,

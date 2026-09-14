@@ -23,6 +23,7 @@ from scripts.configure_footbath_options import (
     TARGET_CODES,
     configure_footbath_option_drafts,
 )
+from scripts.configure_herbal_formulas import FORMULAS
 
 
 EXPECTED_TARGET_CODES = (
@@ -78,6 +79,101 @@ def test_five_formulas_refuse_wrong_store(configuration_db):
     db, _, store_id, _ = configuration_db
     with pytest.raises(ValueError, match='not found'):
         prepare_herbal_formulas(db, store_id + 100, apply=True)
+
+
+def test_five_formulas_refreshes_copy_without_mutating_published_catalog(configuration_db):
+    from app.domain.catalog_options import publish_catalog_version
+    from scripts.configure_herbal_formulas import FORMULAS, prepare_herbal_formulas
+
+    db, _, store_id, projects = configuration_db
+    configure_footbath_option_drafts(db, store_id, dry_run=False)
+    project = projects['hxy-qiqing-30']
+    published = publish_catalog_version(db, project.id, 1)
+    first_draft = prepare_herbal_formulas(db, store_id, apply=True)
+    first_version = db.get(ProjectCatalogVersion, first_draft['draft_version_id'])
+    legacy_names = {
+        'formula-wood': '舒心放松',
+        'formula-fire': '舒筋活力',
+        'formula-earth': '轻盈舒畅',
+        'formula-metal': '清润舒缓',
+    }
+    first_group = db.scalar(select(ProjectOptionGroup).where(
+        ProjectOptionGroup.catalog_version_id == first_version.id,
+        ProjectOptionGroup.code == 'footbath-formula'))
+    for choice in db.scalars(select(ProjectOptionChoice).where(ProjectOptionChoice.option_group_id == first_group.id)):
+        if choice.code in legacy_names:
+            choice.name = legacy_names[choice.code]
+    first_version = publish_catalog_version(db, project.id, 1)
+
+    refreshed = prepare_herbal_formulas(db, store_id, apply=True)
+    assert refreshed['operation'] == 'refresh_existing_formulas'
+    assert project.current_published_version_id == first_version.id
+    refreshed_group = db.scalar(select(ProjectOptionGroup).where(
+        ProjectOptionGroup.catalog_version_id == refreshed['draft_version_id'],
+        ProjectOptionGroup.code == 'footbath-formula'))
+    refreshed_choices = list(db.scalars(select(ProjectOptionChoice).where(
+        ProjectOptionChoice.option_group_id == refreshed_group.id,
+        ProjectOptionChoice.status == 'active').order_by(ProjectOptionChoice.display_order)))
+    assert [(choice.code, choice.name, choice.description) for choice in refreshed_choices] == list(FORMULAS)
+    original_choices = list(db.scalars(select(ProjectOptionChoice).where(
+        ProjectOptionChoice.option_group_id == first_group.id,
+        ProjectOptionChoice.status == 'active').order_by(ProjectOptionChoice.display_order)))
+    assert [(choice.code, choice.name, choice.description) for choice in original_choices] != list(FORMULAS)
+
+
+def test_five_formulas_prepare_all_footbath_catalogs_without_changing_published_versions(configuration_db):
+    from app.domain.catalog_options import publish_catalog_version, verify_published_catalog_hash
+    from scripts.configure_herbal_formulas import FORMULAS, prepare_footbath_herbal_formulas
+
+    db, _, store_id, projects = configuration_db
+    configure_footbath_option_drafts(db, store_id, dry_run=False)
+    published_by_code = {
+        code: publish_catalog_version(db, projects[code].id, 1)
+        for code in ('hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90')
+    }
+    hashes = {code: version.snapshot_hash for code, version in published_by_code.items()}
+
+    preview = prepare_footbath_herbal_formulas(db, store_id)
+    assert preview['status'] == 'preview'
+    assert [item['project_code'] for item in preview['projects']] == list(published_by_code)
+
+    result = prepare_footbath_herbal_formulas(db, store_id, apply=True)
+    assert result['status'] == 'draft_prepared'
+    for item in result['projects']:
+        code = item['project_code']
+        published = published_by_code[code]
+        assert projects[code].current_published_version_id == published.id
+        verify_published_catalog_hash(db, published)
+        assert published.snapshot_hash == hashes[code]
+        group = db.scalar(select(ProjectOptionGroup).where(
+            ProjectOptionGroup.catalog_version_id == item['draft_version_id'],
+            ProjectOptionGroup.code == 'footbath-formula'))
+        active = list(db.scalars(select(ProjectOptionChoice).where(
+            ProjectOptionChoice.option_group_id == group.id,
+            ProjectOptionChoice.status == 'active').order_by(ProjectOptionChoice.display_order)))
+        assert [(choice.code, choice.name, choice.description) for choice in active] == list(FORMULAS)
+
+
+def test_five_formulas_prepare_all_rolls_back_when_any_footbath_has_a_draft(configuration_db):
+    from app.domain.catalog_options import publish_catalog_version
+    from scripts.configure_herbal_formulas import prepare_footbath_herbal_formulas
+
+    db, _, store_id, projects = configuration_db
+    configure_footbath_option_drafts(db, store_id, dry_run=False)
+    for code in ('hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90'):
+        publish_catalog_version(db, projects[code].id, 1)
+    db.add(ProjectCatalogVersion(
+        project_id=projects['hxy-xiangxiang-60'].id,
+        version=2,
+        status='draft',
+    ))
+    db.flush()
+    before = _table_counts(db)
+
+    with pytest.raises(ValueError, match='existing draft'):
+        prepare_footbath_herbal_formulas(db, store_id, apply=True)
+
+    assert _table_counts(db) == before
 
 
 def _add_project(
@@ -191,7 +287,7 @@ def test_configurator_creates_five_service_catalogs_with_required_preferences(co
         group_by_code = {group.code: group for group in groups}
         if code in {"hxy-qiqing-30", "hxy-xiangxiang-60", "hxy-xiaoqi-90"}:
             expected_group_codes = {
-                "footbath-liquid",
+                "footbath-formula",
                 "pressure",
                 "small-services",
                 "local-strength",
@@ -238,7 +334,7 @@ def test_configurator_creates_five_service_catalogs_with_required_preferences(co
         )
         expected_preferences = {}
         if code in {"hxy-qiqing-30", "hxy-xiangxiang-60", "hxy-xiaoqi-90"}:
-            expected_preferences["footbath-liquid"] = ["老姜", "艾草", "玫瑰", "薰衣草", "老醋"]
+            expected_preferences["footbath-formula"] = [name for _, name, _ in FORMULAS]
         if code in {"hxy-qiqing-30", "hxy-xiangxiang-60", "hxy-xiaoqi-90", "hxy-tuina-70", "hxy-spa-90"}:
             expected_preferences["pressure"] = ["轻柔", "适中", "强力"]
         if code == "hxy-spa-90":

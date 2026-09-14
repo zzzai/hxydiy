@@ -73,14 +73,23 @@ const GODDESS_FOOT_CARE_VISUALS: ProjectDetailVisualSection[] = [
   },
 ];
 
+const HERBAL_FOOTBATH_VISUALS: ProjectDetailVisualSection[] = [
+  {
+    image: assetPath('projects/hxy-qiqing-30-detail-story-v2.webp'),
+    title: '一桶草本，慢慢泡开',
+    body: '从现煮草本到一杯热茶，让身体和心情都慢下来。',
+    alt: '荷小悦 IP 准备现煮草本泡、整理草本并在木桶旁品茶的长详情插画',
+  },
+];
+
 export function projectDetailVisuals(code: string): ProjectDetailVisualSection[] {
   // 招牌草本沐足与 60 分钟精油 SPA 使用专属流程插画；其他项目沿用统一信息结构和画风。
   if (code === 'hxy-xiaoqi-90') return SIGNATURE_FOOTBATH_VISUALS;
   if (code === 'hxy-spa-60') return SPA_60_VISUALS;
   if (code === 'hxy-foot-refine-1') return FOOT_REFINEMENT_VISUALS;
   if (code === 'hxy-nvshen-60') return GODDESS_FOOT_CARE_VISUALS;
+  if (code === 'hxy-qiqing-30') return HERBAL_FOOTBATH_VISUALS;
   const copy: Record<string, [string, string, string]> = {
-    'hxy-qiqing-30': ['一桶草本，先让双脚暖起来', '从温热草本开始，按需要选泡脚液和手法力度。', '泡好之后，服务完成统一线下结算。'],
     'hxy-xiangxiang-60': ['先暖足，再慢慢放松', '给双脚和小腿留出完整时间，按需要自由搭配。', '不赶步骤，按门店最终确认清单服务。'],
     'hxy-tuina-70': ['从肩背开始，慢慢松开', '先选手法力度，再按需要加选服务内容。', '服务完成后统一线下结算。'],
     'hxy-spa-60': ['精油、毛巾和安静的房间', '先选喜欢的精油与手法力度，再按需加选。', '留一段完整时间，安静地照顾自己。'],
