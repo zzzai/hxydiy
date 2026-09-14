@@ -18,7 +18,7 @@ from sqlalchemy import delete, select, func as sa_func, and_, or_, union
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.admin import _current_staff, normalize_staff_role
+from app.api.admin import _current_staff, hash_password, normalize_staff_role
 from app.db.session import get_db
 from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
@@ -342,6 +342,152 @@ def update_store_master_data(
     db.commit()
     db.refresh(store)
     return _store_master_view(store)
+
+
+StaffManagedRole = Literal["manager", "staff"]
+StaffManagedStatus = Literal["active", "disabled"]
+
+
+class StaffAccountCreate(BaseModel):
+    username: StrictStr = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_.-]+$")
+    password: StrictStr = Field(min_length=8, max_length=128)
+    name: StrictStr = Field(min_length=1, max_length=32)
+    role: StaffManagedRole
+    store_id: StrictInt = Field(gt=0)
+    status: StaffManagedStatus = "active"
+
+
+class StaffAccountPatch(BaseModel):
+    name: StrictStr | None = Field(default=None, min_length=1, max_length=32)
+    role: StaffManagedRole | None = None
+    store_id: StrictInt | None = Field(default=None, gt=0)
+    status: StaffManagedStatus | None = None
+    password: StrictStr | None = Field(default=None, min_length=8, max_length=128)
+
+
+def _staff_account_view(account: Staff) -> dict:
+    return {
+        "id": account.id,
+        "username": account.username,
+        "name": account.name,
+        "role": account.role,
+        "store_id": account.store_id,
+        "status": account.status,
+        "created_at": account.created_at.isoformat() if account.created_at else None,
+    }
+
+
+def _managed_staff_account(db: Session, staff_id: int) -> Staff:
+    account = db.get(Staff, staff_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="员工账号不存在")
+    if account.role == "admin" or account.technician_id is not None or account.role == "technician":
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "STAFF_ACCOUNT_MANAGED_ELSEWHERE", "message": "总部和技师账号不在此处维护"},
+        )
+    return account
+
+
+@router.get("/staff")
+def list_staff_accounts(
+    store_id: int | None = None,
+    status: StaffManagedStatus | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    operator = _current_staff(authorization, db)
+    _require_headquarters_admin(operator)
+    query = select(Staff).where(
+        Staff.role.in_(("manager", "staff")),
+        Staff.technician_id.is_(None),
+    )
+    if store_id is not None:
+        query = query.where(Staff.store_id == store_id)
+    if status is not None:
+        query = query.where(Staff.status == status)
+    total = db.scalar(select(sa_func.count()).select_from(query.subquery())) or 0
+    accounts = list(db.scalars(
+        query.order_by(Staff.store_id, Staff.id).offset((page - 1) * page_size).limit(page_size)
+    ))
+    return {
+        "items": [_staff_account_view(account) for account in accounts],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.post("/staff", status_code=201)
+def create_staff_account(
+    body: StaffAccountCreate,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    operator = _current_staff(authorization, db)
+    _require_headquarters_admin(operator)
+    if not db.get(Store, body.store_id):
+        raise HTTPException(status_code=404, detail="门店不存在")
+    if db.scalar(select(Staff.id).where(Staff.username == body.username)) is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "STAFF_USERNAME_EXISTS", "message": "登录名已存在"},
+        )
+    account = Staff(
+        **body.model_dump(exclude={"password"}),
+        password_hash=hash_password(body.password),
+    )
+    db.add(account)
+    db.flush()
+    _audit(
+        db,
+        operator,
+        "create_staff_account",
+        "staff",
+        str(account.id),
+        {"role": account.role, "store_id": account.store_id},
+        store_id=account.store_id,
+    )
+    db.commit()
+    db.refresh(account)
+    return _staff_account_view(account)
+
+
+@router.patch("/staff/{staff_id}")
+def update_staff_account(
+    staff_id: int,
+    body: StaffAccountPatch,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    operator = _current_staff(authorization, db)
+    _require_headquarters_admin(operator)
+    account = _managed_staff_account(db, staff_id)
+    changes = body.model_dump(exclude_unset=True)
+    if "store_id" in changes and not db.get(Store, changes["store_id"]):
+        raise HTTPException(status_code=404, detail="门店不存在")
+    session_revoked = bool({"role", "store_id", "status", "password"} & changes.keys())
+    for field, value in changes.items():
+        if field == "password":
+            account.password_hash = hash_password(value)
+        else:
+            setattr(account, field, value)
+    if session_revoked:
+        account.credentials_version = int(account.credentials_version or 1) + 1
+    _audit(
+        db,
+        operator,
+        "update_staff_account",
+        "staff",
+        str(account.id),
+        {"fields": sorted(changes), "store_id": account.store_id, "session_revoked": session_revoked},
+        store_id=account.store_id,
+    )
+    db.commit()
+    db.refresh(account)
+    return _staff_account_view(account)
 
 
 def _customer_display_name(user: User) -> str:

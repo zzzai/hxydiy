@@ -21,6 +21,7 @@ const AuditLogsPage = lazy(() => import('../pages/AuditLogsPage'));
 const FeedbackPage = lazy(() => import('../pages/FeedbackPage'));
 const RoomsPage = lazy(() => import('../pages/RoomsPage'));
 const TechsPage = lazy(() => import('../pages/TechsPage'));
+const StaffAccountsPage = lazy(() => import('../pages/StaffAccountsPage'));
 const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const AddonsPage = lazy(() => import('../pages/AddonsPage'));
 const ProductsPage = lazy(() => import('../pages/ProductsPage'));
@@ -130,6 +131,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
                 <Route path="/rooms/*" element={page('/rooms', <RoomsPage />)} />
                 <Route path="/stores" element={page('/stores', <StoresPage />)} />
                 <Route path="/techs" element={page('/techs', <TechsPage />)} />
+                <Route path="/staff-accounts" element={page('/staff-accounts', <StaffAccountsPage />)} />
                 <Route path="/projects" element={page('/projects', <ProjectsPage />)} />
                 <Route path="/addons" element={page('/addons', <AddonsPage />)} />
                 <Route path="/page-content" element={page('/page-content', <PageContentPage />)} />

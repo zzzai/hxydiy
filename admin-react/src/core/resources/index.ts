@@ -8,4 +8,5 @@ export const resources = {
   products: 'admin/v2/products',
   addons: 'admin/v2/addons',
   technicians: 'admin/v2/technicians',
+  staffAccounts: 'admin/v2/staff',
 } as const;
