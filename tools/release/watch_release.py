@@ -1,7 +1,8 @@
 """Bounded, dependency-free GitHub waiter. No LLM calls; logs never contain credentials.
 
 Read-only by default. --merge explicitly authorizes one exact PR head to merge
-after trusted checks; production is handled only by the existing Actions gates.
+after trusted checks. Production is a separate manual workflow and is never
+triggered or inferred by this waiter.
 """
 import argparse
 from contextlib import contextmanager
@@ -20,8 +21,7 @@ REPO = 'zzzai/hxydiy'
 ROOT = Path(__file__).resolve().parents[2]
 REQUIRED = ['Static contracts', 'Admin tests and build', 'Customer tests and build',
             'Backend tests', 'Trusted PR Gate']
-TERMINAL = {'checks_failed', 'ci_failed', 'deployment_failed', 'deployment_skipped',
-            'deployment_unverified', 'deployment_succeeded', 'timeout', 'head_changed',
+TERMINAL = {'checks_failed', 'ci_failed', 'ci_succeeded', 'timeout', 'head_changed',
             'pr_ineligible', 'merge_blocked', 'superseded', 'setup_failed'}
 
 
@@ -53,19 +53,12 @@ def pr_problem(pr, sha):
     return None
 
 
-def release_state(ci, deploy, job):
+def ci_state(ci):
     if not ci or ci['status'] != 'completed':
         return 'waiting_for_ci'
     if ci['conclusion'] != 'success':
         return 'ci_failed'
-    if not deploy:
-        return 'waiting_for_deployment'
-    if deploy['status'] != 'completed':
-        return 'deploying'
-    if deploy['conclusion'] != 'success':
-        return 'deployment_failed'
-    return {'success': 'deployment_succeeded', 'skipped': 'deployment_skipped',
-            'failure': 'deployment_failed'}.get(job, 'deployment_unverified')
+    return 'ci_succeeded'
 
 
 def save(path, report):
@@ -178,15 +171,8 @@ def step(api, args, report):
     runs.sort(key=lambda r: r['id'], reverse=True)
     ci = next((r for r in runs if r['path'] == '.github/workflows/ci.yml'
                and r['event'] == 'push' and r['head_branch'] == 'main'), None)
-    deploy = next((r for r in runs if r['path'] == '.github/workflows/deploy-production.yml'
-                   and r['event'] == 'workflow_run' and r['head_branch'] == 'main'), None)
-    report.update(ci=compact(ci), deployment=compact(deploy))
-    job = None
-    if deploy and deploy['status'] == 'completed':
-        jobs = api.pages(f'/actions/runs/{deploy["id"]}/jobs', 'jobs')
-        job = next((j['conclusion'] for j in jobs
-                    if j['name'] == 'Backup, rehearse, deploy and verify'), None)
-    return release_state(ci, deploy, job)
+    report.update(ci=compact(ci), deployment=None)
+    return ci_state(ci)
 
 
 def main():
@@ -213,7 +199,7 @@ def main():
     target_path = folder / 'report.json'
     report = dict(status='starting', commit=args.commit, pr=args.pr, head=args.head,
                   mergeAuthorized=args.merge, terminal=False, error=None,
-                  evidence='GitHub trusted CI and deployment job conclusions; not live current identity or store acceptance',
+                  evidence='GitHub trusted CI conclusion only; production requires a separate manual release and current/field verification',
                   ci=None, deployment=None)
     deadline = time.monotonic() + args.timeout
     try:
@@ -247,7 +233,7 @@ def main():
     print(json.dumps({'status': report['status'], 'report': str(target_path)}, ensure_ascii=False))
     if not report['terminal']:
         return 2
-    return 0 if report['status'] in ('deployment_succeeded', 'deployment_skipped', 'superseded') else 1
+    return 0 if report['status'] in ('ci_succeeded', 'superseded') else 1
 
 
 if __name__ == '__main__':
