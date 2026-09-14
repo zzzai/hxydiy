@@ -14,6 +14,43 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     table_name = "membership_benefit_grants"
+    inspector = sa.inspect(op.get_bind())
+    if table_name not in inspector.get_table_names():
+        op.create_table(
+            table_name,
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+            sa.Column("benefit_type", sa.String(length=32), nullable=False, server_default="annual_project_gift"),
+            sa.Column("membership_cycle_id", sa.String(length=64), nullable=False),
+            sa.Column("membership_started_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("membership_expires_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("store_id", sa.Integer(), sa.ForeignKey("stores.id"), nullable=True),
+            sa.Column("cycle_state", sa.String(length=16), nullable=False, server_default="active"),
+            sa.Column("payment_channel", sa.String(length=32), nullable=True),
+            sa.Column("payment_reference", sa.String(length=64), nullable=True),
+            sa.Column("rights_confirmed", sa.Boolean(), nullable=False, server_default=sa.false()),
+            sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("cancellation_reason", sa.String(length=200), nullable=True),
+            sa.Column("refund_disposition", sa.String(length=64), nullable=True),
+            sa.Column("recovery_idempotency_key", sa.String(length=64), nullable=True),
+            sa.Column("redemption_idempotency_key", sa.String(length=64), nullable=True),
+            sa.Column("status", sa.String(length=16), nullable=False, server_default="available"),
+            sa.Column("used_service_line_id", sa.String(length=36), sa.ForeignKey("service_lines.id"), nullable=True),
+            sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+            sa.UniqueConstraint("user_id", "membership_cycle_id", name="uq_membership_benefit_cycle"),
+            sa.UniqueConstraint("used_service_line_id", name="uq_membership_benefit_used_service_line"),
+            sa.UniqueConstraint("recovery_idempotency_key", name="uq_membership_benefit_recovery_key"),
+            sa.UniqueConstraint("redemption_idempotency_key", name="uq_membership_benefit_redemption_key"),
+            sa.CheckConstraint("status IN ('available', 'used', 'voided')", name="ck_membership_benefit_status"),
+        )
+        op.create_index("ix_membership_benefit_grants_user_id", table_name, ["user_id"])
+        op.create_index("ix_membership_benefit_grants_status", table_name, ["status"])
+        op.create_index("ix_membership_benefit_user_status", table_name, ["user_id", "status"])
+        op.create_index("ix_membership_benefit_store_id", table_name, ["store_id"])
+        op.create_index("ix_membership_benefit_cycle_state", table_name, ["cycle_state"])
+        return
+
     columns = {
         "membership_expires_at": sa.Column("membership_expires_at", sa.DateTime(timezone=True), nullable=True),
         "store_id": sa.Column("store_id", sa.Integer(), nullable=True),
@@ -27,7 +64,7 @@ def upgrade() -> None:
         "recovery_idempotency_key": sa.Column("recovery_idempotency_key", sa.String(length=64), nullable=True),
         "redemption_idempotency_key": sa.Column("redemption_idempotency_key", sa.String(length=64), nullable=True),
     }
-    existing_columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
     for name, column in columns.items():
         if name not in existing_columns:
             op.add_column(table_name, column)
