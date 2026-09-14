@@ -2535,9 +2535,15 @@ class ServiceReferenceV5CustomerReported(BaseModel):
 class ServiceReferenceV5TechnicianObserved(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    service_adjustments: list[Literal["pressure_lighter", "pressure_stronger", "pace_slower", "temperature_lower", "temperature_higher", "focus_area", "avoid_area", "end_early"]] = Field(default_factory=list, max_length=3)
     service_feedback: Literal["suitable", "better_after_adjustment", "adjust_next_time"] | None = None
     service_note: str = Field(default="", max_length=200)
     recording_outcome: Literal["no_additional_notes"] | None = None
+
+    @field_validator("service_adjustments")
+    @classmethod
+    def validate_unique_adjustments(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
 
     @field_validator("service_note")
     @classmethod
@@ -2582,6 +2588,7 @@ class ServiceReferenceV5Profile(BaseModel):
             or reported.temperature_preference
             or reported.communication_preference
             or reported.body_service_notes
+            or observed.service_adjustments
             or observed.service_feedback
             or observed.service_note
             or observed.recording_outcome
@@ -2666,36 +2673,8 @@ class CustomerProfileRecordIn(BaseModel):
             self.source = 'both' if self.customer_confirmed else 'service_observation'
         elif isinstance(self.profile, ProjectServiceRecord):
             raise ValueError('新版服务记录内外版本必须一致')
-        elif self.schema_version == 2:
-            if self.taxonomy_version != "service_reference_v1" or not isinstance(self.profile, ServiceReferenceProfile):
-                raise ValueError("v2 服务参考必须使用 service_reference_v1 结构")
-            if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
-                raise ValueError("服务参考内外版本必须一致")
-            if self.signals or self.note:
-                raise ValueError("v2 服务参考不能混用旧版标签或备注")
-            if not self.profile.has_content():
-                raise ValueError("请至少记录一项服务参考")
-            self.source = "both" if self.customer_confirmed else "service_observation"
-        elif self.schema_version == 3:
-            if self.taxonomy_version != "service_reference_v2" or not isinstance(self.profile, ServiceReferenceV3Profile):
-                raise ValueError("v3 服务参考必须使用 service_reference_v2 结构")
-            if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
-                raise ValueError("服务参考内外版本必须一致")
-            if self.signals or self.note:
-                raise ValueError("v3 服务参考不能混用旧版标签或备注")
-            if not self.profile.has_content():
-                raise ValueError("请至少记录一项服务参考")
-            self.source = "both" if self.customer_confirmed else "service_observation"
-        elif self.schema_version == 4:
-            if self.taxonomy_version != "service_reference_v3" or not isinstance(self.profile, ServiceReferenceV4Profile):
-                raise ValueError("v4 服务参考必须使用 service_reference_v3 结构")
-            if self.profile.schema_version != self.schema_version or self.profile.taxonomy_version != self.taxonomy_version:
-                raise ValueError("服务参考内外版本必须一致")
-            if self.signals or self.note:
-                raise ValueError("v4 服务参考不能混用旧版标签或备注")
-            if not self.profile.has_content():
-                raise ValueError("请至少记录一项服务参考")
-            self.source = "both" if self.customer_confirmed else "service_observation"
+        elif self.schema_version in {2, 3, 4}:
+            raise ValueError("v1 至 v4 服务参考仅支持历史读取，请使用当前服务交接记录")
         elif self.schema_version == 5:
             if self.taxonomy_version != "service_reference_v4" or not isinstance(self.profile, ServiceReferenceV5Profile):
                 raise ValueError("v5 服务参考必须使用 service_reference_v4 结构")
@@ -2831,9 +2810,17 @@ def _management_profile_record_view(record: CustomerProfileRecord, db: Session) 
             safe_reported[field] = value
     if safe_reported:
         safe_profile["customer_reported"] = safe_reported
+    safe_observed: dict[str, object] = {}
+    adjustments = observed.get("service_adjustments")
+    allowed_adjustments = {"pressure_lighter", "pressure_stronger", "pace_slower", "temperature_lower", "temperature_higher", "focus_area", "avoid_area", "end_early"}
+    filtered_adjustments = [item for item in adjustments if isinstance(item, str) and item in allowed_adjustments] if isinstance(adjustments, list) else []
+    if filtered_adjustments:
+        safe_observed["service_adjustments"] = filtered_adjustments
     feedback = observed.get("service_feedback")
     if feedback in {"suitable", "better_after_adjustment", "adjust_next_time"}:
-        safe_profile["technician_observed"] = {"service_feedback": feedback}
+        safe_observed["service_feedback"] = feedback
+    if safe_observed:
+        safe_profile["technician_observed"] = safe_observed
     plan = next_visit.get("plan")
     if plan in {"repeat_current", "confirm_on_arrival"}:
         safe_profile["next_visit"] = {"plan": plan}
@@ -3278,6 +3265,7 @@ def get_customer_profile_current(
     statement = select(CustomerProfileCurrent).where(
         CustomerProfileCurrent.customer_id == user_id,
         CustomerProfileCurrent.store_id == _staff_store_id(staff),
+        CustomerProfileCurrent.profile_code.in_(("focus_area", "avoid_area", "force_preference", "temperature_preference")),
     )
     if not include_expired:
         statement = statement.where(CustomerProfileCurrent.status == "active")

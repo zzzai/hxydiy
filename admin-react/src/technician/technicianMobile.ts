@@ -26,6 +26,7 @@ export type TechnicianHistoryProfileSummary = {
   service_feedback?: string | null;
   next_visit_plan?: string | null;
   communication_preference?: string | null;
+  service_adjustments?: string[];
   body_reconfirm_required?: boolean;
 };
 
@@ -34,6 +35,7 @@ const HISTORY_SUMMARY_VALUES = {
   force: ['轻柔', '适中', '偏强'], temperature: ['偏低', '适中', '偏高'],
   feedback: ['本次合适', '调整后更合适', '下次需调整'], nextVisit: ['延续本次', '到店再确认'],
   communication: ['希望安静', '愿意聊天', '希望先沟通'],
+  adjustments: ['减轻力度', '加强力度', '放慢节奏', '调低温度', '调高温度', '重点照顾', '避开该处', '提前结束'],
 } as const;
 
 function safeSummaryArray(value: unknown, allowed: readonly string[]): string[] {
@@ -54,9 +56,10 @@ export function technicianHistorySummaryLines(summary: TechnicianHistoryProfileS
   const feedback = safeSummaryValue(summary.service_feedback, HISTORY_SUMMARY_VALUES.feedback);
   const nextVisit = safeSummaryValue(summary.next_visit_plan, HISTORY_SUMMARY_VALUES.nextVisit);
   const communication = safeSummaryValue(summary.communication_preference, HISTORY_SUMMARY_VALUES.communication);
+  const adjustments = safeSummaryArray(summary.service_adjustments, HISTORY_SUMMARY_VALUES.adjustments);
   const lines = [
     focusAreas.length ? `重点：${focusAreas.join('、')}` : '', avoidAreas.length ? `避开或谨慎：${avoidAreas.join('、')}` : '',
-    force ? `力度：${force}` : '', temperature ? `温度：${temperature}` : '', communication ? `沟通：${communication}` : '', feedback ? `反馈：${feedback}` : '', nextVisit ? `下次：${nextVisit}` : '',
+    force ? `力度：${force}` : '', temperature ? `温度：${temperature}` : '', communication ? `沟通：${communication}` : '', adjustments.length ? `本次调整：${adjustments.join('、')}` : '', feedback ? `反馈：${feedback}` : '', nextVisit ? `下次：${nextVisit}` : '',
     summary.body_reconfirm_required === true ? '身体情况：服务前再确认' : '',
   ];
   return lines.filter(Boolean);

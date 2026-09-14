@@ -25,3 +25,16 @@ test('顾客明确要求安静时保存为可复用的服务沟通偏好', () =>
   assert.deepEqual(result.profile.customer_reported, { communication_preference: 'quiet' });
   assert.deepEqual(result.profile.technician_observed, {});
 });
+
+test('本次实际调整使用受控服务事实，可在下次服务前安全交接', () => {
+  const result = buildServiceReferenceV5Payload(12, 'service-1', {
+    serviceAdjustments: ['pressure_lighter', 'pace_slower'],
+    serviceFeedback: 'better_after_adjustment',
+    nextVisitPlan: 'confirm_on_arrival',
+  });
+  assert.deepEqual(result.profile.technician_observed, {
+    service_adjustments: ['pressure_lighter', 'pace_slower'],
+    service_feedback: 'better_after_adjustment',
+  });
+  assert.deepEqual(result.profile.next_visit, { plan: 'confirm_on_arrival' });
+});

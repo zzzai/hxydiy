@@ -69,9 +69,9 @@ test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   assert.match(source, /JSON\.stringify/);
 });
 
-test('技师快记默认层先收集服务结果，身体记录必须按需进入', () => {
+test('技师快记默认层先收集服务交接，身体记录必须按需进入', () => {
   const source = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
-  assert.match(source, /需要记录身体情况/);
+  assert.match(source, /记录身体情况（按需）/);
   assert.doesNotMatch(source, /Collapse|精确补充身体情况/);
 });
 
@@ -168,6 +168,12 @@ test('管理端历史只展示可执行的服务交接，不展示旧画像或�
   ]);
   assert.equal(display.collapsedQuote, '');
   assert.doesNotMatch(JSON.stringify(display.groups), /顾客自述正在用药/);
+});
+
+test('新的服务交接统一使用按项目裁剪的 v5 流程，v6 只用于本人历史兼容', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  assert.match(source, /props\.task\.record\?\.schema_version === 6/);
+  assert.doesNotMatch(source, /makeRecord\(props\.task\.items \|\| \[\]\)\.template/);
 });
 
 test('管理端隐藏未知或非字符串稳定编码，不展示原始敏感内容', () => {

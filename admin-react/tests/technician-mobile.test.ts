@@ -73,10 +73,10 @@ test('本人历史状态文案区分顾客确认与本次观察', () => {
 
 test('本人历史摘要只输出强类型白名单字段且忽略嵌套敏感值', () => {
   const lines = (technicianMobile as any).technicianHistorySummaryLines({
-    focus_areas: ['肩颈'], force_preference: '适中', occupation_contexts: ['久坐办公'],
+    focus_areas: ['肩颈'], force_preference: '适中', service_adjustments: ['减轻力度', '放慢节奏'], occupation_contexts: ['久坐办公'],
     quote: '不得显示', phone: '13800000000', unknown: { secret: '不得显示' },
   });
-  assert.deepEqual(lines, ['重点：肩颈', '力度：适中']);
+  assert.deepEqual(lines, ['重点：肩颈', '力度：适中', '本次调整：减轻力度、放慢节奏']);
   assert.doesNotMatch(lines.join(''), /不得显示|13800000000|object Object/);
 });
 

@@ -9,7 +9,7 @@ type Props = {task: any; onClose: () => void; onSaved: () => void};
 type Option = {value: string; label: string};
 export default function TechnicianProfileSheet(props: Props) {
   if (!props.task) return null;
-  return makeRecord(props.task.items || []).template === 'herbal_signature_v1' || props.task.record?.schema_version === 6
+  return props.task.record?.schema_version === 6
     ? <ProjectRecordSheet key={`${props.task.selection_session_id}:${props.task.record?.id || 'new'}`} {...props} />
     : <LegacyTechnicianProfileSheet {...props} />;
 }

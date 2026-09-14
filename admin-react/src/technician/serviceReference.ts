@@ -5,6 +5,7 @@ export type TemperaturePreference = 'lower' | 'medium' | 'higher';
 export type ServiceFeedback = 'suitable' | 'better_after_adjustment' | 'adjust_next_time';
 export type NextVisitPlan = 'repeat_current' | 'confirm_on_arrival';
 export type CommunicationPreference = 'quiet' | 'chat' | 'explain_before_action';
+export type ServiceAdjustment = 'pressure_lighter' | 'pressure_stronger' | 'pace_slower' | 'temperature_lower' | 'temperature_higher' | 'focus_area' | 'avoid_area' | 'end_early';
 export type V3AgeBand = '18_24' | '25_34' | '35_44' | '45_54' | '55_64' | '65_plus';
 export type V3Build = 'slim' | 'balanced' | 'sturdy';
 export type V3HeightBand = 'shorter' | 'average' | 'taller';
@@ -33,6 +34,7 @@ export interface ServiceReferenceInput {
   forcePreference?: ForcePreference;
   temperaturePreference?: TemperaturePreference;
   serviceFeedback?: ServiceFeedback;
+  serviceAdjustments?: ServiceAdjustment[];
   nextVisitPlan?: NextVisitPlan;
   customerConfirmed?: boolean;
   quote?: string;
@@ -53,6 +55,7 @@ export const SERVICE_REFERENCE_OPTIONS = {
   force: options<ForcePreference>([['轻柔', 'gentle'], ['适中', 'medium'], ['偏强', 'strong']]),
   temperature: options<TemperaturePreference>([['偏低', 'lower'], ['适中', 'medium'], ['偏高', 'higher']]),
   feedback: options<ServiceFeedback>([['本次合适', 'suitable'], ['调整后更合适', 'better_after_adjustment'], ['下次需调整', 'adjust_next_time']]),
+  adjustments: options<ServiceAdjustment>([['减轻力度', 'pressure_lighter'], ['加强力度', 'pressure_stronger'], ['放慢节奏', 'pace_slower'], ['调低温度', 'temperature_lower'], ['调高温度', 'temperature_higher'], ['重点照顾', 'focus_area'], ['避开该处', 'avoid_area'], ['提前结束', 'end_early']]),
   nextVisit: options<NextVisitPlan>([['延续本次', 'repeat_current'], ['到店再确认', 'confirm_on_arrival']]),
   communication: options<CommunicationPreference>([['希望安静', 'quiet'], ['愿意聊天', 'chat'], ['希望先沟通', 'explain_before_action']]),
 } as const;
@@ -65,6 +68,7 @@ export function hasServiceReferenceInput(values: ServiceReferenceInput): boolean
     || values.forcePreference
     || values.temperaturePreference
     || values.serviceFeedback
+    || values.serviceAdjustments?.length
     || values.nextVisitPlan
     || values.quote?.trim(),
   );
@@ -182,8 +186,13 @@ export function buildServiceReferenceV5Payload(userId: number, selectionSessionI
     throw new Error('本次无补充不能与服务内容同时保存');
   }
   if (values.recordingOutcome && values.customerConfirmed) throw new Error('本次无补充不能作为顾客确认');
-  const v3 = buildServiceReferenceV3Payload(userId, selectionSessionId, values);
-  const customerReported: Record<string, unknown> = { ...v3.profile.customer_reported };
+  const customerReported: Record<string, unknown> = {
+    ...(values.focusAreas?.length ? { focus_areas: values.focusAreas } : {}),
+    ...(values.avoidAreas?.length ? { avoid_areas: values.avoidAreas } : {}),
+    ...(values.forcePreference ? { force_preference: values.forcePreference } : {}),
+    ...(values.temperaturePreference ? { temperature_preference: values.temperaturePreference } : {}),
+    ...(values.communicationPreference ? { communication_preference: values.communicationPreference } : {}),
+  };
   if (values.bodyMapNotes?.length) {
     customerReported.body_service_notes = values.bodyMapNotes.map((note) => ({
       region: note.region,
@@ -195,20 +204,26 @@ export function buildServiceReferenceV5Payload(userId: number, selectionSessionI
     }));
   }
   return {
-    ...v3,
+    user_id: userId,
+    selection_session_id: selectionSessionId,
+    source: values.customerConfirmed ? 'both' as const : 'service_observation' as const,
     schema_version: 5 as const,
     taxonomy_version: 'service_reference_v4' as const,
+    customer_confirmed: Boolean(values.customerConfirmed),
     profile: {
-      ...v3.profile,
       schema_version: 5 as const,
       taxonomy_version: 'service_reference_v4' as const,
       customer_reported: customerReported,
       technician_observed: {
-        ...v3.profile.technician_observed,
+        ...(values.serviceAdjustments?.length ? { service_adjustments: values.serviceAdjustments } : {}),
+        ...(values.serviceFeedback ? { service_feedback: values.serviceFeedback } : {}),
         ...(values.serviceNote?.trim() ? { service_note: values.serviceNote.trim() } : {}),
         ...(values.recordingOutcome ? { recording_outcome: values.recordingOutcome } : {}),
       },
+      next_visit: values.nextVisitPlan ? { plan: values.nextVisitPlan } : {},
     },
+    signals: [],
+    note: '',
   };
 }
 
