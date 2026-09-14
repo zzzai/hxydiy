@@ -2779,6 +2779,10 @@ def _management_profile_record_view(record: CustomerProfileRecord, db: Session) 
     """Return only service-continuity facts; never expose profile dimensions or private notes."""
     view = _profile_record_view(record, db)
     if record.schema_version not in {2, 3, 4, 5, 6}:
+        view["profile"] = {}
+        view["note"] = ''
+        view["signals"] = []
+        view["correction_reason"] = ''
         return view
 
     raw_profile = record.profile if isinstance(record.profile, dict) else {}

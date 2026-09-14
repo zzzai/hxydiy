@@ -110,15 +110,18 @@ class TestTechnicianProfileQuickNoteContract:
         return {
             "user_id": self.own_user_id,
             "selection_session_id": self.session_id,
-            "source": "customer_statement",
+            "schema_version": 5,
+            "taxonomy_version": "service_reference_v4",
+            "customer_confirmed": True,
             "profile": {
-                "age_range": "26-35",
-                "gender": "女",
-                "body_type": "标准",
-                "occupation": "久坐",
+                "schema_version": 5,
+                "taxonomy_version": "service_reference_v4",
+                "customer_reported": {"communication_preference": "quiet", "force_preference": "gentle"},
+                "technician_observed": {"service_adjustments": ["pressure_lighter"], "service_feedback": "better_after_adjustment"},
+                "next_visit": {"plan": "confirm_on_arrival"},
             },
-            "signals": ["肩颈紧张", "偏好中等力度"],
-            "note": "顾客自述久坐后肩颈容易紧张。",
+            "signals": [],
+            "note": "",
         }
 
     def _v2_payload(self, *, confirmed=True):
@@ -143,7 +146,7 @@ class TestTechnicianProfileQuickNoteContract:
             },
         }
 
-    def test_v2_service_reference_persists_stable_structure_and_confirmation(self):
+    def test_legacy_v2_service_reference_write_is_rejected(self):
         payload = self._v2_payload()
         response = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
@@ -151,31 +154,22 @@ class TestTechnicianProfileQuickNoteContract:
             json=payload,
         )
 
-        assert response.status_code == 200, response.text
-        assert response.json()["schema_version"] == 2
-        assert response.json()["taxonomy_version"] == "service_reference_v1"
-        assert response.json()["customer_confirmed"] is True
-        assert response.json()["source"] == "both"
-        with self.SessionLocal() as db:
-            record = db.get(CustomerProfileRecord, response.json()["id"])
-            assert record.profile["customer_reported"]["avoid_areas"] == []
-            assert record.confirmed_at is not None
+        assert response.status_code == 422, response.text
 
-    def test_v2_unconfirmed_service_reference_uses_observation_source(self):
-        payload = self._v2_payload(confirmed=False)
-        payload["profile"]["customer_reported"].pop("avoid_areas")
+    def test_v5_requires_a_service_continuity_item(self):
+        payload = self._payload()
+        payload["profile"]["customer_reported"] = {}
+        payload["profile"]["technician_observed"] = {}
+        payload["profile"]["next_visit"] = {}
         response = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
             headers={**self.headers, "Idempotency-Key": "quick-note-v2-unconfirmed-001"},
             json=payload,
         )
 
-        assert response.status_code == 200, response.text
-        assert response.json()["source"] == "service_observation"
-        assert "avoid_areas" not in response.json()["profile"]["customer_reported"]
-        assert response.json()["confirmed_at"] is None
+        assert response.status_code == 422, response.text
 
-    def test_v2_rejects_unknown_duplicate_long_and_medical_content(self):
+    def test_legacy_v2_writes_remain_rejected_for_unsafe_payloads(self):
         cases = []
         unknown = self._v2_payload()
         unknown["profile"]["customer_reported"]["force_preference"] = "extreme"
@@ -201,7 +195,7 @@ class TestTechnicianProfileQuickNoteContract:
             )
             assert response.status_code == 422, response.text
 
-    def test_v2_quote_rejects_contact_consumption_and_personality_content(self):
+    def test_legacy_v2_writes_remain_rejected_for_private_payloads(self):
         quotes = [
             "手机号13812345678", "联系 138 1234 5678", "座机 010-12345678",
             "QQ 123456789", "微信号 abc123", "邮箱 guest@example.com",
@@ -265,7 +259,7 @@ class TestTechnicianProfileQuickNoteContract:
             assert len(records) == 1
 
         changed = self._payload()
-        changed["note"] = "不同的内容"
+        changed["profile"]["technician_observed"]["service_feedback"] = "adjust_next_time"
         conflict = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
             headers=request_headers,
@@ -275,7 +269,7 @@ class TestTechnicianProfileQuickNoteContract:
 
     def test_profile_only_accepts_whitelisted_structured_fields_and_actual_content(self):
         unknown_field = self._payload()
-        unknown_field["profile"]["diagnosis"] = "颈椎病"
+        unknown_field["profile"]["customer_reported"]["personal_context"] = {"age_band": "25_34"}
         invalid = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
             headers={**self.headers, "Idempotency-Key": "quick-note-invalid-001"},
@@ -289,17 +283,18 @@ class TestTechnicianProfileQuickNoteContract:
             json={
                 "user_id": self.own_user_id,
                 "selection_session_id": self.session_id,
-                "source": "customer_statement",
-                "profile": {},
+                "schema_version": 5,
+                "taxonomy_version": "service_reference_v4",
+                "profile": {"schema_version": 5, "taxonomy_version": "service_reference_v4", "customer_reported": {}, "technician_observed": {}, "next_visit": {}},
                 "signals": [],
                 "note": "",
             },
         )
         assert empty.status_code == 422, empty.text
 
-    def test_technician_profile_requires_explicit_record_source(self):
+    def test_v5_profile_requires_completed_service_association(self):
         payload = self._payload()
-        payload.pop("source")
+        payload.pop("selection_session_id")
         response = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
             headers={**self.headers, "Idempotency-Key": "quick-note-source-001"},
