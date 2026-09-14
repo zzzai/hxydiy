@@ -14,3 +14,11 @@ test('经营分析只展示服务参考的安全汇总字段', () => {
   assert.match(page, /更正率/);
   assert.doesNotMatch(page, /body_service_notes|service_note|\bquote\b/);
 });
+
+test('经营分析将已支付项目销量与浏览热度分开展示', () => {
+  const page = source('pages/AnalyticsPage.tsx');
+
+  assert.match(page, /project_sales/);
+  assert.match(page, /项目销量 Top5（已支付）/);
+  assert.match(page, /项目浏览热度 Top5/);
+});

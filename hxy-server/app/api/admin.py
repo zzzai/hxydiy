@@ -463,6 +463,53 @@ def operations_summary(
     feedback = list(db.scalars(feedback_stmt))
     ratings = [item.rating for item in feedback]
 
+    # 项目销量只基于已支付订单的冻结行快照，避免目录改名、调价或下架改写历史事实。
+    # 不聚合行金额：优惠券和组合加项的实际分摊属于结算范围，不应在经营看板中伪造项目收入。
+    project_sales_by_id: dict[int, dict] = {}
+    for order in orders:
+        for item in order.items or []:
+            if not isinstance(item, dict):
+                continue
+            project_id = item.get("project_id")
+            if isinstance(project_id, bool):
+                continue
+            try:
+                project_id = int(project_id)
+            except (TypeError, ValueError):
+                continue
+            if project_id <= 0:
+                continue
+            quantity = item.get("quantity", 1)
+            if isinstance(quantity, bool):
+                quantity = 1
+            try:
+                quantity = max(1, int(quantity))
+            except (TypeError, ValueError):
+                quantity = 1
+            summary = project_sales_by_id.setdefault(
+                project_id,
+                {
+                    "project_id": project_id,
+                    "name": str(item.get("name") or f"项目 #{project_id}"),
+                    "quantity": 0,
+                    "order_ids": set(),
+                },
+            )
+            summary["quantity"] += quantity
+            summary["order_ids"].add(order.id)
+    project_sales = [
+        {
+            "project_id": summary["project_id"],
+            "name": summary["name"],
+            "quantity": summary["quantity"],
+            "order_count": len(summary["order_ids"]),
+        }
+        for summary in sorted(
+            project_sales_by_id.values(),
+            key=lambda item: (-item["quantity"], -len(item["order_ids"]), item["project_id"]),
+        )[:5]
+    ]
+
     return {
         "period": {"start_date": start.isoformat(), "end_date": end.isoformat(), "store_id": selected_store_id},
         "transactions": {
@@ -501,6 +548,7 @@ def operations_summary(
             "average_rating": round(sum(ratings) / len(ratings), 2) if ratings else None,
             "low_rating_count": sum(1 for rating in ratings if rating <= 2),
         },
+        "project_sales": project_sales,
     }
 
 

@@ -51,6 +51,7 @@ export default function AnalyticsPage() {
   const operations = positions.operations || {};
   const feedback = summary.feedback || {};
   const statusRows = Object.entries(positions.status_counts || {}).map(([status, count]) => ({ key: status, status, count }));
+  const projectSales = summary.project_sales || [];
 
   return (
     <div>
@@ -149,7 +150,22 @@ export default function AnalyticsPage() {
         </Col>
       </Row>
 
-      <Card title="项目热度 Top5" style={{ marginTop: 16 }}>
+      <Card title="项目销量 Top5（已支付）" style={{ marginTop: 16 }}>
+        <Table
+          size="small"
+          pagination={false}
+          rowKey="project_id"
+          locale={{ emptyText: '所选日期暂无已支付项目' }}
+          dataSource={projectSales}
+          columns={[
+            { title: '项目', dataIndex: 'name' },
+            { title: '销量', dataIndex: 'quantity', width: 100, render: (quantity: number) => `${quantity} 份` },
+            { title: '关联订单', dataIndex: 'order_count', width: 110 },
+          ]}
+        />
+      </Card>
+
+      <Card title="项目浏览热度 Top5" style={{ marginTop: 16 }}>
         {(behavior.hot_projects || []).length ? behavior.hot_projects.map((project: any) => (
           <div key={project.project_id} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ width: 100, fontSize: 13 }}>{project.name}</span>

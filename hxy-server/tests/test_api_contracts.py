@@ -226,6 +226,8 @@ class AdminV2ContractTests(unittest.TestCase):
             cls.room_id = room.id
             cls.other_store_id = other_store.id
             cls.other_room_id = other_room.id
+            cls.own_project_id = own_project.id
+            cls.other_project_id = other_project.id
             cls.coupon_id = coupon.id
             cls.auth_headers = {
                 "Authorization": f"Bearer {create_staff_token(staff.id, staff.role)}"
@@ -820,7 +822,7 @@ class AdminV2ContractTests(unittest.TestCase):
                     order_type="service",
                     user_id=repeat_user.id,
                     store_id=1,
-                    items=[],
+                    items=[{"project_id": self.own_project_id, "name": "销量项目", "quantity": 2}],
                     total_amount_cents=1000,
                     pay_amount_cents=1000,
                     status="completed",
@@ -832,7 +834,7 @@ class AdminV2ContractTests(unittest.TestCase):
                     order_type="service",
                     user_id=new_user.id,
                     store_id=1,
-                    items=[],
+                    items=[{"project_id": self.own_project_id, "name": "销量项目", "quantity": 2}],
                     total_amount_cents=10000,
                     discount_cents=1000,
                     member_discount_cents=500,
@@ -846,7 +848,7 @@ class AdminV2ContractTests(unittest.TestCase):
                     order_type="service",
                     user_id=repeat_user.id,
                     store_id=1,
-                    items=[],
+                    items=[{"project_id": self.own_project_id, "name": "销量项目", "quantity": 1}],
                     total_amount_cents=20000,
                     discount_cents=2000,
                     pay_amount_cents=18000,
@@ -859,7 +861,7 @@ class AdminV2ContractTests(unittest.TestCase):
                     order_type="service",
                     user_id=new_user.id,
                     store_id=self.other_store_id,
-                    items=[],
+                    items=[{"project_id": self.other_project_id, "name": "其他门店项目", "quantity": 9}],
                     total_amount_cents=50000,
                     pay_amount_cents=50000,
                     status="completed",
@@ -927,6 +929,12 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertEqual(body["funnel"]["diy_entry_view"], 1)
         self.assertEqual(body["funnel"]["project_view"], 2)
         self.assertEqual(body["funnel"]["feedback_submit_success"], 1)
+        self.assertEqual(body["project_sales"], [{
+            "project_id": self.own_project_id,
+            "name": "销量项目",
+            "quantity": 3,
+            "order_count": 2,
+        }])
         self.assertGreaterEqual(body["service_positions"]["total_count"], 1)
 
     def test_operations_summary_requires_admin_role(self):
