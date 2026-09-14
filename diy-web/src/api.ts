@@ -368,7 +368,7 @@ export function enrollTrustedDevice(token: string) {
 }
 
 export function rebindTrustedDevice(token: string, code: string) {
-  return request<{ trusted: boolean }>('/auth/h5/trusted-device/rebind', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ code }) });
+  return request<{ trusted: boolean; access_token: string }>('/auth/h5/trusted-device/rebind', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ code }) });
 }
 
 export function issueMemberCode(token: string) {

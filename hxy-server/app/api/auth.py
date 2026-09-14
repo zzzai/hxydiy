@@ -87,12 +87,16 @@ def rebind_trusted_device(body: TrustedDeviceRebindRequest, response: Response, 
     for device in db.scalars(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == user_id, CustomerTrustedDevice.status == "active").with_for_update()):
         device.status, device.revoked_at = "revoked", now
     db.query(MembershipCode).filter(MembershipCode.user_id == user_id, MembershipCode.status.in_(["issued", "scanned_pending"])).update({"status": "revoked"}, synchronize_session=False)
+    login_version = advance_customer_login_version(db, user_id, now)
     token = secrets.token_urlsafe(32)
     db.add(CustomerTrustedDevice(user_id=user_id, token_hash=_hash_code(token), last_seen_at=now))
-    db.add(AuditLog(actor_type="customer", actor_id=str(user_id), store_id=user.membership_store_id, action="customer_trusted_device_rebound", entity_type="user", entity_id=str(user_id), detail={"method": "sms"}))
+    db.add(AuditLog(actor_type="customer", actor_id=str(user_id), store_id=user.membership_store_id, action="customer_trusted_device_rebound", entity_type="user", entity_id=str(user_id), detail={"method": "sms", "login_version": login_version}))
     db.commit()
     response.set_cookie(TRUSTED_DEVICE_COOKIE, token, max_age=31536000, httponly=True, secure=settings.environment == "production", samesite="lax", path="/")
-    return {"trusted": True}
+    return {
+        "trusted": True,
+        "access_token": create_access_token(str(user.id), user.openid, login_version),
+    }
 
 
 @router.post("/h5/member-code")
