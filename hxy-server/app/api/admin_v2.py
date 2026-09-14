@@ -2506,9 +2506,22 @@ class ServiceReferenceV5BodyNote(BaseModel):
         return self
 
 
-class ServiceReferenceV5CustomerReported(ServiceReferenceV3CustomerReported):
-    body_service_notes: list[ServiceReferenceV5BodyNote] = Field(default_factory=list, max_length=3)
+class ServiceReferenceV5CustomerReported(BaseModel):
+    """Only service-continuity facts are writable in the active v5 contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    focus_areas: list[ServiceArea] = Field(default_factory=list, max_length=6)
+    avoid_areas: list[AvoidArea] = Field(default_factory=list, max_length=5)
+    force_preference: Literal["gentle", "medium", "strong"] | None = None
+    temperature_preference: Literal["lower", "medium", "higher"] | None = None
     communication_preference: Literal["quiet", "chat", "explain_before_action"] | None = None
+    body_service_notes: list[ServiceReferenceV5BodyNote] = Field(default_factory=list, max_length=3)
+
+    @field_validator("focus_areas", "avoid_areas")
+    @classmethod
+    def validate_unique_areas(cls, value: list[str]) -> list[str]:
+        return _reject_duplicate_codes(value)
 
     @field_validator("body_service_notes")
     @classmethod
@@ -2519,7 +2532,10 @@ class ServiceReferenceV5CustomerReported(ServiceReferenceV3CustomerReported):
         return value
 
 
-class ServiceReferenceV5TechnicianObserved(ServiceReferenceV3TechnicianObserved):
+class ServiceReferenceV5TechnicianObserved(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    service_feedback: Literal["suitable", "better_after_adjustment", "adjust_next_time"] | None = None
     service_note: str = Field(default="", max_length=200)
     recording_outcome: Literal["no_additional_notes"] | None = None
 
@@ -2557,13 +2573,20 @@ class ServiceReferenceV5Profile(BaseModel):
         return self
 
     def has_content(self) -> bool:
-        return ServiceReferenceV3Profile(
-            schema_version=3,
-            taxonomy_version="service_reference_v2",
-            customer_reported=ServiceReferenceV3CustomerReported.model_validate(self.customer_reported.model_dump(exclude={"body_service_notes", "communication_preference"})),
-            technician_observed=ServiceReferenceV3TechnicianObserved.model_validate(self.technician_observed.model_dump(exclude={"service_note", "recording_outcome"})),
-            next_visit=self.next_visit,
-        ).has_content() or bool(self.customer_reported.body_service_notes or self.customer_reported.communication_preference or self.technician_observed.service_note or self.technician_observed.recording_outcome)
+        reported = self.customer_reported
+        observed = self.technician_observed
+        return bool(
+            reported.focus_areas
+            or reported.avoid_areas
+            or reported.force_preference
+            or reported.temperature_preference
+            or reported.communication_preference
+            or reported.body_service_notes
+            or observed.service_feedback
+            or observed.service_note
+            or observed.recording_outcome
+            or self.next_visit.plan
+        )
 
 
 from app.schemas.service_record import ProjectServiceRecord
@@ -2774,25 +2797,52 @@ def _profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
 
 
 def _management_profile_record_view(record: CustomerProfileRecord, db: Session) -> dict:
-    """管理端历史只提供 v5 身体记录的安全提醒，绝不下发部位或自述细节。"""
+    """Return only service-continuity facts; never expose profile dimensions or private notes."""
     view = _profile_record_view(record, db)
-    if record.schema_version == 6:
-        view['profile'] = {'schema_version': 6, 'taxonomy_version': 'service_record_v1'}
-        view['note'] = ''
-        view['signals'] = []
-        view['correction_reason'] = ''
+    if record.schema_version not in {2, 3, 4, 5, 6}:
         return view
-    if record.schema_version != 5:
-        return view
-    profile = deepcopy(view["profile"])
-    reported = profile.get("customer_reported") if isinstance(profile, dict) else None
-    notes = reported.pop("body_service_notes", None) if isinstance(reported, dict) else None
-    observed = profile.get("technician_observed") if isinstance(profile, dict) else None
-    if isinstance(observed, dict):
-        observed.pop("service_note", None)
-    if notes:
+
+    raw_profile = record.profile if isinstance(record.profile, dict) else {}
+    reported = raw_profile.get("customer_reported") if isinstance(raw_profile.get("customer_reported"), dict) else {}
+    observed = raw_profile.get("technician_observed") if isinstance(raw_profile.get("technician_observed"), dict) else {}
+    next_visit = raw_profile.get("next_visit") if isinstance(raw_profile.get("next_visit"), dict) else {}
+    safe_profile: dict[str, object] = {
+        "schema_version": record.schema_version,
+        "taxonomy_version": record.taxonomy_version,
+    }
+    safe_reported: dict[str, object] = {}
+    allowed_lists = {
+        "focus_areas": {"neck_shoulder", "waist_hip", "legs", "abdomen", "feet", "full_relaxation"},
+        "avoid_areas": {"neck_shoulder", "waist_hip", "legs", "abdomen", "feet"},
+    }
+    for field, allowed in allowed_lists.items():
+        value = reported.get(field)
+        filtered = [item for item in value if isinstance(item, str) and item in allowed] if isinstance(value, list) else []
+        if filtered:
+            safe_reported[field] = filtered
+    allowed_values = {
+        "force_preference": {"gentle", "medium", "strong"},
+        "temperature_preference": {"lower", "medium", "higher"},
+        "communication_preference": {"quiet", "chat", "explain_before_action"},
+    }
+    for field, allowed in allowed_values.items():
+        value = reported.get(field)
+        if isinstance(value, str) and value in allowed:
+            safe_reported[field] = value
+    if safe_reported:
+        safe_profile["customer_reported"] = safe_reported
+    feedback = observed.get("service_feedback")
+    if feedback in {"suitable", "better_after_adjustment", "adjust_next_time"}:
+        safe_profile["technician_observed"] = {"service_feedback": feedback}
+    plan = next_visit.get("plan")
+    if plan in {"repeat_current", "confirm_on_arrival"}:
+        safe_profile["next_visit"] = {"plan": plan}
+    if record.schema_version in {4, 5} and isinstance(reported.get("body_service_notes"), list) and reported["body_service_notes"]:
         view["body_reconfirm_required"] = True
-    view["profile"] = profile
+    view["profile"] = safe_profile
+    view["note"] = ''
+    view["signals"] = []
+    view["correction_reason"] = ''
     return view
 
 

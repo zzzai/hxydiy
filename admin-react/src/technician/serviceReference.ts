@@ -54,7 +54,7 @@ export const SERVICE_REFERENCE_OPTIONS = {
   temperature: options<TemperaturePreference>([['偏低', 'lower'], ['适中', 'medium'], ['偏高', 'higher']]),
   feedback: options<ServiceFeedback>([['本次合适', 'suitable'], ['调整后更合适', 'better_after_adjustment'], ['下次需调整', 'adjust_next_time']]),
   nextVisit: options<NextVisitPlan>([['延续本次', 'repeat_current'], ['到店再确认', 'confirm_on_arrival']]),
-  communication: options<CommunicationPreference>([['希望安静', 'quiet'], ['愿意聊天', 'chat'], ['动作前说明', 'explain_before_action']]),
+  communication: options<CommunicationPreference>([['希望安静', 'quiet'], ['愿意聊天', 'chat'], ['希望先沟通', 'explain_before_action']]),
 } as const;
 
 export function hasServiceReferenceInput(values: ServiceReferenceInput): boolean {

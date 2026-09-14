@@ -76,7 +76,7 @@ test('本人历史摘要只输出强类型白名单字段且忽略嵌套敏感�
     focus_areas: ['肩颈'], force_preference: '适中', occupation_contexts: ['久坐办公'],
     quote: '不得显示', phone: '13800000000', unknown: { secret: '不得显示' },
   });
-  assert.deepEqual(lines, ['重点：肩颈', '力度：适中', '职业场景：久坐办公']);
+  assert.deepEqual(lines, ['重点：肩颈', '力度：适中']);
   assert.doesNotMatch(lines.join(''), /不得显示|13800000000|object Object/);
 });
 
@@ -90,7 +90,7 @@ test('本人历史白名单键也拒绝错误类型、未知文案和电话文�
     decision_priorities: ['品质', { secret: '价格' }],
     budget_preference: '年收入百万',
   });
-  assert.deepEqual(lines, ['职业场景：久坐办公', '决策关注：品质']);
+  assert.deepEqual(lines, []);
   assert.doesNotMatch(lines.join(''), /13800000000|未知职业|年收入|object Object/);
 });
 

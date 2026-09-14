@@ -154,6 +154,35 @@ class TestTechnicianProfileV3Contract:
         assert response.status_code == 200, response.text
         assert response.json()["profile"]["customer_reported"]["communication_preference"] == "quiet"
 
+    def test_v5_rejects_legacy_profile_dimensions(self):
+        """The active quick-note contract cannot be used to add inferred profiles."""
+        payload = self.v5_payload([], customer_confirmed=False)
+        payload["profile"]["customer_reported"]["personal_context"] = {"age_band": "25_34"}
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=payload,
+            headers={**self.technician_headers, "Idempotency-Key": "v5-no-legacy-profile-001"},
+        )
+        assert response.status_code == 422, response.text
+
+    def test_management_view_redacts_historical_profile_dimensions(self):
+        """Existing v3 rows remain readable as records, but not as manager-visible profiles."""
+        saved = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            json=self.v3_payload(),
+            headers={**self.technician_headers, "Idempotency-Key": "v3-management-redaction-001"},
+        )
+        assert saved.status_code == 200, saved.text
+        with self.SessionLocal() as db:
+            from app.api.admin_v2 import _management_profile_record_view
+            record = db.get(CustomerProfileRecord, saved.json()["id"])
+            view = _management_profile_record_view(record, db)
+        serialized = json.dumps(view, ensure_ascii=False)
+        assert "age_band" not in serialized
+        assert "occupation_contexts" not in serialized
+        assert "medication_mentioned" not in serialized
+        assert "顾客自述正在用药" not in serialized
+
     def v3_payload(self, **overrides):
         profile = {
             "schema_version": 3,
