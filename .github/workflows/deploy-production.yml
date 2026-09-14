@@ -1,10 +1,6 @@
 name: Deploy Production
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    branches: [main]
-    types: [completed]
   workflow_dispatch:
     inputs:
       commit_sha:
@@ -41,13 +37,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const fromCi = context.eventName === 'workflow_run';
-            let run = context.payload.workflow_run;
-            const sha = fromCi ? run.head_sha : (context.payload.inputs?.commit_sha || '');
+            const sha = context.payload.inputs?.commit_sha || '';
             const requestedRunId = context.payload.inputs?.ci_run_id || '';
             const { eligibleRun, hasBuilds } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/release-policy.cjs`);
             const { data: latest } = await github.rest.repos.getCommit({ ...context.repo, ref: 'main' });
-            if (!fromCi && /^[0-9a-f]{40}$/.test(sha)) {
+            let run;
+            if (/^[0-9a-f]{40}$/.test(sha)) {
               if (/^\d+$/.test(requestedRunId)) {
                 const { data } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: Number(requestedRunId) });
                 run = data;
@@ -58,7 +53,7 @@ jobs:
                 run = data.workflow_runs.find((candidate) => eligibleRun(candidate, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`));
               }
             }
-            const allowedEvents = fromCi ? ['push'] : ['push', 'workflow_dispatch'];
+            const allowedEvents = ['push', 'workflow_dispatch'];
             let shouldDeploy = eligibleRun(run, sha, latest.sha, `${context.repo.owner}/${context.repo.repo}`, allowedEvents);
             if (shouldDeploy) {
               const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
