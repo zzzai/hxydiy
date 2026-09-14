@@ -391,15 +391,16 @@ export default function App() {
     : snapshotStoreTotalCents;
   const payableTotal = displayPayableTotal({
     readOnly,
+    viewingSubmitted: boot === 'submitted',
     serverTotalCents: Number.isFinite(serverPayableTotal) ? serverPayableTotal : null,
     previewStoreTotalCents: preview.storeTotalCents,
     previewMemberTotalCents: preview.memberTotalCents,
     priceType: appliedPriceType,
   });
-  const memberTotalCents = readOnly
+  const memberTotalCents = readOnly || boot === 'submitted'
     ? snapshotMemberTotalCents
     : preview.memberTotalCents;
-  const storeTotalCents = readOnly
+  const storeTotalCents = readOnly || boot === 'submitted'
     ? snapshotStoreTotalCents
     : preview.storeTotalCents;
   const alignedMemberTotalCents = savingHint?.kind === 'member' && Number.isFinite(savingHint.estimated_saving_cents)

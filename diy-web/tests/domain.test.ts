@@ -470,6 +470,21 @@ test('可编辑选单优先显示本地实时预计金额，确认后才使用�
   assert.equal(displayPayableTotal({ ...input, readOnly: true, serverTotalCents: null }), 27600);
 });
 
+test('已提交清单金额独立于可追加状态及新购物车金额', () => {
+  const input = {
+    readOnly: false,
+    serverTotalCents: 14890,
+    previewStoreTotalCents: 0,
+    previewMemberTotalCents: 0,
+    priceType: 'store' as const,
+  };
+  assert.equal(domainModule.displayPayableTotal({ ...input, viewingSubmitted: true }), 14890);
+  assert.equal(domainModule.displayPayableTotal({ ...input, viewingSubmitted: false }), 0);
+  assert.equal(domainModule.displayPayableTotal({ ...input, viewingSubmitted: true, previewStoreTotalCents: 5900 }), 14890);
+  assert.equal(domainModule.displayPayableTotal({ ...input, viewingSubmitted: false, previewStoreTotalCents: 5900 }), 5900);
+  assert.equal(domainModule.displayPayableTotal({ ...input, viewingSubmitted: true, serverTotalCents: 12900 }), 12900);
+});
+
 test('未登录显示门店价并引导登录看会员价', () => {
   const item = project({ id: 1, code: 'hxy-qiqing-30', category: 'bath' });
   const guidance = priceGuidance(item, null);

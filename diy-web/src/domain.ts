@@ -86,6 +86,7 @@ export function emptyPricingPreview(): PricingPreview {
 
 export function displayPayableTotal(input: {
   readOnly: boolean;
+  viewingSubmitted?: boolean;
   serverTotalCents: number | null;
   previewStoreTotalCents: number;
   previewMemberTotalCents: number;
@@ -94,7 +95,7 @@ export function displayPayableTotal(input: {
   const previewTotal = input.priceType === 'member'
     ? input.previewMemberTotalCents
     : input.previewStoreTotalCents;
-  return input.readOnly && input.serverTotalCents !== null && Number.isFinite(input.serverTotalCents)
+  return (input.readOnly || input.viewingSubmitted) && input.serverTotalCents !== null && Number.isFinite(input.serverTotalCents)
     ? input.serverTotalCents
     : previewTotal;
 }
