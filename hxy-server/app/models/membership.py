@@ -40,6 +40,7 @@ class MembershipBenefitGrant(Base):
     cancellation_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     refund_disposition: Mapped[str | None] = mapped_column(String(64), nullable=True)
     recovery_idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    redemption_idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     status: Mapped[str] = mapped_column(String(16), default="available", index=True)
     used_service_line_id: Mapped[str | None] = mapped_column(
         ForeignKey("service_lines.id"), nullable=True

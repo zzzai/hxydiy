@@ -123,6 +123,10 @@ export const createCustomerProfileRecord = (data: {
 });
 export const confirmSelectionSession = (id: string) => client.post(`/admin/v2/selection-sessions/${id}/confirm`);
 export const cancelSelectionSession = (id: string) => client.post(`/admin/v2/selection-sessions/${id}/cancel`);
+export const redeemAnnualGift = (sessionId: string, data: { cycle_id: string; service_line_id: string; idempotency_key: string }) =>
+  client.post(`/admin/v2/selection-sessions/${sessionId}/annual-gift/redeem`, data);
+export const cancelSelectionServiceLine = (sessionId: string, serviceLineId: string, reason: string) =>
+  client.post(`/admin/v2/selection-sessions/${sessionId}/service-lines/${serviceLineId}/cancel`, { reason });
 export const getSelectionChangeRequests = (state = 'awaiting_staff_confirmation') =>
   client.get('/admin/v2/selection-change-requests', { params: { state } });
 export const approveSelectionChangeRequest = (id: string) =>

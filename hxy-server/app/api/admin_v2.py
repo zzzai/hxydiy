@@ -30,6 +30,7 @@ from app.models import (
     TechnicianInvite,
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
+from app.domain.membership_pricing import price_book_snapshot
 from app.domain.occupancy import audit_occupancy, release_occupancy
 from app.services.customer_profile_projection import rebuild_customer_profile_current
 from app.models.operations import Room, Technician
@@ -427,6 +428,7 @@ def _selection_view(session: SelectionSession, customer: User | None = None, fee
             "is_member": customer.is_member,
             "member_type": customer.member_type,
             "member_expire_at": customer.member_expire_at.isoformat() if customer.member_expire_at else None,
+            "membership_cycle_id": customer.annual_membership_cycle_id,
         } if customer else None),
         "feedback": ({
             "id": feedback.id,
@@ -820,6 +822,221 @@ def cancel_selection_session(session_id: str, db: Session = Depends(get_db), aut
     db.commit()
     db.refresh(session)
     return _selection_view(session, db.get(User, session.customer_id) if session.customer_id else None)
+
+
+class AnnualGiftRedeemIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cycle_id: StrictStr = Field(min_length=1, max_length=64)
+    service_line_id: StrictStr = Field(min_length=1, max_length=36)
+    idempotency_key: StrictStr = Field(min_length=1, max_length=64)
+
+
+class ServiceLineCancellationIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: StrictStr = Field(min_length=2, max_length=200)
+
+
+def _locked_service_line(db: Session, session_id: str, service_line_id: str) -> ServiceLine:
+    line = db.scalar(
+        select(ServiceLine)
+        .where(
+            ServiceLine.id == service_line_id,
+            ServiceLine.selection_session_id == session_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if line is None:
+        raise HTTPException(status_code=404, detail="服务项目不存在")
+    return line
+
+
+def _annual_gift_eligible_line(db: Session, session: SelectionSession, line: ServiceLine) -> Project:
+    snapshot = line.snapshot or {}
+    project_id = snapshot.get("project_id")
+    if (
+        line.state != "pending"
+        or not isinstance(project_id, int)
+        or int(snapshot.get("quantity") or 1) != 1
+        or snapshot.get("item_kind") == "standalone_addon"
+        or snapshot.get("addon_id") is not None
+        or snapshot.get("addon_ids")
+        or snapshot.get("option_choice_id") is not None
+        or snapshot.get("option_choice_ids")
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "ANNUAL_GIFT_LINE_INELIGIBLE",
+            "message": "赠送权益仅可核销一项未开始、无加项的单次服务",
+        })
+    project = db.get(Project, project_id)
+    if (
+        project is None
+        or project.store_id != session.store_id
+        or project.publication_status != "published"
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "ANNUAL_GIFT_LINE_INELIGIBLE",
+            "message": "该服务项目当前不可用于赠送权益",
+        })
+    try:
+        store_price = price_book_snapshot(db, project.id).prices["store"]
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "ANNUAL_GIFT_LINE_INELIGIBLE",
+            "message": "该服务项目缺少有效门店价格",
+        }) from exc
+    if store_price > 9900:
+        raise HTTPException(status_code=409, detail={
+            "code": "ANNUAL_GIFT_LINE_INELIGIBLE",
+            "message": "赠送权益仅可核销门店价不高于99元的服务",
+        })
+    return project
+
+
+def _replace_session_item(session: SelectionSession, service_line_id: str, transform) -> list[dict]:
+    items = []
+    changed = False
+    for item in session.items or []:
+        if str(item.get("service_line_id") or "") == service_line_id:
+            items.append(transform(dict(item)))
+            changed = True
+        else:
+            items.append(dict(item))
+    if not changed:
+        raise HTTPException(status_code=409, detail="服务项目与当前确认选单不一致")
+    return items
+
+
+@router.post("/selection-sessions/{session_id}/annual-gift/redeem")
+def redeem_annual_gift(
+    session_id: str,
+    body: AnnualGiftRedeemIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    session = _locked_owned_selection(db, session_id, staff)
+    if session.status != "confirmed" or not session.customer_id:
+        raise HTTPException(status_code=409, detail="仅已确认且已绑定顾客的选单可核销赠送权益")
+    user = _locked_store_user(db, session.customer_id, staff)
+    grant = _locked_membership_cycle(db, user.id, body.cycle_id)
+    if grant is None or grant.store_id != session.store_id:
+        raise HTTPException(status_code=404, detail="会员周期不存在")
+    now = datetime.now(UTC)
+    expires_at = _utc_time(grant.membership_expires_at) if grant.membership_expires_at else None
+    if grant.redemption_idempotency_key not in {None, body.idempotency_key}:
+        raise HTTPException(status_code=409, detail="该赠送权益已由其他核销请求处理")
+    if (
+        grant.cycle_state != "active"
+        or _utc_time(grant.membership_started_at) > now
+        or expires_at is None
+        or expires_at <= now
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "ANNUAL_GIFT_UNAVAILABLE",
+            "message": "该年度会员周期当前没有可用赠送权益",
+        })
+    line = _locked_service_line(db, session.id, body.service_line_id)
+    if grant.status == "used" and grant.used_service_line_id == line.id and grant.redemption_idempotency_key == body.idempotency_key:
+        return _selection_view(session, user)
+    if grant.status != "available":
+        raise HTTPException(status_code=409, detail={
+            "code": "ANNUAL_GIFT_UNAVAILABLE",
+            "message": "该年度会员周期当前没有可用赠送权益",
+        })
+    _annual_gift_eligible_line(db, session, line)
+    if grant.used_service_line_id and grant.used_service_line_id != line.id:
+        raise HTTPException(status_code=409, detail="该年度赠送权益已用于其他服务项目")
+    session.items = _replace_session_item(
+        session,
+        line.id,
+        lambda item: {
+            **item,
+            "annual_gift_cycle_id": grant.membership_cycle_id,
+            "annual_gift_applied": True,
+        },
+    )
+    line.snapshot = {**(line.snapshot or {}), "annual_gift_cycle_id": grant.membership_cycle_id}
+    grant.status = "used"
+    grant.used_service_line_id = line.id
+    grant.used_at = now
+    grant.redemption_idempotency_key = body.idempotency_key
+    from app.api.selections import refresh_session_pricing
+    try:
+        pricing = refresh_session_pricing(db, session, confirmed_at=_utc_time(session.confirmed_at) if session.confirmed_at else now)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "CONFIRMATION_PRICING_INVALID", "message": str(exc)}) from exc
+    _sync_unsettled_fulfillment_bill(db, session, pricing)
+    _audit(db, staff, "redeem_annual_membership_gift", "membership_benefit_grant", str(grant.id), {
+        "cycle_id": grant.membership_cycle_id,
+        "selection_session_id": session.id,
+        "service_line_id": line.id,
+        "idempotency_key": body.idempotency_key,
+        "payable_total_cents": pricing["payable_total_cents"],
+    })
+    db.commit()
+    db.refresh(session)
+    return _selection_view(session, user)
+
+
+@router.post("/selection-sessions/{session_id}/service-lines/{service_line_id}/cancel")
+def cancel_service_line(
+    session_id: str,
+    service_line_id: str,
+    body: ServiceLineCancellationIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    session = _locked_owned_selection(db, session_id, staff)
+    user = _locked_store_user(db, session.customer_id, staff) if session.customer_id else None
+    if session.status != "confirmed":
+        raise HTTPException(status_code=409, detail="仅已确认选单可取消服务项目")
+    line = _locked_service_line(db, session.id, service_line_id)
+    if line.state == "cancelled":
+        return _selection_view(session, user)
+    if line.state != "pending":
+        raise HTTPException(status_code=409, detail="已开始或已完成的服务项目不能取消")
+    grant = db.scalar(
+        select(MembershipBenefitGrant)
+        .where(MembershipBenefitGrant.used_service_line_id == line.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    session.items = [
+        dict(item)
+        for item in session.items or []
+        if str(item.get("service_line_id") or "") != line.id
+    ]
+    line.state = "cancelled"
+    line.snapshot = {**(line.snapshot or {}), "state": "cancelled", "cancellation_reason": body.reason.strip()}
+    if grant is not None and grant.cycle_state == "active":
+        grant.status = "available"
+        grant.used_service_line_id = None
+        grant.used_at = None
+        grant.redemption_idempotency_key = None
+    from app.api.selections import refresh_session_pricing
+    try:
+        pricing = refresh_session_pricing(
+            db,
+            session,
+            confirmed_at=_utc_time(session.confirmed_at) if session.confirmed_at else datetime.now(UTC),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "CONFIRMATION_PRICING_INVALID", "message": str(exc)}) from exc
+    _sync_unsettled_fulfillment_bill(db, session, pricing)
+    _audit(db, staff, "cancel_service_line", "service_line", line.id, {
+        "selection_session_id": session.id,
+        "reason": body.reason.strip(),
+        "released_cycle_id": grant.membership_cycle_id if grant and grant.cycle_state == "active" else None,
+    })
+    db.commit()
+    db.refresh(session)
+    return _selection_view(session, user)
 
 
 @router.post("/selection-change-requests/{request_id}/approve")

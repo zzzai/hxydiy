@@ -229,6 +229,11 @@ def calculate_selection_pricing(
             )
         unit_payable = confirmed.amount_cents if confirmed is not None else legacy_payable_unit
         line_basis = confirmed.basis if confirmed is not None else price_type
+        # 年度赠送只能由店长核销命令写入该标识；顾客提交的选单 schema 不接收此字段。
+        # 仍保留门店/会员基准价，便于账单和审计展示原价与核销差额。
+        if item.get("annual_gift_cycle_id"):
+            unit_payable = 0
+            line_basis = "annual_gift"
         if price_context is not None:
             confirmation_payable_subtotal += unit_payable * quantity
         store_subtotal += line_store
@@ -514,6 +519,7 @@ def _has_bundle_base_eligibility(item: dict) -> bool:
         _first_value(item, "price_basis") == "annual_gift"
         or _first_value(item, "basis") == "annual_gift"
         or bool(_first_value(item, "annual_gift_applied"))
+        or bool(_first_value(item, "annual_gift_cycle_id"))
     ):
         return False
     return True
