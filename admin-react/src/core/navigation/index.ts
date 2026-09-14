@@ -50,6 +50,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     icon: 'team',
     items: [
       { path: '/techs', label: '技师管理', icon: 'idcard', roles: managementRoles },
+      { path: '/staff-accounts', label: '员工账号', icon: 'team', roles: ['admin'], requiresUnboundAdmin: true },
       { path: '/users', label: '用户列表', icon: 'team', roles: managementRoles },
       { path: '/tags', label: '标签管理', icon: 'tags', roles: managementRoles },
       { path: '/segments', label: '用户分群', icon: 'pie-chart', roles: managementRoles },
