@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, Staff, Store
+from app.models import AuditLog, MediaAsset, PageContent, Project, Staff, Store
 from app.services.media_storage import MediaStorageError
 
 
@@ -129,6 +129,62 @@ class AdminMediaApiTests(unittest.TestCase):
             media = db.get(__import__("app.models", fromlist=["MediaAsset"]).MediaAsset, uploaded["id"])
             self.assertIsNotNone(media)
             self.assertIsNotNone(media.deleted_at)
+
+    def test_media_delete_rejects_catalog_and_page_content_references(self):
+        uploaded = self.client.post(
+            "/api/v1/admin/media",
+            headers=self._headers(self.manager_id),
+            files={"file": ("cover.jpg", io.BytesIO(b"jpg-bytes"), "image/jpeg")},
+        ).json()
+        with self.SessionLocal() as db:
+            db.add(Project(
+                store_id=1,
+                code="media-reference-project",
+                category="bath",
+                name="引用媒体项目",
+                image_url=uploaded["url"],
+                detail_modules=[{"type": "image", "body": uploaded["url"]}],
+            ))
+            db.add(PageContent(
+                store_id=1,
+                page_key="media-reference-page",
+                promo_banners=[{"image": uploaded["url"]}],
+            ))
+            db.commit()
+
+        response = self.client.delete(f"/api/v1/admin/media/{uploaded['id']}", headers=self._headers(self.manager_id))
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "MEDIA_IN_USE")
+        self.assertEqual(response.json()["detail"]["reference_count"], 2)
+        with self.SessionLocal() as db:
+            self.assertIsNone(db.get(MediaAsset, uploaded["id"]).deleted_at)
+
+    def test_media_delete_rejects_historical_signed_url_reference_by_object_key(self):
+        storage = _FakeStorage()
+        with patch("app.api.media.get_media_storage", return_value=storage):
+            uploaded = self.client.post(
+                "/api/v1/admin/media",
+                headers=self._headers(self.manager_id),
+                files={"file": ("cover.png", io.BytesIO(b"png-bytes"), "image/png")},
+            ).json()
+        with self.SessionLocal() as db:
+            db.add(Project(
+                store_id=1,
+                code="media-signed-url-project",
+                category="bath",
+                name="签名地址引用项目",
+                image_url=f"{uploaded['url']}?e=expired-signature",
+            ))
+            db.commit()
+
+        response = self.client.delete(f"/api/v1/admin/media/{uploaded['id']}", headers=self._headers(self.manager_id))
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "MEDIA_IN_USE")
+        self.assertEqual(storage.delete_calls, [])
+        with self.SessionLocal() as db:
+            self.assertIsNone(db.get(MediaAsset, uploaded["id"]).deleted_at)
 
     def test_qiniu_backend_uses_storage_adapter_and_cdn_url(self):
         storage = _FakeStorage()
