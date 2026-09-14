@@ -10,6 +10,7 @@ test('服务参考使用稳定编码而非中文展示值', () => {
   assert.deepEqual(SERVICE_REFERENCE_OPTIONS.focusAreas[0], { label: '肩颈', value: 'neck_shoulder' });
   assert.equal(SERVICE_REFERENCE_OPTIONS.force[1].value, 'medium');
   assert.equal(SERVICE_REFERENCE_OPTIONS.nextVisit[0].value, 'repeat_current');
+  assert.deepEqual(SERVICE_REFERENCE_OPTIONS.communication[2], { label: '希望先沟通', value: 'explain_before_action' });
 });
 
 test('服务参考请求保留选择顺序、空数组和确认来源', () => {

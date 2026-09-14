@@ -287,7 +287,12 @@ SERVICE_REFERENCE_LABELS = {
         "adjust_next_time": "下次需调整",
     },
     "next_visit": {"repeat_current": "延续本次", "confirm_on_arrival": "到店再确认"},
-    "communication": {"quiet": "希望安静", "chat": "愿意聊天", "explain_before_action": "动作前说明"},
+    "communication": {"quiet": "希望安静", "chat": "愿意聊天", "explain_before_action": "希望先沟通"},
+    "adjustments": {
+        "pressure_lighter": "减轻力度", "pressure_stronger": "加强力度", "pace_slower": "放慢节奏",
+        "temperature_lower": "调低温度", "temperature_higher": "调高温度", "focus_area": "重点照顾",
+        "avoid_area": "避开该处", "end_early": "提前结束",
+    },
 }
 
 
@@ -324,7 +329,14 @@ SERVICE_REFERENCE_V3_TAXONOMY = {
 }
 
 SERVICE_REFERENCE_V4_TAXONOMY = {
-    **SERVICE_REFERENCE_V2_TAXONOMY,
+    "focus_areas": SERVICE_REFERENCE_LABELS["areas"],
+    "avoid_areas": {key: value for key, value in SERVICE_REFERENCE_LABELS["areas"].items() if key != "full_relaxation"},
+    "force": SERVICE_REFERENCE_LABELS["force"],
+    "temperature": SERVICE_REFERENCE_LABELS["temperature"],
+    "communication": SERVICE_REFERENCE_LABELS["communication"],
+    "feedback": SERVICE_REFERENCE_LABELS["feedback"],
+    "next_visit": SERVICE_REFERENCE_LABELS["next_visit"],
+    "service_adjustments": SERVICE_REFERENCE_LABELS["adjustments"],
     "body_service_notes": {
         "regions": {
             "head": "头部", "neck": "颈部", "shoulder": "肩部", "chest": "胸部", "abdomen": "腹部",
@@ -634,11 +646,9 @@ def _safe_reference_profile(value) -> dict:
     shape = {
         "customer_reported": {
             "focus_areas": list, "avoid_areas": list,
-            "force_preference": str, "temperature_preference": str,
-            "work_lifestyle": {"occupation_contexts": list},
-            "communication_consumption": {"decision_priorities": list, "budget_preference": str},
+            "force_preference": str, "temperature_preference": str, "communication_preference": str,
         },
-        "technician_observed": {"service_feedback": str, "session_response": {"relaxation": str}},
+        "technician_observed": {"service_adjustments": list, "service_feedback": str},
         "next_visit": {"plan": str},
     }
 
@@ -700,10 +710,7 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
         return summary
     if (record.schema_version, record.taxonomy_version) in ((3, "service_reference_v2"), (4, "service_reference_v3"), (5, "service_reference_v4")):
         reported = profile.get("customer_reported") or {}
-        lifestyle = reported.get("work_lifestyle") or {}
-        consumption = reported.get("communication_consumption") or {}
         observed = profile.get("technician_observed") or {}
-        response = observed.get("session_response") or {}
         area_labels = SERVICE_REFERENCE_LABELS["areas"]
         summary = {
             "schema_version": record.schema_version,
@@ -713,22 +720,9 @@ def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | Non
             "force_preference": SERVICE_REFERENCE_LABELS["force"].get(reported.get("force_preference")),
             "temperature_preference": SERVICE_REFERENCE_LABELS["temperature"].get(reported.get("temperature_preference")),
             "communication_preference": SERVICE_REFERENCE_LABELS["communication"].get(reported.get("communication_preference")),
-            "occupation_contexts": [
-                SERVICE_REFERENCE_V2_TAXONOMY["occupation_contexts"][code]
-                for code in lifestyle.get("occupation_contexts", [])
-                if code in SERVICE_REFERENCE_V2_TAXONOMY["occupation_contexts"]
-            ],
-            "relaxation": SERVICE_REFERENCE_V2_TAXONOMY["session_response"]["relaxation"].get(
-                response.get("relaxation")
-            ),
+            "service_adjustments": [SERVICE_REFERENCE_LABELS["adjustments"][code] for code in observed.get("service_adjustments", []) if code in SERVICE_REFERENCE_LABELS["adjustments"]],
             "service_feedback": SERVICE_REFERENCE_LABELS["feedback"].get(observed.get("service_feedback")),
             "next_visit_plan": SERVICE_REFERENCE_LABELS["next_visit"].get((profile.get("next_visit") or {}).get("plan")),
-            "decision_priorities": [
-                SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"][code]
-                for code in consumption.get("decision_priorities", [])
-                if code in SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["decision_priorities"]
-            ],
-            "budget_preference": SERVICE_REFERENCE_V2_TAXONOMY["communication_consumption"]["budget_preference"].get(consumption.get("budget_preference")),
             **({"body_reconfirm_required": True} if record.schema_version in {4, 5} and has_body_notes else {}),
         }
         return {key: value for key, value in summary.items() if value not in (None, [], "")}

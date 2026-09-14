@@ -312,10 +312,17 @@ class TestTechnicianPortalApi:
             json={
                 "user_id": user.id,
                 "selection_session_id": "tech-action-session",
-                "source": "both",
-                "profile": {},
-                "signals": ["偏好中等力度"],
-                "note": "服务结束后记录",
+                "schema_version": 5,
+                "taxonomy_version": "service_reference_v4",
+                "profile": {
+                    "schema_version": 5,
+                    "taxonomy_version": "service_reference_v4",
+                    "customer_reported": {"communication_preference": "quiet"},
+                    "technician_observed": {"service_adjustments": ["pace_slower"]},
+                    "next_visit": {},
+                },
+                "signals": [],
+                "note": "",
             },
         )
         assert profile.status_code == 200, profile.text
@@ -447,7 +454,21 @@ class TestTechnicianPortalApi:
         response = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
             headers={**headers, "Idempotency-Key": "tech-profile-entity-001"},
-            json={"user_id": user_id, "selection_session_id": session_id, "source": "service_observation", "profile": {}, "signals": ["偏好中等力度"], "note": "实体关联验证"},
+            json={
+                "user_id": user_id,
+                "selection_session_id": session_id,
+                "schema_version": 5,
+                "taxonomy_version": "service_reference_v4",
+                "profile": {
+                    "schema_version": 5,
+                    "taxonomy_version": "service_reference_v4",
+                    "customer_reported": {"communication_preference": "quiet"},
+                    "technician_observed": {"service_adjustments": ["pace_slower"]},
+                    "next_visit": {},
+                },
+                "signals": [],
+                "note": "",
+            },
         )
         assert response.status_code == 200, response.text
 

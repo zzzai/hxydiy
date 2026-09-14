@@ -48,7 +48,7 @@ class CustomerProfileRecordsApiTests(unittest.TestCase):
         app.dependency_overrides.clear()
         self.engine.dispose()
 
-    def test_staff_can_save_and_read_quick_customer_profile(self):
+    def test_manager_cannot_write_legacy_customer_profile(self):
         response = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
             headers={**self.headers, "Idempotency-Key": "manager-profile-save-001"},
@@ -60,21 +60,16 @@ class CustomerProfileRecordsApiTests(unittest.TestCase):
                 "note": "本次服务后反馈肩颈放松明显",
             },
         )
-        self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["profile"]["occupation"], "教师")
+        self.assertEqual(response.status_code, 422, response.text)
         listed = self.client.get(f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-records", headers=self.headers)
         self.assertEqual(listed.status_code, 200, listed.text)
-        self.assertEqual(listed.json()["items"][0]["signals"], ["肩颈紧张", "偏好中等力度"])
+        self.assertEqual(listed.json()["items"], [])
 
-    def test_staff_cannot_write_customer_from_another_store(self):
-        response = self.client.post(
-            "/api/v1/admin/v2/customer-profile-records",
-            headers={**self.headers, "Idempotency-Key": "manager-profile-other-001"},
-            json={"user_id": self.other_user_id, "source": "customer_statement", "profile": {}, "signals": ["放松需求"], "note": ""},
-        )
+    def test_manager_cannot_read_customer_from_another_store(self):
+        response = self.client.get(f"/api/v1/admin/v2/users/{self.other_user_id}/customer-profile-records", headers=self.headers)
         self.assertEqual(response.status_code, 404)
 
-    def test_medical_diagnosis_wording_is_rejected(self):
+    def test_legacy_medical_profile_write_is_rejected(self):
         response = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
             headers={**self.headers, "Idempotency-Key": "manager-profile-medical-001"},
@@ -82,24 +77,30 @@ class CustomerProfileRecordsApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
 
-    def test_correction_creates_new_record_and_preserves_original(self):
+    def test_manager_cannot_correct_legacy_customer_profile(self):
+        with self.SessionLocal() as db:
+            original = CustomerProfileRecord(
+                store_id=self.store_id,
+                user_id=self.user_id,
+                created_by_staff_id=self.staff_id,
+                profile={"age_range": "31-40"},
+                signals=["偏好中等力度"],
+                note="历史记录",
+            )
+            db.add(original)
+            db.commit()
+            original_id = original.id
         first = self.client.post(
             "/api/v1/admin/v2/customer-profile-records",
             headers={**self.headers, "Idempotency-Key": "manager-profile-correct-001"},
-            json={"user_id": self.user_id, "source": "customer_statement", "profile": {"age_range": "31-40"}, "signals": ["偏好中等力度"], "note": "首次记录"},
-        )
-        self.assertEqual(first.status_code, 200, first.text)
-        original_id = first.json()["id"]
-        corrected = self.client.post(
-            "/api/v1/admin/v2/customer-profile-records",
-            headers={**self.headers, "Idempotency-Key": "manager-profile-correct-002"},
             json={"user_id": self.user_id, "source": "both", "correction_of_id": original_id, "correction_reason": "顾客补充说明", "profile": {"age_range": "36-45"}, "signals": ["偏好轻柔力度"], "note": "更正后的记录"},
         )
-        self.assertEqual(corrected.status_code, 200, corrected.text)
-        self.assertEqual(corrected.json()["correction_of_id"], original_id)
+        self.assertEqual(first.status_code, 422, first.text)
         listed = self.client.get(f"/api/v1/admin/v2/users/{self.user_id}/customer-profile-records", headers=self.headers)
-        self.assertEqual(len(listed.json()["items"]), 2)
-        self.assertEqual(listed.json()["items"][-1]["id"], original_id)
+        self.assertEqual(len(listed.json()["items"]), 1)
+        self.assertEqual(listed.json()["items"][0]["id"], original_id)
+        self.assertEqual(listed.json()["items"][0]["profile"], {})
+        self.assertEqual(listed.json()["items"][0]["note"], "")
 
     def test_service_reference_summary_is_store_scoped_and_excludes_superseded_records(self):
         with self.SessionLocal() as db:

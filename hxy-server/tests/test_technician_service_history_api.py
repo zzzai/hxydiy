@@ -361,8 +361,6 @@ class TestTechnicianServiceHistoryApi:
         assert item["profile_summary"] == {
             "schema_version": 3,
             "taxonomy_version": "service_reference_v2",
-            "occupation_contexts": ["久坐办公"],
-            "relaxation": "逐渐",
         }
         serialized = response.text
         for forbidden in (

@@ -1,6 +1,6 @@
 # 服务参考 v4 跨端契约
 
-状态：产品已确认，待实现与发布
+状态：本地实现，待 CI、合并与发布
 
 数据结构版本：`schema_version=5`
 
@@ -15,8 +15,8 @@
 ## 2. 兼容规则
 
 - 新写入固定使用 `schema_version=5`、`taxonomy_version=service_reference_v4`。
-- `schema_version=1` 至 `4` 继续只读兼容，不迁移、不覆盖、不补猜缺失字段。
-- v5 保留 v4 以前的高频服务参考字段；身体条目使用 `customer_reported.body_service_notes`，服务交接补充使用受限字段。
+- `schema_version=1` 至 `4` 继续只读兼容，不迁移、不覆盖、不补猜缺失字段；写接口拒绝这些历史版本。
+- v5 新写入只允许服务连续性字段：沟通方式、重点/避让部位、力度、温度、本次实际调整、当次反馈、下次安排、身体条目和受限本人补充。年龄、体型、职业、作息、消费偏好、家庭与收入等旧画像维度不属于 v5，也不应由技师端写入。
 - 中文文案可以优化，稳定英文编码在同一 taxonomy 版本内不得改义。
 - 未识别版本必须安全降级为“存在历史服务参考，请到店确认”，不得直接展示原始 JSON。
 
@@ -40,7 +40,8 @@
     ]
   },
   "technician_observed": {
-    "service_note": "右肩减轻力度后表示合适",
+    "service_adjustments": ["pressure_lighter"],
+    "service_note": "仅本人回看时需要的补充",
     "recording_outcome": null
   },
   "customer_confirmed": true
@@ -49,9 +50,11 @@
 
 `body_service_notes` 为可选数组，最多 3 条。同一记录中 `region + side` 必须唯一。每条五个字段均必填，不接收空字符串、未知编码或额外字段。
 
-`communication_preference` 仅接受顾客明确表达的 `quiet`（希望安静）、`chat`（愿意聊天）或 `explain_before_action`（动作前说明），是服务方式事实，不得由技师根据一次聊天、沉默或印象推断。
+`communication_preference` 仅接受顾客明确表达的 `quiet`（希望安静）、`chat`（愿意聊天）或 `explain_before_action`（希望先沟通），是服务方式事实，不得由技师根据一次聊天、沉默或印象推断。
 
-`technician_observed.service_note` 是最多 200 字的本次交接补充，不是顾客原话；可记录当次来店原因、调整后反馈、未满足需求或明确的下次要求。`recording_outcome="no_additional_notes"` 表示本次没有新增服务信息，不能与任何标签、补充文字、身体条目或顾客确认同时提交。
+`technician_observed.service_adjustments` 为最多三项、不可重复的本次实际动作：`pressure_lighter`、`pressure_stronger`、`pace_slower`、`temperature_lower`、`temperature_higher`、`focus_area`、`avoid_area`、`end_early`。它是下次服务前可见的安全摘要，不等同诊疗判断。
+
+`technician_observed.service_note` 是最多 200 字、仅记录技师本人历史可见的补充，不是顾客原话，也不作为跨技师交接。不得记录泛化画像、诊断结论或营销判断。`recording_outcome="no_additional_notes"` 表示本次没有新增服务信息，不能与任何标签、补充文字、身体条目或顾客确认同时提交。
 
 ## 4. 身体点位字典
 
@@ -146,7 +149,7 @@
 
 ### 管理端读取
 
-管理端沿用门店隔离的画像历史只读接口。v5 首期仅在授权详情时间线中展示，不进入客户列表、搜索条件、普通运营标签或导出；默认折叠身体相关明细。
+管理端沿用门店隔离的画像历史只读接口，但只返回服务方式、重点/避让、力度、温度、本次实际调整、当次反馈、下次安排及“服务前再确认”提醒。身体部位、身体自述、私人文字、原话，以及年龄、职业、消费等历史画像维度均不得进入管理端网络响应、列表、搜索、普通运营标签或导出。
 
 ## 7. 查看上次与匿名顾客
 
@@ -164,7 +167,8 @@ v5 身体条目、交接补充文字与无新增完成结果首期不写入 `cus
 
 ## 9. 合同测试要求
 
-- v5 合法 payload 可写入并原样读取；v1 至 v4 继续兼容。
+- v5 合法 payload 可写入并按白名单读取；v1 至 v4 历史继续兼容但新写入必须拒绝。
+- v5 写入携带年龄、职业、消费倾向、家庭、收入、作息或其他非服务连续性字段必须拒绝；管理端读取历史记录也不得回传这些字段。
 - 未知版本、未知编码、非法侧别、重复点位、超过三条、缺字段和额外字段均拒绝。
 - `reconfirm_next_visit=false` 拒绝。
 - 诊断式自由文本继续拒绝，敏感正文不进入安全摘要和审计。

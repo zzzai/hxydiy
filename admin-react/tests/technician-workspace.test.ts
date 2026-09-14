@@ -69,9 +69,9 @@ test('移动技师快记使用快捷服务字段并防止重复保存', () => {
   assert.match(source, /JSON\.stringify/);
 });
 
-test('技师快记默认层先收集服务结果，身体记录必须按需进入', () => {
+test('技师快记默认层先收集服务交接，身体记录必须按需进入', () => {
   const source = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
-  assert.match(source, /需要记录身体情况/);
+  assert.match(source, /记录身体情况（按需）/);
   assert.doesNotMatch(source, /Collapse|精确补充身体情况/);
 });
 
@@ -153,23 +153,27 @@ test('管理端将 v3 服务参考显示为结构化摘要而非普通运营标�
   assert.doesNotMatch(source, /addUserTag|searchIndex|algorithmFeature/);
 });
 
-test('管理端以白名单结构化展示 v3 且原话保持默认折叠', () => {
+test('管理端历史只展示可执行的服务交接，不展示旧画像或原话', () => {
   const display = buildServiceReferenceDisplay({
     schema_version: 3, taxonomy_version: 'service_reference_v2', customer_confirmed: true,
     profile: {
-      customer_reported: { personal_context: { build: 'balanced' }, service_related_context: { contexts: ['medication_mentioned'], quote: '顾客自述正在用药' } },
+      customer_reported: { personal_context: { build: 'balanced' }, service_related_context: { contexts: ['medication_mentioned'], quote: '顾客自述正在用药' }, force_preference: 'gentle' },
       technician_observed: { session_response: { relaxation: 'quick' } }, next_visit: { plan: 'confirm_on_arrival' },
     },
   });
   assert.equal(display.version, 'v3 · service_reference_v2');
   assert.deepEqual(display.groups, [
-    { title: '个人概况', items: [{ label: '体型', value: '匀称' }] },
-    { title: '服务相关情况', items: [{ label: '需再次确认', value: '顾客提及正在用药' }] },
-    { title: '本次反应', items: [{ label: '放松过程', value: '较快' }] },
-    { title: '下次与沟通', items: [{ label: '下次建议', value: '到店再确认' }] },
+    { title: '服务偏好', items: [{ label: '力度', value: '轻柔' }] },
+    { title: '本次反馈与下次', items: [{ label: '下次安排', value: '到店再确认' }] },
   ]);
-  assert.equal(display.collapsedQuote, '顾客自述正在用药');
+  assert.equal(display.collapsedQuote, '');
   assert.doesNotMatch(JSON.stringify(display.groups), /顾客自述正在用药/);
+});
+
+test('新的服务交接统一使用按项目裁剪的 v5 流程，v6 只用于本人历史兼容', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  assert.match(source, /props\.task\.record\?\.schema_version === 6/);
+  assert.doesNotMatch(source, /makeRecord\(props\.task\.items \|\| \[\]\)\.template/);
 });
 
 test('管理端隐藏未知或非字符串稳定编码，不展示原始敏感内容', () => {
@@ -190,10 +194,9 @@ test('管理端兼容 v2 嵌套服务参考而不退化为空摘要', () => {
   assert.equal(display.version, 'v2 · service_reference_v1');
   assert.deepEqual(display.groups, [
     { title: '服务偏好', items: [{ label: '本次重点', value: '肩颈' }, { label: '避开或谨慎', value: '腹部' }, { label: '力度', value: '适中' }, { label: '温度', value: '偏高' }] },
-    { title: '本次反应', items: [{ label: '服务反馈', value: '调整后更合适' }] },
-    { title: '下次与沟通', items: [{ label: '下次建议', value: '延续本次' }] },
+    { title: '本次反馈与下次', items: [{ label: '服务反馈', value: '调整后更合适' }, { label: '下次安排', value: '延续本次' }] },
   ]);
-  assert.equal(display.collapsedQuote, '顾客希望避开腹部');
+  assert.equal(display.collapsedQuote, '');
 });
 
 test('查看上次服务参考只显示身体服务前再确认，不显示部位或自述', () => {
@@ -226,6 +229,14 @@ test('管理端将 v5 身体记录降级为服务前再确认，不展示部位�
 test('管理端接收后端脱敏的 v5 身体提醒时仍显示服务前再确认', () => {
   const display = buildServiceReferenceDisplay({
     schema_version: 5, taxonomy_version: 'service_reference_v4', body_reconfirm_required: true,
+    profile: { customer_reported: {} },
+  });
+  assert.deepEqual(display.groups, [{ title: '身体服务提醒', items: [{ label: '下次服务', value: '服务前再确认' }] }]);
+});
+
+test('管理端接收后端脱敏的 v4 身体提醒时仍显示服务前再确认', () => {
+  const display = buildServiceReferenceDisplay({
+    schema_version: 4, taxonomy_version: 'service_reference_v3', body_reconfirm_required: true,
     profile: { customer_reported: {} },
   });
   assert.deepEqual(display.groups, [{ title: '身体服务提醒', items: [{ label: '下次服务', value: '服务前再确认' }] }]);
