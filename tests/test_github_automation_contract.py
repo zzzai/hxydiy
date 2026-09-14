@@ -68,11 +68,11 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("permissions:\n      contents: read\n      checks: write", content)
         self.assertIn("permissions:\n      contents: read\n      checks: none", content)
 
-    def test_production_workflow_requires_environment_gate_and_pinned_host_identity(self):
+    def test_production_workflow_requires_manual_dispatch_and_pinned_host_identity(self):
         content = workflow("deploy-production.yml")
 
-        self.assertIn("workflow_run:", content)
-        self.assertIn('workflows: ["CI"]', content)
+        self.assertIn("workflow_dispatch:", content)
+        self.assertNotIn("workflow_run:", content)
         self.assertIn("environment: production", content)
         self.assertIn("PRODUCTION_SSH_KNOWN_HOSTS", content)
         self.assertIn("deploy-production.sh", content)
