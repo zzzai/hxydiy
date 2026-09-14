@@ -34,6 +34,52 @@ EXPECTED_TARGET_CODES = (
 )
 
 
+def test_five_formulas_clone_only_herbal_group_and_preserve_published_history(configuration_db):
+    from app.domain.catalog_options import publish_catalog_version, verify_published_catalog_hash
+    from scripts.configure_herbal_formulas import FORMULAS, prepare_herbal_formulas
+
+    db, _, store_id, projects = configuration_db
+    configure_footbath_option_drafts(db, store_id, dry_run=False)
+    project = projects['hxy-qiqing-30']
+    published = publish_catalog_version(db, project.id, 1)
+    old_hash = published.snapshot_hash
+    before_count = db.scalar(select(func.count()).select_from(ProjectCatalogVersion))
+    assert prepare_herbal_formulas(db, store_id)['status'] == 'preview'
+    assert db.scalar(select(func.count()).select_from(ProjectCatalogVersion)) == before_count
+    result = prepare_herbal_formulas(db, store_id, apply=True)
+    assert project.current_published_version_id == published.id
+    verify_published_catalog_hash(db, published)
+    assert published.snapshot_hash == old_hash
+    group = db.scalar(select(ProjectOptionGroup).where(
+        ProjectOptionGroup.catalog_version_id == result['draft_version_id'],
+        ProjectOptionGroup.code == 'footbath-formula'))
+    active = list(db.scalars(select(ProjectOptionChoice).where(
+        ProjectOptionChoice.option_group_id == group.id,
+        ProjectOptionChoice.status == 'active').order_by(ProjectOptionChoice.display_order)))
+    assert [(c.code, c.name, c.description) for c in active] == list(FORMULAS)
+    assert all(c.choice_type == 'preference' and c.charge_mode == 'free' for c in active)
+    assert group.required and group.selection_mode == 'single' and group.max_select == 1
+    with pytest.raises(ValueError, match='existing draft'):
+        prepare_herbal_formulas(db, store_id, apply=True)
+    for code in ('pressure', 'small-services', 'local-strength'):
+        groups = list(db.scalars(select(ProjectOptionGroup).where(
+            ProjectOptionGroup.catalog_version_id.in_([published.id, result['draft_version_id']]),
+            ProjectOptionGroup.code == code).order_by(ProjectOptionGroup.catalog_version_id)))
+        snapshots = []
+        for item in groups:
+            snapshots.append([(c.code, c.name, c.description, c.charge_mode, c.linked_project_id)
+                for c in db.scalars(select(ProjectOptionChoice).where(
+                    ProjectOptionChoice.option_group_id == item.id).order_by(ProjectOptionChoice.display_order))])
+        assert len(snapshots) == 2 and snapshots[0] == snapshots[1]
+
+
+def test_five_formulas_refuse_wrong_store(configuration_db):
+    from scripts.configure_herbal_formulas import prepare_herbal_formulas
+    db, _, store_id, _ = configuration_db
+    with pytest.raises(ValueError, match='not found'):
+        prepare_herbal_formulas(db, store_id + 100, apply=True)
+
+
 def _add_project(
     db: Session,
     store_id: int,

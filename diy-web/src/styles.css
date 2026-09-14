@@ -1331,6 +1331,16 @@ h1, h2, h3, p { margin-top: 0; }
 .mini-option-grid button strong { font-size: 12px; }
 .mini-option-grid button small { color: var(--muted); font-size: 9px; }
 .mini-option-grid button.active { border-color: #1f8f75; background: #f0faf5; }
+.herbal-formula-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.herbal-formula-options button { display: flex; min-width: 0; min-height: 44px; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; border: 1px solid #dfe7e3; border-radius: 8px; background: #fff; color: #1d2a25; font-size: 14px; }
+.herbal-formula-options button.active { border-color: #1f8f75; background: #f0faf5; }
+.herbal-formula-options button:focus-visible { outline: 2px solid #176856; outline-offset: 2px; }
+.herbal-formula-options i { width: 7px; height: 7px; flex: none; border-radius: 50%; }
+.herbal-formula-detail { margin-top: 12px; padding: 16px 0 0; border-top: 1px solid #edf2ef; background: #fff; }
+.herbal-formula-detail > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.herbal-formula-detail strong { color: #1d2a25; font-size: 18px; }
+.herbal-formula-detail span { padding: 3px 7px; border-radius: 6px; background: #eef8f3; color: #176856; font-size: 11px; }
+.herbal-formula-detail p { margin: 10px 0 0; white-space: pre-line; color: var(--muted); font-size: 13px; line-height: 1.8; }
 .mini-addon-grid, .mini-local-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .mini-addon-grid > button, .mini-local-grid > div { min-width: 0; border: 1px solid #dfe7e3; border-radius: 8px; background: #fff; }
 .mini-addon-grid > button, .mini-local-grid > div > button { display: grid; width: 100%; min-height: 64px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 10px; color: #1d2a25; background: transparent; text-align: left; }

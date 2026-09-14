@@ -14,6 +14,7 @@ import { linkedProjectIdsForChoices, catalogChoicesByType } from '../selectionSu
 import { catalogDraftResetKey, validateCatalogSelection, withRequiredCatalogDefaults } from '../catalogOptions';
 import CatalogLinkedProjectGroup from './project-options/CatalogLinkedProjectGroup';
 import LocalStrengthGroup from './project-options/LocalStrengthGroup';
+import HerbalFormulaGroup from './project-options/HerbalFormulaGroup';
 import FootBathBundleProgress from './project-options/FootBathBundleProgress';
 import ProjectDetailVisualSections from './ProjectDetailVisualSections';
 import DetailIntroduction from './DetailIntroduction';
@@ -260,43 +261,6 @@ export default function ProjectDetailPage({
         })}
 
         {hasAdditions && !catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
-        {isCatalogOptions && !catalogPublished && attachableAddons.length > 0 && (
-          <section className="mini-config-card">
-            <div className="mini-config-title"><strong>加购服务</strong><span>按需加购 · 可多选</span></div>
-            <div className="mini-addon-grid">
-              {attachableAddons.map((item) => {
-                const active = draftAddOnIds.includes(item.id);
-                const addonGuidance = priceGuidanceForPrices(item.prices.store, item.prices.member, { is_member: isMember });
-                return <button key={item.id} type="button" disabled={readOnly} className={active ? 'active' : ''} onClick={() => toggleAddOn(item.id)}><span><strong>{item.name}</strong><small>{item.summary || `${item.duration_min || 15}分钟 · 可加选`}</small></span><span className="addon-price">{item.chargeable ? <><em>+{formatMoney(addonGuidance.primaryCents)}</em>{addonGuidance.memberHintCents !== null && addonGuidance.memberHintCents < addonGuidance.primaryCents && <small>{addonGuidance.hintText.replace('登录享', '登录后享')}</small>}</> : <em>免费</em>}</span></button>;
-              })}
-            </div>
-          </section>
-        )}
-
-        {isCatalogOptions && catalogPublished && catalogPreferenceGroups.length > 0 && <div className="mini-detail-section-label"><strong>先选服务偏好</strong><span>{preferenceSummary(catalogPreferenceGroups.map((group) => customerPreferenceLabel(group.name)))}</span></div>}
-
-        {isCatalogOptions && catalogPublished && catalogPreferenceGroups.map((group) => (
-          <section className="mini-config-card mini-required-options" key={group.id} aria-label={customerPreferenceLabel(group.name)}>
-            <div className="mini-config-title"><strong>{customerPreferenceLabel(group.name)}</strong><span>{group.required ? '请选择一项 · 不加价' : '按需选择 · 不加价'}</span></div>
-            <div className={`mini-option-grid ${group.selection_mode === 'single' ? (group.choices.length >= 3 ? 'three-col' : 'two-col') : ''}`}>
-              {group.choices.map((choice) => (
-                <button key={choice.id} type="button" className={draftChoiceIds.includes(choice.id) ? 'active' : ''} aria-pressed={draftChoiceIds.includes(choice.id)} disabled={readOnly} onClick={() => toggleChoice(choice.id)}>
-                  <strong>{choice.name}</strong><small>{choice.description || '不加价'}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-        ))}
-
-        {hasAdditions && catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
-        {isCatalogOptions && catalogPublished && catalogSmallChoices.length > 0 && (
-          <CatalogLinkedProjectGroup title="加购服务" choices={catalogSmallChoices} selectedChoiceIds={draftChoiceIds} onToggle={toggleChoice} projects={projects} isMember={isMember} readOnly={readOnly} />
-        )}
-
-        {isFootbathOptions && catalogPublished && catalogLocalChoices.length > 0 && (
-          <LocalStrengthGroup choice={catalogLocalChoices} parts={draftLocalParts} onToggle={toggleCatalogLocal} projects={projects} isMember={isMember} readOnly={readOnly} />
-        )}
-
         {isFootbathOptions && !catalogPublished && localProject && (
           <section className="mini-config-card">
             <div className="mini-config-title"><strong>局部加强</strong><span>按部位加购 · 可多选</span></div>
@@ -312,6 +276,45 @@ export default function ProjectDetailPage({
             </div>
             {showBundleProgress && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
           </section>
+        )}
+
+        {isCatalogOptions && !catalogPublished && attachableAddons.length > 0 && (
+          <section className="mini-config-card">
+            <div className="mini-config-title"><strong>加购服务</strong><span>按需加购 · 可多选</span></div>
+            <div className="mini-addon-grid">
+              {attachableAddons.map((item) => {
+                const active = draftAddOnIds.includes(item.id);
+                const addonGuidance = priceGuidanceForPrices(item.prices.store, item.prices.member, { is_member: isMember });
+                return <button key={item.id} type="button" disabled={readOnly} className={active ? 'active' : ''} onClick={() => toggleAddOn(item.id)}><span><strong>{item.name}</strong><small>{item.summary || `${item.duration_min || 15}分钟 · 可加选`}</small></span><span className="addon-price">{item.chargeable ? <><em>+{formatMoney(addonGuidance.primaryCents)}</em>{addonGuidance.memberHintCents !== null && addonGuidance.memberHintCents < addonGuidance.primaryCents && <small>{addonGuidance.hintText.replace('登录享', '登录后享')}</small>}</> : <em>免费</em>}</span></button>;
+              })}
+            </div>
+          </section>
+        )}
+
+        {isCatalogOptions && catalogPublished && catalogPreferenceGroups.length > 0 && <div className="mini-detail-section-label"><strong>先选服务偏好</strong><span>{preferenceSummary(catalogPreferenceGroups.map((group) => customerPreferenceLabel(group.name)))}</span></div>}
+
+        {isCatalogOptions && catalogPublished && catalogPreferenceGroups.map((group) => group.code === 'footbath-formula' ? (
+          <HerbalFormulaGroup key={group.id} group={group} selectedChoiceIds={draftChoiceIds} onSelect={(id) => { if (!draftChoiceIds.includes(id)) toggleChoice(id); }} readOnly={readOnly} />
+        ) : (
+          <section className="mini-config-card mini-required-options" key={group.id} aria-label={customerPreferenceLabel(group.name)}>
+            <div className="mini-config-title"><strong>{customerPreferenceLabel(group.name)}</strong><span>{group.required ? '请选择一项 · 不加价' : '按需选择 · 不加价'}</span></div>
+            <div className={`mini-option-grid ${group.selection_mode === 'single' ? (group.choices.length >= 3 ? 'three-col' : 'two-col') : ''}`}>
+              {group.choices.map((choice) => (
+                <button key={choice.id} type="button" className={draftChoiceIds.includes(choice.id) ? 'active' : ''} aria-pressed={draftChoiceIds.includes(choice.id)} disabled={readOnly} onClick={() => toggleChoice(choice.id)}>
+                  <strong>{choice.name}</strong><small>{choice.description || '不加价'}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {hasAdditions && catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
+        {isFootbathOptions && catalogPublished && catalogLocalChoices.length > 0 && (
+          <LocalStrengthGroup choice={catalogLocalChoices} parts={draftLocalParts} onToggle={toggleCatalogLocal} projects={projects} isMember={isMember} readOnly={readOnly} />
+        )}
+
+        {isCatalogOptions && catalogPublished && catalogSmallChoices.length > 0 && (
+          <CatalogLinkedProjectGroup title="加购服务" choices={catalogSmallChoices} selectedChoiceIds={draftChoiceIds} onToggle={toggleChoice} projects={projects} isMember={isMember} readOnly={readOnly} />
         )}
 
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
