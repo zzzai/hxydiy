@@ -4,6 +4,26 @@ import { createServer } from 'vite';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+test('草本方详情随选中项切换，保留真实选项标识与只读状态', async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const { default: HerbalFormulaGroup } = await server.ssrLoadModule('/src/components/project-options/HerbalFormulaGroup.tsx');
+    const group = { choices: [
+      { id: 201, code: 'formula-wood', name: '舒心放松', description: '最近有点忙，想松一松\n玫瑰花 · 佛手 · 合欢皮' },
+      { id: 205, code: 'formula-water', name: '温暖养护', description: '手脚容易凉，想暖一暖\n杜仲 · 桑寄生 · 淫羊藿' },
+    ] };
+    const render = (id: number, readOnly = false) => renderToStaticMarkup(createElement(HerbalFormulaGroup, {
+      group, selectedChoiceIds: [id], readOnly, onSelect: () => {},
+    }));
+    assert.match(render(201), /玫瑰花 · 佛手 · 合欢皮/);
+    assert.doesNotMatch(render(201), /杜仲 · 桑寄生 · 淫羊藿/);
+    assert.match(render(205), /杜仲 · 桑寄生 · 淫羊藿/);
+    assert.doesNotMatch(render(205), /玫瑰花 · 佛手 · 合欢皮/);
+    assert.equal((render(205).match(/aria-pressed="true"/g) || []).length, 1);
+    assert.equal((render(205, true).match(/disabled=""/g) || []).length, 2);
+  } finally { await server.close(); }
+});
+
 test('详情价格渲染：匿名与非会员参考价不划线，同价合并，会员保留门店价对比', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
