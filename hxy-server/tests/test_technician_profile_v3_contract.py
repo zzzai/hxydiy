@@ -101,6 +101,7 @@ class TestTechnicianServiceContinuityContract:
             assert db.query(CustomerProfileCurrent).filter_by(customer_id=self.user_id).count() == 0
 
     @pytest.mark.parametrize('schema_version,taxonomy_version,profile', [
+        (1, None, {'age_range': '31-40'}),
         (2, 'service_reference_v1', {'schema_version': 2, 'taxonomy_version': 'service_reference_v1', 'customer_reported': {'force_preference': 'gentle'}, 'technician_observed': {}, 'next_visit': {}}),
         (3, 'service_reference_v2', {'schema_version': 3, 'taxonomy_version': 'service_reference_v2', 'customer_reported': {'personal_context': {'age_band': '25_34'}}, 'technician_observed': {}, 'next_visit': {}}),
         (4, 'service_reference_v3', {'schema_version': 4, 'taxonomy_version': 'service_reference_v3', 'customer_reported': {'body_service_notes': [{'area': 'knee', 'context': 'old_injury', 'reconfirm_next_visit': True}]}, 'technician_observed': {}, 'next_visit': {}}),

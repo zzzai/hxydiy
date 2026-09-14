@@ -2673,7 +2673,7 @@ class CustomerProfileRecordIn(BaseModel):
             self.source = 'both' if self.customer_confirmed else 'service_observation'
         elif isinstance(self.profile, ProjectServiceRecord):
             raise ValueError('新版服务记录内外版本必须一致')
-        elif self.schema_version in {2, 3, 4}:
+        elif self.schema_version in {1, 2, 3, 4}:
             raise ValueError("v1 至 v4 服务参考仅支持历史读取，请使用当前服务交接记录")
         elif self.schema_version == 5:
             if self.taxonomy_version != "service_reference_v4" or not isinstance(self.profile, ServiceReferenceV5Profile):
