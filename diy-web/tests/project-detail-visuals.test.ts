@@ -10,6 +10,10 @@ test('所有已上线项目均提供统一长详情视觉模块', () => {
   assert.equal(sections.length, 3);
   assert.match(sections.map((section) => section.title).join(''), /招牌步骤|温热草本/);
   assert.ok(sections.every((section) => section.image.endsWith('.webp')));
+  const herbalFootbath = projectDetailVisuals('hxy-qiqing-30');
+  assert.equal(herbalFootbath.length, 1);
+  assert.match(herbalFootbath[0]?.image || '', /hxy-qiqing-30-detail-story-v2\.webp$/);
+  assert.match(herbalFootbath[0]?.alt || '', /荷小悦 IP/);
   assert.equal(projectDetailVisuals('hxy-xiangxiang-60').length, 3);
   const spa60Sections = projectDetailVisuals('hxy-spa-60');
   assert.equal(spa60Sections.length, 4);

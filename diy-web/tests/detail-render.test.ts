@@ -9,7 +9,7 @@ test('草本方详情随选中项切换，保留真实选项标识与只读状�
   try {
     const { default: HerbalFormulaGroup } = await server.ssrLoadModule('/src/components/project-options/HerbalFormulaGroup.tsx');
     const group = { choices: [
-      { id: 201, code: 'formula-wood', name: '舒心放松', description: '最近有点忙，想松一松\n玫瑰花 · 佛手 · 合欢皮' },
+      { id: 201, code: 'formula-wood', name: '舒心解压', description: '最近有点忙，想松一松\n玫瑰花 · 佛手 · 合欢皮' },
       { id: 205, code: 'formula-water', name: '温暖养护', description: '手脚容易凉，想暖一暖\n杜仲 · 桑寄生 · 淫羊藿' },
     ] };
     const render = (id: number, readOnly = false) => renderToStaticMarkup(createElement(HerbalFormulaGroup, {
