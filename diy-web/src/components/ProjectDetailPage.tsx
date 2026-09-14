@@ -235,7 +235,7 @@ export default function ProjectDetailPage({
 
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
-          <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
+          <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={project.code === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
           <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} />
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
@@ -263,7 +263,7 @@ export default function ProjectDetailPage({
         {hasAdditions && !catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
         {isFootbathOptions && !catalogPublished && localProject && (
           <section className="mini-config-card">
-            <div className="mini-config-title"><strong>局部加强</strong><span>按部位加购 · 可多选</span></div>
+            <div className="mini-config-title"><strong>重点多按一会</strong><span>按部位加购 · 可多选</span></div>
             <div className="mini-local-grid">
               {LOCAL_PARTS.map((part) => {
                 const active = draftLocalParts.includes(part);
@@ -280,7 +280,7 @@ export default function ProjectDetailPage({
 
         {isCatalogOptions && !catalogPublished && attachableAddons.length > 0 && (
           <section className="mini-config-card">
-            <div className="mini-config-title"><strong>加购服务</strong><span>按需加购 · 可多选</span></div>
+            <div className="mini-config-title"><strong>再放松一会</strong><span>按需加购 · 可多选</span></div>
             <div className="mini-addon-grid">
               {attachableAddons.map((item) => {
                 const active = draftAddOnIds.includes(item.id);
@@ -291,7 +291,7 @@ export default function ProjectDetailPage({
           </section>
         )}
 
-        {isCatalogOptions && catalogPublished && catalogPreferenceGroups.length > 0 && <div className="mini-detail-section-label"><strong>先选服务偏好</strong><span>{preferenceSummary(catalogPreferenceGroups.map((group) => customerPreferenceLabel(group.name)))}</span></div>}
+        {isCatalogOptions && catalogPublished && catalogPreferenceGroups.length > 0 && !catalogPreferenceGroups.some((group) => group.code === 'footbath-formula') && <div className="mini-detail-section-label"><strong>先选服务偏好</strong><span>{preferenceSummary(catalogPreferenceGroups.map((group) => customerPreferenceLabel(group.name)))}</span></div>}
 
         {isCatalogOptions && catalogPublished && catalogPreferenceGroups.map((group) => group.code === 'footbath-formula' ? (
           <HerbalFormulaGroup key={group.id} group={group} selectedChoiceIds={draftChoiceIds} onSelect={(id) => { if (!draftChoiceIds.includes(id)) toggleChoice(id); }} readOnly={readOnly} />
@@ -314,7 +314,7 @@ export default function ProjectDetailPage({
         )}
 
         {isCatalogOptions && catalogPublished && catalogSmallChoices.length > 0 && (
-          <CatalogLinkedProjectGroup title="加购服务" choices={catalogSmallChoices} selectedChoiceIds={draftChoiceIds} onToggle={toggleChoice} projects={projects} isMember={isMember} readOnly={readOnly} />
+          <CatalogLinkedProjectGroup title="再放松一会" choices={catalogSmallChoices} selectedChoiceIds={draftChoiceIds} onToggle={toggleChoice} projects={projects} isMember={isMember} readOnly={readOnly} />
         )}
 
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}

@@ -18,8 +18,8 @@ function partOf(choice: CatalogOptionChoice) {
 export default function LocalStrengthGroup({ choice, parts, onToggle = () => undefined, projects, isMember, readOnly = false }: Props) {
   const choices = Array.isArray(choice) ? choice : [choice];
   return (
-    <section className="mini-config-card catalog-local-group" aria-label="局部加强">
-      <div className="mini-config-title"><strong>局部加强</strong><span>按部位加购 · 可多选</span></div>
+    <section className="mini-config-card catalog-local-group" aria-label="重点多按一会">
+      <div className="mini-config-title"><strong>重点多按一会</strong><span>按部位加购 · 可多选</span></div>
       <div className="mini-local-grid">
         {choices.map((item) => {
           const part = partOf(item);

@@ -1,3 +1,5 @@
+@import './herbal-font.css';
+
 :root {
   font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
   color: #17211e;
@@ -1331,16 +1333,35 @@ h1, h2, h3, p { margin-top: 0; }
 .mini-option-grid button strong { font-size: 12px; }
 .mini-option-grid button small { color: var(--muted); font-size: 9px; }
 .mini-option-grid button.active { border-color: #1f8f75; background: #f0faf5; }
-.herbal-formula-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-.herbal-formula-options button { display: flex; min-width: 0; min-height: 44px; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; border: 1px solid #dfe7e3; border-radius: 8px; background: #fff; color: #1d2a25; font-size: 14px; }
-.herbal-formula-options button.active { border-color: #1f8f75; background: #f0faf5; }
+.herbal-formula-group { font-family: HxyHerbalRounded, "Microsoft YaHei", "PingFang SC", sans-serif; container-type: inline-size; --herbal-gap: clamp(3px, 1cqw, 7px); padding: 14px; }
+.herbal-formula-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 3px 12px; }
+.herbal-formula-title strong { color: #152630; font-size: clamp(15px, 3.7cqw, 25px); line-height: 1.25; font-weight: 700; white-space: nowrap; }
+.herbal-formula-title > span { color: #7b9198; font-size: clamp(9px, 2.35cqw, 16px); line-height: 1.4; white-space: nowrap; }
+.herbal-formula-options { display: grid; grid-template-columns: repeat(var(--herbal-columns, 5), minmax(0, 1fr)); gap: var(--herbal-gap); }
+.herbal-formula-options button { display: flex; min-width: 0; min-height: 44px; height: clamp(44px, 8.8cqw, 60px); flex-direction: row; align-items: center; justify-content: center; gap: clamp(2px, 1cqw, 7px); padding: 4px 1px; border: 1.5px solid #dce6e9; border-radius: clamp(8px, 1.8cqw, 12px); background: #fff; color: #31424d; box-shadow: inset 0 0 0 1px #f4f8f9; transition: border-color 160ms ease, background-color 160ms ease; }
+.herbal-formula-options button.active { border-color: #94dbcf; background: #f1fcf9; box-shadow: inset 0 0 0 1px #e5f8f2; color: #172e38; }
 .herbal-formula-options button:focus-visible { outline: 2px solid #176856; outline-offset: 2px; }
-.herbal-formula-options i { width: 7px; height: 7px; flex: none; border-radius: 50%; }
-.herbal-formula-detail { margin-top: 12px; padding: 16px 0 0; border-top: 1px solid #edf2ef; background: #fff; }
-.herbal-formula-detail > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.herbal-formula-detail strong { color: #1d2a25; font-size: 18px; }
-.herbal-formula-detail span { padding: 3px 7px; border-radius: 6px; background: #eef8f3; color: #176856; font-size: 11px; }
-.herbal-formula-detail p { margin: 10px 0 0; white-space: pre-line; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.herbal-formula-options i { display: grid; place-items: center; width: clamp(14px, 4.4cqw, 30px); height: clamp(14px, 4.4cqw, 30px); flex: none; border: 1.4px solid currentColor; border-radius: 50%; font-size: clamp(11px, 3.25cqw, 23px); font-style: normal; font-weight: 700; line-height: 1; }
+.herbal-formula-options button > span { min-width: 0; font-size: clamp(9px, 2.35cqw, 16px); font-weight: 600; letter-spacing: -.03em; line-height: 1.2; white-space: nowrap; }
+.herbal-formula-detail { position: relative; display: grid; grid-template-columns: 53% minmax(0, 1fr); align-items: center; min-height: 108px; margin-top: 13px; padding: clamp(11px, 2.8cqw, 19px) clamp(10px, 3.3cqw, 22px); border: 0; border-radius: clamp(11px, 2.3cqw, 16px); background: #eff8f8; }
+.herbal-formula-detail::before { position: absolute; top: -4px; left: var(--herbal-anchor, 50%); width: 8px; height: 8px; border-top-left-radius: 3px; background: #eff8f8; transform: translateX(-50%) rotate(45deg); transition: left 180ms cubic-bezier(.22, 1, .36, 1); content: ''; pointer-events: none; }
+.herbal-formula-copy { grid-column: 1; grid-row: 1; min-width: 0; position: relative; z-index: 1; }
+.herbal-formula-heading { display: flex; align-items: center; gap: clamp(5px, 1.5cqw, 10px); white-space: nowrap; }
+.herbal-formula-heading::before { width: clamp(3px, 1cqw, 7px); height: clamp(18px, 4.5cqw, 31px); flex: none; border-radius: 4px; background: var(--herbal-color); content: ''; }
+.herbal-formula-heading strong { color: #172b36; font-size: clamp(15px, 4cqw, 28px); letter-spacing: -.025em; font-weight: 700; line-height: 1.2; }
+.herbal-formula-heading > span { padding: clamp(3px, .6cqw, 4px) clamp(5px, 1.6cqw, 11px); border-radius: 999px; background: #d9f3ec; color: #378c80; font-size: clamp(10px, 2.7cqw, 18px); line-height: 1.25; white-space: nowrap; }
+.herbal-formula-copy p { margin: clamp(9px, 1.6cqw, 12px) 0 0 clamp(9px, 2.5cqw, 17px); white-space: pre-line; color: #617985; font-size: clamp(11px, 2.85cqw, 20px); line-height: 2.05; }
+.herbal-formula-art { grid-column: 2; grid-row: 1; position: relative; width: 88%; aspect-ratio: 2; overflow: hidden; pointer-events: none; mix-blend-mode: multiply; }
+.herbal-formula-art img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.herbal-formula-caption { position: absolute; top: 12%; right: 4%; display: flex; flex-direction: row-reverse; gap: clamp(2px, .7cqw, 5px); color: var(--herbal-color); font-size: clamp(9px, 2.2cqw, 15px); font-weight: 500; line-height: 1.4; letter-spacing: .12em; pointer-events: none; }
+.herbal-formula-caption span { writing-mode: vertical-rl; }
+.herbal-formula-caption span + span { padding-top: 1.25em; }
+@media (max-width: 340px) {
+  .herbal-formula-group { margin-right: 8px; margin-left: 8px; padding: 10px 6px; }
+  .herbal-formula-options button { gap: 1px; padding-right: 0; padding-left: 0; border-width: 1px; }
+  .herbal-formula-options i { width: 13px; height: 13px; font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .herbal-formula-detail::before, .herbal-formula-options button { transition: none; } }
 .mini-addon-grid, .mini-local-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
 .mini-addon-grid > button, .mini-local-grid > div { min-width: 0; border: 1px solid #dfe7e3; border-radius: 8px; background: #fff; }
 .mini-addon-grid > button, .mini-local-grid > div > button { display: grid; width: 100%; min-height: 64px; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 10px; color: #1d2a25; background: transparent; text-align: left; }
