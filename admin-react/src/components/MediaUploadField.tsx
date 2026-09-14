@@ -16,6 +16,7 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
   const { message } = App.useApp();
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>();
+  const [failedFile, setFailedFile] = useState<File>();
   const url = typeof value === 'string' ? value : value?.url;
   const mediaId = typeof value === 'object' ? value?.id : Number(url?.match(/\/media\/(\d+)\//)?.[1]) || undefined;
   useEffect(() => {
@@ -29,22 +30,31 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
     }).catch(() => { if (active) setPreviewUrl(undefined); });
     return () => { active = false; };
   }, [url]);
+  const upload = async (file: File) => {
+    setUploading(true);
+    try {
+      const response = await uploadMedia(file, purpose, storeId);
+      onChange?.(response.data.url);
+      setFailedFile(undefined);
+      return response.data;
+    } catch (error) {
+      setFailedFile(file);
+      message.error(error instanceof Error ? error.message : '图片上传失败');
+      throw error;
+    } finally {
+      setUploading(false);
+    }
+  };
   const props: UploadProps = {
     accept: 'image/jpeg,image/png,image/webp,image/gif',
     showUploadList: false,
     maxCount: 1,
     customRequest: async ({ file, onError, onSuccess }) => {
-      setUploading(true);
       try {
-        const response = await uploadMedia(file as File, purpose, storeId);
-        const media = response.data;
-        onChange?.(media.url);
+        const media = await upload(file as File);
         onSuccess?.(media);
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '图片上传失败');
         onError?.(error as Error);
-      } finally {
-        setUploading(false);
       }
     },
     beforeUpload: (file) => {
@@ -62,7 +72,8 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
   return <Space direction="vertical" size={8}>
     {previewUrl && <Image src={previewUrl} width={120} height={90} style={{ objectFit: 'cover' }} />}
     <Space>
-      <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading} disabled={requireStoreId && !storeId}>{url ? '替换图片' : '上传图片'}</Button></Upload>
+      <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading} disabled={uploading || (requireStoreId && !storeId)}>{url ? '替换图片' : '上传图片'}</Button></Upload>
+      {failedFile && <Button loading={uploading} onClick={() => void upload(failedFile)}>重试上传</Button>}
       {mediaId && <Button danger type="text" icon={<DeleteOutlined />} onClick={async () => { await deleteMedia(mediaId); onChange?.(''); message.success('图片已删除'); }}>删除</Button>}
     </Space>
   </Space>;
