@@ -136,6 +136,7 @@ approved_migrations=(
   '20260905_membership_verification.py'
   '20260905_technician_service_history_v3.py'
   '20260906_wellness_profile_current.py'
+  '20260910_membership_closure.py'
 )
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
