@@ -65,7 +65,7 @@ class TestMembershipVerification:
         assert response.status_code == 403
         assert response.json()["detail"]["code"] == "DEVICE_NOT_TRUSTED"
 
-    def test_member_can_rebind_current_browser_after_a_fresh_sms_code(self):
+    def test_member_rebind_invalidates_old_session_and_returns_a_new_one(self):
         self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())
         self.client.post("/api/v1/auth/h5/member-code", headers=self.customer_headers())
         with self.SessionLocal() as db:
@@ -80,12 +80,25 @@ class TestMembershipVerification:
         response = current_browser.post("/api/v1/auth/h5/trusted-device/rebind", headers=self.customer_headers(), json={"code": "123456"})
 
         assert response.status_code == 200, response.text
-        assert response.json()["trusted"] is True
+        result = response.json()
+        assert result["trusted"] is True
+        assert result["access_token"]
+        old_session = self.client.get("/api/v1/auth/h5/me", headers=self.customer_headers())
+        assert old_session.status_code == 401
+        assert old_session.json()["detail"]["code"] == "SESSION_REPLACED"
+        rebound_code = current_browser.post(
+            "/api/v1/auth/h5/member-code",
+            headers={"Authorization": f"Bearer {result['access_token']}"},
+        )
+        assert rebound_code.status_code == 200, rebound_code.text
         with self.SessionLocal() as db:
             devices = list(db.scalars(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == self.member_id)))
             assert [device.status for device in devices].count("active") == 1
             assert any(device.status == "revoked" for device in devices)
-            assert db.scalar(select(MembershipCode).where(MembershipCode.user_id == self.member_id)).status == "revoked"
+            assert db.get(User, self.member_id).customer_login_version == 3
+            membership_codes = list(db.scalars(select(MembershipCode).where(MembershipCode.user_id == self.member_id)))
+            assert any(code.status == "revoked" for code in membership_codes)
+            assert any(code.status == "issued" for code in membership_codes)
 
     def test_scan_reserves_code_before_binding(self):
         self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())

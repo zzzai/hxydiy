@@ -108,7 +108,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
             )}
             {selectedRecord && <RecordDetail record={selectedRecord} onClose={() => setSelectedRecord(null)} onFeedback={() => { setFeedbackRecord(selectedRecord); setSelectedRecord(null); }} />}
             <FeedbackDialog open={Boolean(feedbackRecord)} submitting={feedbackSubmitting} submitted={Boolean(feedbackRecord?.evaluated)} onClose={() => setFeedbackRecord(null)} onSubmit={async (input) => { if (!auth || !feedbackRecord) return; setFeedbackSubmitting(true); try { await submitCustomerFeedback(feedbackRecord.id, auth.token, input); setFeedbackRecord(null); loadData(auth.token, auth.user.is_member); } finally { setFeedbackSubmitting(false); } }} />
-            {memberCodeOpen && <MemberCodeDialog token={auth.token} phone={auth.user.phone} onClose={() => setMemberCodeOpen(false)} />}
+            {memberCodeOpen && <MemberCodeDialog token={auth.token} phone={auth.user.phone} onTokenReplaced={(token) => { const next = { ...auth, token }; writeCustomerAuth(next); onAuthChange(next); }} onClose={() => setMemberCodeOpen(false)} />}
           </main>
         )}
     </div>
@@ -242,7 +242,7 @@ function RecordFilters({ value, onChange }: { value: RecordFilter; onChange: (va
   return <div className="profile-record-filters" aria-label="到店记录筛选">{([['all', '全部'], ['pending-feedback', '待评价'], ['in-service', '服务中'], ['completed', '已完成']] as const).map(([key, label]) => <button key={key} type="button" className={value === key ? 'active' : ''} aria-pressed={value === key} onClick={() => onChange(key)}>{label}</button>)}</div>;
 }
 
-function MemberCodeDialog({ token, phone, onClose }: { token: string; phone: string; onClose: () => void }) {
+function MemberCodeDialog({ token, phone, onTokenReplaced, onClose }: { token: string; phone: string; onTokenReplaced: (token: string) => void; onClose: () => void }) {
   const [code, setCode] = useState('');
   const [seconds, setSeconds] = useState(30);
   const [error, setError] = useState('');
@@ -262,7 +262,7 @@ function MemberCodeDialog({ token, phone, onClose }: { token: string; phone: str
   }, [token]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (!code) return; const timer = window.setInterval(() => setSeconds((value) => { if (value <= 1) { window.clearInterval(timer); void load(); return 0; } return value - 1; }), 1000); return () => window.clearInterval(timer); }, [code, load]);
-  const enableHere = async () => { try { await rebindTrustedDevice(token, rebindCode); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : '验证失败，请重试'); } };
+  const enableHere = async () => { try { const result = await rebindTrustedDevice(token, rebindCode); onTokenReplaced(result.access_token); setRebindMode(false); } catch (reason) { setError(reason instanceof Error ? reason.message : '验证失败，请重试'); } };
   return <div className="profile-detail-backdrop" role="presentation" onClick={onClose}><section className="profile-member-code-dialog" role="dialog" aria-modal="true" aria-labelledby="member-code-title" onClick={(event) => event.stopPropagation()}><header><strong id="member-code-title">会员本人核验</strong><button type="button" aria-label="关闭会员码" onClick={onClose}><X size={20} /></button></header>{code ? <><QRCodeSVG value={code} size={220} level="M" /><strong>请向技师或店长出示</strong><p>{seconds} 秒后自动刷新</p><small>动态码每 30 秒更新，仅限本机当次使用，请勿截图或转发。</small></> : <><p>{error || '正在生成会员码…'}</p>{rebindMode ? <><small>验证手机号后将在此浏览器启用会员核验，原入口立即失效。</small><button type="button" onClick={() => void sendPhoneCode(phone).then(() => setRebindMode(true))}>获取验证码</button><input aria-label="短信验证码" inputMode="numeric" maxLength={6} value={rebindCode} onChange={(event) => setRebindCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="输入 6 位验证码" /><button type="button" disabled={rebindCode.length !== 6} onClick={() => void enableHere()}>验证并在此浏览器启用</button></> : error && <button type="button" onClick={() => void load()}>重新生成</button>}</>}</section></div>;
 }
 

@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -11,7 +11,7 @@ from app.api.admin import create_staff_token, hash_password
 from app.api.admin_v2 import MembershipUpdateIn, set_user_membership
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import MembershipBenefitGrant, Order, Staff, Store, User
+from app.models import MembershipBenefitGrant, Order, PriceBook, Project, SelectionRevision, SelectionSession, ServiceLine, Staff, Store, User
 
 
 class AdminMembershipTests(unittest.TestCase):
@@ -24,13 +24,17 @@ class AdminMembershipTests(unittest.TestCase):
         Base.metadata.create_all(cls.engine)
         with cls.SessionLocal() as db:
             store = Store(store_code="membership-store", name="会员门店", address="测试地址")
+            other_store = Store(store_code="membership-other", name="其他门店", address="测试地址")
             staff = Staff(
                 username="membership-admin", name="店长", role="admin", status="active",
                 password_hash=hash_password("pass"), store_id=None,
             )
-            db.add_all([store, staff])
+            db.add_all([store, other_store, staff])
             db.flush()
             staff.store_id = store.id
+            other_staff = Staff(username="membership-other-admin", name="其他店长", role="manager", status="active", password_hash=hash_password("pass"), store_id=other_store.id)
+            read_only_staff = Staff(username="membership-read-only", name="普通员工", role="staff", status="active", password_hash=hash_password("pass"), store_id=store.id)
+            db.add_all([other_staff, read_only_staff])
             customer = User(openid="membership-customer", phone="13800138000")
             db.add(customer)
             db.flush()
@@ -43,6 +47,8 @@ class AdminMembershipTests(unittest.TestCase):
             db.commit()
             cls.store_id = store.id
             cls.staff_id = staff.id
+            cls.other_staff_id = other_staff.id
+            cls.read_only_staff_id = read_only_staff.id
             cls.customer_id = customer.id
 
         def override_get_db():
@@ -55,6 +61,8 @@ class AdminMembershipTests(unittest.TestCase):
         app.dependency_overrides[get_db] = override_get_db
         cls.client = TestClient(app)
         cls.headers = {"Authorization": f"Bearer {create_staff_token(cls.staff_id, 'admin')}"}
+        cls.other_store_headers = {"Authorization": f"Bearer {create_staff_token(cls.other_staff_id, 'manager')}"}
+        cls.read_only_headers = {"Authorization": f"Bearer {create_staff_token(cls.read_only_staff_id, 'staff')}"}
 
     @classmethod
     def tearDownClass(cls):
@@ -83,6 +91,224 @@ class AdminMembershipTests(unittest.TestCase):
             user = db.get(User, self.customer_id)
             self.assertFalse(user.is_member)
             self.assertIsNone(user.member_type)
+
+    def test_server_generated_enrollment_records_only_payment_summary(self):
+        customer_id = self._new_customer("server-command")
+        response = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/enroll",
+            headers=self.headers,
+            json={
+                "payment_channel": "wechat",
+                "payment_reference": "wx-merchant-transaction-123456",
+                "rights_confirmed": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertTrue(payload["is_member"])
+        self.assertTrue(payload["cycle_id"].startswith("annual-"))
+        with self.SessionLocal() as db:
+            grant = db.scalar(select(MembershipBenefitGrant).where(
+                MembershipBenefitGrant.membership_cycle_id == payload["cycle_id"],
+            ))
+        self.assertEqual(grant.payment_channel, "wechat")
+        self.assertEqual(grant.payment_reference, "***123456")
+        self.assertTrue(grant.rights_confirmed)
+        self.assertIsNotNone(grant.membership_expires_at)
+
+    def test_cancellation_voids_unused_gift_and_recovery_is_idempotent(self):
+        customer_id = self._new_customer("cancel-recovery")
+        enrolled = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/enroll",
+            headers=self.headers,
+            json={"payment_channel": "cash", "payment_reference": "R-1001", "rights_confirmed": True},
+        )
+        self.assertEqual(enrolled.status_code, 200, enrolled.text)
+        cycle_id = enrolled.json()["cycle_id"]
+
+        cancelled = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/cancel",
+            headers=self.headers,
+            json={"cycle_id": cycle_id, "reason": "顾客退款", "refund_disposition": "refunded"},
+        )
+        self.assertEqual(cancelled.status_code, 200, cancelled.text)
+        self.assertEqual(cancelled.json()["benefit_status"], "voided")
+
+        first = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/recover",
+            headers=self.headers,
+            json={"cycle_id": cycle_id, "reason": "退款误操作已复核", "idempotency_key": "recover-r1001"},
+        )
+        retry = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/recover",
+            headers=self.headers,
+            json={"cycle_id": cycle_id, "reason": "退款误操作已复核", "idempotency_key": "recover-r1001"},
+        )
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(retry.status_code, 200, retry.text)
+        with self.SessionLocal() as db:
+            grant = db.scalar(select(MembershipBenefitGrant).where(
+                MembershipBenefitGrant.membership_cycle_id == cycle_id,
+            ))
+            user = db.get(User, customer_id)
+        self.assertEqual(grant.status, "available")
+        self.assertEqual(grant.cycle_state, "active")
+        self.assertTrue(user.is_member)
+
+    def test_renewal_is_only_available_in_last_ninety_days_and_starts_at_expiry(self):
+        customer_id = self._new_customer("renewal")
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            user.is_member = True
+            user.member_type = "annual"
+            user.member_expire_at = datetime.now(timezone.utc) + timedelta(days=89)
+            user.annual_membership_cycle_id = "renew-source-cycle"
+            db.add(MembershipBenefitGrant(
+                user_id=user.id, store_id=self.store_id, benefit_type="annual_project_gift",
+                membership_cycle_id="renew-source-cycle",
+                membership_started_at=datetime.now(timezone.utc) - timedelta(days=276),
+                membership_expires_at=user.member_expire_at, status="available", cycle_state="active",
+            ))
+            db.commit()
+            expires_at = user.member_expire_at
+
+        response = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/renew",
+            headers=self.headers,
+            json={"payment_channel": "manual_receipt", "payment_reference": "REC-20260910", "rights_confirmed": True},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["member_started_at"], expires_at.isoformat())
+        renewed_cycle_id = response.json()["cycle_id"]
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            source = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.membership_cycle_id == "renew-source-cycle"))
+            renewed = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.membership_cycle_id == renewed_cycle_id))
+        self.assertEqual(user.annual_membership_cycle_id, "renew-source-cycle")
+        self.assertEqual(user.member_expire_at, renewed.membership_expires_at)
+        self.assertEqual(source.cycle_state, "active")
+        self.assertEqual(renewed.cycle_state, "scheduled")
+
+        cancelled = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/cancel",
+            headers=self.headers,
+            json={"cycle_id": "renew-source-cycle", "reason": "顾客申请退款", "refund_disposition": "refunded"},
+        )
+        self.assertEqual(cancelled.status_code, 200, cancelled.text)
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            renewed = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.membership_cycle_id == renewed_cycle_id))
+        self.assertFalse(user.is_member)
+        self.assertEqual(renewed.cycle_state, "scheduled")
+
+    def test_annual_gift_redemption_reprices_one_eligible_service_line_and_cancellation_releases_it(self):
+        customer_id = self._new_customer("gift-redeem")
+        enrolled = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/enroll",
+            headers=self.headers,
+            json={"payment_channel": "cash", "payment_reference": "R-2001", "rights_confirmed": True},
+        )
+        self.assertEqual(enrolled.status_code, 200, enrolled.text)
+        session_id, service_line_id = self._confirmed_gift_selection(customer_id, 9900)
+
+        cross_store = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/annual-gift/redeem",
+            headers=self.other_store_headers,
+            json={"cycle_id": enrolled.json()["cycle_id"], "service_line_id": service_line_id, "idempotency_key": "gift-cross-store"},
+        )
+        read_only = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/annual-gift/redeem",
+            headers=self.read_only_headers,
+            json={"cycle_id": enrolled.json()["cycle_id"], "service_line_id": service_line_id, "idempotency_key": "gift-read-only"},
+        )
+        self.assertEqual(cross_store.status_code, 404, cross_store.text)
+        self.assertEqual(read_only.status_code, 403, read_only.text)
+
+        redeemed = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/annual-gift/redeem",
+            headers=self.headers,
+            json={"cycle_id": enrolled.json()["cycle_id"], "service_line_id": service_line_id, "idempotency_key": "gift-redeem-1"},
+        )
+        self.assertEqual(redeemed.status_code, 200, redeemed.text)
+        self.assertEqual(redeemed.json()["pricing_snapshot"]["payable_total_cents"], 0)
+        self.assertEqual(redeemed.json()["pricing_snapshot"]["lines"][0]["price_basis"], "annual_gift")
+        retry = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/annual-gift/redeem",
+            headers=self.headers,
+            json={"cycle_id": enrolled.json()["cycle_id"], "service_line_id": service_line_id, "idempotency_key": "gift-redeem-1"},
+        )
+        self.assertEqual(retry.status_code, 200, retry.text)
+
+        cancelled = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/service-lines/{service_line_id}/cancel",
+            headers=self.headers,
+            json={"reason": "顾客临时取消本次服务"},
+        )
+        self.assertEqual(cancelled.status_code, 200, cancelled.text)
+        with self.SessionLocal() as db:
+            grant = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.user_id == customer_id))
+            line = db.get(ServiceLine, service_line_id)
+        self.assertEqual(grant.status, "available")
+        self.assertIsNone(grant.used_service_line_id)
+        self.assertEqual(line.state, "cancelled")
+
+    def test_annual_gift_rejects_service_over_ninety_nine_yuan_without_consuming_benefit(self):
+        customer_id = self._new_customer("gift-price-limit")
+        enrolled = self.client.post(
+            f"/api/v1/admin/v2/users/{customer_id}/membership/enroll",
+            headers=self.headers,
+            json={"payment_channel": "cash", "payment_reference": "R-2002", "rights_confirmed": True},
+        )
+        self.assertEqual(enrolled.status_code, 200, enrolled.text)
+        session_id, service_line_id = self._confirmed_gift_selection(customer_id, 9901)
+
+        response = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/annual-gift/redeem",
+            headers=self.headers,
+            json={"cycle_id": enrolled.json()["cycle_id"], "service_line_id": service_line_id, "idempotency_key": "gift-price-limit-1"},
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "ANNUAL_GIFT_LINE_INELIGIBLE")
+        with self.SessionLocal() as db:
+            grant = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.user_id == customer_id))
+        self.assertEqual(grant.status, "available")
+
+    def test_due_renewal_activates_before_its_gift_can_be_redeemed(self):
+        customer_id = self._new_customer("due-renewal-gift")
+        cycle_id = "due-renewal-cycle"
+        now = datetime.now(timezone.utc)
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            user.is_member = False
+            user.member_type = None
+            user.annual_membership_cycle_id = "expired-source-cycle"
+            user.member_expire_at = now - timedelta(seconds=1)
+            db.add(MembershipBenefitGrant(
+                user_id=user.id,
+                store_id=self.store_id,
+                benefit_type="annual_project_gift",
+                membership_cycle_id=cycle_id,
+                membership_started_at=now - timedelta(seconds=1),
+                membership_expires_at=now + timedelta(days=364),
+                status="available",
+                cycle_state="scheduled",
+            ))
+            db.commit()
+        session_id, service_line_id = self._confirmed_gift_selection(customer_id, 9900)
+
+        response = self.client.post(
+            f"/api/v1/admin/v2/selection-sessions/{session_id}/annual-gift/redeem",
+            headers=self.headers,
+            json={"cycle_id": cycle_id, "service_line_id": service_line_id, "idempotency_key": "due-renewal-gift-1"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        with self.SessionLocal() as db:
+            user = db.get(User, customer_id)
+            grant = db.scalar(select(MembershipBenefitGrant).where(MembershipBenefitGrant.membership_cycle_id == cycle_id))
+        self.assertTrue(user.is_member)
+        self.assertEqual(user.annual_membership_cycle_id, cycle_id)
+        self.assertEqual(grant.cycle_state, "active")
+        self.assertEqual(grant.status, "used")
 
     def test_setting_same_annual_membership_twice_issues_one_gift(self):
         with self.SessionLocal() as db:
@@ -413,6 +639,74 @@ class AdminMembershipTests(unittest.TestCase):
             "member_started_at": "2026-08-01T00:00:00+00:00",
             "member_expire_at": "2027-08-01T00:00:00+00:00",
         }
+
+    def _new_customer(self, suffix: str) -> int:
+        with self.SessionLocal() as db:
+            sequence = int(db.scalar(select(func.count()).select_from(User)) or 0)
+            customer = User(openid=f"membership-{suffix}", phone=f"139{sequence:08d}")
+            db.add(customer)
+            db.flush()
+            db.add(Order(
+                order_no=f"HXY{suffix.upper()[:16]}", order_type="service", user_id=customer.id,
+                store_id=self.store_id, items=[], total_amount_cents=9900,
+                pay_amount_cents=9900, status="completed", pay_status="paid",
+            ))
+            db.commit()
+            return customer.id
+
+    def _confirmed_gift_selection(self, customer_id: int, store_price_cents: int) -> tuple[str, str]:
+        session_id = f"gift-session-{customer_id}"
+        revision_id = f"gift-revision-{customer_id}"
+        service_line_id = f"gift-line-{customer_id}"
+        with self.SessionLocal() as db:
+            project = Project(
+                store_id=self.store_id,
+                code=f"GIFT-{customer_id}",
+                category="care",
+                name="赠送服务测试项目",
+                publication_status="published",
+            )
+            db.add(project)
+            db.flush()
+            db.add_all([
+                PriceBook(project_id=project.id, price_type="store", amount_cents=store_price_cents),
+                PriceBook(project_id=project.id, price_type="member", amount_cents=store_price_cents),
+            ])
+            item = {
+                "project_id": project.id,
+                "service_line_id": service_line_id,
+                "quantity": 1,
+                "item_type": "service",
+                "chargeable": True,
+            }
+            now = datetime.now(timezone.utc)
+            db.add(SelectionSession(
+                id=session_id,
+                access_token_hash="x",
+                store_id=self.store_id,
+                customer_id=customer_id,
+                status="confirmed",
+                confirmed_at=now,
+                items=[item],
+                diy_preferences={},
+            ))
+            db.add(SelectionRevision(
+                id=revision_id,
+                selection_session_id=session_id,
+                revision_no=1,
+                state="confirmed",
+                idempotency_key=f"gift-revision-key-{customer_id}",
+                snapshot={"items": [item]},
+            ))
+            db.add(ServiceLine(
+                id=service_line_id,
+                selection_session_id=session_id,
+                selection_revision_id=revision_id,
+                snapshot=item,
+                state="pending",
+            ))
+            db.commit()
+        return session_id, service_line_id
 
 
 if __name__ == "__main__":

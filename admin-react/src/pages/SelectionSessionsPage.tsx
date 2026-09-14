@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { App, Button, Card, Collapse, Descriptions, Drawer, Empty, Input, Segmented, Space, Table, Tag, Typography } from 'antd';
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
-import { approveSelectionChangeRequest, cancelSelectionSession, confirmSelectionSession, getCustomerProfileRecords, getSelectionChangeRequests, getSelectionSessions, getStaff, rejectSelectionChangeRequest } from '../api';
+import { approveSelectionChangeRequest, cancelSelectionServiceLine, cancelSelectionSession, confirmSelectionSession, getCustomerProfileRecords, getSelectionChangeRequests, getSelectionSessions, getStaff, redeemAnnualGift, rejectSelectionChangeRequest } from '../api';
 import { canApproveSelectionChange, canRejectSelectionChange, selectionChangeItemSummary } from '../selectionChanges';
 import { buildServiceReferenceDisplay } from '../serviceReferenceDisplay';
 
@@ -78,6 +78,36 @@ export default function SelectionSessionsPage() {
       },
     });
   };
+  const redeemGift = (item: any) => {
+    if (!selected?.customer?.membership_cycle_id || !item.service_line_id) {
+      message.error('当前顾客没有可核销的年度会员周期');
+      return;
+    }
+    modal.confirm({
+      title: '核销年度赠送服务？',
+      content: '系统会再次验证该服务为本店已发布、门店价不高于99元且无加项的未开始服务；核销后该服务行金额将变为0元。',
+      okText: '确认核销', cancelText: '返回',
+      onOk: async () => {
+        const idempotencyKey = globalThis.crypto?.randomUUID?.() || `annual-gift-${Date.now()}-${item.service_line_id}`;
+        const response = await redeemAnnualGift(selected.id, { cycle_id: selected.customer.membership_cycle_id, service_line_id: item.service_line_id, idempotency_key: idempotencyKey });
+        setSelected(response.data); message.success('年度赠送权益已核销'); await load();
+      },
+    });
+  };
+  const cancelServiceLine = (item: any) => {
+    if (!selected?.id || !item.service_line_id) return;
+    let reason = '';
+    modal.confirm({
+      title: '取消这项服务？',
+      content: <Input.TextArea autoFocus rows={3} maxLength={200} placeholder="填写取消原因" onChange={(event) => { reason = event.target.value; }} />,
+      okText: '取消服务', cancelText: '返回', okButtonProps: { danger: true },
+      onOk: async () => {
+        if (reason.trim().length < 2) { message.error('请填写至少2个字的取消原因'); return Promise.reject(new Error('reason-required')); }
+        const response = await cancelSelectionServiceLine(selected.id, item.service_line_id, reason.trim());
+        setSelected(response.data); message.success('服务项目已取消；如已核销赠送权益，权益已释放'); await load();
+      },
+    });
+  };
   if (readOnly) return <Space direction="vertical" size={18} style={{ width: '100%' }}>
     <div className="page-heading"><div><Typography.Title level={3} style={{ margin: 0 }}>到店服务选单</Typography.Title><Typography.Text type="secondary">仅查看本店已提交的服务需求</Typography.Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
     <Card>{!loading && !items.length ? <Empty description="暂无选单" /> : <Table rowKey="id" loading={loading} dataSource={items} pagination={{ pageSize: 20 }} columns={[
@@ -111,6 +141,16 @@ export default function SelectionSessionsPage() {
     <Drawer title="选单详情" open={Boolean(selected)} onClose={() => setSelected(null)} width={420}>{selected && <Space direction="vertical" size={18} style={{ width: '100%' }}>
       <Descriptions column={1} size="small" items={[{ label: '状态', children: <Tag color={STATUS[selected.status]?.color}>{STATUS[selected.status]?.label || selected.status}</Tag> }, { label: '顾客', children: selected.customer ? `${selected.customer.nickname || '已登录顾客'} · ${selected.customer.phone}` : '匿名访客，尚未登录' }, { label: '会员身份', children: selected.customer?.is_member ? <Tag color="gold">会员</Tag> : selected.customer ? '非会员' : '-' }, { label: '来源', children: sourceLabel(selected.source) }, { label: '设备', children: selected.device_label || '-' }, { label: '提交时间', children: dateText(selected.submitted_at) }]} />
       <div><Typography.Text strong>项目</Typography.Text><Typography.Paragraph style={{ marginTop: 8 }}>{itemSummary(selected.items)}</Typography.Paragraph></div>
+      {selected.status === 'confirmed' && selected.customer?.is_member && <Card size="small" title="年度赠送服务">
+        <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>只可核销一项本店已发布、门店价不高于99元且无加项的未开始服务。取消该服务项目会释放仍有效周期的赠送权益。</Typography.Paragraph>
+        <Space direction="vertical" style={{ width: '100%' }}>
+          {(selected.items || []).map((item: any) => <Space key={item.service_line_id || `${item.project_id}-${item.name}`} wrap>
+            <Typography.Text>{item.name || `项目 ${item.project_id}`}</Typography.Text>
+            {item.annual_gift_cycle_id ? <Tag color="gold">年度赠送已核销</Tag> : <Button size="small" type="primary" onClick={() => redeemGift(item)}>核销年度赠送</Button>}
+            <Button size="small" danger onClick={() => cancelServiceLine(item)}>取消项目</Button>
+          </Space>)}
+        </Space>
+      </Card>}
       <Descriptions column={1} size="small" items={[
         { label: '计价档位', children: selected.pricing_snapshot?.applied_price_type === 'member' ? <Tag color="gold">会员价</Tag> : selected.pricing_snapshot?.applied_price_type === 'group' ? <Tag color="blue">团购价</Tag> : <Tag>门店价</Tag> },
         { label: selected.status === 'confirmed' ? '已确认金额' : '当前预计金额', children: `¥${((selected.pricing_snapshot?.payable_total_cents ?? selected.store_total_cents ?? 0) / 100).toFixed(1)}` },
