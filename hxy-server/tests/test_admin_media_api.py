@@ -1,5 +1,7 @@
 import io
+import struct
 import unittest
+import zlib
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -12,6 +14,18 @@ from app.db.session import Base, get_db
 from app.main import app
 from app.models import AuditLog, MediaAsset, PageContent, Project, Staff, Store
 from app.services.media_storage import MediaStorageError
+
+
+def _png(width: int, height: int) -> bytes:
+    def chunk(kind: bytes, value: bytes) -> bytes:
+        return struct.pack(">I", len(value)) + kind + value + struct.pack(">I", zlib.crc32(kind + value) & 0xFFFFFFFF)
+
+    row = b"\x00" + b"\x00\x00\x00" * width
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(row * height)) + chunk(b"IEND", b"")
+
+
+PNG_1X1 = _png(1, 1)
+PNG_2X1 = _png(2, 1)
 
 
 class _FakeStorage:
@@ -74,7 +88,7 @@ class AdminMediaApiTests(unittest.TestCase):
         response = self.client.post(
             "/api/v1/admin/media",
             headers=self._headers(self.manager_id),
-            files={"file": ("cover.png", io.BytesIO(b"png-bytes"), "image/png")},
+            files={"file": ("cover.png", io.BytesIO(PNG_1X1), "image/png")},
             data={"purpose": "project_cover"},
         )
         self.assertEqual(response.status_code, 201, response.text)
@@ -102,6 +116,44 @@ class AdminMediaApiTests(unittest.TestCase):
         )
         self.assertEqual(too_large.status_code, 413)
 
+    def test_upload_rejects_non_image_bytes_declared_as_png_before_storage_write(self):
+        storage = _FakeStorage()
+        with patch("app.api.media.get_media_storage", return_value=storage):
+            response = self.client.post(
+                "/api/v1/admin/media",
+                headers=self._headers(self.manager_id),
+                files={"file": ("cover.png", io.BytesIO(b"not-an-image"), "image/png")},
+            )
+        self.assertEqual(response.status_code, 415, response.text)
+        self.assertEqual(storage.put_calls, [])
+
+    def test_upload_rejects_extension_that_disagrees_with_declared_image_type(self):
+        storage = _FakeStorage()
+        with patch("app.api.media.get_media_storage", return_value=storage):
+            response = self.client.post(
+                "/api/v1/admin/media",
+                headers=self._headers(self.manager_id),
+                files={"file": ("cover.jpg", io.BytesIO(PNG_1X1), "image/png")},
+            )
+        self.assertEqual(response.status_code, 415, response.text)
+        self.assertEqual(storage.put_calls, [])
+
+    def test_upload_rejects_image_over_configured_pixel_limit_before_storage_write(self):
+        storage = _FakeStorage()
+        media_settings = __import__("app.core.config", fromlist=["settings"]).settings
+        with patch("app.api.media.get_media_storage", return_value=storage), patch.object(
+            media_settings,
+            "media_max_pixels",
+            1,
+        ):
+            response = self.client.post(
+                "/api/v1/admin/media",
+                headers=self._headers(self.manager_id),
+                files={"file": ("cover.png", io.BytesIO(PNG_2X1), "image/png")},
+            )
+        self.assertEqual(response.status_code, 413, response.text)
+        self.assertEqual(storage.put_calls, [])
+
     def test_regular_staff_cannot_upload_media(self):
         with self.SessionLocal() as db:
             staff = Staff(username="media-staff", password_hash=hash_password("pass"), name="员工", role="staff", store_id=1, status="active")
@@ -111,7 +163,7 @@ class AdminMediaApiTests(unittest.TestCase):
         response = self.client.post(
             "/api/v1/admin/media",
             headers=self._headers(staff_id, "staff"),
-            files={"file": ("cover.png", io.BytesIO(b"png-bytes"), "image/png")},
+            files={"file": ("cover.png", io.BytesIO(PNG_1X1), "image/png")},
         )
         self.assertEqual(response.status_code, 403)
 
@@ -119,7 +171,7 @@ class AdminMediaApiTests(unittest.TestCase):
         uploaded = self.client.post(
             "/api/v1/admin/media",
             headers=self._headers(self.manager_id),
-            files={"file": ("cover.jpg", io.BytesIO(b"jpg-bytes"), "image/jpeg")},
+            files={"file": ("cover.png", io.BytesIO(PNG_1X1), "image/png")},
         ).json()
         denied = self.client.delete(f"/api/v1/admin/media/{uploaded['id']}", headers=self._headers(self.other_manager_id))
         self.assertEqual(denied.status_code, 404)
@@ -134,7 +186,7 @@ class AdminMediaApiTests(unittest.TestCase):
         uploaded = self.client.post(
             "/api/v1/admin/media",
             headers=self._headers(self.manager_id),
-            files={"file": ("cover.jpg", io.BytesIO(b"jpg-bytes"), "image/jpeg")},
+            files={"file": ("cover.png", io.BytesIO(PNG_1X1), "image/png")},
         ).json()
         with self.SessionLocal() as db:
             db.add(Project(
@@ -166,7 +218,7 @@ class AdminMediaApiTests(unittest.TestCase):
             uploaded = self.client.post(
                 "/api/v1/admin/media",
                 headers=self._headers(self.manager_id),
-                files={"file": ("cover.png", io.BytesIO(b"png-bytes"), "image/png")},
+                files={"file": ("cover.png", io.BytesIO(PNG_1X1), "image/png")},
             ).json()
         with self.SessionLocal() as db:
             db.add(Project(
@@ -196,7 +248,7 @@ class AdminMediaApiTests(unittest.TestCase):
             response = self.client.post(
                 "/api/v1/admin/media",
                 headers=self._headers(self.manager_id),
-                files={"file": ("cover.png", io.BytesIO(b"png-bytes"), "image/png")},
+                files={"file": ("cover.png", io.BytesIO(PNG_1X1), "image/png")},
                 data={"purpose": "project_cover"},
             )
             self.assertEqual(response.status_code, 201, response.text)
@@ -210,7 +262,7 @@ class AdminMediaApiTests(unittest.TestCase):
         uploaded = self.client.post(
             "/api/v1/admin/media",
             headers=self._headers(self.manager_id),
-            files={"file": ("cover.jpg", io.BytesIO(b"jpg-bytes"), "image/jpeg")},
+            files={"file": ("cover.png", io.BytesIO(PNG_1X1), "image/png")},
         ).json()
         storage = _FailingDeleteStorage()
         with patch("app.api.media.get_media_storage", return_value=storage):

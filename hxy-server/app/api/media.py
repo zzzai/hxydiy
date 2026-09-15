@@ -1,11 +1,13 @@
 """管理端媒体上传与门店隔离访问。"""
 
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,25 @@ def _is_headquarters_admin(staff: Staff) -> bool:
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+FILENAME_EXTENSIONS = {"image/jpeg": {".jpg", ".jpeg"}, "image/png": {".png"}, "image/webp": {".webp"}, "image/gif": {".gif"}}
+FORMAT_CONTENT_TYPES = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp", "GIF": "image/gif"}
+
+
+def _validate_image_content(content: bytes, declared_type: str) -> None:
+    """Reject invalid, misdeclared, and oversized-pixel image data before storage."""
+
+    try:
+        with Image.open(BytesIO(content)) as image:
+            actual_type = FORMAT_CONTENT_TYPES.get(image.format or "")
+            if actual_type != declared_type:
+                raise HTTPException(status_code=415, detail="图片内容与声明类型不一致")
+            if image.width * image.height > settings.media_max_pixels:
+                raise HTTPException(status_code=413, detail="图片像素不能超过 2500 万")
+            image.verify()
+    except HTTPException:
+        raise
+    except (Image.DecompressionBombError, OSError, UnidentifiedImageError, ValueError) as exc:
+        raise HTTPException(status_code=415, detail="图片内容无效") from exc
 
 
 def _value_references_media(value: object, reference_values: tuple[str, ...]) -> bool:
@@ -132,9 +153,12 @@ async def upload_media(
     original_name = Path(file.filename or "upload").name
     if not original_name or len(original_name) > 255:
         raise HTTPException(status_code=400, detail="文件名无效")
+    if Path(original_name).suffix.lower() not in FILENAME_EXTENSIONS[file.content_type]:
+        raise HTTPException(status_code=415, detail="文件扩展名与图片类型不一致")
     content = await file.read(settings.media_max_size_bytes + 1)
     if len(content) > settings.media_max_size_bytes:
         raise HTTPException(status_code=413, detail="图片不能超过 5MB")
+    _validate_image_content(content, file.content_type)
     object_key = f"stores/{target_store_id}/media/{uuid4().hex}{EXTENSIONS[file.content_type]}"
     storage = _storage_or_http()
     try:
