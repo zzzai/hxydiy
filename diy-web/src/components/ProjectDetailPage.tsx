@@ -15,6 +15,7 @@ import { catalogDraftResetKey, validateCatalogSelection, withRequiredCatalogDefa
 import CatalogLinkedProjectGroup from './project-options/CatalogLinkedProjectGroup';
 import LocalStrengthGroup from './project-options/LocalStrengthGroup';
 import HerbalFormulaGroup from './project-options/HerbalFormulaGroup';
+import FallbackHerbalFormulaGroup, { FOOTBATH_HERBAL_FORMULAS, type HerbalFormula } from './project-options/FallbackHerbalFormulaGroup';
 import FootBathBundleProgress from './project-options/FootBathBundleProgress';
 import ProjectDetailVisualSections from './ProjectDetailVisualSections';
 import DetailIntroduction from './DetailIntroduction';
@@ -123,6 +124,7 @@ export default function ProjectDetailPage({
   const isFootBath = Boolean(project && isPrimaryFootBathDiy(project));
   const isCatalogOptions = Boolean(project && isCatalogOptionsProject(project));
   const isFootbathOptions = Boolean(project && isFootbathOptionsProject(project));
+  const usesFrontendHerbalFormula = isFootbathOptions && !catalogPublished;
   const showBundleProgress = Boolean(project && supportsFootBathBundle(project));
   const detailOnly = Boolean(project && isDetailOnlyProject(project));
   const [choices, setChoices] = useState<string[]>(preferences);
@@ -139,11 +141,19 @@ export default function ProjectDetailPage({
   });
 
   useEffect(() => {
-    setChoices(preferences.length > 0 ? preferences : groups.map((group) => group.options[0]).filter(Boolean));
+    const initialChoices = preferences.length > 0 ? preferences : groups.map((group) => group.options[0]).filter(Boolean);
+    const legacyFormulaChoices = new Set(groups
+      .filter((group) => usesFrontendHerbalFormula && customerPreferenceLabel(group.label) === '泡脚液')
+      .flatMap((group) => group.options));
+    const nextChoices = initialChoices.filter((choice) => !legacyFormulaChoices.has(choice));
+    if (usesFrontendHerbalFormula && !nextChoices.some((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.name === choice))) {
+      nextChoices.unshift(FOOTBATH_HERBAL_FORMULAS[0].name);
+    }
+    setChoices(nextChoices);
     setDraftAddOnIds(selectedAddonIds);
     setDraftLocalParts(localParts);
     setDraftChoiceIds(withRequiredCatalogDefaults(catalogGroups, catalogSelection?.optionChoiceIds || []));
-  }, [draftResetKey, groups, catalogGroups]);
+  }, [draftResetKey, groups, catalogGroups, usesFrontendHerbalFormula]);
 
   useEffect(() => {
     if (!project) return undefined;
@@ -186,6 +196,11 @@ export default function ProjectDetailPage({
     if (readOnly) return;
     const withoutGroup = choices.filter((choice) => !group.options.includes(choice));
     setChoices([...withoutGroup, option]);
+  };
+  const chooseHerbalFormula = (formula: HerbalFormula) => {
+    if (readOnly) return;
+    const formulaNames = new Set(FOOTBATH_HERBAL_FORMULAS.map((item) => item.name));
+    setChoices((current) => [...current.filter((choice) => !formulaNames.has(choice)), formula.name]);
   };
   const toggleAddOn = (id: number) => {
     if (readOnly) return;
@@ -242,7 +257,13 @@ export default function ProjectDetailPage({
 
         {!detailOnly && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong><small>请确认位置无误</small></section>}
 
-        {groups.map((group, index) => {
+        {usesFrontendHerbalFormula && <FallbackHerbalFormulaGroup
+          selectedName={choices.find((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.name === choice))}
+          onSelect={chooseHerbalFormula}
+          readOnly={readOnly}
+        />}
+
+        {groups.filter((group) => !usesFrontendHerbalFormula || customerPreferenceLabel(group.label) !== '泡脚液').map((group, index) => {
           const displayLabel = customerPreferenceLabel(group.label);
           return (
             <section className="mini-config-card" key={group.label} aria-labelledby={`mini-config-${project.id}-${index}`}>
