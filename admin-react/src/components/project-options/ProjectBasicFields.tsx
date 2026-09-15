@@ -1,6 +1,7 @@
 import { Button, Form, Input, InputNumber, Select, Space } from 'antd';
 import type { FormInstance } from 'antd';
 import MediaUploadField from '../MediaUploadField';
+import { moveProjectDetailModule } from '../../projectContent';
 
 const CAT_MAP: Record<string, string> = { bath: '泡脚沐足', balance: '推拿', care: '精油SPA', small: '养生小项', 'local-strength': '局部调理', kit: '功夫调理', tea: '茶饮' };
 
@@ -23,16 +24,24 @@ export default function ProjectBasicFields({ form, editing }: { form: FormInstan
     <div className="admin-subtitle">详情模块</div>
     <Form.List name="detail_modules">
       {(fields, { add, remove }) => <>
-        {fields.map(({ key, name, ...restField }) => <Space key={key} align="start" style={{ display: 'flex', width: '100%' }}>
-          <Form.Item {...restField} name={[name, 'type']} initialValue="text"><Select style={{ width: 100 }} options={[{ value: 'text', label: '文字' }, { value: 'image', label: '图片' }, { value: 'highlight', label: '亮点' }]} /></Form.Item>
-          <Form.Item {...restField} name={[name, 'title']}><Input placeholder="标题" /></Form.Item>
-          <Form.Item noStyle shouldUpdate={(prev, current) => prev.detail_modules?.[name]?.type !== current.detail_modules?.[name]?.type}>
-            {({ getFieldValue }) => getFieldValue(['detail_modules', name, 'type']) === 'image'
-              ? <Form.Item {...restField} name={[name, 'body']} label="图片"><MediaUploadField purpose="project_detail" /></Form.Item>
-              : <Form.Item {...restField} name={[name, 'body']}><Input placeholder="内容" /></Form.Item>}
-          </Form.Item>
-          <Button danger type="text" onClick={() => remove(name)}>删除</Button>
-        </Space>)}
+        {fields.map(({ key, name, ...restField }) => <div key={key} draggable onDragStart={(event) => event.dataTransfer.setData('text/plain', String(name))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+          event.preventDefault();
+          const from = Number(event.dataTransfer.getData('text/plain'));
+          const detailModules = form.getFieldValue('detail_modules') || [];
+          form.setFieldValue('detail_modules', moveProjectDetailModule(detailModules, from, name));
+        }} style={{ cursor: 'grab' }}>
+          <Space align="start" style={{ display: 'flex', width: '100%' }}>
+            <span aria-label="拖拽排序" style={{ paddingTop: 5, color: '#84928e' }}>⠿</span>
+            <Form.Item {...restField} name={[name, 'type']} initialValue="text"><Select style={{ width: 100 }} options={[{ value: 'text', label: '文字' }, { value: 'image', label: '图片' }, { value: 'highlight', label: '亮点' }]} /></Form.Item>
+            <Form.Item {...restField} name={[name, 'title']}><Input placeholder="标题" /></Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, current) => prev.detail_modules?.[name]?.type !== current.detail_modules?.[name]?.type}>
+              {({ getFieldValue }) => getFieldValue(['detail_modules', name, 'type']) === 'image'
+                ? <Form.Item {...restField} name={[name, 'body']} label="图片"><MediaUploadField purpose="project_detail" /></Form.Item>
+                : <Form.Item {...restField} name={[name, 'body']}><Input placeholder="内容" /></Form.Item>}
+            </Form.Item>
+            <Button danger type="text" onClick={() => remove(name)}>删除</Button>
+          </Space>
+        </div>)}
         <Button type="dashed" onClick={() => add({ type: 'text' })} block>增加详情模块</Button>
       </>}
     </Form.List>

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { projectFormPayload, projectToForm, supportsDiyOptions } from '../src/projectContent.ts';
+import * as projectContent from '../src/projectContent.ts';
+
+const { projectFormPayload, projectToForm, supportsDiyOptions } = projectContent;
 
 test('项目表单把元转换为分并拆分标签', () => {
   const payload = projectFormPayload({ store_price: 39.9, member_price: 29.9, tags_text: '现煮，DIY, 到店确认' });
@@ -47,4 +49,13 @@ test('历史误分类的套盒编码 hxy-taoke-60 同样清空 DIY 选项', () =
   assert.equal(supportsDiyOptions('balance', 'hxy-taoke-60'), false);
   assert.equal(supportsDiyOptions('balance', 'hxy-tuina-70'), true);
   assert.deepEqual(payload.diy_options, []);
+});
+
+test('详情模块拖拽后按目标位置保存新顺序', () => {
+  const move = (projectContent as typeof projectContent & {
+    moveProjectDetailModule: <T>(items: T[], from: number, to: number) => T[];
+  }).moveProjectDetailModule;
+  const moved = move([{ title: '第一段' }, { title: '第二段' }, { title: '第三段' }], 0, 2);
+
+  assert.deepEqual(moved.map((item) => item.title), ['第二段', '第三段', '第一段']);
 });
