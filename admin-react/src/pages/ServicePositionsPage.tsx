@@ -23,6 +23,7 @@ import {
   CopyOutlined,
   ExportOutlined,
   PlayCircleOutlined,
+  PrinterOutlined,
   ReloadOutlined,
   StopOutlined,
   SwapOutlined,
@@ -61,7 +62,7 @@ import {
 } from '../servicePositions';
 import { canManageConfiguration } from '../auth';
 import { buildServicePositionConfigurationPayload, canManageServicePositionConfiguration } from '../servicePositionConfiguration';
-import { getServicePositionQrPermissions, servicePositionQrActions, servicePositionQrRenderOptions } from '../servicePositionQr';
+import { buildPositionQrPrintDocument, getServicePositionQrPermissions, servicePositionQrActions, servicePositionQrRenderOptions } from '../servicePositionQr';
 
 type ActionMode = 'start_service' | 'kiosk' | null;
 
@@ -157,6 +158,7 @@ export default function ServicePositionsPage() {
   const [positionQr, setPositionQr] = useState<PositionQr | null>(null);
   const [qrTargetRoomId, setQrTargetRoomId] = useState<number>();
   const [qrBusy, setQrBusy] = useState(false);
+  const [batchPrintBusy, setBatchPrintBusy] = useState(false);
   const [positionConfigBusy, setPositionConfigBusy] = useState(false);
   const [maintenanceNote, setMaintenanceNote] = useState('');
   const [displayOrder, setDisplayOrder] = useState(0);
@@ -384,6 +386,48 @@ export default function ServicePositionsPage() {
     link.click();
   };
 
+  const printPositionQrs = async () => {
+    const printWindow = window.open('', 'hxy-position-qr-print');
+    if (!printWindow) {
+      message.error('浏览器拦截了打印窗口，请允许本站打开窗口后重试');
+      return;
+    }
+    printWindow.document.write('<p>正在生成服务位二维码，请勿关闭此窗口。</p>');
+    setBatchPrintBusy(true);
+    try {
+      const printablePositions = positions.filter((position) => (
+        position.id > 0 && position.customer_selectable && position.operational_status === 'active'
+      ));
+      const qrs = await Promise.all(printablePositions.map(async (position) => {
+        const response = await getPositionQrLink(position.id);
+        return { position, qr: response.data };
+      }));
+      const activeQrs = qrs.filter(({ qr }) => qr.status === 'active');
+      if (!activeQrs.length) {
+        printWindow.close();
+        message.warning('没有可打印的启用中服务位二维码');
+        return;
+      }
+      const images = await Promise.all(activeQrs.map(async ({ position, qr }) => ({
+        code: position.code,
+        name: position.name,
+        image: await QRCode.toDataURL(qr.url, servicePositionQrRenderOptions),
+      })));
+      printWindow.document.open();
+      printWindow.document.write(buildPositionQrPrintDocument(images));
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      const skipped = qrs.length - activeQrs.length;
+      message.success(`已生成 ${activeQrs.length} 个服务位二维码${skipped ? `，跳过 ${skipped} 个已停用二维码` : ''}`);
+    } catch {
+      printWindow.close();
+      message.error('批量生成二维码失败，请检查网络后重试');
+    } finally {
+      setBatchPrintBusy(false);
+    }
+  };
+
   const copyKioskLink = async () => {
     await navigator.clipboard.writeText(kioskLink);
     message.success('试用链接已复制');
@@ -408,6 +452,7 @@ export default function ServicePositionsPage() {
         </div>
         <Space>
           <Typography.Text type="secondary" className="live-updated">3 秒自动刷新 · {updatedAt ? dateTime(updatedAt) : '-'}</Typography.Text>
+          {qrPermissions.canManage && <Button icon={<PrinterOutlined />} loading={batchPrintBusy} onClick={() => void printPositionQrs()}>批量打印二维码</Button>}
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>
         </Space>
       </div>
