@@ -80,6 +80,13 @@ type Props = {
   couponPrompt?: { title?: string; body?: string };
 };
 
+export const FRONTEND_HERBAL_FORMULA_CODES = new Set([
+  'hxy-qiqing-30',
+  'hxy-xiangxiang-60',
+  'hxy-xiaoqi-90',
+  'hxy-foot-refine-1',
+]);
+
 export default function ProjectDetailPage({
   project,
   projects,
@@ -124,7 +131,7 @@ export default function ProjectDetailPage({
   const isFootBath = Boolean(project && isPrimaryFootBathDiy(project));
   const isCatalogOptions = Boolean(project && isCatalogOptionsProject(project));
   const isFootbathOptions = Boolean(project && isFootbathOptionsProject(project));
-  const usesFrontendHerbalFormula = isFootbathOptions && !catalogPublished;
+  const usesFrontendHerbalFormula = FRONTEND_HERBAL_FORMULA_CODES.has(project?.code || '') && !catalogPublished;
   const showBundleProgress = Boolean(project && supportsFootBathBundle(project));
   const detailOnly = Boolean(project && isDetailOnlyProject(project));
   const [choices, setChoices] = useState<string[]>(preferences);

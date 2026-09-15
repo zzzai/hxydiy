@@ -39,6 +39,14 @@ test('未配置后台目录的沐足项目使用前端五方默认值', async ()
   } finally { await server.close(); }
 });
 
+test('四个足疗项目均进入前端五方兜底，足部精修不被遗漏', async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const { FRONTEND_HERBAL_FORMULA_CODES } = await server.ssrLoadModule('/src/components/ProjectDetailPage.tsx');
+    for (const code of ['hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-foot-refine-1']) assert.equal(FRONTEND_HERBAL_FORMULA_CODES.has(code), true);
+  } finally { await server.close(); }
+});
+
 test('详情价格渲染：匿名与非会员参考价不划线，同价合并，会员保留门店价对比', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
