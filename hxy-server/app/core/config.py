@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     wx_appid: str = ""
     wx_appsecret: str = ""
 
+    # 微信认证服务号网页 JS-SDK。与小程序凭据分离，真实 Secret 仅存在生产 .env。
+    wechat_official_appid: str = ""
+    wechat_official_appsecret: str = ""
+
+    @property
+    def wechat_official_enabled(self) -> bool:
+        return bool(self.wechat_official_appid and self.wechat_official_appsecret)
+
     # 微信支付 v3（直连商户）
     wxpay_mchid: str = ""
     wxpay_appid: str = ""

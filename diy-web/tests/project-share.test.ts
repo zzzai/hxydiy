@@ -23,3 +23,15 @@ test('系统分享不可用时复制项目链接，取消分享不回退复制',
   const dismissed = await shareProjectLink({ currentUrl: 'https://diy.hexiaoyue.com/?store=1', projectCode: 'hxy-xiaoqi-90', projectName: '90分钟精油SPA' }, { share: async () => { const error = new Error('cancelled'); error.name = 'AbortError'; throw error; }, writeText: async () => { throw new Error('must not copy'); } });
   assert.equal(dismissed, 'dismissed');
 });
+
+test('微信内先配置好友分享卡片，再提示顾客从右上角发送', async () => {
+  let configured: ShareData | undefined;
+  const result = await shareProjectLink(
+    { currentUrl: 'https://diy.hexiaoyue.com/?store=1&seat=sofa-06', projectCode: 'hxy-qiqing-30', projectName: '现煮草本泡' },
+    { configureWeChatShare: async (data) => { configured = data; return true; } },
+  );
+
+  assert.equal(result, 'wechat_ready');
+  assert.equal(configured?.title, '荷小悦 · 现煮草本泡');
+  assert.equal(configured?.url, 'https://diy.hexiaoyue.com/share/project/hxy-qiqing-30?store=1');
+});
