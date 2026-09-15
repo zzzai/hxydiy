@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildPositionQrPrintDocument,
   getServicePositionQrPermissions,
   servicePositionQrRenderOptions,
   servicePositionQrActions,
@@ -46,4 +47,12 @@ test('现场打印二维码使用标准静区和中等纠错，避免无 Logo �
     margin: 4,
     errorCorrectionLevel: 'M',
   });
+});
+
+test('批量打印文档保留服务位标识并转义显示文本', () => {
+  const html = buildPositionQrPrintDocument([{ code: 'sofa-01', name: '<1号沙发>', image: 'data:image/png;base64,abc' }]);
+  assert.match(html, /荷小悦服务位二维码/);
+  assert.match(html, /sofa-01/);
+  assert.match(html, /&lt;1号沙发&gt;/);
+  assert.doesNotMatch(html, /<h1><1号沙发><\/h1>/);
 });
