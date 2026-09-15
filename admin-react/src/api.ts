@@ -284,6 +284,23 @@ export const uploadMedia = (file: File, purpose = 'general', storeId?: number) =
   if (storeId !== undefined) form.append('store_id', String(storeId));
   return client.post('/admin/media', form, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
+export type DirectMediaUploadGrant = {
+  upload_token: string;
+  key: string;
+  ticket: string;
+};
+export const createDirectMediaUpload = (file: File, purpose = 'general', storeId?: number) =>
+  client.post<DirectMediaUploadGrant>('/admin/media/direct-upload', {
+    filename: file.name,
+    content_type: file.type,
+    size_bytes: file.size,
+    purpose,
+    store_id: storeId,
+  });
+export const completeDirectMediaUpload = (ticket: string) =>
+  client.post('/admin/media/direct-upload/complete', { ticket });
+export const isDirectMediaUploadUnavailable = (error: unknown) =>
+  axios.isAxiosError(error) && error.response?.data?.detail?.code === 'DIRECT_UPLOAD_UNAVAILABLE';
 export const deleteMedia = (id: number) => client.delete(`/admin/media/${id}`);
 
 // Project catalog options

@@ -2,9 +2,20 @@ import { useEffect, useState } from 'react';
 import { App, Button, Image, Space, Upload } from 'antd';
 import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
-import { client, deleteMedia, uploadMedia } from '../api';
+import * as qiniu from 'qiniu-js';
+import {
+  client,
+  completeDirectMediaUpload,
+  createDirectMediaUpload,
+  deleteMedia,
+  isDirectMediaUploadUnavailable,
+  uploadMedia,
+  type DirectMediaUploadGrant,
+} from '../api';
+import { waitForQiniuUpload } from '../qiniuDirectUpload';
 
 type MediaValue = string | { id?: number; url: string } | undefined;
+type RetryableDirectUpload = { file: File; grant: DirectMediaUploadGrant };
 
 export default function MediaUploadField({ value, onChange, purpose = 'general', storeId, requireStoreId = false }: {
   value?: MediaValue;
@@ -15,8 +26,10 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
 }) {
   const { message } = App.useApp();
   const [uploading, setUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number>();
   const [previewUrl, setPreviewUrl] = useState<string>();
   const [failedFile, setFailedFile] = useState<File>();
+  const [retryableDirectUpload, setRetryableDirectUpload] = useState<RetryableDirectUpload>();
   const url = typeof value === 'string' ? value : value?.url;
   const mediaId = typeof value === 'object' ? value?.id : Number(url?.match(/\/media\/(\d+)\//)?.[1]) || undefined;
   useEffect(() => {
@@ -32,17 +45,39 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
   }, [url]);
   const upload = async (file: File) => {
     setUploading(true);
+    setUploadPercent(undefined);
+    let grant = retryableDirectUpload?.file === file ? retryableDirectUpload.grant : undefined;
     try {
-      const response = await uploadMedia(file, purpose, storeId);
+      if (!grant) {
+        try {
+          grant = (await createDirectMediaUpload(file, purpose, storeId)).data;
+        } catch (error) {
+          if (isDirectMediaUploadUnavailable(error)) {
+            const response = await uploadMedia(file, purpose, storeId);
+            onChange?.(response.data.url);
+            setFailedFile(undefined);
+            return response.data;
+          }
+          throw error;
+        }
+      }
+      await waitForQiniuUpload(
+        qiniu.upload(file, grant.key, grant.upload_token, { fname: file.name, mimeType: file.type }),
+        setUploadPercent,
+      );
+      const response = await completeDirectMediaUpload(grant.ticket);
       onChange?.(response.data.url);
       setFailedFile(undefined);
+      setRetryableDirectUpload(undefined);
       return response.data;
     } catch (error) {
       setFailedFile(file);
+      if (grant) setRetryableDirectUpload({ file, grant });
       message.error(error instanceof Error ? error.message : '图片上传失败');
       throw error;
     } finally {
       setUploading(false);
+      setUploadPercent(undefined);
     }
   };
   const props: UploadProps = {
@@ -72,7 +107,7 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
   return <Space direction="vertical" size={8}>
     {previewUrl && <Image src={previewUrl} width={120} height={90} style={{ objectFit: 'cover' }} />}
     <Space>
-      <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading} disabled={uploading || (requireStoreId && !storeId)}>{url ? '替换图片' : '上传图片'}</Button></Upload>
+      <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading} disabled={uploading || (requireStoreId && !storeId)}>{uploading && uploadPercent !== undefined ? `上传中 ${Math.round(uploadPercent)}%` : (url ? '替换图片' : '上传图片')}</Button></Upload>
       {failedFile && <Button loading={uploading} onClick={() => void upload(failedFile)}>重试上传</Button>}
       {mediaId && <Button danger type="text" icon={<DeleteOutlined />} onClick={async () => { await deleteMedia(mediaId); onChange?.(''); message.success('图片已删除'); }}>删除</Button>}
     </Space>
