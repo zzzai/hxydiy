@@ -24,6 +24,29 @@ test('草本方详情随选中项切换，保留真实选项标识与只读状�
   } finally { await server.close(); }
 });
 
+test('未配置后台目录的沐足项目使用前端五方默认值', async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const module = await server.ssrLoadModule('/src/components/project-options/FallbackHerbalFormulaGroup.tsx');
+    const render = (selectedName?: string) => renderToStaticMarkup(createElement(module.default, {
+      selectedName, readOnly: false, onSelect: () => {},
+    }));
+    const markup = render();
+    for (const name of ['舒心解压', '筋骨轻松', '轻盈畅快', '清润放松', '温暖养护']) assert.match(markup, new RegExp(name));
+    assert.match(markup, /玫瑰花 · 佛手 · 合欢皮/);
+    assert.equal((markup.match(/aria-pressed="true"/g) || []).length, 1);
+    assert.match(render('温暖养护'), /杜仲 · 桑寄生 · 淫羊藿/);
+  } finally { await server.close(); }
+});
+
+test('四个足疗项目均进入前端五方兜底，足部精修不被遗漏', async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const { FRONTEND_HERBAL_FORMULA_CODES } = await server.ssrLoadModule('/src/components/ProjectDetailPage.tsx');
+    for (const code of ['hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-foot-refine-1']) assert.equal(FRONTEND_HERBAL_FORMULA_CODES.has(code), true);
+  } finally { await server.close(); }
+});
+
 test('详情价格渲染：匿名与非会员参考价不划线，同价合并，会员保留门店价对比', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
