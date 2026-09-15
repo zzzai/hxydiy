@@ -49,6 +49,28 @@ class _FailingDeleteStorage(_FakeStorage):
         raise MediaStorageError("七牛云删除失败，HTTP 500")
 
 
+class _DirectUploadStorage(_FakeStorage):
+    def __init__(self):
+        super().__init__()
+        self.direct_upload_token_calls = []
+        self.objects = {}
+        self.move_calls = []
+
+    def create_direct_upload_token(self, object_key, max_size_bytes, allowed_types):
+        self.direct_upload_token_calls.append((object_key, max_size_bytes, allowed_types))
+        return "qiniu-direct-upload-token"
+
+    def read(self, object_key, max_size_bytes):
+        content = self.objects[object_key]
+        if len(content) > max_size_bytes:
+            raise MediaStorageError("对象超过允许大小")
+        return content
+
+    def move(self, source_key, destination_key):
+        self.move_calls.append((source_key, destination_key))
+        self.objects[destination_key] = self.objects.pop(source_key)
+
+
 class AdminMediaApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -257,6 +279,86 @@ class AdminMediaApiTests(unittest.TestCase):
             self.client.delete(f"/api/v1/admin/media/{body['id']}", headers=self._headers(self.manager_id))
         self.assertEqual(len(storage.put_calls), 1)
         self.assertEqual(storage.delete_calls, [storage.put_calls[0][0]])
+
+    def test_direct_upload_completion_creates_one_scoped_media_record_after_content_validation(self):
+        storage = _DirectUploadStorage()
+        media_settings = __import__("app.core.config", fromlist=["settings"]).settings
+        with patch("app.api.media.get_media_storage", return_value=storage), patch.object(
+            media_settings,
+            "media_storage_backend",
+            "qiniu",
+        ):
+            grant = self.client.post(
+                "/api/v1/admin/media/direct-upload",
+                headers=self._headers(self.manager_id),
+                json={
+                    "filename": "cover.png",
+                    "content_type": "image/png",
+                    "size_bytes": len(PNG_1X1),
+                    "purpose": "project_cover",
+                },
+            )
+            self.assertEqual(grant.status_code, 201, grant.text)
+            grant_body = grant.json()
+            self.assertEqual(grant_body["upload_token"], "qiniu-direct-upload-token")
+            self.assertTrue(grant_body["key"].startswith("stores/1/media/staging/"))
+            storage.objects[grant_body["key"]] = PNG_1X1
+
+            completed = self.client.post(
+                "/api/v1/admin/media/direct-upload/complete",
+                headers=self._headers(self.manager_id),
+                json={"ticket": grant_body["ticket"]},
+            )
+            self.assertEqual(completed.status_code, 201, completed.text)
+            media = completed.json()
+            self.assertEqual(media["original_name"], "cover.png")
+            self.assertEqual(media["purpose"], "project_cover")
+            self.assertTrue(storage.move_calls[0][0].startswith("stores/1/media/staging/"))
+            self.assertTrue(storage.move_calls[0][1].startswith("stores/1/media/"))
+            self.assertNotIn("/staging/", storage.move_calls[0][1])
+
+            repeated = self.client.post(
+                "/api/v1/admin/media/direct-upload/complete",
+                headers=self._headers(self.manager_id),
+                json={"ticket": grant_body["ticket"]},
+            )
+        self.assertEqual(repeated.status_code, 200, repeated.text)
+        self.assertEqual(repeated.json()["id"], media["id"])
+        with self.SessionLocal() as db:
+            self.assertEqual(db.scalar(select(MediaAsset).where(MediaAsset.id == media["id"])).store_id, 1)
+
+    def test_direct_upload_completion_rejects_another_store_manager_and_removes_invalid_object(self):
+        storage = _DirectUploadStorage()
+        media_settings = __import__("app.core.config", fromlist=["settings"]).settings
+        with patch("app.api.media.get_media_storage", return_value=storage), patch.object(
+            media_settings,
+            "media_storage_backend",
+            "qiniu",
+        ):
+            grant_response = self.client.post(
+                "/api/v1/admin/media/direct-upload",
+                headers=self._headers(self.manager_id),
+                json={"filename": "invalid-direct.png", "content_type": "image/png", "size_bytes": len(PNG_1X1)},
+            )
+            self.assertEqual(grant_response.status_code, 201, grant_response.text)
+            grant = grant_response.json()
+            cross_store = self.client.post(
+                "/api/v1/admin/media/direct-upload/complete",
+                headers=self._headers(self.other_manager_id),
+                json={"ticket": grant["ticket"]},
+            )
+            self.assertEqual(cross_store.status_code, 403, cross_store.text)
+
+            storage.objects[grant["key"]] = b"x" * len(PNG_1X1)
+            invalid = self.client.post(
+                "/api/v1/admin/media/direct-upload/complete",
+                headers=self._headers(self.manager_id),
+                json={"ticket": grant["ticket"]},
+            )
+        self.assertEqual(invalid.status_code, 415, invalid.text)
+        self.assertEqual(storage.delete_calls, [grant["key"]])
+        with self.SessionLocal() as db:
+            self.assertIsNone(db.scalar(select(MediaAsset).where(MediaAsset.original_name == "invalid-direct.png")))
 
     def test_storage_delete_failure_does_not_soft_delete_database_record(self):
         uploaded = self.client.post(

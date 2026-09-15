@@ -16,8 +16,8 @@ class _FakeAuth:
         self.upload_token_calls = []
         self.__class__.instances.append(self)
 
-    def upload_token(self, bucket, key, expires=3600):
-        self.upload_token_calls.append((bucket, key, expires))
+    def upload_token(self, bucket, key, expires=3600, policy=None, strict_policy=True):
+        self.upload_token_calls.append((bucket, key, expires, policy, strict_policy))
         return "upload-token"
 
     def private_download_url(self, url, expires=3600):
@@ -31,10 +31,15 @@ class _FakeBucketManager:
         self.auth = auth
         self.config = config
         self.delete_calls = []
+        self.move_calls = []
         self.__class__.instances.append(self)
 
     def delete(self, bucket, key):
         self.delete_calls.append((bucket, key))
+        return {}, SimpleNamespace(status_code=200)
+
+    def move(self, bucket, key, bucket_to, key_to, force="false"):
+        self.move_calls.append((bucket, key, bucket_to, key_to, force))
         return {}, SimpleNamespace(status_code=200)
 
 
@@ -125,6 +130,45 @@ class MediaStorageTests(unittest.TestCase):
         storage.delete("stores/1/media/a.png")
 
         self.assertEqual(_FakeBucketManager.instances[0].delete_calls, [("diyhxy", "stores/1/media/a.png")])
+
+    def test_qiniu_direct_upload_token_locks_key_size_and_detected_image_types(self):
+        storage = QiniuMediaStorage(
+            access_key="ak-test",
+            secret_key="sk-test",
+            bucket="diyhxy",
+            cdn_domain="https://img.hexiaoyue.com",
+            qiniu_module=_FakeQiniu,
+        )
+
+        token = storage.create_direct_upload_token(
+            "stores/1/media/staging/a.png",
+            5 * 1024 * 1024,
+            {"image/jpeg", "image/png", "image/webp", "image/gif"},
+        )
+
+        self.assertEqual(token, "upload-token")
+        bucket, key, expires, policy, strict_policy = _FakeAuth.instances[0].upload_token_calls[0]
+        self.assertEqual((bucket, key, expires, strict_policy), ("diyhxy", "stores/1/media/staging/a.png", 3600, True))
+        self.assertEqual(policy["insertOnly"], 1)
+        self.assertEqual(policy["fsizeLimit"], 5 * 1024 * 1024)
+        self.assertEqual(policy["detectMime"], 1)
+        self.assertEqual(policy["mimeLimit"], "image/gif;image/jpeg;image/png;image/webp")
+
+    def test_qiniu_move_uses_the_configured_bucket(self):
+        storage = QiniuMediaStorage(
+            access_key="ak-test",
+            secret_key="sk-test",
+            bucket="diyhxy",
+            cdn_domain="https://img.hexiaoyue.com",
+            qiniu_module=_FakeQiniu,
+        )
+
+        storage.move("stores/1/media/staging/a.png", "stores/1/media/a.png")
+
+        self.assertEqual(
+            _FakeBucketManager.instances[0].move_calls,
+            [("diyhxy", "stores/1/media/staging/a.png", "diyhxy", "stores/1/media/a.png", "false")],
+        )
 
     def test_qiniu_requires_all_credentials(self):
         with self.assertRaises(MediaStorageError):

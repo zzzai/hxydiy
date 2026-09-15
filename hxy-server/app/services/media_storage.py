@@ -7,6 +7,7 @@ from pathlib import Path
 import inspect
 from typing import Protocol
 from urllib.parse import quote
+from urllib.request import urlopen
 
 
 class MediaStorageError(RuntimeError):
@@ -19,6 +20,14 @@ class MediaStorage(Protocol):
     def delete(self, object_key: str) -> None: ...
 
     def url(self, object_key: str) -> str | None: ...
+
+
+class DirectUploadStorage(MediaStorage, Protocol):
+    def create_direct_upload_token(self, object_key: str, max_size_bytes: int, allowed_types: set[str]) -> str: ...
+
+    def read(self, object_key: str, max_size_bytes: int) -> bytes: ...
+
+    def move(self, source_key: str, destination_key: str) -> None: ...
 
 
 class LocalMediaStorage:
@@ -104,20 +113,55 @@ class QiniuMediaStorage:
         if getattr(info, "status_code", None) != 200:
             raise MediaStorageError(f"七牛云上传失败，HTTP {getattr(info, 'status_code', 'unknown')}")
 
-    def delete(self, object_key: str) -> None:
+    def create_direct_upload_token(self, object_key: str, max_size_bytes: int, allowed_types: set[str]) -> str:
+        policy = {
+            "insertOnly": 1,
+            "fsizeLimit": max_size_bytes,
+            "detectMime": 1,
+            "mimeLimit": ";".join(sorted(allowed_types)),
+        }
+        try:
+            return self.auth.upload_token(self.bucket, object_key, 3600, policy=policy)
+        except Exception as exc:
+            raise MediaStorageError(f"七牛云生成上传凭证失败: {exc}") from exc
+
+    def _bucket_manager(self):
         try:
             manager_params = inspect.signature(self.qiniu.BucketManager).parameters
             if self.zone is not None and "zone" in manager_params:
-                manager = self.qiniu.BucketManager(self.auth, zone=self.zone)
-            elif self.config is not None:
-                manager = self.qiniu.BucketManager(self.auth, self.config)
-            else:
-                manager = self.qiniu.BucketManager(self.auth)
+                return self.qiniu.BucketManager(self.auth, zone=self.zone)
+            if self.config is not None:
+                return self.qiniu.BucketManager(self.auth, self.config)
+            return self.qiniu.BucketManager(self.auth)
+        except Exception as exc:
+            raise MediaStorageError(f"七牛云初始化对象管理器失败: {exc}") from exc
+
+    def delete(self, object_key: str) -> None:
+        try:
+            manager = self._bucket_manager()
             _, info = manager.delete(self.bucket, object_key)
         except Exception as exc:
             raise MediaStorageError(f"七牛云删除失败: {exc}") from exc
         if getattr(info, "status_code", None) not in (200, 612):
             raise MediaStorageError(f"七牛云删除失败，HTTP {getattr(info, 'status_code', 'unknown')}")
+
+    def read(self, object_key: str, max_size_bytes: int) -> bytes:
+        try:
+            with urlopen(self.url(object_key), timeout=15) as response:
+                content = response.read(max_size_bytes + 1)
+        except Exception as exc:
+            raise MediaStorageError(f"七牛云读取对象失败: {exc}") from exc
+        if len(content) > max_size_bytes:
+            raise MediaStorageError("七牛云对象超过允许大小")
+        return content
+
+    def move(self, source_key: str, destination_key: str) -> None:
+        try:
+            _, info = self._bucket_manager().move(self.bucket, source_key, self.bucket, destination_key, force="false")
+        except Exception as exc:
+            raise MediaStorageError(f"七牛云移动对象失败: {exc}") from exc
+        if getattr(info, "status_code", None) != 200:
+            raise MediaStorageError(f"七牛云移动对象失败，HTTP {getattr(info, 'status_code', 'unknown')}")
 
     def url(self, object_key: str) -> str:
         public_url = f"{self.cdn_domain}/{quote(object_key, safe='/')}"
