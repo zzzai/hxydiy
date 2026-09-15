@@ -19,6 +19,16 @@ export function supportsDiyOptions(category: string | undefined, code?: string):
   return true;
 }
 
+export function moveProjectDetailModule<T>(items: T[], from: number, to: number): T[] {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= items.length || to >= items.length || from === to) {
+    return [...items];
+  }
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
 export function projectFormPayload(values: ProjectFormValues) {
   const { tags_text, store_price, member_price, group_price, ...rest } = values;
   const prices: Record<string, number> = {};
