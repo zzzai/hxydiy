@@ -135,7 +135,7 @@ class ReleaseScriptTests(unittest.TestCase):
         delivery = (REPO_ROOT / "docs/script-first-delivery.md").read_text(encoding="utf-8")
 
         self.assertIn("'ci_succeeded'", watcher)
-        self.assertNotIn("waiting_for_deployment", watcher)
+        self.assertIn("return ci_state(ci)", watcher)
         self.assertIn("生产发布只接受维护者手动触发", delivery)
 
     def test_release_creation_excludes_local_runtime_and_secret_files(self):

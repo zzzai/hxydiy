@@ -61,6 +61,28 @@ def ci_state(ci):
     return 'ci_succeeded'
 
 
+def release_state(ci, deploy, job):
+    """Keep the historical deployment verdict available for offline checks.
+
+    The PR waiter intentionally uses ``ci_state`` because production is now
+    manual. This helper remains a pure compatibility contract for callers that
+    evaluate a separately supplied deployment result.
+    """
+
+    if not ci or ci['status'] != 'completed':
+        return 'waiting_for_ci'
+    if ci['conclusion'] != 'success':
+        return 'ci_failed'
+    if not deploy:
+        return 'waiting_for_deployment'
+    if deploy['status'] != 'completed':
+        return 'deploying'
+    if deploy['conclusion'] != 'success':
+        return 'deployment_failed'
+    return {'success': 'deployment_succeeded', 'skipped': 'deployment_skipped',
+            'failure': 'deployment_failed'}.get(job, 'deployment_unverified')
+
+
 def save(path, report):
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
