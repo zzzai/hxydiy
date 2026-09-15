@@ -130,6 +130,14 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("run-id: ${{ needs.verify.outputs.run_id }}", workflow)
         self.assertNotIn("npm ci", workflow)
 
+    def test_release_waiter_stops_after_main_ci_when_production_is_manual(self):
+        watcher = (REPO_ROOT / "tools/release/watch_release.py").read_text(encoding="utf-8")
+        delivery = (REPO_ROOT / "docs/script-first-delivery.md").read_text(encoding="utf-8")
+
+        self.assertIn("'ci_succeeded'", watcher)
+        self.assertIn("return ci_state(ci)", watcher)
+        self.assertIn("生产发布只接受维护者手动触发", delivery)
+
     def test_release_creation_excludes_local_runtime_and_secret_files(self):
         create = (REPO_ROOT / "deploy/diy/create-release.sh").read_text(encoding="utf-8")
 
