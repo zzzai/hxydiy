@@ -796,6 +796,7 @@ def service_history(
             CustomerProfileRecord.store_id == technician.store_id,
             CustomerProfileRecord.selection_session_id == session.id,
             CustomerProfileRecord.technician_id == technician.id,
+            CustomerProfileRecord.created_by_staff_id == staff.id,
             _supported_reference_version(), _not_superseded_reference(),
         ).order_by(CustomerProfileRecord.created_at.desc(), CustomerProfileRecord.id.desc()).limit(1))
         own_profile = own_record.profile if own_record and isinstance(own_record.profile, dict) else {}
@@ -816,6 +817,14 @@ def service_history(
         items.append({
             "occupancy_id": occupancy.id,
             'own_record_id': own_record.id if own_record and own_record.schema_version == 6 and own_record.created_by_staff_id == staff.id else None,
+            'editable_record': {
+                'id': own_record.id,
+                'schema_version': own_record.schema_version,
+                'profile': own_profile,
+                'customer_confirmed': bool(own_record.customer_confirmed),
+                'selection_session_id': session.id,
+                'user_id': own_record.user_id,
+            } if own_record and own_record.schema_version == 5 else None,
             "completed_at": occupancy.actual_service_end_at,
             "duration_minutes": duration_minutes,
             "profile_status": "confirmed" if record else "pending",
@@ -839,7 +848,7 @@ def own_service_record_versions(record_id: int, page: int = Query(1, ge=1),
         CustomerProfileRecord.store_id == technician.store_id,
         CustomerProfileRecord.technician_id == technician.id,
         CustomerProfileRecord.created_by_staff_id == staff.id,
-        CustomerProfileRecord.schema_version == 6,
+        CustomerProfileRecord.schema_version.in_((5, 6)),
     )
     record = db.scalar(select(CustomerProfileRecord).where(CustomerProfileRecord.id == record_id, *ownership))
     if not record:

@@ -178,6 +178,16 @@ test('新的服务交接统一使用按项目裁剪的 v5 流程，v6 只用于�
   assert.doesNotMatch(source, /makeRecord\(props\.task\.items \|\| \[\]\)\.template/);
 });
 
+test('技师可更正本人 v5 服务交接，且必须说明更正原因', () => {
+  const history = readFileSync(new URL('../src/technician/TechnicianServiceHistoryPage.tsx', import.meta.url), 'utf8');
+  const sheet = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
+  assert.match(history, /editable_record/);
+  assert.match(history, /更正本次记录/);
+  assert.match(sheet, /correction_of_id/);
+  assert.match(sheet, /correction_reason/);
+  assert.match(sheet, /更正说明/);
+});
+
 test('管理端隐藏未知或非字符串稳定编码，不展示原始敏感内容', () => {
   const display = buildServiceReferenceDisplay({ schema_version: 3, taxonomy_version: 'service_reference_v2', profile: {
     customer_reported: { force_preference: '13800000000', focus_areas: ['neck_shoulder', { phone: '13800000000' }, '原始敏感值'], communication_consumption: { budget_preference: 'constructor' } },

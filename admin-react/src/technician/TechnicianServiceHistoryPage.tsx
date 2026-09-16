@@ -9,6 +9,14 @@ import { technicianHistoryEmptyState, technicianHistorySummaryLines, technicianP
 type ProfileStatus = 'all' | 'confirmed' | 'pending';
 type HistoryItem = {
   own_record_id?: number | null;
+  editable_record?: {
+    id: number;
+    schema_version: number;
+    profile: Record<string, unknown>;
+    customer_confirmed: boolean;
+    selection_session_id: string;
+    user_id: number;
+  } | null;
   occupancy_id: number;
   completed_at: string;
   duration_minutes: number | null;
@@ -51,6 +59,19 @@ export default function TechnicianServiceHistoryPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const editV5Record = (item: HistoryItem) => {
+    const record = item.editable_record;
+    if (!record || record.schema_version !== 5) return;
+    setEditTask({
+      selection_session_id: record.selection_session_id,
+      user_id: record.user_id,
+      customer: { id: record.user_id, display_name: item.customer?.display_name },
+      items: item.projects.map((name) => ({ name })),
+      room_name: item.service_position,
+      record,
+    });
+  };
+
   return <section className="technician-own-history">
     <div className="technician-history-toolbar">
       <Segmented block value={status} options={[{ label: '全部', value: 'all' }, { label: '未确认', value: 'pending' }, { label: '顾客已确认', value: 'confirmed' }]} onChange={(value) => { setPage(1); setStatus(value as ProfileStatus); }} />
@@ -72,6 +93,7 @@ export default function TechnicianServiceHistoryPage() {
               <Tag color={item.record_completed ? 'green' : 'default'}>{item.record_completed ? (item.recording_outcome === 'no_additional_notes' ? '已记录 · 本次无补充' : '已完成记录') : '待记录'}</Tag>
               {item.service_note && <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.service_note}</Typography.Paragraph>}
               {item.own_record_id && <Button onClick={()=>setRecordId(item.own_record_id!)}>查看记录与更正</Button>}
+              {item.editable_record?.schema_version === 5 && <Button onClick={() => editV5Record(item)}>更正本次记录</Button>}
               <Typography.Paragraph className="technician-history-summary">{technicianHistorySummaryLines(item.own_record_summary || item.profile_summary).join(' · ') || (item.record_completed ? '本次记录已保存' : '本次尚未记录')}</Typography.Paragraph>
             </div>
           </article>)}</div>

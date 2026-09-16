@@ -6,6 +6,51 @@ import BodyMapNoteDrawer from './BodyMapNoteDrawer';
 import './service-notebook.css';
 import { SERVICE_REFERENCE_OPTIONS, buildServiceReferenceV5Payload, hasServiceReferenceInput, type ServiceReferenceInput, type V5BodyServiceNote } from './serviceReference';
 
+type CorrectionFormValues = ServiceReferenceInput & { correctionReason?: string };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function correctionFormValues(record: any): CorrectionFormValues {
+  const profile = asRecord(record?.profile);
+  const reported = asRecord(profile.customer_reported);
+  const observed = asRecord(profile.technician_observed);
+  const nextVisit = asRecord(profile.next_visit);
+  return {
+    communicationPreference: typeof reported.communication_preference === 'string' ? reported.communication_preference as CorrectionFormValues['communicationPreference'] : undefined,
+    focusAreas: stringList(reported.focus_areas) as CorrectionFormValues['focusAreas'],
+    avoidAreas: stringList(reported.avoid_areas) as CorrectionFormValues['avoidAreas'],
+    forcePreference: typeof reported.force_preference === 'string' ? reported.force_preference as CorrectionFormValues['forcePreference'] : undefined,
+    temperaturePreference: typeof reported.temperature_preference === 'string' ? reported.temperature_preference as CorrectionFormValues['temperaturePreference'] : undefined,
+    serviceAdjustments: stringList(observed.service_adjustments) as CorrectionFormValues['serviceAdjustments'],
+    serviceFeedback: typeof observed.service_feedback === 'string' ? observed.service_feedback as CorrectionFormValues['serviceFeedback'] : undefined,
+    serviceNote: typeof observed.service_note === 'string' ? observed.service_note : undefined,
+    nextVisitPlan: typeof nextVisit.plan === 'string' ? nextVisit.plan as CorrectionFormValues['nextVisitPlan'] : undefined,
+  };
+}
+
+function correctionBodyMapNotes(record: any): V5BodyServiceNote[] {
+  const profile = asRecord(record?.profile);
+  const reported = asRecord(profile.customer_reported);
+  return (Array.isArray(reported.body_service_notes) ? reported.body_service_notes : []).flatMap((value) => {
+    const note = asRecord(value);
+    if (typeof note.region !== 'string' || typeof note.side !== 'string' || typeof note.context !== 'string' || typeof note.current_state !== 'string' || typeof note.session_handling !== 'string') return [];
+    return [{
+      region: note.region as V5BodyServiceNote['region'],
+      side: note.side as V5BodyServiceNote['side'],
+      context: note.context as V5BodyServiceNote['context'],
+      currentState: note.current_state as V5BodyServiceNote['currentState'],
+      sessionHandling: note.session_handling as V5BodyServiceNote['sessionHandling'],
+      reconfirmNextVisit: note.reconfirm_next_visit === true,
+    }];
+  });
+}
+
 function Choices({ value, onChange, options, multiple = false, maxSelections }: {
   value?: string | string[]; onChange?: (value: any) => void;
   options: ReadonlyArray<{ value: string; label: string }>; multiple?: boolean; maxSelections?: number;
@@ -34,8 +79,8 @@ function serviceContext(items: any[]) {
 }
 
 export default function LegacyTechnicianProfileSheet({ task, onClose, onSaved }: { task: any; onClose: () => void; onSaved: () => void }) {
-  const [form] = Form.useForm<ServiceReferenceInput>();
-  const values = Form.useWatch([], form) as ServiceReferenceInput | undefined;
+  const [form] = Form.useForm<CorrectionFormValues>();
+  const values = Form.useWatch([], form) as CorrectionFormValues | undefined;
   const { message, modal } = App.useApp();
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -45,17 +90,19 @@ export default function LegacyTechnicianProfileSheet({ task, onClose, onSaved }:
   const [bodyMapNotes, setBodyMapNotes] = useState<V5BodyServiceNote[]>([]);
   const idempotencyKey = useRef(crypto.randomUUID());
   const lastPayloadSignature = useRef<string | null>(null);
-  const lastValues = useRef<ServiceReferenceInput | null>(null);
-  const taskKey = task?.selection_session_id;
+  const lastValues = useRef<CorrectionFormValues | null>(null);
+  const correction = task?.record?.schema_version === 5 ? task.record : null;
+  const taskKey = `${task?.selection_session_id || ''}:${correction?.id || 'new'}`;
 
   useEffect(() => {
     form.resetFields();
+    if (correction) form.setFieldsValue(correctionFormValues(correction));
     idempotencyKey.current = crypto.randomUUID();
     lastPayloadSignature.current = null;
     lastValues.current = null;
     setSaveFailed(false);
-    setConfirmation(false);
-    setBodyMapNotes([]);
+    setConfirmation(Boolean(correction?.customer_confirmed));
+    setBodyMapNotes(correction ? correctionBodyMapNotes(correction) : []);
     setBodyNoteOpen(false);
   }, [form, taskKey]);
 
@@ -65,11 +112,19 @@ export default function LegacyTechnicianProfileSheet({ task, onClose, onSaved }:
     if (!hasInput) { onClose(); return; }
     modal.confirm({ title: '笔记还没有保存', content: '返回后可以继续填写；放弃将清除本次未保存的内容。', okText: '继续填写', cancelText: '放弃内容', onCancel: onClose, maskClosable: false, closable: false });
   };
-  const save = async (input: ServiceReferenceInput) => {
+  const save = async (input: CorrectionFormValues) => {
     const customerId = task?.customer?.id ?? task?.user_id;
     if (!customerId || !task?.selection_session_id || savingRef.current) return;
-    if (!hasServiceReferenceInput(input) && !input.serviceNote?.trim() && !input.bodyMapNotes?.length && !input.recordingOutcome) return;
-    const payload = buildServiceReferenceV5Payload(customerId, task.selection_session_id, input);
+    const { correctionReason, ...serviceInput } = input;
+    if (!hasServiceReferenceInput(serviceInput) && !serviceInput.serviceNote?.trim() && !serviceInput.bodyMapNotes?.length && !serviceInput.recordingOutcome) return;
+    if (correction && !correctionReason?.trim()) {
+      message.error('请说明本次更正原因');
+      return;
+    }
+    const payload = {
+      ...buildServiceReferenceV5Payload(customerId, task.selection_session_id, serviceInput),
+      ...(correction ? { correction_of_id: correction.id, correction_reason: correctionReason!.trim() } : {}),
+    };
     const payloadSignature = JSON.stringify(payload);
     if (lastPayloadSignature.current !== null && lastPayloadSignature.current !== payloadSignature) idempotencyKey.current = crypto.randomUUID();
     lastPayloadSignature.current = payloadSignature;
@@ -79,7 +134,7 @@ export default function LegacyTechnicianProfileSheet({ task, onClose, onSaved }:
     setSaveFailed(false);
     try {
       await createCustomerProfileRecord(payload, idempotencyKey.current);
-      message.success(input.recordingOutcome ? '已记录：本次无补充' : '服务快记已保存');
+      message.success(correction ? '更正已保存，原记录已保留' : input.recordingOutcome ? '已记录：本次无补充' : '服务快记已保存');
       onSaved();
     } catch {
       setSaveFailed(true);
@@ -90,14 +145,14 @@ export default function LegacyTechnicianProfileSheet({ task, onClose, onSaved }:
     }
   };
 
-  const saveForm = (input: ServiceReferenceInput) => void save({ ...input, bodyMapNotes, customerConfirmed: confirmation === true });
+  const saveForm = (input: CorrectionFormValues) => void save({ ...input, bodyMapNotes, customerConfirmed: confirmation === true });
   const summary = (task?.items || []).map(technicianOrderItemLabel).filter(Boolean).join('、');
   const position = task?.room_name || task?.room_code || task?.position_name || '当前服务位';
   const context = serviceContext(task?.items || []);
-  return <Drawer title="服务交接" placement="bottom" height="94dvh" open={!!task}
+  return <Drawer title={correction ? '更正本次服务交接' : '服务交接'} placement="bottom" height="94dvh" open={!!task}
     onClose={requestClose} maskClosable={false} keyboard={!saving}
     className="technician-profile-sheet technician-notebook" footer={<div className="technician-profile-sheet-actions">
-      <Button size="large" disabled={saving || hasInput} onClick={() => void save({ recordingOutcome: 'no_additional_notes', customerConfirmed: false })}>本次无补充</Button>
+      {!correction && <Button size="large" disabled={saving || hasInput} onClick={() => void save({ recordingOutcome: 'no_additional_notes', customerConfirmed: false })}>本次无补充</Button>}
       <Button type="primary" block size="large" loading={saving} disabled={saving || (!hasInput && !saveFailed)}
         onClick={() => saveFailed && lastValues.current ? void save(lastValues.current) : form.submit()}>{saveFailed ? '重试保存' : '保存快记'}</Button>
     </div>}>
@@ -130,6 +185,12 @@ export default function LegacyTechnicianProfileSheet({ task, onClose, onSaved }:
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} maxLength={200} showCount placeholder="选填，仅记录本次服务中需要自己回看的内容。" />
         </Form.Item>
       </section>
+      {correction && <section className="notebook-followup">
+        <h3>更正说明</h3><p>说明这次改了什么；原记录会保留。</p>
+        <Form.Item name="correctionReason" rules={[{ required: true, whitespace: true, message: '请说明本次更正原因' }]}>
+          <Input maxLength={256} showCount placeholder="例如：补上当时漏记的力度调整" />
+        </Form.Item>
+      </section>}
     </Form>
     <BodyMapNoteDrawer open={bodyNoteOpen && !!task} value={bodyMapNotes}
       onChange={notes => { setBodyMapNotes(notes); setSaveFailed(false); }} onClose={() => setBodyNoteOpen(false)} context={position + ' · 顾客'} />
