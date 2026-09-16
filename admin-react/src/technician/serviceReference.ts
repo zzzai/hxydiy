@@ -233,6 +233,7 @@ export interface TechnicianServiceReferenceRecord {
   avoid_areas: string[];
   force_preference: string | null;
   temperature_preference: string | null;
+  service_adjustments?: string[];
   service_feedback: string | null;
   next_visit_plan: string | null;
   recorded_date: string | null;

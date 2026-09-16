@@ -96,6 +96,8 @@ test('活动顾客服务单显式打开安全服务参考摘要', () => {
   assert.match(today, /TechnicianServiceReferenceDrawer/);
   assert.match(drawer, /getTechnicianServiceReference/);
   assert.match(drawer, /请本次服务前再次确认/);
+  assert.match(drawer, /上次调整/);
+  assert.match(drawer, /service_adjustments/);
   for (const sensitive of ['quote', 'note', 'phone', 'age_range', 'gender', 'occupation']) assert.doesNotMatch(drawer, new RegExp(sensitive));
 });
 

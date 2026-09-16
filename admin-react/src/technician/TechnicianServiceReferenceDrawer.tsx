@@ -20,16 +20,20 @@ export default function TechnicianServiceReferenceDrawer({ occupancyId, open, on
   }, [occupancyId, open]);
 
   const record = data?.record;
+  const referenceItems = record && !record.service_lines ? [
+    record.focus_areas.length ? ['重点', record.focus_areas.join('、')] : null,
+    record.avoid_areas.length ? ['避开', record.avoid_areas.join('、')] : null,
+    record.force_preference ? ['力度', record.force_preference] : null,
+    record.temperature_preference ? ['温度', record.temperature_preference] : null,
+    record.service_adjustments?.length ? ['上次调整', record.service_adjustments.join('、')] : null,
+    record.service_feedback ? ['反馈', record.service_feedback] : null,
+    record.next_visit_plan ? ['下次', record.next_visit_plan] : null,
+  ].filter((item): item is [string, string] => item !== null) : [];
   const content = <>
     {loading ? <div className="technician-reference-state"><Spin /><Typography.Text type="secondary">正在读取已确认记录…</Typography.Text></div> : failed ? <Alert type="error" showIcon message="服务参考加载失败" description="请关闭后重试，或直接向顾客现场确认。" /> : !record ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data?.message || '暂无顾客确认的历史服务参考，请现场询问'} /> : <div className="technician-reference-card">
       <Tag color="green">顾客已确认</Tag>
       {record.service_lines ? <>{record.service_lines.map((line,index)=><Typography.Paragraph key={index}>{line}</Typography.Paragraph>)}<Typography.Paragraph type="secondary">{record.recorded_date} · 本店技师记录</Typography.Paragraph></> : <Descriptions column={1} size="small">
-        <Descriptions.Item label="重点">{record.focus_areas.join('、') || '未记录'}</Descriptions.Item>
-        <Descriptions.Item label="避开">{record.avoid_areas.join('、') || '未记录'}</Descriptions.Item>
-        <Descriptions.Item label="力度">{record.force_preference || '未记录'}</Descriptions.Item>
-        <Descriptions.Item label="温度">{record.temperature_preference || '未记录'}</Descriptions.Item>
-        <Descriptions.Item label="反馈">{record.service_feedback || '未记录'}</Descriptions.Item>
-        <Descriptions.Item label="下次">{record.next_visit_plan || '未记录'}</Descriptions.Item>
+        {referenceItems.map(([label, value]) => <Descriptions.Item key={label} label={label}>{value}</Descriptions.Item>)}
         <Descriptions.Item label="记录日期">{record.recorded_date || '未记录'}</Descriptions.Item>
       </Descriptions>}
       {record.body_reconfirm_required === true && <Alert type="warning" showIcon message="身体情况：服务前再确认" description="请向顾客当面确认本次服务是否需要调整；此处不展示身体部位或自述内容。" />}
