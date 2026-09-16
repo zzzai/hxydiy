@@ -3204,7 +3204,7 @@ def create_customer_profile_record(
     is_bound_technician = role == "technician" and bool(staff.technician_id)
     if is_bound_technician and body.schema_version == 1 and "source" not in body.model_fields_set:
         raise HTTPException(status_code=422, detail="技师记录必须明确选择记录来源")
-    if is_bound_technician and (body.technician_id is not None or (body.correction_of_id is not None and body.schema_version != 6)):
+    if is_bound_technician and (body.technician_id is not None or (body.correction_of_id is not None and body.schema_version not in {5, 6})):
         raise HTTPException(status_code=403, detail="技师不能代填他人画像或更正历史记录")
     technician_id = staff.technician_id if is_bound_technician else body.technician_id
     if is_bound_technician:
@@ -3268,9 +3268,9 @@ def create_customer_profile_record(
         ))
         if not original:
             raise HTTPException(status_code=404, detail="原画像记录不存在")
-        if body.schema_version == 6:
+        if body.schema_version in {5, 6}:
             original = db.scalar(select(CustomerProfileRecord).where(CustomerProfileRecord.id == original.id).with_for_update())
-            if original.schema_version != 6 or original.created_by_staff_id != staff.id or original.technician_id != technician_id or original.selection_session_id != body.selection_session_id:
+            if original.schema_version != body.schema_version or original.created_by_staff_id != staff.id or original.technician_id != technician_id or original.selection_session_id != body.selection_session_id:
                 raise HTTPException(status_code=403, detail='只能更正本人本次服务的新版记录')
             if db.scalar(select(CustomerProfileRecord.id).where(CustomerProfileRecord.correction_of_id == original.id)):
                 raise HTTPException(status_code=409, detail='这条记录已有新版本，请重新打开历史记录')

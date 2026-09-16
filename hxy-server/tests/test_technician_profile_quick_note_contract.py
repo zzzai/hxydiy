@@ -301,3 +301,38 @@ class TestTechnicianProfileQuickNoteContract:
             json=payload,
         )
         assert response.status_code == 422, response.text
+
+    def test_v5_owner_can_append_one_correction_with_a_reason(self):
+        original = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            headers={**self.headers, "Idempotency-Key": "quick-note-original-001"},
+            json=self._payload(),
+        )
+        assert original.status_code == 200, original.text
+
+        corrected = self._payload()
+        corrected["profile"]["technician_observed"]["service_adjustments"] = ["pace_slower"]
+        corrected["correction_of_id"] = original.json()["id"]
+        corrected["correction_reason"] = "补上当时漏记的节奏调整"
+        response = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            headers={**self.headers, "Idempotency-Key": "quick-note-correction-001"},
+            json=corrected,
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["id"] != original.json()["id"]
+        assert response.json()["correction_of_id"] == original.json()["id"]
+        with self.SessionLocal() as db:
+            persisted = db.get(CustomerProfileRecord, response.json()["id"])
+            assert persisted.correction_reason == "补上当时漏记的节奏调整"
+
+        second = self._payload()
+        second["correction_of_id"] = original.json()["id"]
+        second["correction_reason"] = "再次修改"
+        duplicate = self.client.post(
+            "/api/v1/admin/v2/customer-profile-records",
+            headers={**self.headers, "Idempotency-Key": "quick-note-correction-002"},
+            json=second,
+        )
+        assert duplicate.status_code == 409, duplicate.text

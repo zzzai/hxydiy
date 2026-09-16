@@ -379,6 +379,41 @@ class TestTechnicianServiceHistoryApi:
         ):
             assert forbidden not in serialized
 
+    def test_v5_editable_record_is_available_only_in_the_owner_history(self):
+        with self.SessionLocal() as db:
+            occupancy = db.get(PositionOccupancy, self.occupancy_id)
+            occupancy.serviced_by_technician_id = self.tech_a_id
+            occupancy.actual_service_end_at = datetime.now(timezone.utc)
+            db.add(CustomerProfileRecord(
+                store_id=self.store_id,
+                user_id=self.customer_id,
+                selection_session_id="history-session",
+                technician_id=self.tech_a_id,
+                created_by_staff_id=self.staff_a_id,
+                schema_version=5,
+                taxonomy_version="service_reference_v4",
+                customer_confirmed=False,
+                profile={
+                    "schema_version": 5,
+                    "taxonomy_version": "service_reference_v4",
+                    "customer_reported": {"communication_preference": "quiet"},
+                    "technician_observed": {"service_adjustments": ["pace_slower"], "service_note": "仅本人可见"},
+                    "next_visit": {"plan": "confirm_on_arrival"},
+                },
+            ))
+            db.commit()
+
+        owner = self.client.get("/api/v1/technician/service-history", headers=self.tech_a_headers)
+        assert owner.status_code == 200, owner.text
+        editable = owner.json()["items"][0]["editable_record"]
+        assert editable["schema_version"] == 5
+        assert editable["profile"]["technician_observed"]["service_adjustments"] == ["pace_slower"]
+
+        other = self.client.get("/api/v1/technician/service-history", headers=self.tech_b_headers)
+        assert other.status_code == 200, other.text
+        assert other.json()["items"] == []
+        assert "仅本人可见" not in other.text
+
 
 def test_safe_summary_rejects_malformed_nested_values_without_leaking_or_crashing():
     from app.api.technician import _history_profile_summary
