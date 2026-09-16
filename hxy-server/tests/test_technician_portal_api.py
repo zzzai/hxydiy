@@ -166,7 +166,7 @@ class TestTechnicianPortalApi:
             unconfirmed = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=False, profile={"customer_reported": {"focus_areas": ["feet"]}})
             old = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["neck_shoulder"], "quote": "私密原话"}}, note="内部备注")
             db.add_all([unconfirmed, old]); db.flush()
-            current = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), correction_of_id=old.id, profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["neck_shoulder", "legs"], "avoid_areas": ["abdomen"], "force_preference": "medium", "temperature_preference": "lower", "quote": "不得返回"}, "technician_observed": {"service_feedback": "better_after_adjustment"}, "next_visit": {"plan": "repeat_current"}}, note="不得返回")
+            current = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=5, taxonomy_version="service_reference_v4", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), correction_of_id=old.id, profile={"schema_version": 5, "taxonomy_version": "service_reference_v4", "customer_reported": {"focus_areas": ["neck_shoulder", "legs"], "avoid_areas": ["abdomen"], "force_preference": "medium", "temperature_preference": "lower", "quote": "不得返回"}, "technician_observed": {"service_adjustments": ["pressure_lighter", "pace_slower"], "service_feedback": "better_after_adjustment"}, "next_visit": {"plan": "repeat_current"}}, note="不得返回")
             db.add(current); db.flush()
             same_service = CustomerProfileRecord(store_id=self.store_id, user_id=user.id, selection_session_id=session.id, technician_id=self.technician_id, created_by_staff_id=staff.id, schema_version=2, taxonomy_version="service_reference_v1", customer_confirmed=True, confirmed_at=datetime.now(timezone.utc), profile={"schema_version": 2, "taxonomy_version": "service_reference_v1", "customer_reported": {"focus_areas": ["feet"]}})
             db.add(same_service); db.commit()
@@ -181,6 +181,7 @@ class TestTechnicianPortalApi:
         assert record["avoid_areas"] == ["腹部"]
         assert record["force_preference"] == "适中"
         assert record["temperature_preference"] == "偏低"
+        assert record["service_adjustments"] == ["减轻力度", "放慢节奏"]
         assert record["service_feedback"] == "调整后更合适"
         assert record["next_visit_plan"] == "延续本次"
         assert "confirmed_at" not in record
