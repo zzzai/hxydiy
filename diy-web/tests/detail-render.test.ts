@@ -39,11 +39,12 @@ test('未配置后台目录的沐足项目使用前端五方默认值', async ()
   } finally { await server.close(); }
 });
 
-test('四个足疗项目均进入前端五方兜底，足部精修不被遗漏', async () => {
+test('四个草本泡项目在未发布目录时均进入前端五方兜底，足部精修不被误配置', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
     const { FRONTEND_HERBAL_FORMULA_CODES } = await server.ssrLoadModule('/src/components/ProjectDetailPage.tsx');
-    for (const code of ['hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-foot-refine-1']) assert.equal(FRONTEND_HERBAL_FORMULA_CODES.has(code), true);
+    for (const code of ['hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-nvshen-60']) assert.equal(FRONTEND_HERBAL_FORMULA_CODES.has(code), true);
+    assert.equal(FRONTEND_HERBAL_FORMULA_CODES.has('hxy-foot-refine-1'), false);
   } finally { await server.close(); }
 });
 

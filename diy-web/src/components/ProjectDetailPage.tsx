@@ -84,7 +84,7 @@ export const FRONTEND_HERBAL_FORMULA_CODES = new Set([
   'hxy-qiqing-30',
   'hxy-xiangxiang-60',
   'hxy-xiaoqi-90',
-  'hxy-foot-refine-1',
+  'hxy-nvshen-60',
 ]);
 
 export default function ProjectDetailPage({
