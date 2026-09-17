@@ -129,7 +129,23 @@ export default function TechnicianTodayPage() {
     : [];
 
   const groups = technicianBoardGroups(tasks);
-  const activeOrderCount = tasks.reduce((total, task) => total + (task.conflict ? Number(task.conflict_count || 1) : (task.occupancy_id ? 1 : 0)), 0);
+  const boardCounts = tasks.reduce((counts, task) => {
+    if (task.conflict) {
+      counts.conflict += Number(task.conflict_count || 1);
+      return counts;
+    }
+    if (!task.occupancy_id) return counts;
+    if (task.occupancy_status === 'in_service') counts.inService += 1;
+    else if (task.occupancy_status === 'waiting_service') counts.waiting += 1;
+    else if (task.occupancy_status === 'post_service_present') counts.completed += 1;
+    return counts;
+  }, { waiting: 0, inService: 0, completed: 0, conflict: 0 });
+  const boardSummary = [
+    boardCounts.inService ? `服务中 ${boardCounts.inService} 单` : '',
+    boardCounts.waiting ? `待服务 ${boardCounts.waiting} 单` : '',
+    boardCounts.conflict ? `待核对 ${boardCounts.conflict} 项` : '',
+    boardCounts.completed ? `已完成 ${boardCounts.completed} 单` : '',
+  ].filter(Boolean).join(' · ');
 
   if (loading && !tasks.length) return <div className="technician-loading"><Spin size="large" /></div>;
 
@@ -138,13 +154,13 @@ export default function TechnicianTodayPage() {
       <div>
         <span className="technician-eyebrow">{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</span>
         <h1>服务看板</h1>
-            <p>{me?.technician?.name || '技师'} · {activeOrderCount ? `当前 ${activeOrderCount} 个服务单` : '当前没有顾客订单'} · 共 {tasks.length} 个服务位</p>
+            <p>{me?.technician?.name || '技师'} · {boardSummary || '当前没有待处理服务'} · 共 {tasks.length} 个服务位</p>
       </div>
       <Button shape="circle" aria-label="刷新服务看板" icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} />
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => void load()}>重试</Button>} />}
     {!tasks.length && !error ? <div className="technician-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前门店暂无服务位" /></div> : <section className="technician-board-section">
-      <div className="technician-section-heading"><h2>服务位</h2><span>{activeOrderCount} 个订单</span></div>
+      <div className="technician-section-heading"><h2>服务位</h2><span>共 {tasks.length} 个</span></div>
       {groups.map((group) => <section className="technician-position-group" key={group.key}>
         <div className="technician-section-heading"><h3>{group.label}</h3><span>{group.items.length} 个</span></div>
         <div className="technician-position-grid">
