@@ -14,6 +14,7 @@
 
 - 先确认自动发布状态，避免自动与手工同时切换。手工发布使用项目已有 `deploy/diy/deploy-production.sh`，保留备份恢复演练、迁移拦截、Manifest、原子切换、容器更新和失败回滚。
 - 发布后批量检查首页、健康接口、实际入口引用的 CSS/JS 和关键图片；核验 current、镜像、迁移 head。未执行数据库迁移时明确记录。
+- 服务器发布脚本以同一把锁串行化手工与自动发布；切换后必须确认公网首页引用的 JS 哈希来自 current release，不匹配即失败并回滚。
 - 更新 CURRENT-STATE、顾客端 workstream、WORK-STATUS 和现有生产记录合同测试，合入主干才算共享事实。
 
 ## 节省 token 的输出方式

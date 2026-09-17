@@ -17,6 +17,7 @@ if [[ -z "$workspace_root" || ! -d "$workspace_root" ]]; then
 fi
 
 release_root=${HXY_DIY_RELEASE_ROOT:-/root/hxy-diy-20260811}
+deploy_lock=${HXY_DIY_DEPLOY_LOCK:-"$release_root/.deploy.lock"}
 workspace_root=$(cd "$workspace_root" && pwd -P)
 case "$workspace_root" in
   "$release_root"/workspaces/*) ;;
@@ -25,6 +26,13 @@ case "$workspace_root" in
     exit 2
     ;;
 esac
+
+mkdir -p "$release_root"
+exec 9>"$deploy_lock"
+if ! flock -n 9; then
+  echo "another production deployment is already running" >&2
+  exit 75
+fi
 
 current="$release_root/current"
 backups_dir="$release_root/backups"
@@ -80,6 +88,20 @@ wait_for_url() {
   done
   echo "health check failed: $url" >&2
   return 1
+}
+
+verify_public_customer_bundle() {
+  local expected_bundle public_html
+  expected_bundle=$(sed -nE 's@.*src="/assets/(index-[^"]+\.js)".*@\1@p' "$current/diy-web/dist/index.html" | head -n 1)
+  if [[ -z "$expected_bundle" ]]; then
+    echo "current release does not declare a customer JavaScript bundle" >&2
+    return 1
+  fi
+  public_html=$(curl -fsS --max-time 10 "$customer_url")
+  if [[ "$public_html" != *"/assets/$expected_bundle"* ]]; then
+    echo "public customer page does not reference current release bundle: $expected_bundle" >&2
+    return 1
+  fi
 }
 
 drop_rehearsal_database() {
@@ -192,6 +214,7 @@ HXY_DIY_CURRENT="$current" docker compose --env-file "$env_file" -f "$compose_fi
 wait_for_url "$api_health_url"
 wait_for_url "$admin_url"
 wait_for_url "$customer_url"
+verify_public_customer_bundle
 
 rm -f -- "$compose_backup"
 compose_backup=''
