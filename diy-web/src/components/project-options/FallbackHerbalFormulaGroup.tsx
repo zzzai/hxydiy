@@ -47,8 +47,7 @@ export default function FallbackHerbalFormulaGroup({ selectedName, onSelect, rea
           const active = formula.code === selected.code;
           return (
             <button key={formula.code} type="button" className={active ? 'active' : ''} aria-label={`${item.label} ${formula.name}`} aria-pressed={active} disabled={readOnly} onClick={() => onSelect(formula)}>
-              <i style={{ color: item.color }} aria-hidden="true">{item.label}</i>
-              <span>{formula.name}</span>
+              <span style={{ color: item.color }}>{item.label}</span>
             </button>
           );
         })}

@@ -21,6 +21,8 @@ test('草本方详情随选中项切换，保留真实选项标识与只读状�
     assert.doesNotMatch(render(205), /玫瑰花 · 佛手 · 合欢皮/);
     assert.equal((render(205).match(/aria-pressed="true"/g) || []).length, 1);
     assert.equal((render(205, true).match(/disabled=""/g) || []).length, 2);
+    assert.match(render(201), /<button[^>]*aria-label="木 舒心解压"[^>]*><span[^>]*>木<\/span><\/button>/);
+    assert.doesNotMatch(render(201), /<i(?:\s|>)/);
   } finally { await server.close(); }
 });
 
@@ -34,8 +36,19 @@ test('未配置后台目录的沐足项目使用前端五方默认值', async ()
     const markup = render();
     for (const name of ['舒心解压', '筋骨轻松', '轻盈畅快', '清润放松', '温暖养护']) assert.match(markup, new RegExp(name));
     assert.match(markup, /玫瑰花 · 佛手 · 合欢皮/);
+    assert.match(markup, /<button[^>]*aria-label="木 舒心解压"[^>]*><span[^>]*>木<\/span><\/button>/);
+    assert.doesNotMatch(markup, /<i(?:\s|>)/);
     assert.equal((markup.match(/aria-pressed="true"/g) || []).length, 1);
     assert.match(render('温暖养护'), /杜仲 · 桑寄生 · 淫羊藿/);
+  } finally { await server.close(); }
+});
+
+test('四个草本泡项目在未发布目录时均进入前端五方兜底，足部精修不被误配置', async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const { FRONTEND_HERBAL_FORMULA_CODES } = await server.ssrLoadModule('/src/components/ProjectDetailPage.tsx');
+    for (const code of ['hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-nvshen-60']) assert.equal(FRONTEND_HERBAL_FORMULA_CODES.has(code), true);
+    assert.equal(FRONTEND_HERBAL_FORMULA_CODES.has('hxy-foot-refine-1'), false);
   } finally { await server.close(); }
 });
 

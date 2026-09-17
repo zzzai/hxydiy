@@ -55,6 +55,7 @@ import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL
 import { anonymousBrowserEntryHint, customerPageSubtitle, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
 import { customerServiceProgress, shouldPollCustomerServiceStatus } from './customerServiceStatus';
 import { shareProjectLink } from './projectShare';
+import { configureWeChatProjectShare } from './wechatShare';
 import ProjectDetailPage from './components/ProjectDetailPage';
 import LocalDetailPage from './components/LocalDetailPage';
 import {
@@ -473,12 +474,15 @@ export default function App() {
       currentUrl: window.location.href,
       projectCode: project.code,
       projectName: displayProjectName(project),
+      imageUrl: projectImage(project),
     }, {
+      configureWeChatShare: configureWeChatProjectShare,
       share: typeof navigator.share === 'function' ? navigator.share.bind(navigator) : undefined,
       writeText: navigator.clipboard?.writeText ? navigator.clipboard.writeText.bind(navigator.clipboard) : undefined,
     }).catch(() => 'unavailable' as const);
     pageTracking.projectShare({ project_id: project.id, project_code: project.code, outcome });
     if (outcome === 'copied') flash('分享链接已复制');
+    if (outcome === 'wechat_ready') flash('已准备分享，请点右上角“…”发送给朋友');
     if (outcome === 'unavailable') flash('暂时无法分享，请复制浏览器地址发送给好友');
   };
 

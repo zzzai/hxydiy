@@ -38,8 +38,7 @@ export default function HerbalFormulaGroup({ group, selectedChoiceIds, onSelect,
           const item = ELEMENTS[choice.code];
           return (
             <button key={choice.id} type="button" className={selected?.id === choice.id ? 'active' : ''} aria-label={`${item?.label || ''} ${choice.name}`} aria-pressed={selected?.id === choice.id} disabled={readOnly} onClick={() => onSelect(choice.id)}>
-              {item && <i style={{ color: item.color }} aria-hidden="true">{item.label}</i>}
-              <span>{choice.name}</span>
+              <span style={item ? { color: item.color } : undefined}>{item?.label || choice.name}</span>
             </button>
           );
         })}
