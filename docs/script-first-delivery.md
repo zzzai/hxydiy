@@ -20,6 +20,16 @@ pwsh -File tools/release/start-release-watch.ps1 -Commit <40位main-SHA>
 非 Windows 或前台执行：`python tools/release/watch_release.py --pr 123 --head <40位SHA> --merge`。
 无需安装 Python 第三方库或 GitHub CLI；使用已有 Git Credential Manager 凭证，仅保存在内存，禁止把凭证写入命令、报告或仓库。
 
+## 服务器端创建 PR
+
+在已完成明确 `git commit` 的干净任务分支中执行以下命令，即可推送分支并创建或复用同分支、同 `main` 目标的非草稿 PR；`--watch` 会在后台启动只读检查等待脚本：
+
+```bash
+python tools/release/submit_pr.py --title "feat(admin): 简短标题" --watch
+```
+
+脚本优先读取服务器环境变量 `GH_TOKEN`，否则读取已有 Git Credential Manager 凭据；`GH_TOKEN` 同时通过仅进程内的 Git credential helper 用于 HTTPS 推送，令牌不会出现在远程 URL、命令参数、报告或仓库。令牌必须具备本仓库 Contents 与 Pull Request 读写权限，且不得写入 shell 历史。它不会暂存文件、创建 commit、自动 merge 或发布生产；工作区不干净、处于 `main`、远程仓库不匹配或已有 PR 的 head 与本地 commit 不一致时会停止并返回机器可读错误。需要更完整的 PR 描述时传入 `--body-file /安全路径/description.md`。
+
 ## 输出与安全边界
 
 - 报告存放在 Git 公共目录下 `hxy-release-reports/<提交或PR及head>/report.json`，跨 worktree 防重复等待、按任务隔离；操作系统锁在进程结束时自动释放。报告原子替换，不覆盖代码或生产数据。
