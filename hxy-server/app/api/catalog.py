@@ -29,9 +29,9 @@ DEFAULT_PAGE_CONTENT = {
     "subtitle": "按需要，自由搭配",
     "promo_banners": [],
     "tea_options": [
-        {"name": "老姜茶", "note": "辛香温润", "description": "姜香温润，适合偏爱暖香口感。"},
-        {"name": "陈皮茶", "note": "清香顺口", "description": "陈皮清香，入口顺和，适合日常慢饮。"},
-        {"name": "玫瑰茶", "note": "柔和花香", "description": "花香柔和，口感清雅。"},
+        {"name": "菊花清润茶", "note": "花香清雅", "description": "玫瑰花、菊花、佛手、陈皮与枸杞，花香清雅，入口顺和。", "image_url": "/diy/assets/tea-juhua-herbal.webp"},
+        {"name": "薏米祛湿茶", "note": "谷香温和", "description": "茯苓、炒薏米、陈皮、炒麦芽与芡实，谷香自然，口感温和。", "image_url": "/diy/assets/tea-yimi-herbal.webp"},
+        {"name": "桑葚滋养茶", "note": "果香柔和", "description": "玉竹、麦冬、桑葚、山药与枸杞，果香柔和，适合慢慢品饮。", "image_url": "/diy/assets/tea-sangshen-herbal.webp"},
     ],
     "coupon_prompt": {"title": "登录领取到店礼", "body": "手机号登录后保存到账号，符合条件后预计自动抵扣"},
     "brand_story": {"title": "把服务做到身边", "body": "从真实需求出发，用好服务赢得信任。"},
@@ -46,6 +46,10 @@ def _upgrade_legacy_customer_copy(key: str, value: object) -> object:
         if upgraded.get("body") == "手机号登录后领取，优惠券保存到账号":
             upgraded["body"] = "手机号登录后保存到账号，符合条件后预计自动抵扣"
         return upgraded
+    if key == "tea_options" and isinstance(value, list):
+        names = [item.get("name") for item in value if isinstance(item, dict)]
+        if names == ["老姜茶", "陈皮茶", "玫瑰茶"]:
+            return [dict(item) for item in DEFAULT_PAGE_CONTENT["tea_options"]]
     return value
 
 _LOCAL_BODY_PARTS = frozenset({"肩颈", "腰臀", "腿部", "腹部", "足部"})
