@@ -132,9 +132,9 @@ def bootstrap_diy_store(db: Session) -> None:
             title="到店选项目",
             subtitle="按需要，自由搭配",
             tea_options=[
-                {"name": "老姜茶", "note": "辛香温润"},
-                {"name": "陈皮茶", "note": "清香顺口"},
-                {"name": "玫瑰茶", "note": "柔和花香"},
+                {"name": "菊花清润茶", "note": "花香清雅", "description": "玫瑰花、菊花、佛手、陈皮与枸杞，花香清雅，入口顺和。", "image_url": "/diy/assets/tea-juhua-herbal.webp"},
+                {"name": "薏米祛湿茶", "note": "谷香温和", "description": "茯苓、炒薏米、陈皮、炒麦芽与芡实，谷香自然，口感温和。", "image_url": "/diy/assets/tea-yimi-herbal.webp"},
+                {"name": "桑葚滋养茶", "note": "果香柔和", "description": "玉竹、麦冬、桑葚、山药与枸杞，果香柔和，适合慢慢品饮。", "image_url": "/diy/assets/tea-sangshen-herbal.webp"},
             ],
             published=False,
         ))

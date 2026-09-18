@@ -37,6 +37,17 @@ import {
 } from '../src/domain.ts';
 import * as domainModule from '../src/domain.ts';
 
+test('茶饮默认配置使用三款正式茶饮与独立品牌配图', () => {
+  assert.deepEqual(
+    domainModule.TEAS.map((tea) => ({ name: tea.name, image: tea.image.split('/').pop() })),
+    [
+      { name: '菊花清润茶', image: 'tea-juhua-herbal.webp' },
+      { name: '薏米祛湿茶', image: 'tea-yimi-herbal.webp' },
+      { name: '桑葚滋养茶', image: 'tea-sangshen-herbal.webp' },
+    ],
+  );
+});
+
 function project(partial: Partial<Project> & Pick<Project, 'id' | 'code' | 'category'>): Project {
   return {
     name: partial.code, summary: '', duration_min: 30, publication_status: 'published',

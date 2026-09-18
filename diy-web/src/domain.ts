@@ -185,9 +185,9 @@ export function assetPath(fileName: string, baseUrl = import.meta.env?.BASE_URL 
 }
 
 export const TEAS = [
-  { name: '老姜茶', note: '辛香温润', image: assetPath('fresh-ginger.jpg') },
-  { name: '陈皮茶', note: '清香顺口', image: assetPath('hxy-herbal-tea-cup.webp') },
-  { name: '玫瑰茶', note: '柔和花香', image: assetPath('home-herbal-wellness-tea.webp') },
+  { name: '菊花清润茶', note: '花香清雅', image: assetPath('tea-juhua-herbal.webp') },
+  { name: '薏米祛湿茶', note: '谷香温和', image: assetPath('tea-yimi-herbal.webp') },
+  { name: '桑葚滋养茶', note: '果香柔和', image: assetPath('tea-sangshen-herbal.webp') },
 ] as const;
 
 export function resolveTeaImage(option: { name: string; image_url?: string; image?: string }): string {
@@ -197,14 +197,14 @@ export function resolveTeaImage(option: { name: string; image_url?: string; imag
 export const TEA_SERVICE = {
   name: '五行茶饮',
   summary: '随到店项目提供，先喝一杯热茶，再慢慢进入放松状态。',
-  image: assetPath('hxy-herbal-tea-cup.webp'),
+  image: assetPath('tea-juhua-herbal.webp'),
   availability: 'preference',
 } as const;
 
 export const TEA_DETAIL_PROFILES: Record<(typeof TEAS)[number]['name'], { description: string; highlight: string }> = {
-  老姜茶: { description: '姜香温润，适合偏爱浓郁暖香口感的顾客。', highlight: '辛香温润' },
-  陈皮茶: { description: '陈皮清香，入口顺和，适合日常慢饮。', highlight: '清香顺口' },
-  玫瑰茶: { description: '花香柔和，口感清雅，适合偏爱轻盈香气的顾客。', highlight: '柔和花香' },
+  菊花清润茶: { description: '玫瑰花、菊花、佛手、陈皮与枸杞，花香清雅，入口顺和。', highlight: '花香清雅' },
+  薏米祛湿茶: { description: '茯苓、炒薏米、陈皮、炒麦芽与芡实，谷香自然，口感温和。', highlight: '谷香温和' },
+  桑葚滋养茶: { description: '玉竹、麦冬、桑葚、山药与枸杞，果香柔和，适合慢慢品饮。', highlight: '果香柔和' },
 };
 
 export const LOCAL_PARTS = ['肩颈', '腰臀', '腿部', '腹部', '足部'] as const;

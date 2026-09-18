@@ -98,7 +98,7 @@ class PageContentApiTests(unittest.TestCase):
         ).json()
 
         self.assertEqual(result["title"], "到店服务选单")
-        self.assertEqual(result["tea_options"][0]["name"], "老姜茶")
+        self.assertEqual(result["tea_options"][0]["name"], "菊花清润茶")
         self.assertEqual(result["coupon_prompt"]["title"], "登录领取到店礼")
         self.assertNotIn("?", str(result))
 
@@ -120,6 +120,31 @@ class PageContentApiTests(unittest.TestCase):
 
         self.assertEqual(result["title"], "到店服务选单")
         self.assertEqual(result["coupon_prompt"]["body"], "手机号登录后保存到账号，符合条件后预计自动抵扣")
+
+    def test_public_content_upgrades_legacy_tea_options_to_current_menu(self):
+        with self.SessionLocal() as db:
+            db.add(PageContent(
+                store_id=self.store_id,
+                page_key="diy-home-legacy-tea",
+                published=True,
+                tea_options=[
+                    {"name": "老姜茶", "note": "辛香温润"},
+                    {"name": "陈皮茶", "note": "清香顺口"},
+                    {"name": "玫瑰茶", "note": "柔和花香"},
+                ],
+            ))
+            db.commit()
+
+        result = self.client.get(
+            f"/api/v1/stores/{self.store_id}/page-content",
+            params={"page_key": "diy-home-legacy-tea"},
+        ).json()
+
+        self.assertEqual(
+            [item["name"] for item in result["tea_options"]],
+            ["菊花清润茶", "薏米祛湿茶", "桑葚滋养茶"],
+        )
+        self.assertTrue(result["tea_options"][0]["image_url"].endswith("tea-juhua-herbal.webp"))
 
 
 if __name__ == "__main__":
