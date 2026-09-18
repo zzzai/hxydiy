@@ -191,6 +191,9 @@ export const TEAS = [
 ] as const;
 
 export function resolveTeaImage(option: { name: string; image_url?: string; image?: string }): string {
+  if (option.image_url?.startsWith('/diy/assets/')) {
+    return assetPath(option.image_url.slice('/diy/assets/'.length));
+  }
   return option.image_url || option.image || TEAS.find((tea) => tea.name === option.name)?.image || TEAS[0].image;
 }
 
