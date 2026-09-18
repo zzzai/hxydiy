@@ -48,6 +48,13 @@ test('茶饮默认配置使用三款正式茶饮与独立品牌配图', () => {
   );
 });
 
+test('茶饮接口资源路径映射到生产静态资源目录', () => {
+  assert.equal(
+    domainModule.resolveTeaImage({ name: '菊花清润茶', image_url: '/diy/assets/tea-juhua-herbal.webp' }),
+    domainModule.assetPath('tea-juhua-herbal.webp'),
+  );
+});
+
 function project(partial: Partial<Project> & Pick<Project, 'id' | 'code' | 'category'>): Project {
   return {
     name: partial.code, summary: '', duration_min: 30, publication_status: 'published',
