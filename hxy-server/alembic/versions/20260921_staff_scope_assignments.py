@@ -65,6 +65,15 @@ def upgrade() -> None:
     op.create_index("ix_audit_logs_assignment_id", "audit_logs", ["assignment_id"])
 
     bind = op.get_bind()
+    staff_columns = {column["name"] for column in sa.inspect(bind).get_columns("staff")}
+    required_staff_columns = {
+        "id", "username", "role", "store_id", "technician_id", "status", "credentials_version",
+    }
+    # Some historical migration tests intentionally reconstruct only the columns needed by
+    # their older revision. The new table/audit columns must still migrate, but there is no
+    # trustworthy account snapshot to backfill from when compatibility fields are absent.
+    if not required_staff_columns.issubset(staff_columns):
+        return
     rows = bind.execute(sa.text(
         "SELECT id, username, role, store_id, technician_id, status, credentials_version FROM staff ORDER BY id"
     )).mappings()
