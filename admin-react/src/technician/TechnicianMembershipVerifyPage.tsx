@@ -16,10 +16,16 @@ export default function TechnicianMembershipVerifyPage() {
   const [error, setError] = useState('');
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream>();
-  useEffect(() => { void getMembershipVerificationSelections().then(({ data }) => { setItems(data.items); if (data.items.length === 1) setSelectionId(data.items[0].selection_session_id); }).catch(() => setError('加载本店待核验选单失败')); return () => streamRef.current?.getTracks().forEach((track) => track.stop()); }, []);
+  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+  const loadCandidates = async () => {
+    const { data } = await getMembershipVerificationSelections();
+    setItems(data.items);
+    if (data.items.length === 1) setSelectionId(data.items[0].selection_session_id);
+    else setSelectionId('');
+    return data.items as Candidate[];
+  };
   const stop = () => { streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = undefined; setScanning(false); };
   const start = async () => {
-    if (!selectionId) { message.warning('请先选择服务位置'); return; }
     setError(''); setResult(undefined);
     try {
       const Detector = (globalThis as any).BarcodeDetector;
@@ -40,7 +46,12 @@ export default function TechnicianMembershipVerifyPage() {
           const codes = await detector.detect(video).catch(() => []);
           if (codes[0]?.rawValue) {
             stop();
-            try { const response = await scanMembershipCode(codes[0].rawValue); setPending({ ...response.data, codeToken: codes[0].rawValue }); } catch (reason: any) { setError(reason?.response?.data?.detail?.message || '会员码预检失败'); }
+            try {
+              const response = await scanMembershipCode(codes[0].rawValue);
+              const candidates = await loadCandidates();
+              if (!candidates.length) throw new Error('当前没有可绑定的顾客服务单');
+              setPending({ ...response.data, codeToken: codes[0].rawValue });
+            } catch (reason: any) { setError(reason?.response?.data?.detail?.message || reason?.message || '会员码预检失败'); }
             return;
           }
           await new Promise((resolve) => window.setTimeout(resolve, 250));
@@ -54,5 +65,5 @@ export default function TechnicianMembershipVerifyPage() {
     return () => { active = false; };
   }, [scanning, video]);
   const confirm = async () => { if (!pending || !selectionId) return; try { const response = await consumeMembershipCode(pending.codeToken, selectionId); setResult(response.data); setPending(undefined); message.success('会员核验成功'); } catch (reason: any) { setError(reason?.response?.data?.detail?.message || '会员绑定失败'); } };
-  return <section className="technician-member-verify"><h2>会员核验</h2><p>先选择顾客所在服务位，再扫描顾客手机上的30秒动态会员码。</p><Card><label>本店待核验选单</label><Select value={selectionId || undefined} placeholder="选择服务位置" onChange={setSelectionId} options={items.map((item) => ({ value: item.selection_session_id, label: `${item.position_label} · ${item.item_count}项` }))} /><Button type="primary" size="large" icon={<CameraOutlined />} onClick={scanning ? stop : start}>{scanning ? '停止扫码' : '打开摄像头扫码'}</Button></Card>{scanning && <div className="technician-member-camera"><video ref={setVideo} playsInline muted autoPlay /><Spin tip="正在识别会员码" /></div>}{error && <Alert type="error" showIcon message={error} />}{pending && <Card className="technician-member-result"><h3>请核对会员信息</h3><p>{pending.member.name_masked}　{pending.member.phone_masked}</p><Button type="primary" size="large" onClick={() => void confirm()}>确认绑定本次选单</Button></Card>}{result && <Card className="technician-member-result"><CheckCircleOutlined /><h3>会员核验成功</h3><p>{result.member.name_masked}　{result.member.phone_masked}</p><p>会员有效期：{result.member.member_expire_at ? String(result.member.member_expire_at).slice(0, 10) : '以门店记录为准'}</p><strong>已按服务端会员规则重新计算本次选单</strong></Card>}<Alert type="info" showIcon message="核验只绑定本次选单，不确认或结束服务，也不修改物理服务位状态。" /></section>;
+  return <section className="technician-member-verify"><h2>会员核验</h2><p>直接扫描顾客手机上的动态会员码，扫码后再匹配本次服务单。</p><Card><Button type="primary" size="large" icon={<CameraOutlined />} onClick={scanning ? stop : start}>{scanning ? '停止扫码' : '打开摄像头扫码'}</Button></Card>{scanning && <div className="technician-member-camera"><video ref={setVideo} playsInline muted autoPlay /><Spin tip="正在识别会员码" /></div>}{error && <Alert type="error" showIcon message={error} />}{pending && <Card className="technician-member-result"><h3>请核对会员信息</h3><p>{pending.member.name_masked}　{pending.member.phone_masked}</p>{items.length > 1 && <><label>选择本次服务单</label><Select value={selectionId || undefined} placeholder="请选择顾客本次服务单" onChange={setSelectionId} options={items.map((item) => ({ value: item.selection_session_id, label: `${item.position_label} · ${item.item_count}项` }))} /></>}<Button type="primary" size="large" disabled={!selectionId} onClick={() => void confirm()}>确认绑定本次服务单</Button></Card>}{result && <Card className="technician-member-result"><CheckCircleOutlined /><h3>会员核验成功</h3><p>{result.member.name_masked}　{result.member.phone_masked}</p><p>会员有效期：{result.member.member_expire_at ? String(result.member.member_expire_at).slice(0, 10) : '以门店记录为准'}</p><strong>已按服务端会员规则重新计算本次服务单</strong></Card>}<Alert type="info" showIcon message="核验只绑定本次服务单，不确认或结束服务，也不修改物理服务位状态。" /></section>;
 }

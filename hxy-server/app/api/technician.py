@@ -17,6 +17,7 @@ from app.models.catalog import Addon, Project
 from app.models.service import StateTransition
 from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
 from app.schemas.service_record import ProjectServiceRecord, safe_service_lines
+from app.schemas.service_handoff import safe_handoff_lines
 
 router = APIRouter(prefix="/technician", tags=["technician"])
 
@@ -623,6 +624,7 @@ def finish_service(occupancy_id: int, body: ActionIn, authorization: str | None 
 
 def _supported_reference_version():
     return or_(
+        and_(CustomerProfileRecord.schema_version == 7, CustomerProfileRecord.taxonomy_version == "service_handoff_v1"),
         and_(CustomerProfileRecord.schema_version == 6, CustomerProfileRecord.taxonomy_version == 'service_record_v1'),
         and_(CustomerProfileRecord.schema_version == 2, CustomerProfileRecord.taxonomy_version == "service_reference_v1"),
         and_(CustomerProfileRecord.schema_version == 3, CustomerProfileRecord.taxonomy_version == "service_reference_v2"),
@@ -669,6 +671,8 @@ def _safe_reference_profile(value) -> dict:
 
 
 def _history_profile_summary(record: CustomerProfileRecord | None) -> dict | None:
+    if record and record.schema_version == 7 and record.taxonomy_version == "service_handoff_v1":
+        return {"schema_version": 7, "service_lines": safe_handoff_lines(record.profile)}
     if record and record.schema_version == 6 and record.taxonomy_version == 'service_record_v1':
         return {'schema_version': 6, 'service_lines': safe_service_lines(record.profile)}
     if record is None:
@@ -816,7 +820,7 @@ def service_history(
             )
         items.append({
             "occupancy_id": occupancy.id,
-            'own_record_id': own_record.id if own_record and own_record.schema_version == 6 and own_record.created_by_staff_id == staff.id else None,
+            'own_record_id': own_record.id if own_record and own_record.schema_version in (6, 7) and own_record.created_by_staff_id == staff.id else None,
             'editable_record': {
                 'id': own_record.id,
                 'schema_version': own_record.schema_version,
@@ -824,13 +828,13 @@ def service_history(
                 'customer_confirmed': bool(own_record.customer_confirmed),
                 'selection_session_id': session.id,
                 'user_id': own_record.user_id,
-            } if own_record and own_record.schema_version == 5 else None,
+            } if own_record and own_record.schema_version in (5, 7) else None,
             "completed_at": occupancy.actual_service_end_at,
             "duration_minutes": duration_minutes,
             "profile_status": "confirmed" if record else "pending",
             "record_completed": own_record is not None,
             "own_record_summary": _history_profile_summary(own_record),
-            "recording_outcome": "no_additional_notes" if (own_profile if own_record and own_record.schema_version == 6 else own_observed).get("recording_outcome") == "no_additional_notes" else None,
+            "recording_outcome": "no_additional_notes" if (own_profile if own_record and own_record.schema_version in (6, 7) else own_observed).get("recording_outcome") == "no_additional_notes" else None,
             "service_note": service_note,
             "customer": {"display_name": f"顾客 #{customer.id}"} if customer else {"display_name": "匿名顾客"},
             "projects": project_names,
@@ -848,7 +852,7 @@ def own_service_record_versions(record_id: int, page: int = Query(1, ge=1),
         CustomerProfileRecord.store_id == technician.store_id,
         CustomerProfileRecord.technician_id == technician.id,
         CustomerProfileRecord.created_by_staff_id == staff.id,
-        CustomerProfileRecord.schema_version.in_((5, 6)),
+        CustomerProfileRecord.schema_version.in_((5, 6, 7)),
     )
     record = db.scalar(select(CustomerProfileRecord).where(CustomerProfileRecord.id == record_id, *ownership))
     if not record:
@@ -859,27 +863,45 @@ def own_service_record_versions(record_id: int, page: int = Query(1, ge=1),
     query = select(CustomerProfileRecord).where(*ownership, CustomerProfileRecord.selection_session_id == session.id)
     records = db.scalars(query.order_by(CustomerProfileRecord.id.desc()).offset((page - 1) * 20).limit(21)).all()
     from app.api.admin_v2 import _profile_record_view
-    return {'items': [{**_profile_record_view(item, db), 'service_lines': safe_service_lines(item.profile)} for item in records[:20]],
+    def service_lines(item: CustomerProfileRecord) -> list[str]:
+        if item.schema_version == 7:
+            return safe_handoff_lines(item.profile)
+        if item.schema_version == 6:
+            return safe_service_lines(item.profile)
+        return []
+
+    return {'items': [{**_profile_record_view(item, db), 'service_lines': service_lines(item)} for item in records[:20]],
             'has_more': len(records) > 20,
             'task': {'selection_session_id': session.id, 'user_id': record.user_id, 'items': session.items}}
 
 
 @router.get('/service-record-options')
-def service_record_options(authorization: str | None = Header(None), db: Session = Depends(get_db)):
+def service_record_options(schema_version: int = Query(7, ge=6, le=7), authorization: str | None = Header(None), db: Session = Depends(get_db)):
     current_technician(authorization, db)
+    if schema_version == 6:
+        legacy_groups = {
+            'water_request': [('lower', '希望低一点'), ('suitable', '现在就合适'), ('higher', '希望高一点')],
+            'water_action': [('lowered', '已调低水温'), ('raised', '已调高水温')],
+            'water_feedback': [('suitable', '水温合适了'), ('still_unsuitable', '仍不合适')],
+            'region': [('shoulder', '肩部'), ('neck', '颈部'), ('back', '背部'), ('waist', '腰部'), ('abdomen', '腹部'), ('arm', '手臂'), ('leg', '腿部'), ('foot', '足部')],
+            'side': [('unspecified', '未区分左右'), ('left', '左侧'), ('right', '右侧'), ('both', '两侧')],
+            'massage_request': [('lighter', '轻一点'), ('stronger', '重一点'), ('longer', '多按一会儿'), ('avoid', '不要按这里')],
+            'massage_action': [('lighter', '已减轻力度'), ('stronger', '已加重力度'), ('longer', '已增加按摩时间'), ('avoided', '已避开')],
+            'massage_feedback': [('suitable', '调整后合适'), ('still_unsuitable', '仍不合适')],
+            'heat': [('too_hot', '顾客觉得太烫'), ('suitable', '顾客表示温度合适'), ('end_early', '顾客要求提前结束')],
+            'communication': [('quiet', '想安静休息'), ('chat', '愿意聊天')],
+        }
+        return {'schema_version': 6, 'taxonomy_version': 'service_record_v1',
+                'groups': {key: [{'value': value, 'label': label} for value, label in items] for key, items in legacy_groups.items()}}
     groups = {
-        'water_request': [('lower', '希望低一点'), ('suitable', '现在就合适'), ('higher', '希望高一点')],
-        'water_action': [('lowered', '已调低水温'), ('raised', '已调高水温')],
-        'water_feedback': [('suitable', '水温合适了'), ('still_unsuitable', '仍不合适')],
-        'region': [('shoulder', '肩部'), ('neck', '颈部'), ('back', '背部'), ('waist', '腰部'), ('abdomen', '腹部'), ('arm', '手臂'), ('leg', '腿部'), ('foot', '足部')],
-        'side': [('unspecified', '未区分左右'), ('left', '左侧'), ('right', '右侧'), ('both', '两侧')],
-        'massage_request': [('lighter', '轻一点'), ('stronger', '重一点'), ('longer', '多按一会儿'), ('avoid', '不要按这里')],
-        'massage_action': [('lighter', '已减轻力度'), ('stronger', '已加重力度'), ('longer', '已增加按摩时间'), ('avoided', '已避开')],
-        'massage_feedback': [('suitable', '调整后合适'), ('still_unsuitable', '仍不合适')],
-        'heat': [('too_hot', '顾客觉得太烫'), ('suitable', '顾客表示温度合适'), ('end_early', '顾客要求提前结束')],
         'communication': [('quiet', '想安静休息'), ('chat', '愿意聊天')],
+        'body_region': [('neck_shoulder', '肩颈'), ('waist_back', '腰背'), ('leg', '腿部'), ('knee', '膝盖'), ('foot', '足部')],
+        'next_action': [('focus', '重点加强'), ('lighter', '轻一些'), ('avoid', '避开'), ('confirm', '先确认')],
+        'session_change': [('pressure_lighter', '力度调轻'), ('pressure_stronger', '力度调重'), ('temperature_lower', '温度调低'), ('temperature_higher', '温度调高'), ('pace_slower', '节奏放慢'), ('ended_early', '提前结束')],
+        'age_band': [('age_25_29', '25–29'), ('age_30_34', '30–34'), ('age_35_39', '35–39'), ('age_40_44', '40–44'), ('age_45_49', '45–49'), ('age_50_59', '50–59'), ('age_60_plus', '60以上')],
+        'gender': [('male', '男'), ('female', '女')],
     }
-    return {'schema_version': 6, 'taxonomy_version': 'service_record_v1',
+    return {'schema_version': 7, 'taxonomy_version': 'service_handoff_v1',
             'groups': {key: [{'value': value, 'label': label} for value, label in items] for key, items in groups.items()}}
 
 

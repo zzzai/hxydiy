@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Checkbox, Drawer, Input, Spin } from 'antd';
 import { createCustomerProfileRecord, getProjectRecordOptions } from '../api';
 import LegacyTechnicianProfileSheet from './LegacyTechnicianProfileSheet';
+import ServiceHandoffSheet from './ServiceHandoffSheet';
 import { buildRecordPayload, hasRecordContent, makeRecord, type ProjectRecord } from './projectServiceRecord';
 import './project-service-record.css';
 
@@ -9,8 +10,11 @@ type Props = {task: any; onClose: () => void; onSaved: () => void};
 type Option = {value: string; label: string};
 export default function TechnicianProfileSheet(props: Props) {
   if (!props.task) return null;
-  return props.task.record?.schema_version === 6
-    ? <ProjectRecordSheet key={`${props.task.selection_session_id}:${props.task.record?.id || 'new'}`} {...props} />
+  if (!props.task.record || props.task.record.schema_version === 7) {
+    return <ServiceHandoffSheet key={`${props.task.selection_session_id}:${props.task.record?.id || 'new'}`} {...props} />;
+  }
+  return props.task.record.schema_version === 6
+    ? <ProjectRecordSheet key={`${props.task.selection_session_id}:${props.task.record.id}`} {...props} />
     : <LegacyTechnicianProfileSheet {...props} />;
 }
 
@@ -33,7 +37,7 @@ function ProjectRecordSheet({task, onClose, onSaved}: Props) {
   useEffect(() => {
     let active = true;
     setLoadingError(false);
-    getProjectRecordOptions().then(result => {
+    getProjectRecordOptions(6).then(result => {
       if (result.data?.taxonomy_version !== 'service_record_v1') throw Error('Version mismatch');
       if (active) setOptions(result.data.groups);
     }).catch(()=>{if(active)setLoadingError(true);});

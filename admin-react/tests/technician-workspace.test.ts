@@ -172,10 +172,12 @@ test('管理端历史只展示可执行的服务交接，不展示旧画像或�
   assert.doesNotMatch(JSON.stringify(display.groups), /顾客自述正在用药/);
 });
 
-test('新的服务交接统一使用按项目裁剪的 v5 流程，v6 只用于本人历史兼容', () => {
+test('新的服务交接统一使用 v7 快速交接，v5 和 v6 只用于历史兼容', () => {
   const source = readFileSync(new URL('../src/technician/TechnicianProfileSheet.tsx', import.meta.url), 'utf8');
-  assert.match(source, /props\.task\.record\?\.schema_version === 6/);
-  assert.doesNotMatch(source, /makeRecord\(props\.task\.items \|\| \[\]\)\.template/);
+  const handoff = readFileSync(new URL('../src/technician/ServiceHandoffSheet.tsx', import.meta.url), 'utf8');
+  assert.match(source, /!props\.task\.record \|\| props\.task\.record\.schema_version === 7/);
+  assert.match(handoff, /service_handoff_v1/);
+  assert.match(handoff, /给下次服务留句话/);
 });
 
 test('技师可更正本人 v5 服务交接，且必须说明更正原因', () => {

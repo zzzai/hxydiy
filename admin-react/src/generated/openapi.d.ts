@@ -3598,10 +3598,30 @@ export interface components {
             /** Trigger Event */
             trigger_event: string;
         };
+        /** BasicInfo */
+        BasicInfo: {
+            /** Age Band */
+            age_band?: ("age_25_29" | "age_30_34" | "age_35_39" | "age_40_44" | "age_45_49" | "age_50_59" | "age_60_plus") | null;
+            /** Gender */
+            gender?: ("male" | "female") | null;
+        };
         /** BindPhoneRequest */
         BindPhoneRequest: {
             /** Code */
             code: string;
+        };
+        /** BodyFocus */
+        BodyFocus: {
+            /**
+             * Next Action
+             * @enum {string}
+             */
+            next_action: "focus" | "lighter" | "avoid" | "confirm";
+            /**
+             * Region
+             * @enum {string}
+             */
+            region: "neck_shoulder" | "waist_back" | "leg" | "knee" | "foot";
         };
         /** Body_upload_media_api_v1_admin_media_post */
         Body_upload_media_api_v1_admin_media_post: {
@@ -3775,13 +3795,13 @@ export interface components {
             /** Profile */
             profile?: {
                 [key: string]: string;
-            } | components["schemas"]["ServiceReferenceProfile"] | components["schemas"]["ServiceReferenceV3Profile"] | components["schemas"]["ServiceReferenceV4Profile"] | components["schemas"]["ServiceReferenceV5Profile"] | components["schemas"]["ProjectServiceRecord"];
+            } | components["schemas"]["ServiceReferenceProfile"] | components["schemas"]["ServiceReferenceV3Profile"] | components["schemas"]["ServiceReferenceV4Profile"] | components["schemas"]["ServiceReferenceV5Profile"] | components["schemas"]["ProjectServiceRecord"] | components["schemas"]["ServiceHandoffRecord"];
             /**
              * Schema Version
              * @default 1
              * @enum {integer}
              */
-            schema_version: 1 | 2 | 3 | 4 | 5 | 6;
+            schema_version: 1 | 2 | 3 | 4 | 5 | 6 | 7;
             /** Selection Session Id */
             selection_session_id?: string | null;
             /** Signals */
@@ -3793,7 +3813,7 @@ export interface components {
              */
             source: "customer_statement" | "service_observation" | "both";
             /** Taxonomy Version */
-            taxonomy_version?: ("service_reference_v1" | "service_reference_v2" | "service_reference_v3" | "service_reference_v4" | "service_record_v1") | null;
+            taxonomy_version?: ("service_reference_v1" | "service_reference_v2" | "service_reference_v3" | "service_reference_v4" | "service_record_v1" | "service_handoff_v1") | null;
             /** Technician Id */
             technician_id?: number | null;
             /** User Id */
@@ -4991,6 +5011,33 @@ export interface components {
             submitted_at?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /** ServiceHandoffRecord */
+        ServiceHandoffRecord: {
+            basic_info?: components["schemas"]["BasicInfo"] | null;
+            /** Body Focus */
+            body_focus?: components["schemas"]["BodyFocus"][];
+            /** Communication */
+            communication?: ("quiet" | "chat") | null;
+            /**
+             * Private Note
+             * @default
+             */
+            private_note: string;
+            /** Recording Outcome */
+            recording_outcome?: "no_additional_notes" | null;
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: 7;
+            /** Session Changes */
+            session_changes?: ("pressure_lighter" | "pressure_stronger" | "temperature_lower" | "temperature_higher" | "pace_slower" | "ended_early")[];
+            /**
+             * Taxonomy Version
+             * @constant
+             */
+            taxonomy_version: "service_handoff_v1";
         };
         /** ServiceLineCancellationIn */
         ServiceLineCancellationIn: {
@@ -12679,7 +12726,9 @@ export interface operations {
     };
     service_record_options_api_v1_technician_service_record_options_get: {
         parameters: {
-            query?: never;
+            query?: {
+                schema_version?: number;
+            };
             header?: {
                 authorization?: string | null;
             };
