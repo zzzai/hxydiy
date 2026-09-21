@@ -6,6 +6,10 @@
 
 ## 当前生产
 
+- 1 号店沙发显示号已调整为左侧 `1、2、3、5`、右侧 `6、7、8、9`。PR #125 合并为主干 `9b60d3a3b6f60ff2cef161e396d29c718cd3bd77`，主干 CI `35579488848` 成功。
+- 当前完整 release 仍为 `github-c76ac301efa0-35576431361`；顾客端使用该生产基线叠加本次平面图改动的静态构建 `421212a`。数据库仅更新 `sofa-04` 至 `sofa-08` 的 `name/customer_label`，稳定编码 `sofa-01` 至 `sofa-08`、二维码、坐标、排序、占用和历史关联未改。操作前备份为 `pre-sofa-renumber-20260921T084829Z.dump`。
+- 发布后公开服务位地图返回 `1、2、3、5、6、7、8、9`，坐标对应左四右四；首页引用 `/assets/index-CZ7oTNho.js`，健康接口返回 `ok`。微信真机的最终视觉排列仍待现场复核。
+
 - 最新已核验发布：`c76ac301efa07f803d251453a5c99151b4a62dc4`（PR #123，商品目录迁移发布许可；业务实现来自 PR #121）。主干 CI `35575952327` 成功；显式生产部署 `35576431361` 的资格校验及“Backup, rehearse, deploy and verify”作业均成功。
 - 生产 release 为 `github-c76ac301efa0-35576431361`，发布前备份为 `pre-github-c76ac301efa0-35576431361-20260921T081716Z.dump`，校验通过；恢复演练库与生产库均成功升级到 Alembic `20260921_product_catalog`，服务器 `current` 已指向该 release。
 - 发布后独立公网核验：`/`、`/admin/`、`/technician/`、`/api/v1/health` 均为 HTTP 200，健康接口返回 production / ok。1 号店公开商品目录返回 6 条，`member_price_cents`、`display_order`、`detail_modules` 字段齐全，顺序符合 `display_order` 升序后再按商品 ID 升序。总部/店长真实账号写入、跨店权限和门店营业现场仍待验收。
