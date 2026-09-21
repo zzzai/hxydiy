@@ -10,13 +10,14 @@
 
 ## 按任务读取
 
-新接手项目、跨端修改或核对发布状态时，读取根目录 `AGENTS.md`、本文件、`docs/CURRENT-STATE.md` 和相关端 workstream。连续任务复用已读上下文；局部文案或样式修改只读相关文件，不重复加载整套资料。
+新接手项目、跨端修改或核对发布状态时，读取根目录 `AGENTS.md`、本文件、`docs/CURRENT-STATE.md` 和相关端 workstream。总控窗口额外读取 `docs/CONTROL-BOARD.md`；端窗口只在收到 Feature ID 或需要核对跨端依赖时读取该看板。连续任务复用已读上下文；局部文案或样式修改只读相关文件，不重复加载整套资料。
 
 ## 按需读取
 
 - API、价格、状态机、权限、服务位或画像字段变化：读取 `docs/TEAM-MEMORY.md`、相关 `docs/contracts/`、源码和合同测试。
 - 追溯发布、回滚或历史决策：先用 `rg -n` 搜索 `docs/WORK-STATUS.md`，只读取命中片段。
 - 产品设计：读取当前任务对应的 PRD、设计说明或实施计划。
+- 新业务能力、跨端变更或存在重要歧义的改造：从 `docs/templates/incremental-feature-spec.md` 建立增量规格；简单缺陷、文案和纯样式修改不机械套用。
 - 生产判断：实时核对生产服务器、数据库、容器和公网接口，不能只依据文档。
 - 提交、CI 等待与发布交接：读取 `docs/script-first-delivery.md`；之后优先读本次脚本最终报告，不加载整个 Actions 日志。
 
@@ -45,6 +46,7 @@
 ## 更新责任
 
 - 顾客端、管理端、技师端窗口分别维护自己的 workstream。
+- 总控窗口维护 `docs/CONTROL-BOARD.md` 中仍在推进的事项、跨端依赖和状态证据；已完成历史归档到既有事实文件，不在看板重复长期记录。
 - 改变跨端契约的窗口，在同一个 PR 中更新业务实现、合同测试、`TEAM-MEMORY.md` 和相关 contract。
 - 实际执行生产发布的窗口更新 `CURRENT-STATE.md`，并在 `WORK-STATUS.md` 顶部追加发布事实。
 - 其他窗口同步前先保存自己的未提交工作，再执行 `git fetch origin` 并将最新 `origin/main` 合入或 rebase 到当前任务分支。
