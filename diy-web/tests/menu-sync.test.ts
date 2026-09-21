@@ -101,6 +101,24 @@ test('价格、项目上下架、选项状态和加项价格都会改变菜单�
   assert.notEqual(before, menuFingerprint([baseProject], [addon(11, { prices: { store: 4900, member: 2900 } })]));
 });
 
+test('顾客可见的目录组名、说明、选项名称和说明变化都会改变菜单指纹', () => {
+  const baseGroups = optionGroups();
+  const before = menuFingerprint([project(1, { catalog_version_id: 3, option_groups: baseGroups })], []);
+  const renamedGroup = structuredClone(baseGroups);
+  renamedGroup[0].name = '手法力度';
+  const revisedGroupDescription = structuredClone(baseGroups);
+  revisedGroupDescription[0].description = '请选择适合您的力度';
+  const renamedChoice = structuredClone(baseGroups);
+  renamedChoice[0].choices[0].name = '标准力度';
+  const revisedChoiceDescription = structuredClone(baseGroups);
+  revisedChoiceDescription[0].choices[0].description = '舒适放松';
+
+  assert.notEqual(before, menuFingerprint([project(1, { catalog_version_id: 3, option_groups: renamedGroup })], []));
+  assert.notEqual(before, menuFingerprint([project(1, { catalog_version_id: 3, option_groups: revisedGroupDescription })], []));
+  assert.notEqual(before, menuFingerprint([project(1, { catalog_version_id: 3, option_groups: renamedChoice })], []));
+  assert.notEqual(before, menuFingerprint([project(1, { catalog_version_id: 3, option_groups: revisedChoiceDescription })], []));
+});
+
 test('图片与详情内容变化不会触发价格菜单刷新', () => {
   const before = menuFingerprint([project(1)], [addon(11)]);
   const after = menuFingerprint(
@@ -162,6 +180,34 @@ test('目录刷新后必选组为空时不得保留可直接提交的无效项�
 
   assert.deepEqual(result.draft.selectedProjectIds, []);
   assert.deepEqual(result.reselectionProjectIds, [1]);
+});
+
+test('旧草稿没有目录选择时，刷新后新增必选组必须移除项目并要求重选', () => {
+  const result = reconcileDraftToMenu(
+    draft({ selectedProjectIds: [1], projectCatalogSelections: {} }),
+    [project(1, { catalog_version_id: 4, option_groups: optionGroups() })],
+    [addon(11)],
+  );
+
+  assert.deepEqual(result.draft.selectedProjectIds, []);
+  assert.deepEqual(result.reselectionProjectIds, [1]);
+  assert.equal(result.changed, true);
+});
+
+test('旧草稿没有目录选择时，仅新增可选组仍保留有效项目', () => {
+  const optionalGroups = optionGroups();
+  optionalGroups[0].required = false;
+  optionalGroups[0].min_select = 0;
+  const current = draft({ selectedProjectIds: [1], projectAddonIds: { 1: [11] }, projectCatalogSelections: {} });
+  const result = reconcileDraftToMenu(
+    current,
+    [project(1, { catalog_version_id: 4, option_groups: optionalGroups })],
+    [addon(11)],
+  );
+
+  assert.deepEqual(result.draft, current);
+  assert.deepEqual(result.reselectionProjectIds, []);
+  assert.equal(result.changed, false);
 });
 
 test('仍在售且目录版本与选项有效时保留草稿', () => {
@@ -229,6 +275,39 @@ test('页面菜单刷新等待真实项目和加项响应后再原子生成更�
   assert.deepEqual(result.addons, nextAddons);
   assert.equal(result.notice, '门店菜单已更新，价格和可选项已同步');
   assert.equal(result.detailProject?.prices[0]?.amount_cents, 10900);
+});
+
+test('页面菜单刷新会实际应用仅修改顾客可见目录名称的响应', async () => {
+  const beforeGroups = optionGroups();
+  const nextGroups = structuredClone(beforeGroups);
+  nextGroups[0].name = '手法力度';
+  nextGroups[0].choices[0].name = '标准力度';
+  const beforeProjects = [project(1, { catalog_version_id: 3, option_groups: beforeGroups })];
+  const nextProjects = [project(1, { catalog_version_id: 3, option_groups: nextGroups })];
+
+  const result = await loadMenuSyncUpdate({
+    requestStoreId: 1,
+    requestId: 5,
+    loadProjects: async () => nextProjects,
+    loadAddons: async () => [],
+    readContext: () => ({
+      currentStoreId: 1,
+      latestRequestId: 5,
+      saving: false,
+      submitting: false,
+      previousFingerprint: menuFingerprint(beforeProjects, []),
+      draft: draft({
+        selectedProjectIds: [1],
+        projectAddonIds: {},
+        projectCatalogSelections: { 1: { projectId: 1, catalogVersionId: 3, optionChoiceIds: [7] } },
+      }),
+      detailProjectId: 1,
+    }),
+  });
+
+  assert.ok(result);
+  assert.equal(result.projects[0].option_groups?.[0]?.name, '手法力度');
+  assert.equal(result.projects[0].option_groups?.[0]?.choices[0]?.name, '标准力度');
 });
 
 test('页面菜单刷新在响应返回前切店或开始保存提交时不落地旧响应', async () => {

@@ -14,6 +14,8 @@ function priceSignature(prices: Array<{ price_type: string; amount_cents: number
 function choiceSignature(choice: CatalogOptionChoice): string {
   return [
     choice.id,
+    choice.name,
+    choice.description,
     choice.status,
     choice.choice_type,
     choice.charge_mode,
@@ -26,6 +28,8 @@ function choiceSignature(choice: CatalogOptionChoice): string {
 function groupSignature(group: CatalogOptionGroup): string {
   return [
     group.id,
+    group.name,
+    group.description,
     group.selection_mode,
     group.required,
     group.min_select,
@@ -120,8 +124,14 @@ export function reconcileDraftToMenu(draft: MenuDraft, projects: Project[], addo
       continue;
     }
     const catalogSelection = draft.projectCatalogSelections?.[projectId];
-    if (!catalogSelection) continue;
     const currentVersion = catalogVersionId(project);
+    if (!catalogSelection) {
+      if (
+        currentVersion !== null
+        && validateCatalogSelection(project.option_groups || [], []).length > 0
+      ) reselectionProjectIds.add(projectId);
+      continue;
+    }
     const choices = activeChoiceIds(project);
     if (
       currentVersion === null
