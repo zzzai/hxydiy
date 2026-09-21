@@ -89,7 +89,7 @@ class Addon(Base):
 
 
 class Product(Base):
-    """商城商品（到店自提；定价 9.9 暂定，待门店复核）。"""
+    """门店商品目录；当前仅展示，不承诺线上交易或履约。"""
 
     __tablename__ = "products"
 
@@ -101,6 +101,9 @@ class Product(Base):
     spec: Mapped[str] = mapped_column(String(64), default="")
     product_type: Mapped[str] = mapped_column(String(16), index=True)  # foot/heat/gift
     price_cents: Mapped[int] = mapped_column(Integer)
+    member_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     image_url: Mapped[str] = mapped_column(String(512), default="")
+    detail_modules: Mapped[list] = mapped_column(JSON, default=list)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
     publication_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

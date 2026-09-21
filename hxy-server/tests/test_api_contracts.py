@@ -583,6 +583,70 @@ class AdminV2ContractTests(unittest.TestCase):
             self.client.patch("/api/v1/admin/v2/products/1", json=original)
             self.__class__.current_staff_id = self.staff_id
 
+    def test_headquarters_can_manage_product_member_price_order_and_details(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        with self.SessionLocal() as db:
+            product = db.get(Product, 1)
+            original = {
+                "price_cents": product.price_cents,
+                "member_price_cents": product.member_price_cents,
+                "display_order": product.display_order,
+                "detail_modules": product.detail_modules,
+            }
+        try:
+            response = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={
+                    "price_cents": 1990,
+                    "member_price_cents": 1590,
+                    "display_order": 3,
+                    "detail_modules": [{"type": "text", "body": "门店使用说明"}],
+                },
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["member_price_cents"], 1590)
+            self.assertEqual(response.json()["display_order"], 3)
+            self.assertEqual(response.json()["detail_modules"], [{
+                "type": "text",
+                "title": "",
+                "body": "门店使用说明",
+                "image_url": "",
+            }])
+
+            cleared = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"member_price_cents": None},
+            )
+            self.assertEqual(cleared.status_code, 200, cleared.text)
+            self.assertIsNone(cleared.json()["member_price_cents"])
+        finally:
+            self.client.patch("/api/v1/admin/v2/products/1", json=original)
+            self.__class__.current_staff_id = self.staff_id
+
+    def test_product_member_price_cannot_exceed_store_price(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        response = self.client.patch(
+            "/api/v1/admin/v2/products/1",
+            json={"price_cents": 1000, "member_price_cents": 1001},
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "MEMBER_PRICE_EXCEEDS_STORE_PRICE")
+        self.__class__.current_staff_id = self.staff_id
+
+    def test_product_details_reject_unknown_module_types(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        with self.SessionLocal() as db:
+            original = db.get(Product, 1).detail_modules
+        try:
+            response = self.client.patch(
+                "/api/v1/admin/v2/products/1",
+                json={"detail_modules": [{"type": "script", "body": "不受控内容"}]},
+            )
+            self.assertEqual(response.status_code, 422, response.text)
+        finally:
+            self.client.patch("/api/v1/admin/v2/products/1", json={"detail_modules": original})
+            self.__class__.current_staff_id = self.staff_id
+
     def test_legacy_product_post_accepts_full_object_and_keeps_legacy_response(self):
         self.__class__.current_staff_id = self.headquarters_admin_id
         with self.SessionLocal() as db:

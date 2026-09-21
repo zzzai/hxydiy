@@ -12,6 +12,7 @@ from app.main import app
 from app.models import (
     OptionChoicePrice,
     PriceBook,
+    Product,
     Project,
     ProjectCatalogVersion,
     ProjectOptionChoice,
@@ -33,6 +34,28 @@ class PublishedContentApiTests(unittest.TestCase):
             db.add_all([
                 Project(store_id=store.id, code="CONTENT-PUBLISHED", category="bath", name="已发布项目", publication_status="published", display_order=2, detail_modules=[{"type": "text", "title": "服务说明", "body": "详情"}], diy_options=[{"label": "肩颈", "price_cents": 1000}]),
                 Project(store_id=store.id, code="CONTENT-DRAFT", category="bath", name="草稿项目", publication_status="draft", display_order=1),
+            ])
+            db.add_all([
+                Product(
+                    store_id=store.id,
+                    code="PRODUCT-LATER",
+                    name="后展示商品",
+                    product_type="foot",
+                    price_cents=1990,
+                    member_price_cents=1590,
+                    display_order=20,
+                    detail_modules=[{"type": "text", "body": "后展示详情"}],
+                    publication_status="published",
+                ),
+                Product(
+                    store_id=store.id,
+                    code="PRODUCT-FIRST",
+                    name="先展示商品",
+                    product_type="heat",
+                    price_cents=990,
+                    display_order=10,
+                    publication_status="published",
+                ),
             ])
             db.flush()
             for project in db.query(Project).all():
@@ -62,6 +85,20 @@ class PublishedContentApiTests(unittest.TestCase):
         item = response.json()["items"][0]
         self.assertEqual(item["detail_modules"][0]["title"], "服务说明")
         self.assertEqual(item["diy_options"][0]["label"], "肩颈")
+
+    def test_public_products_follow_display_order_and_return_catalog_details(self):
+        response = self.client.get("/api/v1/products", params={"store_id": self.store_id})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual([item["name"] for item in response.json()], ["先展示商品", "后展示商品"])
+        later = response.json()[1]
+        self.assertEqual(later["member_price_cents"], 1590)
+        self.assertEqual(later["detail_modules"], [{
+            "type": "text",
+            "title": "",
+            "body": "后展示详情",
+            "image_url": "",
+        }])
+        self.assertEqual(later["display_order"], 20)
 
     def test_public_project_option_prices_include_only_current_effective_rows(self):
         now = datetime.now(UTC)

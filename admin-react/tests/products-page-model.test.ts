@@ -42,7 +42,10 @@ test('商品记录可还原为编辑表单并将分转换为元', () => {
     spec: '1包',
     product_type: 'foot',
     price: 12.99,
+    member_price: undefined,
     image_url: 'https://cdn.example/foot-7.jpg',
+    display_order: 0,
+    detail_text: '',
     publication_status: 'published',
   });
 });
@@ -55,6 +58,46 @@ test('商品更新负载不带 store_id，避免编辑时越权改门店归属',
   });
 });
 
+test('商品表单转换会员价、展示顺序和文字详情', () => {
+  const payload = toProductPayload({
+    code: 'foot-8',
+    price: 19.9,
+    member_price: 15.9,
+    display_order: 3,
+    detail_text: '门店使用说明',
+  }, 12);
+  assert.deepEqual(payload, {
+    code: 'foot-8',
+    store_id: 12,
+    price_cents: 1990,
+    member_price_cents: 1590,
+    display_order: 3,
+    detail_modules: [{ type: 'text', body: '门店使用说明' }],
+    image_url: '',
+  });
+});
+
+test('商品编辑表单可回填会员价、展示顺序和文字详情', () => {
+  const form = productToForm({
+    id: 8,
+    store_id: 12,
+    code: 'foot-8',
+    name: '草本包',
+    desc: '',
+    spec: '1包',
+    product_type: 'foot',
+    price_cents: 1990,
+    member_price_cents: 1590,
+    display_order: 3,
+    detail_modules: [{ type: 'text', body: '门店使用说明' }],
+    image_url: '',
+    publication_status: 'draft',
+  } as never);
+  assert.equal(form.member_price, 15.9);
+  assert.equal(form.display_order, 3);
+  assert.equal(form.detail_text, '门店使用说明');
+});
+
 test('商品管理页面提供编辑和店长上下架入口', async () => {
   const source = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/pages/ProductsPage.tsx', import.meta.url), 'utf8'));
   assert.match(source, /EditOutlined/);
@@ -64,6 +107,9 @@ test('商品管理页面提供编辑和店长上下架入口', async () => {
   assert.match(source, /强制下线/);
   assert.match(source, /publication_status === 'archived'/);
   assert.match(source, /canStoreToggleProductPublication/);
+  assert.match(source, /会员价（元）/);
+  assert.match(source, /展示顺序/);
+  assert.match(source, /详情说明/);
 });
 
 test('店长只能切换已下发目录的上架状态，不能恢复总部归档商品', () => {
