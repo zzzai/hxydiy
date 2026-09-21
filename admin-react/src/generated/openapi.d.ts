@@ -3373,6 +3373,13 @@ export interface components {
              * @default
              */
             desc: string;
+            /** Detail Modules */
+            detail_modules?: components["schemas"]["ProductDetailModule"][];
+            /**
+             * Display Order
+             * @default 0
+             */
+            display_order: number;
             /** Id */
             id: number;
             /**
@@ -3380,6 +3387,8 @@ export interface components {
              * @default
              */
             image_url: string;
+            /** Member Price Cents */
+            member_price_cents?: number | null;
             /** Name */
             name: string;
             /** Price Cents */
@@ -4409,6 +4418,29 @@ export interface components {
             /** Store Timezone */
             store_timezone: string;
         };
+        /** ProductDetailModule */
+        ProductDetailModule: {
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /**
+             * Image Url
+             * @default
+             */
+            image_url: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "text" | "image";
+        };
         /** ProductIn */
         ProductIn: {
             /** Code */
@@ -4418,11 +4450,20 @@ export interface components {
              * @default
              */
             desc: string;
+            /** Detail Modules */
+            detail_modules?: components["schemas"]["ProductDetailModule"][];
+            /**
+             * Display Order
+             * @default 0
+             */
+            display_order: number;
             /**
              * Image Url
              * @default
              */
             image_url: string;
+            /** Member Price Cents */
+            member_price_cents?: number | null;
             /** Name */
             name: string;
             /**
@@ -4455,6 +4496,13 @@ export interface components {
              * @default
              */
             desc: string;
+            /** Detail Modules */
+            detail_modules?: components["schemas"]["ProductDetailModule"][];
+            /**
+             * Display Order
+             * @default 0
+             */
+            display_order: number;
             /** Id */
             id: number;
             /**
@@ -4462,6 +4510,8 @@ export interface components {
              * @default
              */
             image_url: string;
+            /** Member Price Cents */
+            member_price_cents?: number | null;
             /** Name */
             name: string;
             /** Price Cents */
@@ -4483,8 +4533,14 @@ export interface components {
             code?: string | null;
             /** Desc */
             desc?: string | null;
+            /** Detail Modules */
+            detail_modules?: components["schemas"]["ProductDetailModule"][] | null;
+            /** Display Order */
+            display_order?: number | null;
             /** Image Url */
             image_url?: string | null;
+            /** Member Price Cents */
+            member_price_cents?: number | null;
             /** Name */
             name?: string | null;
             /** Price Cents */

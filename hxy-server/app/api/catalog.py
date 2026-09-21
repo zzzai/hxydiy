@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import UTC, datetime
 import unicodedata
 
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.domain.catalog_options import CatalogDomainError, verify_published_catalog_hash
 from app.models import Addon, OptionChoicePrice, PageContent, PriceBook, Product, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, Store
-from app.schemas.catalog import ProjectListResponse, ProjectOut, StoreOut
+from app.schemas.catalog import ProductDetailModule, ProjectListResponse, ProjectOut, StoreOut
 
 router = APIRouter(tags=["catalog"])
 
@@ -84,7 +84,10 @@ class ProductOut(BaseModel):
     spec: str = ""
     product_type: str
     price_cents: int
+    member_price_cents: int | None = None
     image_url: str = ""
+    detail_modules: list[ProductDetailModule] = Field(default_factory=list)
+    display_order: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -379,4 +382,4 @@ def list_products(
     )
     if product_type:
         stmt = stmt.where(Product.product_type == product_type)
-    return list(db.scalars(stmt.order_by(Product.id)))
+    return list(db.scalars(stmt.order_by(Product.display_order, Product.id)))

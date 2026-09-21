@@ -8,6 +8,7 @@ import {
   ProFormDigit,
   ProFormSelect,
   ProFormText,
+  ProFormTextArea,
   ProTable,
   type ActionType,
   type ProColumns,
@@ -77,7 +78,7 @@ export default function ProductsPage() {
   const openEditor = (product?: Product) => {
     setEditing(product || null);
     form.resetFields();
-    form.setFieldsValue(product ? productToForm(product) : { product_type: 'foot', price: 9.9, publication_status: 'draft' });
+    form.setFieldsValue(product ? productToForm(product) : { product_type: 'foot', price: 9.9, display_order: 0, publication_status: 'draft' });
     setOpen(true);
   };
 
@@ -106,6 +107,8 @@ export default function ProductsPage() {
       render: (_, record) => PRODUCT_TYPE_LABELS[record.product_type] || record.product_type,
     },
     { title: '价格', dataIndex: 'price_cents', width: 100, render: (_, record) => formatProductPrice(record.price_cents) },
+    { title: '会员价', dataIndex: 'member_price_cents', width: 100, search: false, render: (_, record) => record.member_price_cents == null ? '—' : formatProductPrice(record.member_price_cents) },
+    { title: '顺序', dataIndex: 'display_order', width: 70, search: false },
     { title: '规格', dataIndex: 'spec', width: 140, ellipsis: true },
     {
       title: '状态', dataIndex: 'publication_status', width: 90, valueType: 'select',
@@ -183,9 +186,12 @@ export default function ProductsPage() {
         {!editing && <ProFormSelect name="store_id" label="目标门店" options={stores.map((store) => ({ value: store.id, label: `${store.name}${store.store_code ? `（${store.store_code}）` : ''}` }))} fieldProps={{ showSearch: true, filterOption: false, onSearch: (keyword: string) => { void loadStoreOptions(keyword); } }} rules={[{ required: true, message: '请选择目标门店' }]} />}
         <ProFormSelect name="product_type" label="分类" options={PRODUCT_TYPE_OPTIONS} />
         <ProFormDigit name="price" label="价格（元）" min={0} fieldProps={{ precision: 2, addonBefore: '¥' }} rules={[{ required: true, message: '请输入商品价格' }]} />
+        <ProFormDigit name="member_price" label="会员价（元）" min={0} fieldProps={{ precision: 2, addonBefore: '¥' }} tooltip="留空表示不设置会员专享价" />
+        <ProFormDigit name="display_order" label="展示顺序" min={0} fieldProps={{ precision: 0 }} rules={[{ required: true, message: '请输入展示顺序' }]} />
         <ProFormText name="spec" label="规格" />
         <ProFormText name="desc" label="说明" />
         <ProForm.Item name="image_url" label="商品图片"><MediaUploadField purpose="product" /></ProForm.Item>
+        <ProFormTextArea name="detail_text" label="详情说明" fieldProps={{ rows: 5, maxLength: 2000, showCount: true }} />
       </ModalForm>
     </PageContainer>
   );

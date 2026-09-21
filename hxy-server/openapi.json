@@ -378,6 +378,18 @@
             "title": "Desc",
             "type": "string"
           },
+          "detail_modules": {
+            "items": {
+              "$ref": "#/components/schemas/ProductDetailModule"
+            },
+            "title": "Detail Modules",
+            "type": "array"
+          },
+          "display_order": {
+            "default": 0,
+            "title": "Display Order",
+            "type": "integer"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -386,6 +398,17 @@
             "default": "",
             "title": "Image Url",
             "type": "string"
+          },
+          "member_price_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Price Cents"
           },
           "name": {
             "title": "Name",
@@ -3031,6 +3054,42 @@
         "title": "PricePreviewIn",
         "type": "object"
       },
+      "ProductDetailModule": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Body",
+            "type": "string"
+          },
+          "image_url": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Image Url",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 128,
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "text",
+              "image"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "ProductDetailModule",
+        "type": "object"
+      },
       "ProductIn": {
         "properties": {
           "code": {
@@ -3042,10 +3101,35 @@
             "title": "Desc",
             "type": "string"
           },
+          "detail_modules": {
+            "items": {
+              "$ref": "#/components/schemas/ProductDetailModule"
+            },
+            "title": "Detail Modules",
+            "type": "array"
+          },
+          "display_order": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Display Order",
+            "type": "integer"
+          },
           "image_url": {
             "default": "",
             "title": "Image Url",
             "type": "string"
+          },
+          "member_price_cents": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Price Cents"
           },
           "name": {
             "title": "Name",
@@ -3053,6 +3137,7 @@
           },
           "price_cents": {
             "default": 990,
+            "minimum": 0.0,
             "title": "Price Cents",
             "type": "integer"
           },
@@ -3091,6 +3176,18 @@
             "title": "Desc",
             "type": "string"
           },
+          "detail_modules": {
+            "items": {
+              "$ref": "#/components/schemas/ProductDetailModule"
+            },
+            "title": "Detail Modules",
+            "type": "array"
+          },
+          "display_order": {
+            "default": 0,
+            "title": "Display Order",
+            "type": "integer"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -3099,6 +3196,17 @@
             "default": "",
             "title": "Image Url",
             "type": "string"
+          },
+          "member_price_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Price Cents"
           },
           "name": {
             "title": "Name",
@@ -3156,6 +3264,32 @@
             ],
             "title": "Desc"
           },
+          "detail_modules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProductDetailModule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail Modules"
+          },
+          "display_order": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Order"
+          },
           "image_url": {
             "anyOf": [
               {
@@ -3167,6 +3301,18 @@
               }
             ],
             "title": "Image Url"
+          },
+          "member_price_cents": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Price Cents"
           },
           "name": {
             "anyOf": [

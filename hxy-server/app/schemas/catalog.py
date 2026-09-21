@@ -1,6 +1,24 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
+
+
+class ProductDetailModule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["text", "image"]
+    title: StrictStr = Field(default="", max_length=128)
+    body: StrictStr = Field(default="", max_length=2000)
+    image_url: StrictStr = Field(default="", max_length=512)
+
+    @model_validator(mode="after")
+    def validate_content(self):
+        if self.type == "text" and not self.body.strip():
+            raise ValueError("text detail module requires body")
+        if self.type == "image" and not self.image_url.strip():
+            raise ValueError("image detail module requires image_url")
+        return self
 
 
 class StoreOut(BaseModel):
