@@ -269,6 +269,52 @@ class OpenVisitFeedbackTests(unittest.TestCase):
         self.assertIsNone(by_type["visit_feedback"]["selection_session_id"])
         self.assertEqual(by_type["service_review"]["selection_session_id"], session.id)
 
+    def test_admin_inbox_paginates_combined_sources_with_stable_order(self):
+        initial = self.client.get(
+            "/api/v1/admin/v2/feedback?page=1&page_size=1",
+            headers=self.manager_headers(),
+        )
+        self.assertEqual(initial.status_code, 200, initial.text)
+        initial_total = initial.json()["total"]
+        first_visit = self.submit("visit-feedback-page-first", note="较早到店反馈")
+        second_visit = self.submit("visit-feedback-page-second", note="较晚到店反馈")
+        self.assertEqual(first_visit.status_code, 200, first_visit.text)
+        self.assertEqual(second_visit.status_code, 200, second_visit.text)
+        with self.SessionLocal() as db:
+            session = SelectionSession(
+                id=str(uuid.uuid4()), access_token_hash="service-review-page", store_id=self.store_id,
+                status="confirmed", items=[], pricing_snapshot={},
+            )
+            db.add(session)
+            db.flush()
+            db.add(ServiceFeedback(
+                store_id=self.store_id, selection_session_id=session.id, rating=4,
+                tags=["服务贴心"], note="中间服务评价",
+            ))
+            db.commit()
+
+        combined = []
+        expected_total = initial_total + 3
+        for page in range(1, (expected_total + 1) // 2 + 1):
+            response = self.client.get(
+                f"/api/v1/admin/v2/feedback?page={page}&page_size=2",
+                headers=self.manager_headers(),
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["total"], expected_total)
+            combined.extend(response.json()["items"])
+        self.assertEqual(len(combined), expected_total)
+        self.assertEqual(len({(item["feedback_type"], item["id"]) for item in combined}), expected_total)
+        sort_keys = [(item["created_at"], item["feedback_type"], item["id"]) for item in combined]
+        self.assertEqual(sort_keys, sorted(sort_keys, reverse=True))
+        other_store = self.client.get(
+            "/api/v1/admin/v2/feedback?page=1&page_size=2",
+            headers=self.manager_headers("visit-feedback-other-manager"),
+        )
+        self.assertEqual(other_store.status_code, 200, other_store.text)
+        self.assertEqual(other_store.json()["total"], 0)
+        self.assertEqual(other_store.json()["items"], [])
+
     def test_visit_feedback_detail_and_follow_up_are_store_scoped_and_audited(self):
         created = self.submit("visit-feedback-admin-handle", rating=2, tags=["环境问题"], note="需要处理")
         self.assertEqual(created.status_code, 200, created.text)

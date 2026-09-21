@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, field_validator, model_validator
-from sqlalchemy import delete, select, func as sa_func, and_, or_, union
+from sqlalchemy import delete, select, func as sa_func, and_, literal, or_, union, union_all
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -650,24 +650,67 @@ def list_feedback(
 ) -> Paginated:
     staff = _current_staff(authorization, db)
     store_id = _staff_store_id(staff)
-    rows: list[dict] = []
+    queries = []
     if feedback_type in {None, "service_review"}:
-        query = select(ServiceFeedback).where(ServiceFeedback.store_id == store_id)
+        query = select(
+            ServiceFeedback.id.label("id"),
+            literal("service_review").label("feedback_type"),
+            ServiceFeedback.store_id.label("store_id"),
+            ServiceFeedback.selection_session_id.label("selection_session_id"),
+            ServiceFeedback.customer_id.label("customer_id"),
+            ServiceFeedback.rating.label("rating"),
+            ServiceFeedback.tags.label("tags"),
+            ServiceFeedback.note.label("note"),
+            literal("completed_service").label("source"),
+            ServiceFeedback.follow_up_status.label("follow_up_status"),
+            ServiceFeedback.follow_up_staff_id.label("follow_up_staff_id"),
+            ServiceFeedback.follow_up_note.label("follow_up_note"),
+            ServiceFeedback.followed_up_at.label("followed_up_at"),
+            ServiceFeedback.created_at.label("created_at"),
+        ).where(ServiceFeedback.store_id == store_id)
         if low_rating_only:
             query = query.where(ServiceFeedback.rating <= 2)
         if follow_up_status:
             query = query.where(ServiceFeedback.follow_up_status == follow_up_status)
-        rows.extend(_feedback_view(row, "service_review") for row in db.scalars(query))
+        queries.append(query)
     if feedback_type in {None, "visit_feedback"}:
-        query = select(VisitFeedback).where(VisitFeedback.store_id == store_id)
+        query = select(
+            VisitFeedback.id.label("id"),
+            literal("visit_feedback").label("feedback_type"),
+            VisitFeedback.store_id.label("store_id"),
+            literal(None).label("selection_session_id"),
+            VisitFeedback.customer_id.label("customer_id"),
+            VisitFeedback.rating.label("rating"),
+            VisitFeedback.tags.label("tags"),
+            VisitFeedback.note.label("note"),
+            VisitFeedback.source.label("source"),
+            VisitFeedback.follow_up_status.label("follow_up_status"),
+            VisitFeedback.follow_up_staff_id.label("follow_up_staff_id"),
+            VisitFeedback.follow_up_note.label("follow_up_note"),
+            VisitFeedback.followed_up_at.label("followed_up_at"),
+            VisitFeedback.created_at.label("created_at"),
+        ).where(VisitFeedback.store_id == store_id)
         if low_rating_only:
             query = query.where(VisitFeedback.rating <= 2)
         if follow_up_status:
             query = query.where(VisitFeedback.follow_up_status == follow_up_status)
-        rows.extend(_feedback_view(row, "visit_feedback") for row in db.scalars(query))
-    rows.sort(key=lambda row: (row["created_at"] or "", row["id"]), reverse=True)
-    total = len(rows)
-    rows = rows[(page - 1) * page_size:page * page_size]
+        queries.append(query)
+
+    combined = union_all(*queries).subquery()
+    total = db.scalar(select(sa_func.count()).select_from(combined)) or 0
+    records = db.execute(
+        select(combined)
+        .order_by(combined.c.created_at.desc(), combined.c.feedback_type.desc(), combined.c.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).mappings().all()
+    rows = []
+    for record in records:
+        row = dict(record)
+        row["tags"] = row["tags"] or []
+        row["followed_up_at"] = row["followed_up_at"].isoformat() if row["followed_up_at"] else None
+        row["created_at"] = row["created_at"].isoformat() if row["created_at"] else None
+        rows.append(row)
     return {
         "items": rows,
         "total": total,
