@@ -23,12 +23,15 @@
 |---|---|---|---|---|---|---|
 | `PLATFORM-CONTRACT-001` | 项目与商品管理 OpenAPI、生成类型及 Schemathesis 试点 | `Merged` | 总控窗口 | 总控；契约冻结后按需启用管理端窗口 | `docs/superpowers/plans/2026-09-21-contract-governance-and-api-validation.md` | PR #118、#119、#120 已合并；工具链无需生产部署，后续随业务变更持续验证 |
 | `ADMIN-CATALOG-002` | 商品目录首期可运营闭环 | `Deployed` | 总控窗口 | 管理后台 | `docs/specs/ADMIN-CATALOG-002.md` | 生产 release `github-c76ac301efa0-35576431361`、迁移与公网核验已通过；下一门禁为总部/店长授权账号与门店营业现场验收 |
-| `BRAND-ACCESS-003` | 连锁品牌账号、角色与作用域授权 | `Developing` | 总控窗口 | 管理后台 | `docs/superpowers/specs/2026-09-21-chain-brand-access-and-catalog-design.md`；`docs/superpowers/plans/2026-09-21-brand-access-scope.md`；`docs/contracts/admin-catalog-openapi-v1.md` | PR 1 已进入本地集成验证；通过完整回归和 PR 门禁后才可推进为 Integrated/Merged |
+| `BRAND-ACCESS-003` | 连锁品牌账号、角色与作用域授权 | `Developing` | 总控窗口 | 管理后台 | `docs/superpowers/specs/2026-09-21-chain-brand-access-and-catalog-design.md`；`docs/superpowers/plans/2026-09-21-brand-access-scope.md`；`docs/contracts/admin-catalog-openapi-v1.md` | PR #130 已同步最新主干并进入本地集成验证；通过完整回归和 PR 门禁后才可推进为 Integrated/Merged |
 | `BRAND-CATALOG-004` | 总部项目模板与门店价格覆盖 | `Spec Ready` | 总控窗口 | 管理后台 | `docs/superpowers/specs/2026-09-21-chain-brand-access-and-catalog-design.md`；`docs/superpowers/plans/2026-09-21-brand-catalog-pricing.md`；`docs/superpowers/plans/2026-09-21-admin-workspace-ui.md` | 依赖 PR 1；按顺序执行 PR 2 项目/价格分层和 PR 3 管理界面 |
 
 ## 总控规则
 
 - 总控窗口维护优先级、Feature ID、跨端依赖、契约冻结、集成验证和交付证据；端窗口不复制本看板。
+- 状态校准门禁：总控在回答跨窗口状态或下发正式任务前，必须实时核对相关窗口的 `branch/HEAD`、`git status`、相对 `origin/main` 的前后提交数、PR/合并/生产证据和共享文件重叠；不得从窗口标题、旧聊天摘要或“窗口开着”推断正在开发。
+- 任务开始、跨端契约变化、PR 创建、合并、发布五个节点必须重新校准；共享后端、API 与 OpenAPI 同时只指定一个写入窗口。
+- 端窗口统一分开回报本地、提交、推送、PR、合并、生产、现场验收七种状态，缺少证据的状态不得向后推断。
 - 日常任务默认只启动“总控窗口 + 一个相关执行窗口”；确有独立跨端工作时才增加并行窗口。
 - 公共后端模型、价格、会员、权限、状态机、OpenAPI 和 CI 由总控窗口协调；端专属接口可由对应端窗口实现。
 - 跨端契约变化必须在同一个 PR 更新业务实现、合同测试、`docs/TEAM-MEMORY.md` 和相关 `docs/contracts/`。
