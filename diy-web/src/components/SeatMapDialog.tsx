@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 
 import type { ServicePosition } from '../api';
 import { getPositionSelectionDecision } from '../positionSelection';
+import { groupSofasBySide } from '../seatMap';
 
 type Props = {
   open: boolean;
@@ -32,11 +33,8 @@ export default function SeatMapDialog({ open, current, positions, moving, source
     occupancyStatus: current?.occupancy?.status,
     moving,
   };
-  const sofas = positions
-    .filter((position) => position.type === 'sofa')
-    .sort((left, right) => left.sort_order - right.sort_order);
-  const leftSofas = sofas.filter((_, index) => index % 2 === 0);
-  const rightSofas = sofas.filter((_, index) => index % 2 === 1);
+  const sofas = positions.filter((position) => position.type === 'sofa');
+  const { left: leftSofas, right: rightSofas } = groupSofasBySide(sofas);
   const availableTarget = sofas.find((position) => !position.is_current && position.state === 'available');
   const lockProbe = availableTarget || (current ? {
     ...current,

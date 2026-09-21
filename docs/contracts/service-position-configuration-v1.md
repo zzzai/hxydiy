@@ -41,4 +41,6 @@
 
 `GET /api/v1/admin/live-service-position-map` 继续按 `sort_order, id` 返回服务位。绑定门店店长的响应包含 `maintenance_note`；普通员工响应不包含该字段，以维持最小可见范围。管理端仅为已绑定门店的店长显示编辑控件；普通员工没有备注显示或写入口。
 
+1 号店沙发的稳定编码继续使用 `sofa-01` 至 `sofa-08`，编码用于二维码和历史关联，不随门店物理编号调整。顾客显示号映射为：`sofa-01 → 1号`、`sofa-02 → 2号`、`sofa-03 → 3号`、`sofa-04 → 5号`、`sofa-05 → 6号`、`sofa-06 → 7号`、`sofa-07 → 8号`、`sofa-08 → 9号`。顾客端平面图按 `map_x` 区分左右区域、按 `map_y` 决定同侧上下顺序。
+
 既有启停接口 `/api/v1/admin/service-positions/{room_id}/operational-status`、二维码接口和占用流程保持不变。维护备注或展示顺序的变更不因服务位当前占用而改写、结束或拒绝现场服务。
