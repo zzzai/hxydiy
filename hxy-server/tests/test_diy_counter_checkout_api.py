@@ -756,10 +756,10 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         feedback = self.client.post(
             f"/api/v1/selection-sessions/{self.session_id}/feedback",
             headers={"X-Selection-Token": "diy-counter-token"},
-            json={"rating": 5, "tags": ["技术专业", "环境安心", "技师细致"], "note": "追加项目也已纳入最终账单"},
+            json={"rating": 5, "tags": ["手法专业", "环境舒适", "沟通细致"], "note": "追加项目也已纳入最终账单"},
         )
         self.assertEqual(feedback.status_code, 200, feedback.text)
-        self.assertEqual(feedback.json()["tags"], ["技术专业", "环境安心", "技师细致"])
+        self.assertEqual(feedback.json()["tags"], ["手法专业", "环境舒适", "沟通细致"])
         evaluated_status = self.client.get(
             f"/api/v1/selection-sessions/{self.session_id}/service-status",
             headers={"X-Selection-Token": "diy-counter-token"},
@@ -1871,7 +1871,7 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         feedback = self.client.post(
             f"/api/v1/selection-sessions/{self.session_id}/feedback",
             headers={"X-Selection-Token": "diy-counter-token"},
-            json={"rating": 5, "tags": ["服务细致"], "note": "很好"},
+            json={"rating": 5, "tags": ["手法专业"], "note": "很好"},
         )
         self.assertEqual(feedback.status_code, 200, feedback.text)
 

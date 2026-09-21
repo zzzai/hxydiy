@@ -185,7 +185,7 @@ def run_confirmed_catalog_selection(
     feedback = scenario.client.post(
         f"/api/v1/selection-sessions/{session_id}/feedback",
         headers={"X-Selection-Token": selection_token},
-        json={"rating": 5, "tags": ["技术专业", "环境安心", "技师细致"], "note": "Task 8 验收"},
+        json={"rating": 5, "tags": ["手法专业", "环境舒适", "沟通细致"], "note": "Task 8 验收"},
     )
     assert feedback.status_code == 200, feedback.text
     feedback_data = feedback.json()

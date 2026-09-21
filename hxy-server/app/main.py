@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import admin, admin_catalog, admin_v2, auth, catalog, coupons, health, integrations, occupancies, operations, orders, payments, selections, share, technician, technician_admin, tracking, media, wechat_official
+from app.api import admin, admin_catalog, admin_v2, auth, catalog, coupons, health, integrations, occupancies, operations, orders, payments, selections, share, technician, technician_admin, tracking, media, visit_feedback, wechat_official
 from app.core.config import settings
 from app.core.staff_access import bind_staff_request_scope, reset_staff_request_scope
 from app.openapi import install_admin_catalog_openapi
@@ -71,6 +71,7 @@ app.include_router(media.router, prefix="/api/v1")
 app.include_router(admin_catalog.router, prefix="/api/v1")
 app.include_router(operations.router, prefix="/api/v1")
 app.include_router(selections.router, prefix="/api/v1")
+app.include_router(visit_feedback.router, prefix="/api/v1")
 app.include_router(occupancies.router, prefix="/api/v1")
 app.include_router(technician.router, prefix="/api/v1")
 app.include_router(technician_admin.router, prefix="/api/v1")

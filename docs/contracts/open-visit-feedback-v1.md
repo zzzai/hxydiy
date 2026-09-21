@@ -1,0 +1,80 @@
+# 到店反馈接口契约 v1
+
+更新日期：2026-09-21
+
+## 1. 两类反馈
+
+- `service_review`：沿用 `POST /api/v1/selection-sessions/{id}/feedback`。必须持有原选单凭证或本人登录凭证，并且服务已经权威结束；同一选单最多一条。不得放宽这一接口的所有权、结束状态或唯一约束。
+- `visit_feedback`：使用 `POST /api/v1/visit-feedback`。它是独立持久化的到店体验反馈，不依赖选单、订单或服务状态，不关联技师，也不纳入技师评分。
+- 服务位、当前占用、提交时间和二维码只能证明到店门店及入口，不能用于推断选单、订单、顾客自然人或技师。
+
+## 2. 提交到店反馈
+
+### 请求
+
+`POST /api/v1/visit-feedback`
+
+请求头：
+
+- `Idempotency-Key`：必填，8–128 个可打印 ASCII 字符。同一次提交的网络重试必须复用；新的提交意图必须生成新值。
+- `Authorization: Bearer <token>`：可选。提供时必须有效；失效令牌不得静默降级为匿名。
+- 现有 `POST /api/v1/entry-sessions` 成功响应新增 `visit_feedback_token`。该令牌由服务端根据已经建立的扫码入口签发，12 小时有效并绑定门店、服务位、入口来源和当前 HttpOnly `hxy_browser_token`；现有二维码物料无需重印。
+- 未登录时使用现有 HttpOnly `hxy_browser_token` 作为第一方匿名浏览器身份；登录提交仍须携带同一浏览器 Cookie。它不等于手机号账号或自然人身份。
+
+请求体严格拒绝额外字段：
+
+```json
+{
+  "visit_feedback_token": "vf1.server-signed-entry-context",
+  "rating": 5,
+  "tags": ["手法专业", "环境舒适"],
+  "note": "本次到店体验很好"
+}
+```
+
+- `rating`：显式选择的整数 `1`–`5`，无默认值。
+- `tags`：最多 3 项，必须属于当前评分分组：
+  - 4–5 星：`手法专业`、`力度合适`、`沟通细致`、`环境舒适`、`整体放松`
+  - 3 星：`手法一般`、`力度需调整`、`沟通可更清楚`、`环境一般`、`项目预期不一致`
+  - 1–2 星：`力度不合适`、`沟通体验不好`、`等待较久`、`环境问题`、`项目与预期不符`、`其他问题`
+- `note`：可选文本，去除首尾空白后最多 300 字。
+- 客户端不得提交 `store_id`、服务位、`customer_id`、选单、订单或技师。服务端从签名到店反馈令牌解析并校验门店、服务位、来源和浏览器绑定。
+
+### 成功响应
+
+首次提交与相同键、相同请求体的幂等重放均返回 HTTP 200：
+
+```json
+{
+  "id": 123,
+  "feedback_type": "visit_feedback",
+  "rating": 5,
+  "tags": ["手法专业", "环境舒适"],
+  "note": "本次到店体验很好",
+  "submitted": true,
+  "created_at": "2026-09-21T12:00:00Z"
+}
+```
+
+响应不返回其他反馈、手机号、匿名 Cookie、顾客 ID、选单、订单或技师信息。
+
+### 错误
+
+- `400 FEEDBACK_TAG_INVALID`：标签不属于当前评分分组。
+- `400 IDEMPOTENCY_KEY_INVALID`：幂等键缺失或格式非法。
+- `401 SESSION_REPLACED` 或登录失效：提供的登录凭证无效。
+- `403 VISIT_FEEDBACK_TOKEN_INVALID`：令牌签名、浏览器绑定或门店/服务位状态无效，须重新扫码进入。
+- `403 VISIT_FEEDBACK_TOKEN_EXPIRED`：12 小时入口令牌已过期，须重新扫码进入。
+- `409 IDEMPOTENCY_KEY_REUSED`：同一身份复用相同键但请求体不同，原记录不被覆盖。
+- `422`：评分、标签数量、文本长度或额外字段不符合严格请求结构。
+- `429 FEEDBACK_RATE_LIMITED`：同一服务端身份和二维码在滚动一小时内超过 5 条；响应带 `Retry-After`。
+
+幂等唯一性和限流均由共享数据库执行，不能只依赖单进程内存或前端按钮状态。
+
+## 3. 管理端
+
+- 管理端反馈列表、详情和处理操作必须按员工授权门店隔离，并明确返回 `feedback_type`。
+- `visit_feedback` 显示为“到店反馈”，`selection_session_id` 为 `null`，不得展示订单或技师入口。
+- `service_review` 显示为“服务评价”，保留其明确选单关联。
+- 两类反馈可以复用 `open | in_progress | resolved | dismissed` 处理状态及审计，但不得承诺自动回访。
+- 到店反馈可以计入明确命名的门店体验统计；现有选单转化漏斗和任何服务/技师指标只能统计 `service_review`。

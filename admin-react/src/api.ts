@@ -217,8 +217,10 @@ export const exportAuditLogs = (params: Record<string, string | number | undefin
   client.get('/admin/audit-logs', { params: { ...params, export: true }, responseType: 'blob' });
 export const getFeedback = (params?: Record<string, string | number | boolean | undefined>) =>
   client.get('/admin/v2/feedback', { params });
-export const updateFeedbackFollowUp = (id: number, data: { follow_up_status: string; follow_up_note: string }) =>
-  client.patch(`/admin/v2/feedback/${id}`, data);
+export const getFeedbackDetail = (type: 'service_review' | 'visit_feedback', id: number) =>
+  client.get(`/admin/v2/feedback/${type}/${id}`);
+export const updateFeedbackFollowUp = (type: 'service_review' | 'visit_feedback', id: number, data: { follow_up_status: string; follow_up_note: string }) =>
+  client.patch(`/admin/v2/feedback/${type}/${id}`, data);
 
 // Coupons
 export const getCoupons = () => client.get('/admin/coupons');
