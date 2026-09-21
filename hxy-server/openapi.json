@@ -736,6 +736,36 @@
         "title": "AnnualGiftRedeemIn",
         "type": "object"
       },
+      "ApiErrorDetail": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ApiErrorDetail",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/ApiErrorDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
       "AssignIn": {
         "properties": {
           "idempotency_key": {
@@ -5812,6 +5842,295 @@
         "title": "StaffAccountPatch",
         "type": "object"
       },
+      "StaffLoginRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "StaffLoginRequest",
+        "type": "object"
+      },
+      "StaffLoginResponse": {
+        "properties": {
+          "selector_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selector Token"
+          },
+          "staff": {
+            "$ref": "#/components/schemas/StaffSummaryOut"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "workspaces": {
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceGrantOut"
+            },
+            "title": "Workspaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "token",
+          "selector_token",
+          "workspaces",
+          "staff"
+        ],
+        "title": "StaffLoginResponse",
+        "type": "object"
+      },
+      "StaffScopeAssignmentCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "enum": [
+              "brand_admin",
+              "hq_operator",
+              "store_manager",
+              "store_staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "scope_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Id"
+          },
+          "scope_type": {
+            "enum": [
+              "brand",
+              "store"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "scope_type"
+        ],
+        "title": "StaffScopeAssignmentCreate",
+        "type": "object"
+      },
+      "StaffScopeAssignmentList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StaffScopeAssignmentOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "StaffScopeAssignmentList",
+        "type": "object"
+      },
+      "StaffScopeAssignmentOut": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by_staff_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Staff Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "brand_admin",
+              "hq_operator",
+              "store_manager",
+              "store_staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "scope_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Id"
+          },
+          "scope_type": {
+            "enum": [
+              "brand",
+              "store"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          },
+          "staff_id": {
+            "title": "Staff Id",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "staff_id",
+          "role",
+          "scope_type",
+          "scope_id",
+          "status",
+          "created_by_staff_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "StaffScopeAssignmentOut",
+        "type": "object"
+      },
+      "StaffScopeAssignmentPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "StaffScopeAssignmentPatch",
+        "type": "object"
+      },
+      "StaffSummaryOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "store_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Id"
+          },
+          "store_name": {
+            "title": "Store Name",
+            "type": "string"
+          },
+          "technician_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Technician Id"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "store_id",
+          "technician_id",
+          "store_name"
+        ],
+        "title": "StaffSummaryOut",
+        "type": "object"
+      },
       "StoreMasterIn": {
         "properties": {
           "address": {
@@ -6404,6 +6723,92 @@
           }
         },
         "title": "WaterRecord",
+        "type": "object"
+      },
+      "WorkspaceGrantOut": {
+        "properties": {
+          "assignment_id": {
+            "title": "Assignment Id",
+            "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "brand_admin",
+              "hq_operator",
+              "store_manager",
+              "store_staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "scope_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Id"
+          },
+          "scope_name": {
+            "title": "Scope Name",
+            "type": "string"
+          },
+          "scope_type": {
+            "enum": [
+              "brand",
+              "store"
+            ],
+            "title": "Scope Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "role",
+          "scope_type",
+          "scope_id",
+          "scope_name"
+        ],
+        "title": "WorkspaceGrantOut",
+        "type": "object"
+      },
+      "WorkspaceSelectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Assignment Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assignment_id"
+        ],
+        "title": "WorkspaceSelectRequest",
+        "type": "object"
+      },
+      "WorkspaceSelectResponse": {
+        "properties": {
+          "staff": {
+            "$ref": "#/components/schemas/StaffSummaryOut"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceGrantOut"
+          }
+        },
+        "required": [
+          "token",
+          "workspace",
+          "staff"
+        ],
+        "title": "WorkspaceSelectResponse",
         "type": "object"
       },
       "app__api__operations__ActionIn": {
@@ -7071,9 +7476,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
+                "$ref": "#/components/schemas/StaffLoginRequest"
               }
             }
           },
@@ -7084,13 +7487,31 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Staff Login Api V1 Admin Login Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StaffLoginResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {
@@ -13156,6 +13577,234 @@
         ]
       }
     },
+    "/api/v1/admin/v2/staff/accounts/{staff_id}/assignments": {
+      "get": {
+        "operationId": "list_staff_scope_assignments_api_v1_admin_v2_staff_accounts__staff_id__assignments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staff_id",
+            "required": true,
+            "schema": {
+              "title": "Staff Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffScopeAssignmentList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "StaffBearer": []
+          }
+        ],
+        "summary": "List Staff Scope Assignments",
+        "tags": [
+          "admin-v2"
+        ]
+      },
+      "post": {
+        "operationId": "create_staff_scope_assignment_api_v1_admin_v2_staff_accounts__staff_id__assignments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staff_id",
+            "required": true,
+            "schema": {
+              "title": "Staff Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffScopeAssignmentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffScopeAssignmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "StaffBearer": []
+          }
+        ],
+        "summary": "Create Staff Scope Assignment",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/staff/accounts/{staff_id}/assignments/{assignment_id}": {
+      "patch": {
+        "operationId": "update_staff_scope_assignment_api_v1_admin_v2_staff_accounts__staff_id__assignments__assignment_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staff_id",
+            "required": true,
+            "schema": {
+              "title": "Staff Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "title": "Assignment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffScopeAssignmentPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffScopeAssignmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "StaffBearer": []
+          }
+        ],
+        "summary": "Update Staff Scope Assignment",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/staff/{staff_id}": {
       "patch": {
         "operationId": "update_staff_account_api_v1_admin_v2_staff__staff_id__patch",
@@ -15444,6 +16093,73 @@
         "summary": "Revoke Customer Trusted Device",
         "tags": [
           "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/workspaces/select": {
+      "post": {
+        "operationId": "select_staff_workspace_api_v1_admin_workspaces_select_post",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSelectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSelectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "StaffBearer": []
+          }
+        ],
+        "summary": "Select Staff Workspace",
+        "tags": [
+          "admin"
         ]
       }
     },

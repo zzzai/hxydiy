@@ -23,7 +23,7 @@ from app.db.session import get_db
 from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, PageContent,
-    EventLog, Order, OrderEvent, User, AuditLog, Staff, PositionOccupancy,
+    EventLog, Order, OrderEvent, User, AuditLog, Staff, StaffScopeAssignment, PositionOccupancy,
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
     CustomerProfileCurrent, CustomerProfileRecord,
     ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup,
@@ -42,6 +42,13 @@ from app.models.scrm import (
 )
 from app.schemas.profile import ProfileRecordCreate
 from app.schemas.catalog import ProductDetailModule
+from app.schemas.staff_access import (
+    ApiErrorResponse,
+    StaffScopeAssignmentCreate,
+    StaffScopeAssignmentList,
+    StaffScopeAssignmentOut,
+    StaffScopeAssignmentPatch,
+)
 
 router = APIRouter(prefix="/admin/v2", tags=["admin-v2"])
 
@@ -207,8 +214,8 @@ def _audit(
     actor 兼容旧调用和系统脚本，并从 detail/实体标识中尽力读取历史作用域。
     """
     detail = detail or {}
-    if isinstance(actor, Staff):
-        actor_id = actor.name
+    if isinstance(actor, Staff) or hasattr(actor, "staff"):
+        actor_id = str(actor.id) if hasattr(actor, "staff") else actor.name
         store_id = store_id if store_id is not None else actor.store_id
     else:
         actor_id = actor
@@ -219,8 +226,17 @@ def _audit(
         except (TypeError, ValueError):
             store_id = None
     db.add(AuditLog(
-        actor_type="staff", actor_id=actor_id, store_id=store_id, action=action,
-        entity_type=entity, entity_id=eid, detail=detail,
+        actor_type="staff",
+        actor_id=actor_id,
+        store_id=store_id,
+        assignment_id=getattr(actor, "assignment_id", None),
+        actor_role=getattr(actor, "assignment_role", None),
+        scope_type=getattr(actor, "scope_type", None),
+        scope_id=getattr(actor, "scope_id", None),
+        action=action,
+        entity_type=entity,
+        entity_id=eid,
+        detail=detail,
     ))
 
 
@@ -492,6 +508,180 @@ def update_staff_account(
     db.commit()
     db.refresh(account)
     return _staff_account_view(account)
+
+
+def _assignment_view(assignment: StaffScopeAssignment) -> dict:
+    return {
+        "id": assignment.id,
+        "staff_id": assignment.staff_id,
+        "role": assignment.role,
+        "scope_type": assignment.scope_type,
+        "scope_id": assignment.scope_id,
+        "status": assignment.status,
+        "created_by_staff_id": assignment.created_by_staff_id,
+        "created_at": assignment.created_at.isoformat() if assignment.created_at else None,
+        "updated_at": assignment.updated_at.isoformat() if assignment.updated_at else None,
+    }
+
+
+def _require_assignment_manager(operator, target_role: str | None = None) -> None:
+    actor_role = getattr(operator, "assignment_role", None)
+    if actor_role == "brand_admin":
+        return
+    if actor_role == "hq_operator" and target_role != "brand_admin":
+        return
+    raise HTTPException(
+        status_code=403,
+        detail={"code": "ASSIGNMENT_MANAGEMENT_FORBIDDEN", "message": "当前工作区无权管理该授权"},
+    )
+
+
+def _assignment_target(db: Session, staff_id: int) -> Staff:
+    account = db.get(Staff, staff_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="员工账号不存在")
+    if account.role == "technician" or account.technician_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "TECHNICIAN_ASSIGNMENT_FORBIDDEN", "message": "技师账号不使用管理后台工作区授权"},
+        )
+    return account
+
+
+@router.get(
+    "/staff/accounts/{staff_id}/assignments",
+    response_model=StaffScopeAssignmentList,
+    responses={401: {"model": ApiErrorResponse}, 403: {"model": ApiErrorResponse}},
+)
+def list_staff_scope_assignments(
+    staff_id: int,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    operator = _current_staff(authorization, db)
+    _require_assignment_manager(operator)
+    _assignment_target(db, staff_id)
+    assignments = list(db.scalars(
+        select(StaffScopeAssignment)
+        .where(StaffScopeAssignment.staff_id == staff_id)
+        .order_by(StaffScopeAssignment.id)
+    ))
+    return {"items": [_assignment_view(item) for item in assignments], "total": len(assignments)}
+
+
+@router.post(
+    "/staff/accounts/{staff_id}/assignments",
+    status_code=201,
+    response_model=StaffScopeAssignmentOut,
+    responses={401: {"model": ApiErrorResponse}, 403: {"model": ApiErrorResponse}},
+)
+def create_staff_scope_assignment(
+    staff_id: int,
+    body: StaffScopeAssignmentCreate,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    operator = _current_staff(authorization, db)
+    _require_assignment_manager(operator, body.role)
+    _assignment_target(db, staff_id)
+    brand_role = body.role in {"brand_admin", "hq_operator"}
+    if brand_role != (body.scope_type == "brand") or (brand_role and body.scope_id is not None) or (not brand_role and body.scope_id is None):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INVALID_ROLE_SCOPE", "message": "角色与授权范围不匹配"},
+        )
+    if body.scope_type == "store" and not db.get(Store, body.scope_id):
+        raise HTTPException(status_code=404, detail="门店不存在")
+    duplicate = db.scalar(select(StaffScopeAssignment).where(
+        StaffScopeAssignment.staff_id == staff_id,
+        StaffScopeAssignment.role == body.role,
+        StaffScopeAssignment.scope_type == body.scope_type,
+        StaffScopeAssignment.scope_id.is_(None) if body.scope_id is None else StaffScopeAssignment.scope_id == body.scope_id,
+        StaffScopeAssignment.status == "active",
+    ))
+    if duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "STAFF_ASSIGNMENT_EXISTS", "message": "该工作区授权已存在"},
+        )
+    assignment = StaffScopeAssignment(
+        staff_id=staff_id,
+        role=body.role,
+        scope_type=body.scope_type,
+        scope_id=body.scope_id,
+        created_by_staff_id=operator.id,
+    )
+    db.add(assignment)
+    db.flush()
+    _audit(
+        db, operator, "create_staff_scope_assignment", "staff_scope_assignment", str(assignment.id),
+        {"target_staff_id": staff_id, "target_assignment_id": assignment.id, "before": None, "after": _assignment_view(assignment)},
+        store_id=assignment.scope_id,
+    )
+    db.commit()
+    db.refresh(assignment)
+    return _assignment_view(assignment)
+
+
+@router.patch(
+    "/staff/accounts/{staff_id}/assignments/{assignment_id}",
+    response_model=StaffScopeAssignmentOut,
+    responses={401: {"model": ApiErrorResponse}, 403: {"model": ApiErrorResponse}},
+)
+def update_staff_scope_assignment(
+    staff_id: int,
+    assignment_id: int,
+    body: StaffScopeAssignmentPatch,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    operator = _current_staff(authorization, db)
+    _assignment_target(db, staff_id)
+    assignment = db.get(StaffScopeAssignment, assignment_id)
+    if not assignment or assignment.staff_id != staff_id:
+        raise HTTPException(status_code=404, detail="授权不存在")
+    _require_assignment_manager(operator, assignment.role)
+    before = _assignment_view(assignment)
+    if assignment.role == "brand_admin" and assignment.status == "active" and body.status == "disabled":
+        active_brand_admins = db.scalar(select(sa_func.count()).select_from(StaffScopeAssignment).where(
+            StaffScopeAssignment.role == "brand_admin",
+            StaffScopeAssignment.scope_type == "brand",
+            StaffScopeAssignment.status == "active",
+        )) or 0
+        if active_brand_admins <= 1:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "LAST_BRAND_ADMIN_REQUIRED", "message": "至少保留一个有效品牌管理员"},
+            )
+    if assignment.status == "disabled" and body.status == "active":
+        duplicate = db.scalar(select(StaffScopeAssignment).where(
+            StaffScopeAssignment.id != assignment.id,
+            StaffScopeAssignment.staff_id == assignment.staff_id,
+            StaffScopeAssignment.role == assignment.role,
+            StaffScopeAssignment.scope_type == assignment.scope_type,
+            StaffScopeAssignment.scope_id.is_(None) if assignment.scope_id is None else StaffScopeAssignment.scope_id == assignment.scope_id,
+            StaffScopeAssignment.status == "active",
+        ))
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "STAFF_ASSIGNMENT_EXISTS", "message": "该工作区授权已存在"},
+            )
+    assignment.status = body.status
+    db.flush()
+    _audit(
+        db, operator, "update_staff_scope_assignment", "staff_scope_assignment", str(assignment.id),
+        {
+            "target_staff_id": staff_id,
+            "target_assignment_id": assignment.id,
+            "before": before,
+            "after": _assignment_view(assignment),
+        },
+        store_id=assignment.scope_id,
+    )
+    db.commit()
+    db.refresh(assignment)
+    return _assignment_view(assignment)
 
 
 def _customer_display_name(user: User) -> str:

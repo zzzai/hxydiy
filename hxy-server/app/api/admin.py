@@ -14,13 +14,12 @@ from datetime import date as date_type, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import PlainTextResponse
-from jose import JWTError, jwt
+from jose import jwt
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.staff_access import staff_read_only_request_allowed
 from app.db.session import get_db
 from app.models import (
     AuditLog,
@@ -33,8 +32,25 @@ from app.models import (
     ServiceFeedback,
     SelectionSession,
     Staff,
+    StaffScopeAssignment,
     Store,
     User,
+)
+from app.domain.staff_workspaces import (
+    StaffContext,
+    assignments_are_not_initialized,
+    create_scoped_token,
+    create_selector_token,
+    list_staff_workspaces,
+    resolve_selector_staff,
+    resolve_staff_context,
+)
+from app.schemas.staff_access import (
+    ApiErrorResponse,
+    StaffLoginRequest,
+    StaffLoginResponse,
+    WorkspaceSelectRequest,
+    WorkspaceSelectResponse,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -106,37 +122,10 @@ def staff_snapshot(staff: Staff, store_name: str = "") -> dict:
     }
 
 
-def _current_staff(authorization: str | None, db: Session) -> Staff:
+def _current_staff(authorization: str | None, db: Session) -> Staff | StaffContext:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail={"code": "AUTHENTICATION_REQUIRED", "message": "请先登录"})
-    try:
-        payload = jwt.decode(authorization[7:], settings.jwt_secret,
-                             algorithms=[settings.jwt_algorithm])
-    except JWTError:
-        raise HTTPException(status_code=401, detail={"code": "AUTHENTICATION_EXPIRED", "message": "登录已过期"})
-    if payload.get("token_type") != "staff":
-        raise HTTPException(status_code=401, detail={"code": "INVALID_TOKEN_TYPE", "message": "令牌类型无效"})
-    staff = db.get(Staff, int(payload["sub"]))
-    if not staff or staff.status != "active":
-        raise HTTPException(status_code=401, detail={"code": "STAFF_ACCOUNT_UNAVAILABLE", "message": "账号不可用"})
-    token_version = payload.get("credentials_version", 1)
-    if int(token_version) != int(staff.credentials_version or 1):
-        raise HTTPException(status_code=401, detail={"code": "STAFF_SESSION_REVOKED", "message": "登录状态已失效，请重新登录"})
-    if staff.temporary_expires_at is not None:
-        expires_at = staff.temporary_expires_at
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) >= expires_at:
-            raise HTTPException(status_code=401, detail={"code": "STAFF_ACCOUNT_EXPIRED", "message": "临时账号已过期，请联系管理员"})
-    if staff.role not in {"admin", "manager", "staff", "technician"}:
-        raise HTTPException(status_code=403, detail={"code": "INVALID_STAFF_ROLE", "message": "员工角色无效"})
-    if staff.role == "technician" and not staff.technician_id:
-        raise HTTPException(status_code=403, detail={"code": "TECHNICIAN_BINDING_REQUIRED", "message": "技师账号未绑定技师档案"})
-    if staff.role == "staff" and not staff.store_id:
-        raise HTTPException(status_code=403, detail={"code": "STAFF_STORE_REQUIRED", "message": "普通员工必须绑定门店"})
-    if staff.role == "staff" and not staff_read_only_request_allowed():
-        raise HTTPException(status_code=403, detail={"code": "STAFF_READ_ONLY", "message": "普通员工仅可查看本店运营信息"})
-    return staff
+    return resolve_staff_context(authorization[7:], db)
 
 
 def current_store_context(
@@ -182,10 +171,14 @@ def _record_event(db: Session, order_id: int, from_status: str, to_status: str,
     ))
 
 
-@router.post("/login")
-def staff_login(body: dict, db: Session = Depends(get_db)) -> dict:
-    username = (body.get("username") or "").strip()
-    password = body.get("password") or ""
+@router.post(
+    "/login",
+    response_model=StaffLoginResponse,
+    responses={401: {"model": ApiErrorResponse}, 403: {"model": ApiErrorResponse}},
+)
+def staff_login(body: StaffLoginRequest, db: Session = Depends(get_db)) -> dict:
+    username = body.username.strip()
+    password = body.password
     _check_login_lock(username)
     staff = db.scalar(select(Staff).where(Staff.username == username))
     if not staff or staff.status != "active" or not verify_password(password, staff.password_hash):
@@ -204,13 +197,75 @@ def staff_login(body: dict, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=403, detail={"code": "TECHNICIAN_BINDING_REQUIRED", "message": "技师账号未绑定技师档案"})
     if staff.role == "staff" and not staff.store_id:
         raise HTTPException(status_code=403, detail={"code": "STAFF_STORE_REQUIRED", "message": "普通员工必须绑定门店"})
-    store = db.get(Store, staff.store_id) if staff.store_id else None
+    if staff.role == "technician":
+        store = db.get(Store, staff.store_id) if staff.store_id else None
+        return {
+            "token": create_staff_token(staff.id, staff.role, staff.credentials_version),
+            "selector_token": None,
+            "workspaces": [],
+            "staff": staff_snapshot(staff, store.name if store else ""),
+        }
+    workspaces = list_staff_workspaces(db, staff)
+    if not workspaces:
+        if assignments_are_not_initialized(db):
+            store = db.get(Store, staff.store_id) if staff.store_id else None
+            return {
+                "token": create_staff_token(staff.id, staff.role, staff.credentials_version),
+                "selector_token": None,
+                "workspaces": [],
+                "staff": staff_snapshot(staff, store.name if store else ""),
+            }
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "STAFF_WORKSPACE_REQUIRED", "message": "当前账号没有可用工作区"},
+        )
+    selector_token = create_selector_token(staff)
+    selected = workspaces[0] if len(workspaces) == 1 else None
+    token = selector_token
+    staff_data = staff_snapshot(staff)
+    if selected:
+        assignment = db.get(StaffScopeAssignment, selected.assignment_id)
+        token = create_scoped_token(staff, assignment)
+        staff_data.update({
+            "role": selected.role,
+            "store_id": selected.scope_id,
+            "store_name": selected.scope_name if selected.scope_type == "store" else "",
+        })
     return {
-        "token": create_staff_token(staff.id, staff.role, staff.credentials_version),
+        "token": token,
+        "selector_token": selector_token,
+        "workspaces": [workspace.as_dict() for workspace in workspaces],
+        "staff": staff_data,
+    }
+
+
+@router.post(
+    "/workspaces/select",
+    response_model=WorkspaceSelectResponse,
+    responses={401: {"model": ApiErrorResponse}, 403: {"model": ApiErrorResponse}},
+)
+def select_staff_workspace(
+    body: WorkspaceSelectRequest,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail={"code": "AUTHENTICATION_REQUIRED", "message": "请先登录"})
+    staff = resolve_selector_staff(authorization[7:], db)
+    assignment = db.get(StaffScopeAssignment, body.assignment_id)
+    if not assignment or assignment.staff_id != staff.id or assignment.status != "active":
+        raise HTTPException(status_code=403, detail={"code": "WORKSPACE_ACCESS_DENIED", "message": "无权进入该工作区"})
+    workspace = next((item for item in list_staff_workspaces(db, staff) if item.assignment_id == assignment.id), None)
+    if not workspace:
+        raise HTTPException(status_code=403, detail={"code": "WORKSPACE_ACCESS_DENIED", "message": "无权进入该工作区"})
+    return {
+        "token": create_scoped_token(staff, assignment),
+        "workspace": workspace.as_dict(),
         "staff": {
-            "id": staff.id,
-            "name": staff.name,
-            **staff_snapshot(staff, store.name if store else ""),
+            **staff_snapshot(staff),
+            "role": workspace.role,
+            "store_id": workspace.scope_id,
+            "store_name": workspace.scope_name if workspace.scope_type == "store" else "",
         },
     }
 

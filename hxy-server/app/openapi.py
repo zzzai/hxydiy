@@ -5,6 +5,8 @@ from fastapi import FastAPI
 
 
 ADMIN_CATALOG_PREFIXES = (
+    "/api/v1/admin/workspaces",
+    "/api/v1/admin/v2/staff/accounts",
     "/api/v1/admin/v2/projects",
     "/api/v1/admin/v2/products",
 )

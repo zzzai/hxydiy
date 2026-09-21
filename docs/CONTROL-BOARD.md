@@ -23,7 +23,7 @@
 |---|---|---|---|---|---|---|
 | `PLATFORM-CONTRACT-001` | 项目与商品管理 OpenAPI、生成类型及 Schemathesis 试点 | `Merged` | 总控窗口 | 总控；契约冻结后按需启用管理端窗口 | `docs/superpowers/plans/2026-09-21-contract-governance-and-api-validation.md` | PR #118、#119、#120 已合并；工具链无需生产部署，后续随业务变更持续验证 |
 | `ADMIN-CATALOG-002` | 商品目录首期可运营闭环 | `Deployed` | 总控窗口 | 管理后台 | `docs/specs/ADMIN-CATALOG-002.md` | 生产 release `github-c76ac301efa0-35576431361`、迁移与公网核验已通过；下一门禁为总部/店长授权账号与门店营业现场验收 |
-| `BRAND-ACCESS-003` | 连锁品牌账号、角色与作用域授权 | `Spec Ready` | 总控窗口 | 管理后台 | `docs/superpowers/specs/2026-09-21-chain-brand-access-and-catalog-design.md`；`docs/superpowers/plans/2026-09-21-brand-access-scope.md` | 按计划执行 PR 1，在同一 PR 冻结登录、授权、作用域令牌和迁移契约 |
+| `BRAND-ACCESS-003` | 连锁品牌账号、角色与作用域授权 | `Developing` | 总控窗口 | 管理后台 | `docs/superpowers/specs/2026-09-21-chain-brand-access-and-catalog-design.md`；`docs/superpowers/plans/2026-09-21-brand-access-scope.md`；`docs/contracts/admin-catalog-openapi-v1.md` | PR 1 已进入本地集成验证；通过完整回归和 PR 门禁后才可推进为 Integrated/Merged |
 | `BRAND-CATALOG-004` | 总部项目模板与门店价格覆盖 | `Spec Ready` | 总控窗口 | 管理后台 | `docs/superpowers/specs/2026-09-21-chain-brand-access-and-catalog-design.md`；`docs/superpowers/plans/2026-09-21-brand-catalog-pricing.md`；`docs/superpowers/plans/2026-09-21-admin-workspace-ui.md` | 依赖 PR 1；按顺序执行 PR 2 项目/价格分层和 PR 3 管理界面 |
 
 ## 总控规则
