@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   MENU_SYNC_INTERVAL_MS,
   isProjectInMenu,
+  loadMenuSyncUpdate,
   menuFingerprint,
   menuUpdateNotice,
   reconcileDraftToMenu,
@@ -195,4 +196,89 @@ test('项目存续判断和同步间隔保持稳定', () => {
   assert.equal(isProjectInMenu([project(1)], 2), false);
   assert.equal(isProjectInMenu([project(1)], null), false);
   assert.equal(MENU_SYNC_INTERVAL_MS, 60_000);
+});
+
+test('页面菜单刷新等待真实项目和加项响应后再原子生成更新', async () => {
+  const beforeProjects = [project(1, { prices: [{ price_type: 'store', amount_cents: 9900 }] })];
+  const beforeAddons = [addon(11)];
+  const nextProjects = [project(1, { prices: [{ price_type: 'store', amount_cents: 10900 }] })];
+  const nextAddons = [addon(11, { prices: { store: 4900, member: 2900 } })];
+
+  const result = await loadMenuSyncUpdate({
+    requestStoreId: 1,
+    requestId: 4,
+    loadProjects: async () => nextProjects,
+    loadAddons: async () => nextAddons,
+    readContext: () => ({
+      currentStoreId: 1,
+      latestRequestId: 4,
+      saving: false,
+      submitting: false,
+      previousFingerprint: menuFingerprint(beforeProjects, beforeAddons),
+      draft: draft({
+        selectedProjectIds: [1],
+        projectAddonIds: { 1: [11] },
+        projectCatalogSelections: {},
+      }),
+      detailProjectId: 1,
+    }),
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.projects, nextProjects);
+  assert.deepEqual(result.addons, nextAddons);
+  assert.equal(result.notice, '门店菜单已更新，价格和可选项已同步');
+  assert.equal(result.detailProject?.prices[0]?.amount_cents, 10900);
+});
+
+test('页面菜单刷新在响应返回前切店或开始保存提交时不落地旧响应', async () => {
+  let currentStoreId = 1;
+  let saving = false;
+  let submitting = false;
+  let releaseProjects!: (projects: Project[]) => void;
+  const pendingProjects = new Promise<Project[]>((resolve) => { releaseProjects = resolve; });
+  const request = loadMenuSyncUpdate({
+    requestStoreId: 1,
+    requestId: 8,
+    loadProjects: async () => pendingProjects,
+    loadAddons: async () => [addon(11)],
+    readContext: () => ({
+      currentStoreId,
+      latestRequestId: 8,
+      saving,
+      submitting,
+      previousFingerprint: '',
+      draft: draft({ selectedProjectIds: [1] }),
+      detailProjectId: 1,
+    }),
+  });
+  currentStoreId = 2;
+  saving = true;
+  submitting = true;
+  releaseProjects([project(1)]);
+
+  assert.equal(await request, null);
+});
+
+test('页面菜单刷新遇到失效必选项时返回可直接应用的清理结果与提示', async () => {
+  const result = await loadMenuSyncUpdate({
+    requestStoreId: 1,
+    requestId: 2,
+    loadProjects: async () => [project(1, { catalog_version_id: 3, option_groups: optionGroups('inactive') })],
+    loadAddons: async () => [addon(11)],
+    readContext: () => ({
+      currentStoreId: 1,
+      latestRequestId: 2,
+      saving: false,
+      submitting: false,
+      previousFingerprint: '',
+      draft: draft({ selectedProjectIds: [1] }),
+      detailProjectId: 1,
+    }),
+  });
+
+  assert.ok(result);
+  assert.deepEqual(result.reconciliation.draft.selectedProjectIds, []);
+  assert.deepEqual(result.reconciliation.reselectionProjectIds, [1]);
+  assert.equal(result.notice, '门店菜单已更新，请重新选择 1 个项目');
 });

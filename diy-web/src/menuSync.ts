@@ -203,3 +203,66 @@ export function menuUpdateNotice(result: Pick<MenuReconciliation, 'removedProjec
   }
   return '门店菜单已更新，价格和可选项已同步';
 }
+
+export type MenuSyncContext = {
+  currentStoreId: number;
+  latestRequestId: number;
+  saving: boolean;
+  submitting: boolean;
+  previousFingerprint: string;
+  draft: MenuDraft;
+  detailProjectId: number | null;
+};
+
+export type MenuSyncUpdate = {
+  projects: Project[];
+  addons: Addon[];
+  fingerprint: string;
+  reconciliation: MenuReconciliation;
+  detailProject: Project | null;
+  detailGone: boolean;
+  notice: string;
+};
+
+/** Load both menu resources and decide against the latest page state whether the response may land. */
+export async function loadMenuSyncUpdate(input: {
+  requestStoreId: number;
+  requestId: number;
+  loadProjects: (storeId: number) => Promise<Project[]>;
+  loadAddons: (storeId: number) => Promise<Addon[]>;
+  readContext: () => MenuSyncContext;
+}): Promise<MenuSyncUpdate | null> {
+  const [projects, addons] = await Promise.all([
+    input.loadProjects(input.requestStoreId),
+    input.loadAddons(input.requestStoreId).catch(() => null),
+  ]);
+  const context = input.readContext();
+  if (
+    !addons
+    || !shouldApplyMenuSyncResponse({
+      requestStoreId: input.requestStoreId,
+      currentStoreId: context.currentStoreId,
+      requestId: input.requestId,
+      latestRequestId: context.latestRequestId,
+      saving: context.saving,
+      submitting: context.submitting,
+    })
+  ) return null;
+
+  const fingerprint = menuFingerprint(projects, addons);
+  if (fingerprint === context.previousFingerprint) return null;
+  const reconciliation = reconcileDraftToMenu(context.draft, projects, addons);
+  const detailProject = context.detailProjectId === null
+    ? null
+    : projects.find((project) => project.id === context.detailProjectId) || null;
+  const detailGone = context.detailProjectId !== null && !isProjectInMenu(projects, context.detailProjectId);
+  return {
+    projects,
+    addons,
+    fingerprint,
+    reconciliation,
+    detailProject,
+    detailGone,
+    notice: menuUpdateNotice(reconciliation),
+  };
+}

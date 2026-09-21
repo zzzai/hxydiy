@@ -94,11 +94,8 @@ import {
 } from './tracking';
 import {
   MENU_SYNC_INTERVAL_MS,
-  isProjectInMenu,
+  loadMenuSyncUpdate,
   menuFingerprint,
-  menuUpdateNotice,
-  reconcileDraftToMenu,
-  shouldApplyMenuSyncResponse,
 } from './menuSync';
 import {
   CATALOG_SECTIONS,
@@ -1225,54 +1222,47 @@ export default function App() {
       const requestStoreId = query.storeId;
       const requestId = ++menuSyncRequestRef.current;
       try {
-        const [catalog, addonCatalog] = await Promise.all([
-          getProjects(requestStoreId),
-          getAddons(requestStoreId).catch(() => null),
-        ]);
-        const latest = menuSyncStateRef.current;
-        if (
-          !active
-          || !addonCatalog
-          || !shouldApplyMenuSyncResponse({
-            requestStoreId,
-            currentStoreId: latest.storeId,
-            requestId,
-            latestRequestId: menuSyncRequestRef.current,
-            saving: latest.saving,
-            submitting: latest.submitting,
-          })
-        ) return;
+        const update = await loadMenuSyncUpdate({
+          requestStoreId,
+          requestId,
+          loadProjects: getProjects,
+          loadAddons: getAddons,
+          readContext: () => {
+            const latest = menuSyncStateRef.current;
+            return {
+              currentStoreId: latest.storeId,
+              latestRequestId: menuSyncRequestRef.current,
+              saving: latest.saving,
+              submitting: latest.submitting,
+              previousFingerprint: menuFingerprintRef.current,
+              draft: {
+                selectedProjectIds: latest.selectedProjectIds,
+                projectPreferences: latest.projectPreferences,
+                projectAddonIds: latest.projectAddonIds,
+                projectCatalogSelections: latest.projectCatalogSelections,
+              },
+              detailProjectId: latest.detailProjectId,
+            };
+          },
+        });
+        if (!active || !update) return;
 
-        const nextFingerprint = menuFingerprint(catalog, addonCatalog);
-        if (nextFingerprint === menuFingerprintRef.current) return;
-
-        const reconciliation = reconcileDraftToMenu({
-          selectedProjectIds: latest.selectedProjectIds,
-          projectPreferences: latest.projectPreferences,
-          projectAddonIds: latest.projectAddonIds,
-          projectCatalogSelections: latest.projectCatalogSelections,
-        }, catalog, addonCatalog);
-        const detailProject = latest.detailProjectId === null
-          ? null
-          : catalog.find((project) => project.id === latest.detailProjectId) || null;
-        const detailGone = latest.detailProjectId !== null && !isProjectInMenu(catalog, latest.detailProjectId);
-
-        menuFingerprintRef.current = nextFingerprint;
-        setProjects(catalog);
-        setAddons(addonCatalog);
-        if (reconciliation.changed) {
-          setSelectedProjectIds(reconciliation.draft.selectedProjectIds);
-          setProjectPreferences(reconciliation.draft.projectPreferences);
-          setProjectAddonIds(reconciliation.draft.projectAddonIds);
-          setProjectCatalogSelections(reconciliation.draft.projectCatalogSelections || {});
+        menuFingerprintRef.current = update.fingerprint;
+        setProjects(update.projects);
+        setAddons(update.addons);
+        if (update.reconciliation.changed) {
+          setSelectedProjectIds(update.reconciliation.draft.selectedProjectIds);
+          setProjectPreferences(update.reconciliation.draft.projectPreferences);
+          setProjectAddonIds(update.reconciliation.draft.projectAddonIds);
+          setProjectCatalogSelections(update.reconciliation.draft.projectCatalogSelections || {});
         }
-        if (detailGone) {
-          if (latest.activeOverlay === 'project-detail') dismissTopOverlay();
+        if (update.detailGone) {
+          if (menuSyncStateRef.current.activeOverlay === 'project-detail') dismissTopOverlay();
           else setDetailProject(null);
-        } else if (detailProject) {
-          setDetailProject(detailProject);
+        } else if (update.detailProject) {
+          setDetailProject(update.detailProject);
         }
-        flash(menuUpdateNotice(reconciliation));
+        flash(update.notice);
       } catch {
         // Background menu refresh must never block the active selection flow.
       }
