@@ -107,6 +107,16 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("python -m pytest -q", trusted)
         self.assertGreaterEqual(trusted.count("fetch-depth: 0"), 4)
 
+    def test_ci_rejects_stale_openapi_and_generated_admin_types(self):
+        ci = workflow("ci.yml")
+        trusted = workflow("trusted-pr-gate.yml")
+
+        for content in (ci, trusted):
+            self.assertIn("python scripts/export_openapi.py", content)
+            self.assertIn("git diff --exit-code -- openapi.json", content)
+            self.assertIn("npm run generate:api-types", content)
+            self.assertIn("git diff --exit-code -- src/generated/openapi.d.ts", content)
+
     def test_remote_release_script_backs_up_verifies_and_rolls_back(self):
         script = (REPO_ROOT / "deploy" / "diy" / "deploy-production.sh").read_text(encoding="utf-8")
 

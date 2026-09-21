@@ -1,21 +1,6 @@
-export type Project = {
-  id: number;
-  store_id: number;
-  code: string;
-  category: string;
-  category_mark?: string;
-  name: string;
-  duration_min?: number | null;
-  summary?: string;
-  image_url?: string;
-  tags?: string[];
-  detail_modules?: unknown[];
-  diy_options?: unknown[];
-  display_order?: number;
-  price_label?: string;
-  publication_status: string;
-  prices?: Record<string, number>;
-};
+import type { components } from '../generated/openapi';
+
+export type Project = components['schemas']['AdminProject'];
 
 export const CATEGORY_OPTIONS = [
   { value: 'bath', label: '泡脚沐足' },

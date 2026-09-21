@@ -10,7 +10,7 @@ import json
 import re
 import unicodedata
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, field_validator, model_validator
@@ -1624,7 +1624,47 @@ def delete_technician(tech_id: int, db: Session = Depends(get_db),
 # 3. 项目管理（管理端 CRUD + 价格表同步）
 # ──────────────────────────────────────────────────────
 
-@router.get("/projects")
+class AdminProject(BaseModel):
+    id: int
+    store_id: int
+    code: str
+    category: str
+    category_mark: str = ""
+    name: str
+    duration_min: int | None = None
+    summary: str = ""
+    image_url: str = ""
+    tags: list[Any] = Field(default_factory=list)
+    detail_modules: list[Any] = Field(default_factory=list)
+    diy_options: list[Any] = Field(default_factory=list)
+    display_order: int = 0
+    price_label: str = ""
+    publication_status: str
+    prices: dict[str, int] = Field(default_factory=dict)
+
+
+class AdminProjectPage(BaseModel):
+    items: list[AdminProject]
+    total: int
+    page: int
+    page_size: int
+
+
+class AdminProjectCreated(BaseModel):
+    id: int
+    code: str
+
+
+class AdminProjectUpdated(AdminProjectCreated):
+    ok: bool
+    publication_status: str
+
+
+class AdminProjectDuplicated(AdminProjectCreated):
+    catalog_version_id: int
+
+
+@router.get("/projects", response_model=list[AdminProject] | AdminProjectPage)
 def list_projects_admin(
     store_id: int | None = Query(None),
     status: str | None = Query(None),
@@ -1845,7 +1885,7 @@ def _commit_project_or_conflict(db: Session) -> None:
         raise HTTPException(status_code=409, detail="项目编码或价格数据冲突") from exc
 
 
-@router.post("/projects")
+@router.post("/projects", response_model=AdminProjectCreated)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
     staff = _current_staff(authorization, db)
@@ -1888,14 +1928,14 @@ def _update_project_strict(project_id: int, body: ProjectPatch, db: Session, sta
     return {"ok": True, "id": project.id, "code": project.code, "publication_status": project.publication_status}
 
 
-@router.patch("/projects/{proj_id}")
+@router.patch("/projects/{proj_id}", response_model=AdminProjectUpdated)
 def patch_project(proj_id: int, body: ProjectPatch, db: Session = Depends(get_db),
                   authorization: str | None = Header(None)):
     staff = _current_staff(authorization, db)
     return _update_project_strict(proj_id, body, db, staff)
 
 
-@router.post("/projects/{proj_id}")
+@router.post("/projects/{proj_id}", response_model=AdminProjectUpdated)
 def update_project(proj_id: int, body: ProjectPatch, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
     """保留旧 POST 路径，但使用与 PATCH 完全相同的严格契约。"""
@@ -1903,7 +1943,7 @@ def update_project(proj_id: int, body: ProjectPatch, db: Session = Depends(get_d
     return _update_project_strict(proj_id, body, db, staff)
 
 
-@router.post("/projects/{proj_id}/duplicate")
+@router.post("/projects/{proj_id}/duplicate", response_model=AdminProjectDuplicated)
 def duplicate_project(proj_id: int, body: ProjectDuplicateIn, db: Session = Depends(get_db),
                       authorization: str | None = Header(None)):
     staff = _current_staff(authorization, db)
@@ -1957,7 +1997,7 @@ def duplicate_project(proj_id: int, body: ProjectDuplicateIn, db: Session = Depe
     return {"id": duplicate.id, "code": duplicate.code, "catalog_version_id": draft.id}
 
 
-@router.post("/projects/{proj_id}/archive")
+@router.post("/projects/{proj_id}/archive", response_model=AdminProjectUpdated)
 def archive_project(proj_id: int, db: Session = Depends(get_db),
                     authorization: str | None = Header(None)):
     staff = _current_staff(authorization, db)
@@ -2180,7 +2220,36 @@ def update_addon(addon_id: int, body: AddonPatchIn, db: Session = Depends(get_db
 # 5. 商品管理（管理端 CRUD）
 # ──────────────────────────────────────────────────────
 
-@router.get("/products")
+class AdminProduct(BaseModel):
+    id: int
+    store_id: int
+    code: str
+    name: str
+    desc: str = ""
+    spec: str = ""
+    product_type: str
+    price_cents: int
+    image_url: str = ""
+    publication_status: str
+
+
+class AdminProductPage(BaseModel):
+    items: list[AdminProduct]
+    total: int
+    page: int
+    page_size: int
+
+
+class AdminProductCreated(BaseModel):
+    id: int
+    code: str
+
+
+class AdminProductLegacyUpdated(BaseModel):
+    ok: bool
+
+
+@router.get("/products", response_model=list[AdminProduct] | AdminProductPage)
 def list_products_admin(
     store_id: int | None = Query(None),
     status: str | None = Query(None),
@@ -2273,7 +2342,7 @@ def _product_view(product: Product) -> dict:
     }
 
 
-@router.post("/products")
+@router.post("/products", response_model=AdminProductCreated)
 def create_product(body: ProductIn, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
@@ -2309,14 +2378,14 @@ def _update_product(prod_id: int, body: ProductPatch, db: Session, staff: Staff)
     return _product_view(p)
 
 
-@router.patch("/products/{prod_id}")
+@router.patch("/products/{prod_id}", response_model=AdminProduct)
 def patch_product(prod_id: int, body: ProductPatch, db: Session = Depends(get_db),
                   authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     return _update_product(prod_id, body, db, s)
 
 
-@router.post("/products/{prod_id}")
+@router.post("/products/{prod_id}", response_model=AdminProductLegacyUpdated)
 def update_product(prod_id: int, body: dict, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
     """保留旧 POST 路径：接受历史完整对象，忽略非商品字段并保留旧响应。"""
