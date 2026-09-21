@@ -1,13 +1,17 @@
 # hxy-diy 当前状态
 
-更新时间：2026-09-18（Asia/Shanghai）
+更新时间：2026-09-21（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
 
-- 顾客端茶饮已更新为菊花清润茶、薏米祛湿茶、桑葚滋养茶，并配套三张荷小悦 IP 品牌杯图片。业务变更由 PR #113 合并为 `c3919ff`；图片路径修复由 PR #114 合并为 `285a233`。
-- 服务器 `current` 为 `/root/hxy-diy-20260811/releases/manual-main-c3919ff`；随后按静态资源热更新方式写入 `285a233` 的顾客端构建。公网首页引用 `/assets/index-BKhw3lzL.js`，三张 WebP 均 HTTP 200，页面内容接口返回三款新茶饮，健康接口为 `ok`。
+- 最新已核验发布：`c76ac301efa07f803d251453a5c99151b4a62dc4`（PR #123，商品目录迁移发布许可；业务实现来自 PR #121）。主干 CI `35575952327` 成功；显式生产部署 `35576431361` 的资格校验及“Backup, rehearse, deploy and verify”作业均成功。
+- 生产 release 为 `github-c76ac301efa0-35576431361`，发布前备份为 `pre-github-c76ac301efa0-35576431361-20260921T081716Z.dump`，校验通过；恢复演练库与生产库均成功升级到 Alembic `20260921_product_catalog`，服务器 `current` 已指向该 release。
+- 发布后独立公网核验：`/`、`/admin/`、`/technician/`、`/api/v1/health` 均为 HTTP 200，健康接口返回 production / ok。1 号店公开商品目录返回 6 条，`member_price_cents`、`display_order`、`detail_modules` 字段齐全，顺序符合 `display_order` 升序后再按商品 ID 升序。总部/店长真实账号写入、跨店权限和门店营业现场仍待验收。
+
+- 顾客端茶饮已更新为菊花清润茶、薏米祛湿茶、桑葚滋养茶，并配套三张荷小悦 IP 品牌杯图片。该次业务变更由 PR #113 合并为 `c3919ff`；图片路径修复由 PR #114 合并为 `285a233`。
+- 该次发布时服务器 `current` 为 `/root/hxy-diy-20260811/releases/manual-main-c3919ff`；随后按静态资源热更新方式写入 `285a233` 的顾客端构建。公网首页引用 `/assets/index-BKhw3lzL.js`，三张 WebP 均 HTTP 200，页面内容接口返回三款新茶饮，健康接口为 `ok`。当前 `current` 以上方最新 release 为准。
 - 本次未改数据库、价格、状态机、权限或门店隔离。公网校验不替代微信真机的茶饮卡片视觉与缓存刷新验收。
 
 - 最新已核验发布：`f6ab1f98c91cdef4981885aaf7627a5b03566ab9`（PR #110，技师今日看板服务单计数澄清）。主干 CI `35199237392` 与显式生产部署 `35201013678` 均成功；部署中的“Backup, rehearse, deploy and verify”作业成功完成。公网 `/technician/` 与 `/api/v1/health` 均为 HTTP 200，健康接口返回 production / ok。
