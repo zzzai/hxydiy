@@ -171,7 +171,7 @@ test('提交成功页只在服务完成后提供评价入口', () => {
 
 test('评价页不预设五星，并按已选评分展示对应体验标签', () => {
   const dialog = fs.readFileSync(new URL('../src/components/FeedbackDialog.tsx', import.meta.url), 'utf8');
-  assert.match(dialog, /useState<number \| null>\(null\)/);
+  assert.match(dialog, /useState<FeedbackDraft>\(\{ rating: null, tags: \[\], note: '' \}\)/);
   assert.match(dialog, /feedbackTagsForRating\(rating\)/);
   assert.match(dialog, /disabled=\{submitting \|\| !canSubmitFeedback\(rating\)\}/);
 });
@@ -206,15 +206,15 @@ test('登录入口先表达顾客收益，不使用系统保存口吻', () => {
   });
 });
 
-test('评价快捷标签覆盖技术、环境、技师和力度', () => {
-  assert.deepEqual(FEEDBACK_TAGS, ['技术专业', '环境舒适', '技师细致', '力度合适', '整体放松']);
+test('评价快捷标签覆盖手法、环境、沟通和力度', () => {
+  assert.deepEqual(FEEDBACK_TAGS, ['手法专业', '环境舒适', '沟通细致', '力度合适', '整体放松']);
 });
 
 test('评价评分不默认五星，并按体验层级限制标签', () => {
   assert.equal(canSubmitFeedback(null), false);
   assert.equal(canSubmitFeedback(5), true);
   assert.equal(feedbackRatingLabel(null), '请选择评分');
-  assert.deepEqual(feedbackTagsForRating(5), ['技术专业', '环境舒适', '技师细致', '力度合适', '整体放松']);
+  assert.deepEqual(feedbackTagsForRating(5), ['手法专业', '环境舒适', '沟通细致', '力度合适', '整体放松']);
   assert.deepEqual(feedbackTagsForRating(3), ['手法一般', '力度需调整', '沟通可更清楚', '环境一般', '项目预期不一致']);
   assert.deepEqual(feedbackTagsForRating(1), ['力度不合适', '沟通体验不好', '等待较久', '环境问题', '项目与预期不符', '其他问题']);
 });

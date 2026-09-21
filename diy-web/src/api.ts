@@ -114,6 +114,23 @@ export type ServiceFeedback = {
   submitted: boolean;
 };
 
+export type VisitFeedbackInput = {
+  visit_feedback_token: string;
+  rating: number;
+  tags: string[];
+  note: string;
+};
+
+export type VisitFeedback = {
+  id: number;
+  feedback_type: 'visit_feedback';
+  rating: number;
+  tags: string[];
+  note: string;
+  submitted: boolean;
+  created_at: string;
+};
+
 export type Order = {
   id: number;
   order_no: string;
@@ -270,6 +287,7 @@ export function createEntrySession(input: {
     occupancy: Occupancy;
     position: ServicePosition;
     access_token: string;
+    visit_feedback_token: string;
     resumed: boolean;
     returning_browser: boolean;
   }>('/entry-sessions', { method: 'POST', body: JSON.stringify(input) }));
@@ -359,6 +377,20 @@ export function submitFeedback(sessionId: string, token: string, input: { rating
   }, () => request<ServiceFeedback>(`/selection-sessions/${sessionId}/feedback`, {
     method: 'POST',
     headers: { 'X-Selection-Token': token },
+    body: JSON.stringify(input),
+  }));
+}
+
+export function submitVisitFeedback(input: VisitFeedbackInput, idempotencyKey: string, authToken = '') {
+  return runTrackedOperation('visit_feedback_submit', {
+    rating: input.rating,
+    tag_count: input.tags.length,
+  }, () => request<VisitFeedback>('/visit-feedback', {
+    method: 'POST',
+    headers: {
+      'Idempotency-Key': idempotencyKey,
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
     body: JSON.stringify(input),
   }));
 }
