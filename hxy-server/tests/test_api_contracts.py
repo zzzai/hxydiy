@@ -259,6 +259,38 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertEqual(response.headers["content-type"].split(";")[0], "application/json")
         self.assertIn("/api/v1/selection-sessions", response.json()["paths"])
 
+    def test_openapi_describes_admin_catalog_security_and_responses(self):
+        document = self.client.get("/api/v1/openapi.json").json()
+
+        bearer = document["components"]["securitySchemes"]["StaffBearer"]
+        self.assertEqual(bearer, {"type": "http", "scheme": "bearer"})
+
+        operations = {
+            ("/api/v1/admin/v2/projects", "get"),
+            ("/api/v1/admin/v2/projects", "post"),
+            ("/api/v1/admin/v2/projects/{proj_id}", "patch"),
+            ("/api/v1/admin/v2/products", "get"),
+            ("/api/v1/admin/v2/products", "post"),
+            ("/api/v1/admin/v2/products/{prod_id}", "patch"),
+        }
+        for path, method in operations:
+            with self.subTest(path=path, method=method):
+                operation = document["paths"][path][method]
+                self.assertEqual(operation["security"], [{"StaffBearer": []}])
+                self.assertNotIn(
+                    "authorization",
+                    {
+                        parameter.get("name")
+                        for parameter in operation.get("parameters", [])
+                        if parameter.get("in") == "header"
+                    },
+                )
+                response_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+                self.assertTrue(response_schema)
+
+        self.assertIn("AdminProject", document["components"]["schemas"])
+        self.assertIn("AdminProduct", document["components"]["schemas"])
+
     @classmethod
     def tearDownClass(cls):
         cls.client.close()

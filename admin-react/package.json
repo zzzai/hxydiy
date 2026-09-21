@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "generate:openapi": "cd ../hxy-server && python scripts/export_openapi.py",
+    "generate:api-types": "openapi-typescript ../hxy-server/openapi.json -o src/generated/openapi.d.ts",
+    "generate:contracts": "npm run generate:openapi && npm run generate:api-types",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "preview": "vite preview"
   },
@@ -28,6 +31,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "openapi-typescript": "7.13.0",
     "typescript": "~5.6.0",
     "vite": "^6.0.0"
   }

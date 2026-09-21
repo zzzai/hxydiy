@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.api import admin, admin_catalog, admin_v2, auth, catalog, coupons, health, integrations, occupancies, operations, orders, payments, selections, share, technician, technician_admin, tracking, media, wechat_official
 from app.core.config import settings
 from app.core.staff_access import bind_staff_request_scope, reset_staff_request_scope
+from app.openapi import install_admin_catalog_openapi
 from app.release_static import mount_release_static_files
 from app.services.occupancy_scheduler import start_occupancy_scheduler, stop_occupancy_scheduler
 
@@ -76,3 +77,4 @@ app.include_router(technician_admin.router, prefix="/api/v1")
 app.include_router(share.router)
 app.include_router(wechat_official.router)
 mount_release_static_files(app)
+install_admin_catalog_openapi(app)

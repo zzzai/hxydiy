@@ -92,6 +92,12 @@ jobs:
         if: steps.detect.outputs.available == 'true'
         working-directory: admin-react
         run: npm test
+      - name: Verify generated API types
+        if: steps.detect.outputs.available == 'true'
+        working-directory: admin-react
+        run: |
+          npm run generate:api-types
+          git diff --exit-code -- src/generated/openapi.d.ts
       - name: TypeScript and production build
         if: steps.detect.outputs.available == 'true'
         working-directory: admin-react
@@ -194,6 +200,12 @@ jobs:
         if: steps.detect.outputs.available == 'true'
         working-directory: hxy-server
         run: python -m pytest -q
+      - name: Verify exported OpenAPI contract
+        if: steps.detect.outputs.available == 'true'
+        working-directory: hxy-server
+        run: |
+          python scripts/export_openapi.py
+          git diff --exit-code -- openapi.json
 
   release-readiness:
     name: Production release readiness

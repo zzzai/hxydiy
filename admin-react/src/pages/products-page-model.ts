@@ -1,15 +1,6 @@
-export type Product = {
-  id: number;
-  store_id: number;
-  code: string;
-  name: string;
-  desc?: string;
-  spec?: string;
-  product_type: string;
-  price_cents: number;
-  image_url?: string;
-  publication_status: string;
-};
+import type { components } from '../generated/openapi';
+
+export type Product = components['schemas']['AdminProduct'];
 
 export const PRODUCT_TYPE_OPTIONS = [
   { value: 'foot', label: '泡脚包' },
