@@ -18,6 +18,18 @@
 - A policy mode is one of `fixed`, `bounded_override`, or `open_override`: `fixed` is the forced headquarters price, while the two override modes explicitly permit store overrides. Bounds use integer cents and cannot be negative.
 - Update business implementation, OpenAPI, contract tests, `docs/contracts/`, and `docs/TEAM-MEMORY.md` in the same PR.
 
+## Verified implementation baseline before PR 2
+
+- PR 2 must branch from the merged PR 1 head. Its Alembic migration must use the then-current single head; with PR 1 as reviewed, that head is `20260921_staff_scope`, not `20260921_product_catalog`.
+- Current project prices are historical `PriceBook` rows. The effective row is the latest non-expired row per type; missing `group` falls back to `store`, and missing `member` falls back to `group` then `store`. The new resolver must accept an explicit `at` timestamp, preserve these fallbacks, and retain source provenance needed by frozen selection lines.
+- Effective project-price consumers are: public project and linked-choice catalog output; published-catalog linked-project validation; admin project list/create/edit/duplicate; admin catalog preview; selection quote, submit, confirmation, membership reprice, annual-gift eligibility and change approval; legacy order creation; and every indirect `refresh_session_pricing` caller in customer login, membership verification, technician verification and admin service flows.
+- `OptionChoicePrice` for dedicated charges and `Addon` prices are separate pricing domains. PR 2 only routes linked-project choices through the project resolver; it must not silently migrate dedicated-option or add-on prices into project policies.
+- `SelectionSession.pricing_snapshot`, `SelectionRevision.snapshot.pricing`, `ServiceLine.snapshot`, `Order.items`, `ServiceOrder.items` and settled-operation snapshots are immutable historical evidence. They must never be recalculated after policy or override changes.
+- A brand-disabled template must suppress every linked store instance from new public selection without rewriting its historical publication state. Existing `Project.publication_status` remains the store publication switch.
+- Existing `Project` rows duplicate name/content and have globally unique codes. PR 2 must define one canonical template read path and a compatibility projection for legacy APIs; it must not leave template and project content as two independent writable truths.
+- The earlier plan only reported distribution and could not create a store instance. PR 2 therefore includes an idempotent headquarters distribution write that creates or links exactly one `Project` per template/store while preserving every existing project ID. A deterministic collision-checked instance code is required because `Project.code` is globally unique.
+- Existing legacy order creation currently reads `PriceBook` directly and does not itself prove project/store equality. The shared resolver entry point must require the expected store and reject cross-store project IDs before returning a price.
+
 ---
 
 ### Task 1: Add brand template and pricing-policy persistence
@@ -30,6 +42,7 @@
 - Modify: `hxy-server/tests/test_alembic_contract.py`
 - Modify: `hxy-server/tests/test_release_scripts.py`
 - Modify: affected migration allowlists under `tools/release/`
+- Modify: `deploy/diy/deploy-production.sh`
 
 **Interfaces:**
 - `BrandProjectTemplate`: brand code, name, category, duration, description/content fields, status, timestamps.
@@ -37,10 +50,10 @@
 - `BrandProjectPricePolicy`: template, price type, default amount, mode, optional min/max, status, timestamps.
 - `StoreProjectPriceOverride`: project, price type, amount, status, actor, timestamps.
 
-- [ ] Add a failing migration test from the current schema that snapshots all project IDs/codes/publication states and active `PriceBook` amounts, upgrades, and proves there is one template per existing logical project, every store project is linked, and effective prices are byte-for-byte equivalent.
+- [ ] Add a failing migration test from the merged PR 1 schema that snapshots all project IDs/codes/publication states and normalized effective `store/group/member` prices, upgrades, and proves the 14 current store projects each receive one template link, no initial override is needed, and every effective amount/source fallback is unchanged.
 - [ ] Add constraint tests for unique template code, one active policy per template/type, one active override per project/type, valid price types, non-negative cents, and ordered min/max bounds.
 - [ ] Run `python -m pytest hxy-server/tests/test_brand_catalog_migration.py hxy-server/tests/test_alembic_contract.py -q` and confirm the schema is the only missing dependency.
-- [ ] Implement the models and migration. Seed template/policy data from current project and latest active `PriceBook` rows; do not rewrite or delete price history.
+- [ ] Implement the models and migration from the current PR 1 Alembic head. Seed three policy defaults from each project's normalized current prices; do not rewrite/delete `PriceBook`, historical snapshots, project IDs, codes or publication state.
 - [ ] Add migration release validation and one-head assertions, re-run focused tests, and commit with `feat(catalog): add brand templates and price policies`.
 
 ### Task 2: Build one deterministic effective-price resolver
@@ -60,9 +73,10 @@
 - `EffectiveProjectPrice(price_type, amount_cents, source, policy_id, override_id)`
 - `resolve_effective_project_prices(db, project_id, at) -> dict[str, EffectiveProjectPrice]`
 - Precedence: active valid store override, then active policy default, then legacy active `PriceBook` fallback during the compatibility window.
+- Resolver input also requires the expected store scope for customer/order/store operations; mismatched store/project pairs fail before price resolution.
 
 - [ ] Add failing table-driven tests for fixed, bounded, open, absent, disabled, expired, below-minimum, above-maximum, and all three price types. Include a regression fixture built from the current 14 production-shaped projects.
-- [ ] Add failing integration tests proving public catalog, membership pricing, selection pricing, order creation, and admin listing return the same resolved amount/source.
+- [ ] Add failing integration tests proving public catalog (including linked choices), catalog validation/preview, membership and selection pricing, annual-gift eligibility, legacy order creation, admin listing/duplicate, and every session repricing caller return the same resolved amount/source without mutating frozen snapshots.
 - [ ] Run the focused pricing tests and confirm failures reveal duplicated legacy `PriceBook` reads.
 - [ ] Implement the resolver and replace direct current-price queries in the listed consumers. Keep historical order/selection snapshots immutable.
 - [ ] Re-run focused pricing/order tests and commit with `refactor(pricing): centralize effective project prices`.
@@ -82,9 +96,10 @@
 - `GET/PATCH /api/v1/admin/v2/brand/project-templates/{template_id}`
 - `PUT /api/v1/admin/v2/brand/project-templates/{template_id}/price-policies/{price_type}`
 - `GET /api/v1/admin/v2/brand/project-templates/{template_id}/distribution` reports linked stores, publication state, and effective-price source without granting store-operating authority.
+- `POST /api/v1/admin/v2/brand/project-templates/{template_id}/distribution` idempotently links an existing eligible instance or creates one store instance with a deterministic collision-checked code; it never rewrites an existing project ID.
 - `brand_admin`: full write; `hq_operator`: template/policy write except permission/account administration; store roles: read only through store endpoints.
 
-- [ ] Add failing API tests for strict request schemas, code uniqueness, invalid bounds/modes, partial update semantics, distribution reporting, role matrix, audit events, and pagination.
+- [ ] Add failing API tests for strict request schemas, code uniqueness, invalid bounds/modes, partial update semantics, idempotent distribution/create-link collisions, distribution reporting, role matrix, audit events, and pagination.
 - [ ] Run the focused tests and verify failures are missing endpoints rather than fixture assumptions.
 - [ ] Implement the minimal endpoints with transaction-safe validation and structured audit details.
 - [ ] Add explicit OpenAPI operation IDs and response/error schemas; regenerate `hxy-server/openapi.json` and `admin-react/src/generated/openapi.d.ts`.
@@ -108,7 +123,7 @@
 - [ ] Add failing tests for same-store writes, cross-store denial, fixed-policy denial, bounded validation, removal fallback, disabled templates, store-manager access, store-staff denial, and audit evidence.
 - [ ] Run the focused store-pricing/isolation tests and confirm the expected endpoint failures.
 - [ ] Implement scoped endpoints using `StaffContext.store_id`; never accept a caller-supplied store ID as authorization.
-- [ ] Preserve the legacy project edit endpoints as brand compatibility adapters until PR 3 switches the UI; route their price effects through the resolver and reject store-role master-data writes.
+- [ ] Preserve the legacy project edit endpoints as compatibility adapters until PR 3 switches the UI. Brand-scope content/price writes update the canonical template/policy plus the compatibility projection; store scope can only change its instance publication or permitted override. Do not continue direct independent `PriceBook` writes as a second pricing truth.
 - [ ] Re-run focused tests and commit with `feat(catalog): manage store project overrides`.
 
 ### Task 5: Freeze contracts and verify no price drift
@@ -121,8 +136,8 @@
 - Modify: `hxy-server/tests/test_api_contracts.py`
 
 - [ ] Document ownership, role matrix, policy modes, resolver precedence, publication semantics, audit requirements, compatibility endpoints, and rollback behavior.
-- [ ] Add a baseline test that compares all seeded/current project codes and `store/group/member` prices before and after migration/resolution.
+- [ ] Add a baseline test that compares all current project IDs, codes, store IDs, publication states, public visibility, explicit public price rows, normalized `store/group/member` effective amounts, fallback source types and frozen historical snapshots before and after migration/resolution.
 - [ ] Run `python -m pytest hxy-server/tests/test_brand_catalog_migration.py hxy-server/tests/test_brand_project_pricing.py hxy-server/tests/test_admin_brand_catalog_api.py hxy-server/tests/test_admin_store_project_pricing_api.py hxy-server/tests/test_membership_pricing.py hxy-server/tests/test_selection_pricing.py hxy-server/tests/test_final_menu_baseline.py hxy-server/tests/test_store_isolation_regressions.py hxy-server/tests/test_api_contracts.py hxy-server/tests/test_admin_catalog_schemathesis.py -q`.
 - [ ] Run `python -m unittest discover -s tests -p 'test_*.py'`, `npm test --prefix admin-react`, `npm run build --prefix admin-react`, and `git diff --check`.
-- [ ] Produce a read-only migration rehearsal report listing template count, linked-project count, policies, overrides, and every pre/post effective-price difference. The accepted difference count is zero.
+- [ ] Produce a read-only migration rehearsal report listing template count, linked-project count, policies, overrides, public-visibility differences, explicit-price-shape differences and every normalized effective-price/source difference. All accepted difference counts are zero.
 - [ ] Confirm the PR description keeps merge, production migration, and store acceptance unclaimed until separately evidenced.
