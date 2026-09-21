@@ -195,8 +195,6 @@ def staff_login(body: StaffLoginRequest, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=403, detail={"code": "INVALID_STAFF_ROLE", "message": "员工角色无效"})
     if staff.role == "technician" and not staff.technician_id:
         raise HTTPException(status_code=403, detail={"code": "TECHNICIAN_BINDING_REQUIRED", "message": "技师账号未绑定技师档案"})
-    if staff.role == "staff" and not staff.store_id:
-        raise HTTPException(status_code=403, detail={"code": "STAFF_STORE_REQUIRED", "message": "普通员工必须绑定门店"})
     if staff.role == "technician":
         store = db.get(Store, staff.store_id) if staff.store_id else None
         return {
@@ -208,6 +206,11 @@ def staff_login(body: StaffLoginRequest, db: Session = Depends(get_db)) -> dict:
     workspaces = list_staff_workspaces(db, staff)
     if not workspaces:
         if assignments_are_not_initialized(db):
+            if staff.role == "staff" and not staff.store_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail={"code": "STAFF_STORE_REQUIRED", "message": "普通员工必须绑定门店"},
+                )
             store = db.get(Store, staff.store_id) if staff.store_id else None
             return {
                 "token": create_staff_token(staff.id, staff.role, staff.credentials_version),

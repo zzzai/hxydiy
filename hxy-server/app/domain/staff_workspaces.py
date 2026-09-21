@@ -179,7 +179,22 @@ def resolve_staff_context(token: str, db: Session) -> StaffContext:
             raise _auth_error(401, "INVALID_TOKEN_TYPE", "令牌类型无效")
         staff = _validate_staff(db.get(Staff, int(payload["sub"])), payload.get("credentials_version"))
         if token_type == "staff":
-            context = StaffContext(staff)
+            if staff.role == "technician" or assignments_are_not_initialized(db):
+                context = StaffContext(staff)
+            else:
+                assignments = list(db.scalars(
+                    select(StaffScopeAssignment)
+                    .where(
+                        StaffScopeAssignment.staff_id == staff.id,
+                        StaffScopeAssignment.status == "active",
+                    )
+                    .order_by(StaffScopeAssignment.id)
+                ))
+                if not assignments:
+                    raise _auth_error(401, "STAFF_ASSIGNMENT_REVOKED", "当前工作区授权已失效，请重新登录")
+                if len(assignments) != 1:
+                    raise _auth_error(403, "WORKSPACE_SELECTION_REQUIRED", "请重新登录并选择工作区")
+                context = StaffContext(staff, assignments[0])
         else:
             assignment = db.get(StaffScopeAssignment, int(payload["assignment_id"]))
             if (

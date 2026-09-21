@@ -583,7 +583,7 @@ def create_staff_scope_assignment(
 ) -> dict:
     operator = _current_staff(authorization, db)
     _require_assignment_manager(operator, body.role)
-    _assignment_target(db, staff_id)
+    target = _assignment_target(db, staff_id)
     brand_role = body.role in {"brand_admin", "hq_operator"}
     if brand_role != (body.scope_type == "brand") or (brand_role and body.scope_id is not None) or (not brand_role and body.scope_id is None):
         raise HTTPException(
@@ -612,6 +612,7 @@ def create_staff_scope_assignment(
         created_by_staff_id=operator.id,
     )
     db.add(assignment)
+    target.credentials_version = int(target.credentials_version or 1) + 1
     db.flush()
     _audit(
         db, operator, "create_staff_scope_assignment", "staff_scope_assignment", str(assignment.id),
@@ -636,7 +637,7 @@ def update_staff_scope_assignment(
     authorization: str | None = Header(None),
 ) -> dict:
     operator = _current_staff(authorization, db)
-    _assignment_target(db, staff_id)
+    target = _assignment_target(db, staff_id)
     assignment = db.get(StaffScopeAssignment, assignment_id)
     if not assignment or assignment.staff_id != staff_id:
         raise HTTPException(status_code=404, detail="授权不存在")
@@ -667,7 +668,10 @@ def update_staff_scope_assignment(
                 status_code=409,
                 detail={"code": "STAFF_ASSIGNMENT_EXISTS", "message": "该工作区授权已存在"},
             )
+    status_changed = assignment.status != body.status
     assignment.status = body.status
+    if status_changed:
+        target.credentials_version = int(target.credentials_version or 1) + 1
     db.flush()
     _audit(
         db, operator, "update_staff_scope_assignment", "staff_scope_assignment", str(assignment.id),

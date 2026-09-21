@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.admin import hash_password
+from app.api.admin import create_staff_token, hash_password
 from app.db.session import Base, get_db
 from app.domain.staff_workspaces import create_scoped_token
 from app.main import app
@@ -125,6 +125,75 @@ class AdminWorkspaceAuthorizationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(response.json()["detail"]["code"], "ASSIGNMENT_MANAGEMENT_FORBIDDEN")
 
+    def test_hq_operator_can_login_and_receive_scoped_token(self):
+        response = self.login("workspace-hq-operator")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["staff"]["role"], "hq_operator")
+        self.assertEqual(body["workspaces"][0]["scope_type"], "brand")
+
+    def test_legacy_staff_token_cannot_bypass_disabled_assignment(self):
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, self.single_id)
+            assignment = db.query(StaffScopeAssignment).filter_by(staff_id=self.single_id).one()
+            legacy_token = create_staff_token(staff.id, staff.role, staff.credentials_version)
+            assignment.status = "disabled"
+            db.commit()
+        response = self.client.get(
+            "/api/v1/admin/today-appointments",
+            headers={"Authorization": f"Bearer {legacy_token}"},
+        )
+        self.assertIn(response.status_code, {401, 403}, response.text)
+        with self.SessionLocal() as db:
+            assignment = db.query(StaffScopeAssignment).filter_by(staff_id=self.single_id).one()
+            assignment.status = "active"
+            db.commit()
+
+    def test_legacy_staff_token_cannot_choose_between_multiple_assignments(self):
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, self.multiple_id)
+            legacy_token = create_staff_token(staff.id, staff.role, staff.credentials_version)
+        response = self.client.get(
+            "/api/v1/admin/today-appointments",
+            headers={"Authorization": f"Bearer {legacy_token}"},
+        )
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "WORKSPACE_SELECTION_REQUIRED")
+
+    def test_assignment_status_change_revokes_legacy_session_version(self):
+        with self.SessionLocal() as db:
+            assignment = db.get(StaffScopeAssignment, self.other_assignment_id)
+            staff = db.get(Staff, assignment.staff_id)
+            legacy_token = create_staff_token(staff.id, staff.role, staff.credentials_version)
+            old_version = staff.credentials_version
+            staff_id = staff.id
+            assignment_id = assignment.id
+        response = self.client.patch(
+            f"/api/v1/admin/v2/staff/accounts/{staff_id}/assignments/{assignment_id}",
+            headers=self.scoped_headers(self.brand_admin_id),
+            json={"status": "disabled"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        rejected = self.client.get(
+            "/api/v1/admin/today-appointments",
+            headers={"Authorization": f"Bearer {legacy_token}"},
+        )
+        self.assertEqual(rejected.status_code, 401, rejected.text)
+        self.assertEqual(rejected.json()["detail"]["code"], "STAFF_SESSION_REVOKED")
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, staff_id)
+            self.assertEqual(staff.credentials_version, old_version + 1)
+            db.get(StaffScopeAssignment, assignment_id).status = "active"
+            db.commit()
+
+    def test_selector_token_is_rejected_by_admin_and_technician_apis(self):
+        body = self.login("workspace-multiple").json()
+        headers = {"Authorization": f"Bearer {body['selector_token']}"}
+        for path in ("/api/v1/admin/today-appointments", "/api/v1/technician/me"):
+            response = self.client.get(path, headers=headers)
+            self.assertEqual(response.status_code, 401, response.text)
+            self.assertEqual(response.json()["detail"]["code"], "INVALID_TOKEN_TYPE")
+
     def test_last_brand_admin_cannot_be_disabled(self):
         with self.SessionLocal() as db:
             assignment = db.query(StaffScopeAssignment).filter_by(staff_id=self.brand_admin_id).one()
@@ -190,6 +259,28 @@ class AdminWorkspaceAuthorizationTests(unittest.TestCase):
         response = self.login("workspace-none")
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(response.json()["detail"]["code"], "STAFF_WORKSPACE_REQUIRED")
+
+    def test_each_assignment_role_can_login_to_its_workspace(self):
+        expected = {
+            "workspace-brand-admin": "brand_admin",
+            "workspace-hq-operator": "hq_operator",
+            "workspace-single": "store_manager",
+            "workspace-other": "store_staff",
+        }
+        for username, role in expected.items():
+            response = self.login(username)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["staff"]["role"], role)
+
+    def test_single_assignment_keeps_legacy_admin_token_compatible(self):
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, self.single_id)
+            token = create_staff_token(staff.id, staff.role, staff.credentials_version)
+        response = self.client.get(
+            "/api/v1/admin/today-appointments",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
 
     def test_disabling_assignment_revokes_scoped_token(self):
         with self.SessionLocal() as db:
