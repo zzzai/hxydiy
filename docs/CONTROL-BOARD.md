@@ -22,7 +22,7 @@
 | Feature ID | 事项 | 状态 | 总控负责人 | 执行窗口 | 权威规格/契约 | 下一门禁 |
 |---|---|---|---|---|---|---|
 | `PLATFORM-CONTRACT-001` | 项目与商品管理 OpenAPI、生成类型及 Schemathesis 试点 | `Merged` | 总控窗口 | 总控；契约冻结后按需启用管理端窗口 | `docs/superpowers/plans/2026-09-21-contract-governance-and-api-validation.md` | PR #118、#119、#120 已合并；工具链无需生产部署，后续随业务变更持续验证 |
-| `ADMIN-CATALOG-002` | 商品目录首期可运营闭环 | `Integrated` | 总控窗口 | 管理后台 | `docs/specs/ADMIN-CATALOG-002.md` | 本地集成验证通过；下一门禁为提交、PR 与可信 CI |
+| `ADMIN-CATALOG-002` | 商品目录首期可运营闭环 | `Merged` | 总控窗口 | 管理后台 | `docs/specs/ADMIN-CATALOG-002.md` | PR #121 已通过 14 项检查并合并为 `7edae827787df5ff0d25350b6d08e9e2e6a70615`；下一门禁为生产迁移、服务器核验与现场验收 |
 
 ## 总控规则
 

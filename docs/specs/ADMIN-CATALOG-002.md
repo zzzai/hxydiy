@@ -3,7 +3,7 @@
 ## 基本信息
 
 - Feature ID：`ADMIN-CATALOG-002`
-- 当前状态：`Integrated`
+- 当前状态：`Merged`
 - 总控负责人：总控窗口
 - 执行窗口：管理后台
 - 权威 PRD / contract：`docs/product/hxy-diy-admin-platform-prd.md`、`docs/contracts/admin-catalog-openapi-v1.md`
