@@ -57,6 +57,36 @@ class ProjectMemoryContractTests(unittest.TestCase):
         self.assertIn("git fetch origin", prompts)
         self.assertIn("docs/CURRENT-STATE.md", prompts)
 
+    def test_control_plane_has_one_board_and_incremental_spec_template(self):
+        board = read("docs/CONTROL-BOARD.md")
+        template = read("docs/templates/incremental-feature-spec.md")
+        prompts = read("docs/AI-WINDOW-PROMPTS.md")
+        manifest = read("docs/CONTEXT-MANIFEST.md")
+
+        for state in (
+            "Candidate",
+            "Spec Ready",
+            "Contract Frozen",
+            "Developing",
+            "Integrated",
+            "Merged",
+            "Deployed",
+            "Field Accepted",
+        ):
+            self.assertIn(state, board)
+        for heading in (
+            "业务目标",
+            "非目标",
+            "业务规则",
+            "权限与数据范围",
+            "跨端影响",
+            "验收标准",
+            "收敛检查",
+        ):
+            self.assertIn(heading, template)
+        self.assertIn("总控窗口", prompts)
+        self.assertIn("docs/CONTROL-BOARD.md", manifest)
+
     def test_root_instructions_require_shared_memory_updates(self):
         instructions = read("AGENTS.md")
         self.assertIn("docs/CONTEXT-MANIFEST.md", instructions)

@@ -1,4 +1,4 @@
-# 三端开发窗口启动提示词
+# 总控与三端开发窗口启动提示词
 
 本文件只提供短启动指令。项目事实从 Git 主干和共享记忆读取，不把完整背景复制进提示词。
 
@@ -14,6 +14,12 @@
 
 ```text
 完成相关本地验证和本次授权提交后，按 docs/script-first-delivery.md 启动 tools/release/start-release-watch.ps1。正常等待交给脚本，可继续独立工作；需要交接时提供报告路径，不强制结束整个任务。查看结果时先读取 report.json；terminal=false 不宣称完成，失败/超时/冲突才读必要的失败片段。已有合并授权时可传 -Merge，不重复确认；不绕过门禁或手工重复部署。脚本不调用模型，云端 AI 审查默认关闭；不要把整项研发宣称为零 token。
+```
+
+## 总控窗口
+
+```text
+你负责项目优先级、Feature ID、增量规格、跨端依赖、公共业务契约、OpenAPI、CI、集成和交付证据。开始时读取 docs/CONTROL-BOARD.md；新业务能力、跨端变化或存在重要歧义的改造按 docs/templates/incremental-feature-spec.md 收敛目标、非目标、规则和验收。不要复制 PRD、contracts 或各端 workstream，不替端窗口包办日常页面开发。日常默认只启动一个相关执行窗口；契约冻结后再让相关端实现。完成声明分别记录本地、PR、合并、生产和现场验收。
 ```
 
 ## 顾客端窗口
