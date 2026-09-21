@@ -24,6 +24,7 @@ export default function ProjectRecordHistory({recordId,onClose,onEdit}:{recordId
         {item.profile?.recording_outcome==='no_additional_notes' && <p>本次没有新情况</p>}
         {item.profile?.heat_note && <Typography.Paragraph style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>热敷补充：{item.profile.heat_note}</Typography.Paragraph>}
         {item.profile?.service_note && <Typography.Paragraph style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>补充：{item.profile.service_note}</Typography.Paragraph>}
+        {item.profile?.private_note && <Typography.Paragraph style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>仅本人可见：{item.profile.private_note}</Typography.Paragraph>}
         {page===1 && index===0 && <Button onClick={()=>onEdit({...data.task,record:item})}>更正本次记录</Button>}
       </section>)}
       <div className="project-record-actions">{page>1 && <Button onClick={()=>setPage(value=>value-1)}>较新记录</Button>}{data?.has_more && <Button onClick={()=>setPage(value=>value+1)}>更早记录</Button>}</div>

@@ -862,6 +862,48 @@
         "title": "AutomationIn",
         "type": "object"
       },
+      "BasicInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "age_band": {
+            "anyOf": [
+              {
+                "enum": [
+                  "age_25_29",
+                  "age_30_34",
+                  "age_35_39",
+                  "age_40_44",
+                  "age_45_49",
+                  "age_50_59",
+                  "age_60_plus"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Band"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "enum": [
+                  "male",
+                  "female"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gender"
+          }
+        },
+        "title": "BasicInfo",
+        "type": "object"
+      },
       "BindPhoneRequest": {
         "properties": {
           "code": {
@@ -873,6 +915,38 @@
           "code"
         ],
         "title": "BindPhoneRequest",
+        "type": "object"
+      },
+      "BodyFocus": {
+        "additionalProperties": false,
+        "properties": {
+          "next_action": {
+            "enum": [
+              "focus",
+              "lighter",
+              "avoid",
+              "confirm"
+            ],
+            "title": "Next Action",
+            "type": "string"
+          },
+          "region": {
+            "enum": [
+              "neck_shoulder",
+              "waist_back",
+              "leg",
+              "knee",
+              "foot"
+            ],
+            "title": "Region",
+            "type": "string"
+          }
+        },
+        "required": [
+          "region",
+          "next_action"
+        ],
+        "title": "BodyFocus",
         "type": "object"
       },
       "Body_upload_media_api_v1_admin_media_post": {
@@ -1301,6 +1375,9 @@
               },
               {
                 "$ref": "#/components/schemas/ProjectServiceRecord"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceHandoffRecord"
               }
             ],
             "title": "Profile"
@@ -1313,7 +1390,8 @@
               3,
               4,
               5,
-              6
+              6,
+              7
             ],
             "title": "Schema Version",
             "type": "integer"
@@ -1355,7 +1433,8 @@
                   "service_reference_v2",
                   "service_reference_v3",
                   "service_reference_v4",
-                  "service_record_v1"
+                  "service_record_v1",
+                  "service_handoff_v1"
                 ],
                 "type": "string"
               },
@@ -4472,6 +4551,94 @@
           "diy_preferences"
         ],
         "title": "SelectionSessionOut",
+        "type": "object"
+      },
+      "ServiceHandoffRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "basic_info": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BasicInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body_focus": {
+            "items": {
+              "$ref": "#/components/schemas/BodyFocus"
+            },
+            "maxItems": 3,
+            "title": "Body Focus",
+            "type": "array"
+          },
+          "communication": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quiet",
+                  "chat"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Communication"
+          },
+          "private_note": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Private Note",
+            "type": "string"
+          },
+          "recording_outcome": {
+            "anyOf": [
+              {
+                "const": "no_additional_notes",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recording Outcome"
+          },
+          "schema_version": {
+            "const": 7,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "session_changes": {
+            "items": {
+              "enum": [
+                "pressure_lighter",
+                "pressure_stronger",
+                "temperature_lower",
+                "temperature_higher",
+                "pace_slower",
+                "ended_early"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Session Changes",
+            "type": "array"
+          },
+          "taxonomy_version": {
+            "const": "service_handoff_v1",
+            "title": "Taxonomy Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "taxonomy_version"
+        ],
+        "title": "ServiceHandoffRecord",
         "type": "object"
       },
       "ServiceLineCancellationIn": {
@@ -19110,6 +19277,18 @@
       "get": {
         "operationId": "service_record_options_api_v1_technician_service_record_options_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "schema_version",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 7,
+              "minimum": 6,
+              "title": "Schema Version",
+              "type": "integer"
+            }
+          },
           {
             "in": "header",
             "name": "authorization",

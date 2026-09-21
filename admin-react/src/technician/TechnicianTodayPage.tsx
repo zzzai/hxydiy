@@ -45,7 +45,7 @@ function taskToOrder(task: any): any {
       : occupancyStatus === 'in_service' ? 'in_service' : 'cancelled';
   return {
     ...task,
-    id: task.occupancy_id ?? `position-${task.room_id}`,
+    id: task.occupancy_id ?? null,
     status,
     customer: task.user_id ? { id: task.user_id, nickname: '顾客', phone_masked: '' } : null,
   };
@@ -180,10 +180,10 @@ export default function TechnicianTodayPage() {
         </div>
       </section>)}
     </section>}
-    <Drawer title={selectedOrder ? (selectedOrder.conflict ? `${selectedOrder.room_name || '服务位'}待核对` : `服务单 #${selectedOrder.id}`) : '服务单'} placement="bottom" height="min(78vh, 620px)" open={!!selectedOrder} onClose={() => setSelectedOrder(undefined)}>
+    <Drawer title={selectedOrder ? (selectedOrder.conflict ? `${selectedOrder.room_name || '服务位'}待核对` : '顾客服务单') : '顾客服务单'} placement="bottom" height="min(78vh, 620px)" open={!!selectedOrder} onClose={() => setSelectedOrder(undefined)}>
       {selectedOrder && <div className="technician-order-drawer">
         {selectedOrder.conflict ? <Alert type="warning" showIcon message="服务位记录待核对" description={`该房间存在 ${selectedOrder.conflict_count || 2} 条活动占用记录。为避免误操作，当前不展示顾客选单，也不能确认或结束服务；请联系店长核对现场服务位。`} /> : <>
-        <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">顾客服务单</span><h2>#{selectedOrder.id}</h2></div><Tag color={statusColor(selectedOrder.status)}>{orderStatusLabel(selectedOrder.status)}</Tag></div>
+        <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">本次服务</span><h2>{selectedOrder.room_name || '服务位'}</h2></div><Tag color={statusColor(selectedOrder.status)}>{orderStatusLabel(selectedOrder.status)}</Tag></div>
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
         <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
         {selectedActions.length > 0 && selectedOrder.customer?.id && <TechnicianServiceReferenceDrawer inline occupancyId={selectedOccupancyId} open onClose={()=>{}} />}
