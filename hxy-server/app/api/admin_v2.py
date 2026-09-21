@@ -44,6 +44,9 @@ from app.schemas.profile import ProfileRecordCreate
 
 router = APIRouter(prefix="/admin/v2", tags=["admin-v2"])
 
+SQL_INTEGER_MAX = 2**63 - 1
+MAX_PAGE_NUMBER = SQL_INTEGER_MAX // 100 + 1
+
 
 class TrustedDeviceRevokeIn(BaseModel):
     reason: str = Field(min_length=2, max_length=200)
@@ -1666,10 +1669,10 @@ class AdminProjectDuplicated(AdminProjectCreated):
 
 @router.get("/projects", response_model=list[AdminProject] | AdminProjectPage)
 def list_projects_admin(
-    store_id: int | None = Query(None),
+    store_id: int | None = Query(None, ge=1, le=SQL_INTEGER_MAX),
     status: str | None = Query(None),
     category: str | None = Query(None),
-    page: int | None = Query(None, ge=1),
+    page: int | None = Query(None, ge=1, le=MAX_PAGE_NUMBER),
     page_size: int | None = Query(None, ge=1, le=100),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
@@ -2251,10 +2254,10 @@ class AdminProductLegacyUpdated(BaseModel):
 
 @router.get("/products", response_model=list[AdminProduct] | AdminProductPage)
 def list_products_admin(
-    store_id: int | None = Query(None),
+    store_id: int | None = Query(None, ge=1, le=SQL_INTEGER_MAX),
     status: str | None = Query(None),
     product_type: str | None = Query(None),
-    page: int | None = Query(None, ge=1),
+    page: int | None = Query(None, ge=1, le=MAX_PAGE_NUMBER),
     page_size: int | None = Query(None, ge=1, le=100),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),

@@ -639,6 +639,32 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertIsInstance(legacy.json(), list)
         self.__class__.current_staff_id = self.staff_id
 
+    def test_project_list_rejects_page_that_would_overflow_database_offset(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        client = TestClient(app, raise_server_exceptions=False)
+        try:
+            response = client.get(
+                "/api/v1/admin/v2/projects",
+                params={"page": 92_233_720_368_547_760, "page_size": 100},
+            )
+            self.assertEqual(response.status_code, 422, response.text)
+        finally:
+            client.close()
+            self.__class__.current_staff_id = self.staff_id
+
+    def test_product_list_rejects_store_id_outside_database_integer_range(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        client = TestClient(app, raise_server_exceptions=False)
+        try:
+            response = client.get(
+                "/api/v1/admin/v2/products",
+                params={"store_id": 9_223_372_036_854_775_808},
+            )
+            self.assertEqual(response.status_code, 422, response.text)
+        finally:
+            client.close()
+            self.__class__.current_staff_id = self.staff_id
+
     def test_legacy_staff_product_write_returns_structured_forbidden(self):
         self.__class__.current_staff_id = self.read_only_staff_id
         client = TestClient(app, raise_server_exceptions=False)
