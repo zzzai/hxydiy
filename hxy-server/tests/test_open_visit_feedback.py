@@ -1,5 +1,11 @@
+import base64
+import hashlib
+import hmac
+import json
+import time
 import unittest
 import uuid
+from unittest import mock
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
@@ -7,6 +13,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.admin import hash_password
+from app.api.occupancies import _managed_position_qr_token
+from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.session import Base, get_db
 from app.domain.visit_feedback_tokens import create_visit_feedback_token
@@ -54,7 +62,27 @@ class OpenVisitFeedbackTests(unittest.TestCase):
                 is_service_position=True,
                 is_space_container=False,
             )
-            db.add_all([room, entry_room])
+            unsigned_room = Room(
+                store_id=store.id,
+                code="visit-feedback-unsigned",
+                name="未签名入口服务位",
+                room_type="sofa",
+                customer_label="3",
+                operational_status="active",
+                is_service_position=True,
+                is_space_container=False,
+            )
+            verified_room = Room(
+                store_id=store.id,
+                code="visit-feedback-verified",
+                name="已验证入口服务位",
+                room_type="sofa",
+                customer_label="4",
+                operational_status="active",
+                is_service_position=True,
+                is_space_container=False,
+            )
+            db.add_all([room, entry_room, unsigned_room, verified_room])
             db.flush()
             qr = ServicePositionQr(
                 public_id=str(uuid.uuid4()),
@@ -63,13 +91,22 @@ class OpenVisitFeedbackTests(unittest.TestCase):
                 source="personal_qr",
                 status="active",
             )
-            db.add(qr)
+            verified_qr = ServicePositionQr(
+                public_id=str(uuid.uuid4()),
+                store_id=store.id,
+                room_id=verified_room.id,
+                source="personal_qr",
+                status="active",
+            )
+            db.add_all([qr, verified_qr])
             db.commit()
             cls.store_id = store.id
             cls.other_store_id = other_store.id
             cls.room_id = room.id
             cls.entry_room_id = entry_room.id
             cls.qr_id = qr.id
+            cls.verified_room_id = verified_room.id
+            cls.verified_qr_id = verified_qr.id
 
         def override_get_db():
             db = cls.SessionLocal()
@@ -346,6 +383,132 @@ class OpenVisitFeedbackTests(unittest.TestCase):
             headers=self.manager_headers("visit-feedback-staff"),
         )
         self.assertEqual(response.status_code, 403, response.text)
+
+    def test_production_store_qr_without_signed_entry_receives_no_feedback_token(self):
+        browser = TestClient(app)
+        with mock.patch("app.api.occupancies.settings.environment", "production"):
+            response = browser.post("/api/v1/entry-sessions", json={
+                "store_id": self.store_id,
+                "position_code": "visit-feedback-unsigned",
+                "source": "store_qr",
+                "device_label": "未签名门店入口手机",
+            })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["session"]["source"], "store_qr")
+        self.assertIsNone(response.json()["visit_feedback_token"])
+        browser.close()
+
+    def test_production_store_qr_with_forged_entry_token_is_rejected(self):
+        browser = TestClient(app)
+        forged = "v3." + "0" * 32 + "." + "forged-signature-value"
+        with mock.patch("app.api.occupancies.settings.environment", "production"):
+            response = browser.post("/api/v1/entry-sessions", json={
+                "store_id": self.store_id,
+                "position_code": "visit-feedback-unsigned",
+                "source": "store_qr",
+                "entry_token": forged,
+                "device_label": "伪造二维码手机",
+            })
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "QR_BINDING_INVALID")
+        browser.close()
+
+    def test_production_signed_entry_rejects_store_position_and_source_mismatch(self):
+        with self.SessionLocal() as db:
+            qr = db.get(ServicePositionQr, self.qr_id)
+            room = db.get(Room, self.room_id)
+            entry_token = _managed_position_qr_token(qr, room.code)
+        base = {
+            "store_id": self.store_id,
+            "position_code": "visit-feedback-sofa",
+            "source": "personal_qr",
+            "entry_token": entry_token,
+            "device_label": "拼接参数手机",
+        }
+        cases = [
+            {**base, "store_id": self.other_store_id},
+            {**base, "position_code": "visit-feedback-verified"},
+            {**base, "source": "room_qr"},
+        ]
+        for payload in cases:
+            browser = TestClient(app)
+            with mock.patch("app.api.occupancies.settings.environment", "production"):
+                response = browser.post("/api/v1/entry-sessions", json=payload)
+            self.assertEqual(response.status_code, 403, response.text)
+            self.assertEqual(response.json()["detail"]["code"], "QR_BINDING_INVALID")
+            browser.close()
+
+    def test_production_signed_entry_issues_bound_token_and_accepts_anonymous_and_login_feedback(self):
+        with self.SessionLocal() as db:
+            qr = db.get(ServicePositionQr, self.verified_qr_id)
+            room = db.get(Room, self.verified_room_id)
+            entry_token = _managed_position_qr_token(qr, room.code)
+        browser = TestClient(app)
+        with mock.patch("app.api.occupancies.settings.environment", "production"):
+            response = browser.post("/api/v1/entry-sessions", json={
+                "store_id": self.store_id,
+                "position_code": "visit-feedback-verified",
+                "source": "personal_qr",
+                "entry_token": entry_token,
+                "device_label": "正式二维码手机",
+            })
+        self.assertEqual(response.status_code, 200, response.text)
+        token = response.json()["visit_feedback_token"]
+        self.assertTrue(token.startswith("vf1."))
+        # The entry sets a Secure cookie under the production patch; re-set it without
+        # the Secure attribute so the plain-HTTP test transport sends it back.
+        entry_cookie = browser.cookies.get("hxy_browser_token")
+        browser.cookies.clear()
+        browser.cookies.set("hxy_browser_token", entry_cookie)
+
+        anonymous = browser.post(
+            "/api/v1/visit-feedback",
+            headers={"Idempotency-Key": "visit-feedback-verified-anonymous"},
+            json={"visit_feedback_token": token, "rating": 4, "tags": ["环境舒适"], "note": "扫码后直接反馈"},
+        )
+        self.assertEqual(anonymous.status_code, 200, anonymous.text)
+        with self.SessionLocal() as db:
+            row = db.get(VisitFeedback, anonymous.json()["id"])
+            self.assertEqual(row.store_id, self.store_id)
+            self.assertEqual(row.room_id, self.verified_room_id)
+            self.assertEqual(row.service_position_qr_id, self.verified_qr_id)
+            self.assertEqual(row.source, "personal_qr")
+            self.assertIsNone(row.customer_id)
+            customer = User(openid=f"visit-verified-login-{uuid.uuid4().hex}", phone="")
+            db.add(customer)
+            db.commit()
+            customer_id = customer.id
+            login_token = create_access_token(str(customer.id), customer.openid, customer.customer_login_version)
+
+        logged_in = browser.post(
+            "/api/v1/visit-feedback",
+            headers={"Idempotency-Key": "visit-feedback-verified-login", "Authorization": f"Bearer {login_token}"},
+            json={"visit_feedback_token": token, "rating": 5, "tags": [], "note": ""},
+        )
+        self.assertEqual(logged_in.status_code, 200, logged_in.text)
+        with self.SessionLocal() as db:
+            row = db.get(VisitFeedback, logged_in.json()["id"])
+            self.assertEqual(row.customer_id, customer_id)
+        browser.close()
+
+    def test_expired_visit_feedback_token_is_rejected(self):
+        payload = {
+            "v": 1,
+            "store_id": self.store_id,
+            "room_id": self.room_id,
+            "source": "personal_qr",
+            "browser_hash": hashlib.sha256(f"browser:{self.browser_token}".encode()).hexdigest(),
+            "exp": int(time.time()) - 60,
+        }
+        raw = base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+        ).decode().rstrip("=")
+        signature = base64.urlsafe_b64encode(
+            hmac.new(settings.jwt_secret.encode(), f"vf1.{raw}".encode(), hashlib.sha256).digest()[:16]
+        ).decode().rstrip("=")
+        response = self.submit("visit-feedback-expired", visit_feedback_token=f"vf1.{raw}.{signature}")
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "VISIT_FEEDBACK_TOKEN_EXPIRED")
 
 
 if __name__ == "__main__":

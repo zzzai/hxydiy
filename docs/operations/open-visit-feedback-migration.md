@@ -15,7 +15,7 @@
 3. 验证新表约束、同身份幂等唯一性、匿名/登录提交、门店隔离和并发重试。
 4. 隔离库执行应用回归后，才允许生产库 `alembic upgrade head`。
 
-仓库 `deploy/diy/deploy-production.sh` 尚未将该迁移加入显式允许清单；按两步模式，迁移许可由发布前独立的许可 PR 加入（对齐 PR #123 先例），脚本保持“备份校验 → 隔离恢复 → 隔离升级 → 生产升级”的顺序。
+仓库 `deploy/diy/deploy-production.sh` 当前**未**将 `20260921_visit_feedback.py` 加入显式允许清单，发布门禁会拦截该迁移（与 `tests/test_release_scripts.py` 的断言一致）。沿用商品目录迁移的两步模式：业务 PR 合入迁移文件后，由发布前独立的迁移许可 PR 将文件名加入 `approved_migrations`，并保持"备份校验 → 隔离恢复 → 隔离升级 → 生产升级"的顺序。
 
 ## 回滚策略
 

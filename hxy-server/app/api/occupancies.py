@@ -389,6 +389,12 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
         max_age=60 * 60 * 24 * 365 * 2,
         path="/",
     )
+    # Feedback credentials are minted only for entries verified by a signed QR token.
+    # In production an unsigned store-level entry may still browse and select, but it
+    # must never receive a visit_feedback_token from stitched parameters alone.
+    visit_feedback_token = None
+    if body.entry_token or settings.environment != "production":
+        visit_feedback_token = create_visit_feedback_token(room, body.source, browser_token)
     return {
         "session": _selection_view(session),
         "occupancy": occupancy_view(occupancy),
@@ -396,7 +402,7 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
         "access_token": token,
         "resumed": resumed,
         "returning_browser": returning_browser,
-        "visit_feedback_token": create_visit_feedback_token(room, body.source, browser_token),
+        "visit_feedback_token": visit_feedback_token,
     }
 
 
