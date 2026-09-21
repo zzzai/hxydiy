@@ -112,4 +112,3 @@
 - [ ] Run the risk-relevant backend suite and `git diff --check`.
 - [ ] Render the 390px flow, exercise selections, no-new, save failure/retry, close protection, service-order drawer, and scan-first membership states; record any environment limit separately.
 - [ ] Use `tools/release/` to create/monitor the authorized PR and report local, pushed, merged, production, and field-acceptance states separately.
-
