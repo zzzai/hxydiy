@@ -6,6 +6,9 @@
 
 ## 当前生产
 
+- 2026-09-21 已为 1 号店 8 个沙发建立长期有效的受管服务位二维码：1 号沙发复用原有有效码，2、3、5、6、7、8、9 号沙发新增 7 个有效码；稳定位置编码依次为 `sofa-01` 至 `sofa-08`。创建前备份为 `pre-sofa-qr-batch-20260921T100928Z.dump`，8 个签名码均已通过服务端门店、位置和来源绑定校验，系统审计使用 `actor_type=system`，未冒用员工身份。
+- 已生成 8 张独立高清二维码和 4 页 A4 打印版。尚未完成门店张贴后的微信真机逐码验收；打印物必须按展示沙发号对应张贴，不得互换。
+
 - 最新已核验发布：`c76ac301efa07f803d251453a5c99151b4a62dc4`（PR #123，商品目录迁移发布许可；业务实现来自 PR #121）。主干 CI `35575952327` 成功；显式生产部署 `35576431361` 的资格校验及“Backup, rehearse, deploy and verify”作业均成功。
 - 生产 release 为 `github-c76ac301efa0-35576431361`，发布前备份为 `pre-github-c76ac301efa0-35576431361-20260921T081716Z.dump`，校验通过；恢复演练库与生产库均成功升级到 Alembic `20260921_product_catalog`，服务器 `current` 已指向该 release。
 - 发布后独立公网核验：`/`、`/admin/`、`/technician/`、`/api/v1/health` 均为 HTTP 200，健康接口返回 production / ok。1 号店公开商品目录返回 6 条，`member_price_cents`、`display_order`、`detail_modules` 字段齐全，顺序符合 `display_order` 升序后再按商品 ID 升序。总部/店长真实账号写入、跨店权限和门店营业现场仍待验收。
