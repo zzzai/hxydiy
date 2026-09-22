@@ -84,7 +84,7 @@
 
 - `projects` 新增 `template_id`（可空 FK → project_templates）：既有 14 个门店项目迁移期回填关联，**项目 ID、历史引用、上下架状态不变**。
 - 门店覆盖价 `store_price_overrides`：(project_id, price_type) 唯一，列：override_price_cents、updated_by、updated_at。服务端按 spec §5.2 解析有效价：force_standard → 标准价；允许覆盖且本店值合法 → 覆盖价；否则标准价。
-- 会员价开关（catalog-closure 退役时识别的候选 backlog）若立项，落在 template_price_policies 增列，**不**单独建表。
+- 会员价开关（catalog-closure 退役 backlog，业务决策 8.4 立项）落在 `projects.member_price_enabled` 与 `products.member_price_enabled` 增列（语义与既有 `addons.member_price_enabled` 一致），**不**单独建表；模板层开关留待后续迭代按需评估。
 
 ### 4.4 与既有模型的关系
 
@@ -107,7 +107,7 @@
 
 ### 5.3 迁移序列（父点 20260921_staff_scope，串行）
 
-1. `20260923_project_templates`：建 4.1/4.2/4.3 三表 + projects.template_id 回填（14 项目 → 14 模板，价格快照复制为初始标准价与本店有效价，逐项一致性校验对齐 spec §9.2）
+1. `20260922_project_templates`：建 4.1/4.2/4.3 三表 + projects.template_id 回填（14 项目 → 14 模板，价格快照复制为初始标准价与本店有效价，逐项一致性校验对齐 spec §9.2）+ member_price_enabled 双列（按实际实施日命名）
 2. `2026092x_store2_provisioning`：门店 2 供给（文件名按实际执行日定）
 3. 历史账号兼容已由 BRAND-ACCESS-003 处理，本序列不含账号变更
 

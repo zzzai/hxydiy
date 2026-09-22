@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20260921_staff_scope"])
+        self.assertEqual(scripts.get_heads(), ["20260922_project_templates"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -90,11 +90,26 @@ class AlembicContractTests(unittest.TestCase):
             "service_position_qrs", "customer_profile_records", "customer_profile_consents",
             "customer_profile_current", "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
             "staff_scope_assignments",
+            "project_templates", "template_price_policies", "store_price_overrides",
         }
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
                 continue
             copied = table.to_metadata(previous_metadata)
+            if copied.name == "projects":
+                template_column = copied.c.template_id
+                for index in list(copied.indexes):
+                    if template_column.name in index.columns:
+                        copied.indexes.discard(index)
+                for constraint in list(copied.foreign_key_constraints):
+                    if any(foreign_key.parent is template_column for foreign_key in constraint.elements):
+                        for foreign_key in constraint.elements:
+                            foreign_key.parent.foreign_keys.discard(foreign_key)
+                            copied.foreign_keys.discard(foreign_key)
+                        copied.foreign_key_constraints.discard(constraint)
+                        copied.constraints.discard(constraint)
+                copied._columns.remove(template_column)
+                copied._columns.remove(copied.c.member_price_enabled)
             if copied.name == "users":
                 copied._columns.remove(copied.c.customer_login_version)
                 membership_store_column = copied.c.membership_store_id
@@ -278,6 +293,9 @@ class AlembicContractTests(unittest.TestCase):
             "membership_codes",
             "visit_feedback",
             "staff_scope_assignments",
+            "project_templates",
+            "template_price_policies",
+            "store_price_overrides",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():
@@ -294,6 +312,19 @@ class AlembicContractTests(unittest.TestCase):
                         copied.foreign_key_constraints.discard(constraint)
                         copied.constraints.discard(constraint)
                     copied._columns.remove(current_catalog_column)
+                    template_column = copied.c.template_id
+                    for index in list(copied.indexes):
+                        if template_column.name in index.columns:
+                            copied.indexes.discard(index)
+                    for constraint in list(copied.foreign_key_constraints):
+                        if any(foreign_key.parent is template_column for foreign_key in constraint.elements):
+                            for foreign_key in constraint.elements:
+                                foreign_key.parent.foreign_keys.discard(foreign_key)
+                                copied.foreign_keys.discard(foreign_key)
+                            copied.foreign_key_constraints.discard(constraint)
+                            copied.constraints.discard(constraint)
+                    copied._columns.remove(template_column)
+                    copied._columns.remove(copied.c.member_price_enabled)
                 if copied.name == "users":
                     for column_name in (
                         "annual_membership_cycle_id",

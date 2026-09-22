@@ -23,9 +23,24 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                 "service_position_qrs", "customer_profile_consents", "customer_profile_current",
                 "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
                 "staff_scope_assignments",
+                "project_templates", "template_price_policies", "store_price_overrides",
             }:
                 continue
             copied = table.to_metadata(previous_metadata)
+            if copied.name == "projects":
+                template_column = copied.c.template_id
+                for index in list(copied.indexes):
+                    if template_column.name in index.columns:
+                        copied.indexes.discard(index)
+                for constraint in list(copied.foreign_key_constraints):
+                    if any(foreign_key.parent is template_column for foreign_key in constraint.elements):
+                        for foreign_key in constraint.elements:
+                            foreign_key.parent.foreign_keys.discard(foreign_key)
+                            copied.foreign_keys.discard(foreign_key)
+                        copied.foreign_key_constraints.discard(constraint)
+                        copied.constraints.discard(constraint)
+                copied._columns.remove(template_column)
+                copied._columns.remove(copied.c.member_price_enabled)
             if copied.name == "audit_logs":
                 for column_name in ("assignment_id", "actor_role", "scope_type", "scope_id"):
                     column = copied.c[column_name]

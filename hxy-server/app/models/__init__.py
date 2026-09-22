@@ -1,5 +1,5 @@
 from app.models.core import AuditLog, EventLog, Staff, Store, User
-from app.models.catalog import Addon, PriceBook, Product, Project
+from app.models.catalog import Addon, PriceBook, Product, Project, ProjectTemplate, StorePriceOverride, TemplatePricePolicy
 from app.models.marketing import CouponTemplate, MemberPlan, Recharge, UserCoupon
 from app.models.orders import Cart, Order, OrderEvent
 from app.models.operations import Room, Technician
@@ -44,6 +44,7 @@ __all__ = [
     "TechnicianInvite", "TechnicianLeaveRequest",
     "MediaAsset",
     "StaffScopeAssignment",
+    "ProjectTemplate", "TemplatePricePolicy", "StorePriceOverride",
     "CHARGE_MODES", "CHOICE_TYPES", "OptionChoicePrice", "ProjectCatalogVersion",
     "ProjectOptionChoice", "ProjectOptionGroup",
 ]

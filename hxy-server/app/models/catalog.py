@@ -1,11 +1,82 @@
-# 目录模块：项目、价格表、加项
+# 目录模块：项目、价格表、加项、品牌模板
 
 from datetime import datetime
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, func
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
+
+
+class ProjectTemplate(Base):
+    """品牌总部项目模板（MULTI-STORE-005）：门店项目的主数据来源。
+    品牌级内容仅总部可改；brand_enabled=false 时全部门店不得上架。"""
+
+    __tablename__ = "project_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    category: Mapped[str] = mapped_column(String(32), index=True)
+    duration_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    desc: Mapped[str] = mapped_column(String(512), default="")
+    image_url: Mapped[str] = mapped_column(String(512), default="")
+    detail_modules: Mapped[list] = mapped_column(JSON, default=list)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    brand_enabled: Mapped[bool] = mapped_column(default=True)
+    created_by: Mapped[str] = mapped_column(String(64), default="system")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class TemplatePricePolicy(Base):
+    """模板价格政策：总部标准价 + 门店覆盖规则（对齐 BRAND-CATALOG-004 §5.2）。
+    每个模板每种价格类型（store/member/group）至多一条。"""
+
+    __tablename__ = "template_price_policies"
+    __table_args__ = (
+        CheckConstraint("price_type IN ('store', 'member', 'group')", name="ck_template_price_policies_type"),
+        CheckConstraint("standard_price_cents >= 0", name="ck_template_price_policies_standard_non_negative"),
+        UniqueConstraint("template_id", "price_type", name="uq_template_price_policies_template_type"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey("project_templates.id"), index=True)
+    price_type: Mapped[str] = mapped_column(String(16), index=True)  # store / member / group
+    standard_price_cents: Mapped[int] = mapped_column(Integer)
+    override_allowed: Mapped[bool] = mapped_column(default=True)
+    min_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    force_standard: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class StorePriceOverride(Base):
+    """门店覆盖价：挂在门店项目实例上，(project_id, price_type) 唯一。
+    有效价解析（PR2 实现）：force_standard → 标准价；允许覆盖且本店值在
+    [min, max] 区间内 → 覆盖价；否则标准价。"""
+
+    __tablename__ = "store_price_overrides"
+    __table_args__ = (
+        CheckConstraint("price_type IN ('store', 'member', 'group')", name="ck_store_price_overrides_type"),
+        CheckConstraint("override_price_cents >= 0", name="ck_store_price_overrides_non_negative"),
+        UniqueConstraint("project_id", "price_type", name="uq_store_price_overrides_project_type"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    price_type: Mapped[str] = mapped_column(String(16))
+    override_price_cents: Mapped[int] = mapped_column(Integer)
+    updated_by: Mapped[str] = mapped_column(String(64), default="system")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Project(Base):
@@ -34,6 +105,12 @@ class Project(Base):
     diy_options: Mapped[list] = mapped_column(JSON, default=list)
     display_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
     price_label: Mapped[str] = mapped_column(String(32), default="")
+    # 品牌模板关联（MULTI-STORE-005）：迁移期按 code 一对一回填，历史引用不变。
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("project_templates.id"), nullable=True, index=True
+    )
+    # 会员价开关（与 addons 语义一致）：关闭时该项目会员价不对顾客生效。
+    member_price_enabled: Mapped[bool] = mapped_column(default=False)
     # draft / candidate / published / archived —— 只有 published 可被顾客端看到
     publication_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     content_version: Mapped[str] = mapped_column(String(32), default="")
@@ -102,6 +179,8 @@ class Product(Base):
     product_type: Mapped[str] = mapped_column(String(16), index=True)  # foot/heat/gift
     price_cents: Mapped[int] = mapped_column(Integer)
     member_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 会员价开关（catalog-closure backlog 立项）：关闭时 member_price_cents 不生效。
+    member_price_enabled: Mapped[bool] = mapped_column(default=False)
     image_url: Mapped[str] = mapped_column(String(512), default="")
     detail_modules: Mapped[list] = mapped_column(JSON, default=list)
     display_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
