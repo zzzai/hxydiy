@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, field_validator, model_validator
-from sqlalchemy import delete, select, func as sa_func, and_, or_, union
+from sqlalchemy import delete, select, func as sa_func, and_, literal, or_, union, union_all
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,7 +22,7 @@ from app.api.admin import _current_staff, hash_password, normalize_staff_role
 from app.db.session import get_db
 from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
-    Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, ServiceLine, PageContent,
+    Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, VisitFeedback, ServiceLine, PageContent,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, PositionOccupancy,
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
     CustomerProfileCurrent, CustomerProfileRecord,
@@ -613,14 +613,36 @@ def _staff_selection_view(session: SelectionSession) -> dict:
 
 
 class FeedbackFollowUpIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     follow_up_status: Literal["open", "in_progress", "resolved", "dismissed"]
-    follow_up_note: str = ""
+    follow_up_note: str = Field(default="", max_length=1000)
+
+
+def _feedback_view(row: ServiceFeedback | VisitFeedback, feedback_type: str) -> dict:
+    return {
+        "id": row.id,
+        "feedback_type": feedback_type,
+        "store_id": row.store_id,
+        "selection_session_id": row.selection_session_id if feedback_type == "service_review" else None,
+        "customer_id": row.customer_id,
+        "rating": row.rating,
+        "tags": row.tags or [],
+        "note": row.note,
+        "source": "completed_service" if feedback_type == "service_review" else row.source,
+        "follow_up_status": row.follow_up_status,
+        "follow_up_staff_id": row.follow_up_staff_id,
+        "follow_up_note": row.follow_up_note,
+        "followed_up_at": row.followed_up_at.isoformat() if row.followed_up_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
 
 
 @router.get("/feedback")
 def list_feedback(
     low_rating_only: bool = Query(False),
     follow_up_status: str | None = Query(None),
+    feedback_type: Literal["service_review", "visit_feedback"] | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -628,33 +650,117 @@ def list_feedback(
 ) -> Paginated:
     staff = _current_staff(authorization, db)
     store_id = _staff_store_id(staff)
-    query = select(ServiceFeedback).where(ServiceFeedback.store_id == store_id)
-    if low_rating_only:
-        query = query.where(ServiceFeedback.rating <= 2)
-    if follow_up_status:
-        query = query.where(ServiceFeedback.follow_up_status == follow_up_status)
-    query = query.order_by(ServiceFeedback.created_at.desc(), ServiceFeedback.id.desc())
-    total = db.scalar(select(sa_func.count()).select_from(query.subquery())) or 0
-    rows = list(db.scalars(query.offset((page - 1) * page_size).limit(page_size)))
+    queries = []
+    if feedback_type in {None, "service_review"}:
+        query = select(
+            ServiceFeedback.id.label("id"),
+            literal("service_review").label("feedback_type"),
+            ServiceFeedback.store_id.label("store_id"),
+            ServiceFeedback.selection_session_id.label("selection_session_id"),
+            ServiceFeedback.customer_id.label("customer_id"),
+            ServiceFeedback.rating.label("rating"),
+            ServiceFeedback.tags.label("tags"),
+            ServiceFeedback.note.label("note"),
+            literal("completed_service").label("source"),
+            ServiceFeedback.follow_up_status.label("follow_up_status"),
+            ServiceFeedback.follow_up_staff_id.label("follow_up_staff_id"),
+            ServiceFeedback.follow_up_note.label("follow_up_note"),
+            ServiceFeedback.followed_up_at.label("followed_up_at"),
+            ServiceFeedback.created_at.label("created_at"),
+        ).where(ServiceFeedback.store_id == store_id)
+        if low_rating_only:
+            query = query.where(ServiceFeedback.rating <= 2)
+        if follow_up_status:
+            query = query.where(ServiceFeedback.follow_up_status == follow_up_status)
+        queries.append(query)
+    if feedback_type in {None, "visit_feedback"}:
+        query = select(
+            VisitFeedback.id.label("id"),
+            literal("visit_feedback").label("feedback_type"),
+            VisitFeedback.store_id.label("store_id"),
+            literal(None).label("selection_session_id"),
+            VisitFeedback.customer_id.label("customer_id"),
+            VisitFeedback.rating.label("rating"),
+            VisitFeedback.tags.label("tags"),
+            VisitFeedback.note.label("note"),
+            VisitFeedback.source.label("source"),
+            VisitFeedback.follow_up_status.label("follow_up_status"),
+            VisitFeedback.follow_up_staff_id.label("follow_up_staff_id"),
+            VisitFeedback.follow_up_note.label("follow_up_note"),
+            VisitFeedback.followed_up_at.label("followed_up_at"),
+            VisitFeedback.created_at.label("created_at"),
+        ).where(VisitFeedback.store_id == store_id)
+        if low_rating_only:
+            query = query.where(VisitFeedback.rating <= 2)
+        if follow_up_status:
+            query = query.where(VisitFeedback.follow_up_status == follow_up_status)
+        queries.append(query)
+
+    combined = union_all(*queries).subquery()
+    total = db.scalar(select(sa_func.count()).select_from(combined)) or 0
+    records = db.execute(
+        select(combined)
+        .order_by(combined.c.created_at.desc(), combined.c.feedback_type.desc(), combined.c.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).mappings().all()
+    rows = []
+    for record in records:
+        row = dict(record)
+        row["tags"] = row["tags"] or []
+        row["followed_up_at"] = row["followed_up_at"].isoformat() if row["followed_up_at"] else None
+        row["created_at"] = row["created_at"].isoformat() if row["created_at"] else None
+        rows.append(row)
     return {
-        "items": [{
-            "id": row.id,
-            "store_id": row.store_id,
-            "selection_session_id": row.selection_session_id,
-            "customer_id": row.customer_id,
-            "rating": row.rating,
-            "tags": row.tags or [],
-            "note": row.note,
-            "follow_up_status": row.follow_up_status,
-            "follow_up_staff_id": row.follow_up_staff_id,
-            "follow_up_note": row.follow_up_note,
-            "followed_up_at": row.followed_up_at.isoformat() if row.followed_up_at else None,
-            "created_at": row.created_at.isoformat() if row.created_at else None,
-        } for row in rows],
+        "items": rows,
         "total": total,
         "page": page,
         "page_size": page_size,
     }
+
+
+def _feedback_by_type(db: Session, feedback_type: str, feedback_id: int):
+    model = ServiceFeedback if feedback_type == "service_review" else VisitFeedback
+    return db.get(model, feedback_id)
+
+
+@router.get("/feedback/{feedback_type}/{feedback_id}")
+def get_feedback_detail(
+    feedback_type: Literal["service_review", "visit_feedback"],
+    feedback_id: int,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    feedback = _feedback_by_type(db, feedback_type, feedback_id)
+    if not feedback or feedback.store_id != _staff_store_id(staff):
+        raise HTTPException(status_code=404, detail="评价不存在")
+    return _feedback_view(feedback, feedback_type)
+
+
+@router.patch("/feedback/{feedback_type}/{feedback_id}")
+def update_feedback_follow_up_by_type(
+    feedback_type: Literal["service_review", "visit_feedback"],
+    feedback_id: int,
+    body: FeedbackFollowUpIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    feedback = _feedback_by_type(db, feedback_type, feedback_id)
+    if not feedback or feedback.store_id != _staff_store_id(staff):
+        raise HTTPException(status_code=404, detail="评价不存在")
+    feedback.follow_up_status = body.follow_up_status
+    feedback.follow_up_note = body.follow_up_note.strip()
+    feedback.follow_up_staff_id = staff.id
+    feedback.followed_up_at = datetime.now(timezone.utc)
+    _audit(db, staff, "update_feedback_follow_up", feedback_type, str(feedback.id), {
+        "store_id": feedback.store_id,
+        "feedback_type": feedback_type,
+        "follow_up_status": feedback.follow_up_status,
+    })
+    db.commit()
+    return _feedback_view(feedback, feedback_type)
 
 
 @router.patch("/feedback/{feedback_id}")

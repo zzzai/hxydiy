@@ -11,7 +11,7 @@ from app.models.scrm import AutomationLog, AutomationRule, CustomerSegment, Cust
 from app.models.identity import CustomerVerificationCode
 from app.models.content import PageContent
 from app.models.browser import BrowserInstance
-from app.models.feedback import ServiceFeedback
+from app.models.feedback import ServiceFeedback, VisitFeedback
 from app.models.external_identity import CustomerExternalIdentity
 from app.models.membership import MembershipBenefitGrant
 from app.models.membership_verification import CustomerTrustedDevice, MembershipCode
@@ -37,7 +37,7 @@ __all__ = [
     "User", "UserCoupon",    "AutomationLog", "AutomationRule", "CustomerSegment", "CustomerTag",
     "CustomerTagRelation", "Room", "RoomAssignment", "ServiceAssignment", "ServiceOrder",
     "StateTransition", "Technician", "Visit", "SelectionSession", "SelectionRevision", "SelectionChangeRequest", "ServiceLine", "PositionOccupancy",
-    "CustomerVerificationCode", "PageContent", "BrowserInstance", "ServiceFeedback", "CustomerExternalIdentity",
+    "CustomerVerificationCode", "PageContent", "BrowserInstance", "ServiceFeedback", "VisitFeedback", "CustomerExternalIdentity",
     "MembershipBenefitGrant", "CustomerTrustedDevice", "MembershipCode", "SettlementAdjustment", "ServicePositionQr",
     "CustomerProfileRecord", "CustomerProfileConsent", "CustomerProfileCurrent",
     "TechnicianInvite", "TechnicianLeaveRequest",

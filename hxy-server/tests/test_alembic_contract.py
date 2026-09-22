@@ -87,7 +87,7 @@ class AlembicContractTests(unittest.TestCase):
         previous_metadata = MetaData()
         excluded_tables = {
             "service_position_qrs", "customer_profile_records", "customer_profile_consents",
-            "customer_profile_current", "media_assets", "customer_trusted_devices", "membership_codes",
+            "customer_profile_current", "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
         }
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
@@ -260,6 +260,7 @@ class AlembicContractTests(unittest.TestCase):
             "media_assets",
             "customer_trusted_devices",
             "membership_codes",
+            "visit_feedback",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():
