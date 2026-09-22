@@ -273,6 +273,7 @@ export const approveTechnicianLeave = (id: number, review_note = '') => client.p
 export const getProjectsAdmin = () => client.get('/admin/v2/projects');
 export const createProject = (data: any) => client.post('/admin/v2/projects', data);
 export const updateProject = (id: number, data: any) => client.post(`/admin/v2/projects/${id}`, data);
+export const duplicateProject = (id: number, data: { code: string; name: string }) => client.post(`/admin/v2/projects/${id}/duplicate`, data);
 export const getAddonsAdmin = (params?: any) => client.get('/admin/v2/addons', { params });
 export const createAddon = (data: any) => client.post('/admin/v2/addons', data);
 export const updateAddon = (id: number, data: any) => client.post(`/admin/v2/addons/${id}`, data);

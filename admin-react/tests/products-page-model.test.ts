@@ -33,7 +33,11 @@ test('商品记录可还原为编辑表单并将分转换为元', () => {
     spec: '1包',
     product_type: 'foot',
     price_cents: 1299,
+    member_price_cents: 999,
+    member_price_enabled: true,
     image_url: 'https://cdn.example/foot-7.jpg',
+    detail_modules: [{ type: 'text', title: '使用说明', body: '到店领取' }],
+    display_order: 3,
     publication_status: 'published',
   }), {
     code: 'foot-7',
@@ -42,7 +46,11 @@ test('商品记录可还原为编辑表单并将分转换为元', () => {
     spec: '1包',
     product_type: 'foot',
     price: 12.99,
+    member_price_enabled: true,
+    member_price: 9.99,
     image_url: 'https://cdn.example/foot-7.jpg',
+    detail_modules: [{ type: 'text', title: '使用说明', body: '到店领取' }],
+    display_order: 3,
     publication_status: 'published',
   });
 });
@@ -55,6 +63,15 @@ test('商品更新负载不带 store_id，避免编辑时越权改门店归属',
   });
 });
 
+test('商品会员价仅在显式启用时写入，关闭时明确清空', () => {
+  assert.deepEqual(toProductPayload({ price: 12.99, member_price_enabled: true, member_price: 9.99 }, 12), {
+    store_id: 12, price_cents: 1299, image_url: '', member_price_enabled: true, member_price_cents: 999,
+  });
+  assert.deepEqual(toProductPayload({ price: 12.99, member_price_enabled: false }, 12), {
+    store_id: 12, price_cents: 1299, image_url: '', member_price_enabled: false, member_price_cents: null,
+  });
+});
+
 test('商品管理页面提供编辑和店长上下架入口', async () => {
   const source = await import('node:fs/promises').then((fs) => fs.readFile(new URL('../src/pages/ProductsPage.tsx', import.meta.url), 'utf8'));
   assert.match(source, /EditOutlined/);
@@ -64,6 +81,8 @@ test('商品管理页面提供编辑和店长上下架入口', async () => {
   assert.match(source, /强制下线/);
   assert.match(source, /publication_status === 'archived'/);
   assert.match(source, /canStoreToggleProductPublication/);
+  assert.match(source, /商品详情模块/);
+  assert.match(source, /启用会员价/);
 });
 
 test('店长只能切换已下发目录的上架状态，不能恢复总部归档商品', () => {

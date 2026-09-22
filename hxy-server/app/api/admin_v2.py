@@ -2203,13 +2203,13 @@ def list_products_admin(
     if product_type:
         q = q.where(Product.product_type == product_type)
     if page is None and page_size is None:
-        return [_product_view(product) for product in db.execute(q.order_by(Product.id)).scalars().all()]
+        return [_product_view(product) for product in db.execute(q.order_by(Product.display_order, Product.id)).scalars().all()]
 
     resolved_page = page or 1
     resolved_page_size = page_size or 50
     total = db.scalar(select(sa_func.count()).select_from(q.subquery())) or 0
     products = db.execute(
-        q.order_by(Product.id).offset((resolved_page - 1) * resolved_page_size).limit(resolved_page_size),
+        q.order_by(Product.display_order, Product.id).offset((resolved_page - 1) * resolved_page_size).limit(resolved_page_size),
     ).scalars().all()
     return {
         "items": [_product_view(product) for product in products],
@@ -2219,7 +2219,12 @@ def list_products_admin(
     }
 
 
+ProductPublicationStatus = Literal["draft", "candidate", "published", "inactive", "archived"]
+
+
 class ProductIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     store_id: int
     code: str
     name: str
@@ -2227,11 +2232,12 @@ class ProductIn(BaseModel):
     spec: str = ""
     product_type: str = "foot"
     price_cents: int = 990
+    member_price_cents: int | None = None
+    member_price_enabled: bool = False
     image_url: str = ""
-    publication_status: str = "draft"
-
-
-ProductPublicationStatus = Literal["draft", "candidate", "published", "inactive", "archived"]
+    detail_modules: list[dict] = Field(default_factory=list)
+    display_order: int = Field(default=0, ge=0)
+    publication_status: ProductPublicationStatus = "draft"
 
 
 class ProductPatch(BaseModel):
@@ -2245,7 +2251,11 @@ class ProductPatch(BaseModel):
     spec: StrictStr | None = Field(default=None, max_length=64)
     product_type: StrictStr | None = Field(default=None, min_length=1, max_length=16)
     price_cents: StrictInt | None = Field(default=None, ge=0)
+    member_price_cents: StrictInt | None = Field(default=None, ge=0)
+    member_price_enabled: StrictBool | None = None
     image_url: StrictStr | None = Field(default=None, max_length=512)
+    detail_modules: list[dict] | None = None
+    display_order: StrictInt | None = Field(default=None, ge=0)
     publication_status: ProductPublicationStatus | None = None
 
     @model_validator(mode="before")
@@ -2253,9 +2263,24 @@ class ProductPatch(BaseModel):
     def _reject_explicit_nulls(cls, value):
         if isinstance(value, dict):
             for key, item in value.items():
-                if item is None:
+                if item is None and key != "member_price_cents":
                     raise ValueError(f"{key} must not be null")
         return value
+
+
+def _validate_product_price_configuration(
+    price_cents: int,
+    member_price_enabled: bool,
+    member_price_cents: int | None,
+) -> None:
+    if price_cents < 0:
+        raise HTTPException(status_code=422, detail="商品门店价不能为负数")
+    if member_price_enabled and member_price_cents is None:
+        raise HTTPException(status_code=422, detail="启用商品会员价时必须填写会员价")
+    if member_price_cents is not None and member_price_cents < 0:
+        raise HTTPException(status_code=422, detail="商品会员价不能为负数")
+    if member_price_enabled and member_price_cents is not None and member_price_cents > price_cents:
+        raise HTTPException(status_code=422, detail="商品会员价不能高于门店价")
 
 
 def _product_view(product: Product) -> dict:
@@ -2268,7 +2293,11 @@ def _product_view(product: Product) -> dict:
         "spec": product.spec,
         "product_type": product.product_type,
         "price_cents": product.price_cents,
+        "member_price_cents": product.member_price_cents,
+        "member_price_enabled": product.member_price_enabled,
         "image_url": product.image_url,
+        "detail_modules": product.detail_modules,
+        "display_order": product.display_order,
         "publication_status": product.publication_status,
     }
 
@@ -2278,6 +2307,13 @@ def create_product(body: ProductIn, db: Session = Depends(get_db),
                    authorization: str | None = Header(None)):
     s = _current_staff(authorization, db)
     _require_catalog_master_admin(s)
+    _validate_product_price_configuration(
+        body.price_cents,
+        body.member_price_enabled,
+        body.member_price_cents,
+    )
+    if not body.member_price_enabled:
+        body.member_price_cents = None
     p = Product(**body.model_dump())
     db.add(p)
     _audit(db, s, "create_product", "product", body.code, store_id=p.store_id)
@@ -2296,9 +2332,22 @@ def _update_product(prod_id: int, body: ProductPatch, db: Session, staff: Staff)
         publication_status=body.publication_status,
         current_publication_status=p.publication_status,
     )
-    for key, value in body.model_dump(exclude_unset=True).items():
+    values = body.model_dump(exclude_unset=True)
+    member_price_enabled = values.get("member_price_enabled", p.member_price_enabled)
+    member_price_cents = values.get("member_price_cents", p.member_price_cents)
+    if not member_price_enabled:
+        member_price_cents = None
+    _validate_product_price_configuration(
+        values.get("price_cents", p.price_cents),
+        member_price_enabled,
+        member_price_cents,
+    )
+    for key, value in values.items():
         if key != "store_id":
             setattr(p, key, value)
+    if "member_price_enabled" in fields or "member_price_cents" in fields:
+        p.member_price_enabled = member_price_enabled
+        p.member_price_cents = member_price_cents
     _audit(db, staff, "update_product", "product", str(prod_id), store_id=p.store_id)
     try:
         db.commit()

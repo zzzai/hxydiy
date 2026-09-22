@@ -84,7 +84,11 @@ class ProductOut(BaseModel):
     spec: str = ""
     product_type: str
     price_cents: int
+    member_price_cents: int | None = None
+    member_price_enabled: bool = False
     image_url: str = ""
+    detail_modules: list[dict] = []
+    display_order: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -379,4 +383,4 @@ def list_products(
     )
     if product_type:
         stmt = stmt.where(Product.product_type == product_type)
-    return list(db.scalars(stmt.order_by(Product.id)))
+    return list(db.scalars(stmt.order_by(Product.display_order, Product.id)))

@@ -89,7 +89,7 @@ class Addon(Base):
 
 
 class Product(Base):
-    """商城商品（到店自提；定价 9.9 暂定，待门店复核）。"""
+    """商城商品目录；当前仅提供到店自提展示，不承担库存或支付履约。"""
 
     __tablename__ = "products"
 
@@ -100,7 +100,12 @@ class Product(Base):
     desc: Mapped[str] = mapped_column(String(256), default="")
     spec: Mapped[str] = mapped_column(String(64), default="")
     product_type: Mapped[str] = mapped_column(String(16), index=True)  # foot/heat/gift
+    # price_cents 保持旧 API 的门店价字段，避免破坏既有客户端。
     price_cents: Mapped[int] = mapped_column(Integer)
+    member_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    member_price_enabled: Mapped[bool] = mapped_column(default=False)
     image_url: Mapped[str] = mapped_column(String(512), default="")
+    detail_modules: Mapped[list] = mapped_column(JSON, default=list)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
     publication_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

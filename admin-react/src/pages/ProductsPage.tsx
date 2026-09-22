@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Form, Popconfirm, Space, Switch, Tag } from 'antd';
+import { App, Button, Form, Input, Popconfirm, Select, Space, Switch, Tag } from 'antd';
 import { EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import {
   ModalForm,
@@ -7,6 +7,7 @@ import {
   ProForm,
   ProFormDigit,
   ProFormSelect,
+  ProFormSwitch,
   ProFormText,
   ProTable,
   type ActionType,
@@ -36,6 +37,10 @@ const PRODUCT_STATUS_LABELS: Record<string, string> = {
   inactive: '已下架',
   archived: '总部强制下线',
 };
+
+const PRODUCT_STATUS_OPTIONS = Object.entries(PRODUCT_STATUS_LABELS)
+  .filter(([value]) => value !== 'archived')
+  .map(([value, label]) => ({ value, label }));
 
 export default function ProductsPage() {
   const { message } = App.useApp();
@@ -77,7 +82,9 @@ export default function ProductsPage() {
   const openEditor = (product?: Product) => {
     setEditing(product || null);
     form.resetFields();
-    form.setFieldsValue(product ? productToForm(product) : { product_type: 'foot', price: 9.9, publication_status: 'draft' });
+    form.setFieldsValue(product ? productToForm(product) : {
+      product_type: 'foot', price: 9.9, member_price_enabled: false, detail_modules: [], display_order: 0, publication_status: 'draft',
+    });
     setOpen(true);
   };
 
@@ -105,8 +112,17 @@ export default function ProductsPage() {
       valueEnum: Object.fromEntries(PRODUCT_TYPE_OPTIONS.map((item) => [item.value, { text: item.label }])),
       render: (_, record) => PRODUCT_TYPE_LABELS[record.product_type] || record.product_type,
     },
-    { title: '价格', dataIndex: 'price_cents', width: 100, render: (_, record) => formatProductPrice(record.price_cents) },
+    {
+      title: '价格', dataIndex: 'price_cents', width: 170,
+      render: (_, record) => <Space size={4} wrap>
+        <Tag>门店 {formatProductPrice(record.price_cents)}</Tag>
+        {record.member_price_enabled && record.member_price_cents !== null && record.member_price_cents !== undefined
+          ? <Tag color="green">会员 {formatProductPrice(record.member_price_cents)}</Tag>
+          : null}
+      </Space>,
+    },
     { title: '规格', dataIndex: 'spec', width: 140, ellipsis: true },
+    { title: '排序', dataIndex: 'display_order', width: 70 },
     {
       title: '状态', dataIndex: 'publication_status', width: 90, valueType: 'select',
       valueEnum: Object.fromEntries(Object.entries(PRODUCT_STATUS_LABELS).map(([value, text]) => [value, { text }])),
@@ -154,14 +170,14 @@ export default function ProductsPage() {
           return { success: true, data: normalized.data.map((item) => ({ ...item, store_id: item.store_id || storeId || 0 })), total: normalized.total };
         }}
         options={{ density: true, fullScreen: true, reload: true, setting: true }}
-        scroll={{ x: 850 }}
+        scroll={{ x: 1010 }}
       />
       <ModalForm
         key={editing?.id || 'new-product'}
         form={form}
         title={editing ? '编辑商品' : '新建商品'}
         open={open}
-        width={560}
+        width={780}
         modalProps={{ destroyOnClose: true }}
         onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) { setEditing(null); form.resetFields(); } }}
         onFinish={async (values) => {
@@ -183,9 +199,35 @@ export default function ProductsPage() {
         {!editing && <ProFormSelect name="store_id" label="目标门店" options={stores.map((store) => ({ value: store.id, label: `${store.name}${store.store_code ? `（${store.store_code}）` : ''}` }))} fieldProps={{ showSearch: true, filterOption: false, onSearch: (keyword: string) => { void loadStoreOptions(keyword); } }} rules={[{ required: true, message: '请选择目标门店' }]} />}
         <ProFormSelect name="product_type" label="分类" options={PRODUCT_TYPE_OPTIONS} />
         <ProFormDigit name="price" label="价格（元）" min={0} fieldProps={{ precision: 2, addonBefore: '¥' }} rules={[{ required: true, message: '请输入商品价格' }]} />
+        <ProFormSwitch name="member_price_enabled" label="启用会员价" />
+        <Form.Item noStyle shouldUpdate={(prev, current) => prev.member_price_enabled !== current.member_price_enabled}>
+          {({ getFieldValue }) => getFieldValue('member_price_enabled')
+            ? <ProFormDigit name="member_price" label="会员价（元）" min={0} fieldProps={{ precision: 2, addonBefore: '¥' }} rules={[{ required: true, message: '启用会员价后请输入价格' }]} />
+            : null}
+        </Form.Item>
         <ProFormText name="spec" label="规格" />
         <ProFormText name="desc" label="说明" />
         <ProForm.Item name="image_url" label="商品图片"><MediaUploadField purpose="product" /></ProForm.Item>
+        <ProFormDigit name="display_order" label="展示顺序" min={0} fieldProps={{ precision: 0 }} />
+        {isHeadquartersAdmin && <ProFormSelect name="publication_status" label="目录状态" options={PRODUCT_STATUS_OPTIONS} />}
+        <div className="admin-subtitle">商品详情模块</div>
+        <Form.List name="detail_modules">
+          {(fields, { add, remove }) => <>
+            {fields.map(({ key, name, ...restField }) => <div key={key} style={{ marginBottom: 8 }}>
+              <Space align="start" style={{ display: 'flex', width: '100%' }}>
+                <Form.Item {...restField} name={[name, 'type']} initialValue="text"><Select style={{ width: 100 }} options={[{ value: 'text', label: '文字' }, { value: 'image', label: '图片' }, { value: 'highlight', label: '亮点' }]} /></Form.Item>
+                <Form.Item {...restField} name={[name, 'title']}><Input placeholder="标题" /></Form.Item>
+                <Form.Item noStyle shouldUpdate={(prev, current) => prev.detail_modules?.[name]?.type !== current.detail_modules?.[name]?.type}>
+                  {({ getFieldValue }) => getFieldValue(['detail_modules', name, 'type']) === 'image'
+                    ? <Form.Item {...restField} name={[name, 'body']}><MediaUploadField purpose="product_detail" /></Form.Item>
+                    : <Form.Item {...restField} name={[name, 'body']}><Input placeholder="内容" /></Form.Item>}
+                </Form.Item>
+                <Button danger type="text" onClick={() => remove(name)}>删除</Button>
+              </Space>
+            </div>)}
+            <Button type="dashed" onClick={() => add({ type: 'text' })} block>增加详情模块</Button>
+          </>}
+        </Form.List>
       </ModalForm>
     </PageContainer>
   );

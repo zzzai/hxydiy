@@ -7,7 +7,11 @@ export type Product = {
   spec?: string;
   product_type: string;
   price_cents: number;
+  member_price_cents?: number | null;
+  member_price_enabled?: boolean;
   image_url?: string;
+  detail_modules?: Array<{ type?: string; title?: string; body?: string }>;
+  display_order?: number;
   publication_status: string;
 };
 
@@ -46,18 +50,35 @@ export function productToForm(product: Product) {
     spec: product.spec || '',
     product_type: product.product_type,
     price: Number((Number(product.price_cents || 0) / 100).toFixed(2)),
+    member_price_enabled: Boolean(product.member_price_enabled),
+    member_price: product.member_price_enabled && product.member_price_cents !== null && product.member_price_cents !== undefined
+      ? Number((Number(product.member_price_cents) / 100).toFixed(2))
+      : undefined,
     image_url: product.image_url || '',
+    detail_modules: product.detail_modules || [],
+    display_order: Number(product.display_order || 0),
     publication_status: product.publication_status,
   };
 }
 
 export function toProductPayload(values: Record<string, unknown>, storeId: number) {
-  const { price, ...rest } = values as { price?: number } & Record<string, unknown>;
+  const { price, member_price, member_price_enabled, ...rest } = values as {
+    price?: number;
+    member_price?: number;
+    member_price_enabled?: boolean;
+  } & Record<string, unknown>;
+  const hasMemberPriceConfiguration = Object.hasOwn(values, 'member_price_enabled');
   return {
     ...rest,
     store_id: storeId,
     price_cents: Math.round(Number(price ?? 0) * 100),
     image_url: values.image_url || '',
+    ...(hasMemberPriceConfiguration
+      ? {
+        member_price_enabled: Boolean(member_price_enabled),
+        member_price_cents: member_price_enabled ? Math.round(Number(member_price ?? 0) * 100) : null,
+      }
+      : {}),
   };
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Form, Popconfirm, Space, Switch, Tabs, Tag } from 'antd';
-import { EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Form, Input, Popconfirm, Space, Switch, Tabs, Tag } from 'antd';
+import { CopyOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import {
   ModalForm,
   PageContainer,
@@ -9,7 +9,7 @@ import {
   type ActionType,
   type ProColumns,
 } from '@ant-design/pro-components';
-import { getStaff } from '../api';
+import { duplicateProject, getStaff } from '../api';
 import { canManageConfiguration, canManageStoreMasterData, getStoreId } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
@@ -46,9 +46,11 @@ export default function ProjectsPage() {
   const [actionRef] = useState<React.MutableRefObject<ActionType | undefined>>({ current: undefined });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
+  const [copying, setCopying] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [stores, setStores] = useState<Array<{ id: number; name: string; store_code?: string }>>([]);
   const [form] = Form.useForm();
+  const [copyForm] = Form.useForm();
 
   const loadStoreOptions = async (keyword = '') => {
     try {
@@ -83,6 +85,11 @@ export default function ProjectsPage() {
     setOpen(true);
   };
 
+  const openDuplicate = (project: Project) => {
+    setCopying(project);
+    copyForm.setFieldsValue({ code: `${project.code}-copy`, name: `${project.name}（副本）` });
+  };
+
   const updatePublication = async (project: Project, publicationStatus: 'published' | 'inactive' | 'archived') => {
     try {
       await refineDataProvider.update({
@@ -112,6 +119,13 @@ export default function ProjectsPage() {
     },
     { title: '时长', dataIndex: 'duration_min', width: 80, render: (_, record) => record.duration_min ? `${record.duration_min}分钟` : '-' },
     {
+      title: '内容配置', width: 150,
+      render: (_, record) => <Space size={4} wrap>
+        <Tag>{record.detail_modules?.length || 0} 个详情模块</Tag>
+        <Tag>{record.diy_options?.length || 0} 个兼容选项</Tag>
+      </Space>,
+    },
+    {
       title: '价格', dataIndex: 'prices', width: 250,
       render: (_, record) => <Space size={4} wrap>{Object.entries(record.prices || {}).map(([type, cents]) => <Tag key={type} color={type === 'member' ? 'green' : undefined}>{priceLabels[type] || type} {formatProjectPrice(cents)}</Tag>)}</Space>,
     },
@@ -126,6 +140,7 @@ export default function ProjectsPage() {
       render: (_, record) => isHeadquartersAdmin
         ? <Space size={4}>
           <Button size="small" type="link" icon={<EditOutlined />} onClick={() => openEditor(record)}>编辑内容</Button>
+          <Button size="small" type="link" icon={<CopyOutlined />} onClick={() => openDuplicate(record)}>复制为草稿</Button>
           {record.publication_status !== 'archived' && <Popconfirm title="确定强制下线该项目吗？店长不能恢复。" onConfirm={() => updatePublication(record, 'archived')}><Button size="small" type="link" danger>强制下线</Button></Popconfirm>}
         </Space>
         : <Space size={8}>
@@ -172,7 +187,7 @@ export default function ProjectsPage() {
           return { success: true, data: normalized.data, total: normalized.total };
         }}
         options={{ density: true, fullScreen: true, reload: true, setting: true }}
-        scroll={{ x: 980 }}
+        scroll={{ x: 1160 }}
       />
       <ModalForm
         key={editing?.id || 'new-project'}
@@ -211,6 +226,24 @@ export default function ProjectsPage() {
             ] : []),
           ]}
         />
+      </ModalForm>
+      <ModalForm
+        form={copyForm}
+        title={copying ? `复制项目：${copying.name}` : '复制项目'}
+        open={Boolean(copying)}
+        modalProps={{ destroyOnClose: true }}
+        onOpenChange={(nextOpen) => { if (!nextOpen) { setCopying(null); copyForm.resetFields(); } }}
+        onFinish={async (values) => {
+          if (!copying) return false;
+          await duplicateProject(copying.id, { code: String(values.code || '').trim(), name: String(values.name || '').trim() });
+          message.success('已复制为草稿，请继续编辑并发布');
+          actionRef.current?.reload();
+          setCopying(null);
+          return true;
+        }}
+      >
+        <Form.Item name="code" label="新项目编码" rules={[{ required: true, message: '请输入新项目编码' }]}><Input /></Form.Item>
+        <Form.Item name="name" label="新项目名称" rules={[{ required: true, message: '请输入新项目名称' }]}><Input /></Form.Item>
       </ModalForm>
     </PageContainer>
   );
