@@ -110,6 +110,8 @@ class AlembicContractTests(unittest.TestCase):
                         copied.constraints.discard(constraint)
                 copied._columns.remove(template_column)
                 copied._columns.remove(copied.c.member_price_enabled)
+            if copied.name == "products":
+                copied._columns.remove(copied.c.member_price_enabled)
             if copied.name == "users":
                 copied._columns.remove(copied.c.customer_login_version)
                 membership_store_column = copied.c.membership_store_id
@@ -324,6 +326,8 @@ class AlembicContractTests(unittest.TestCase):
                             copied.foreign_key_constraints.discard(constraint)
                             copied.constraints.discard(constraint)
                     copied._columns.remove(template_column)
+                    copied._columns.remove(copied.c.member_price_enabled)
+                if copied.name == "products":
                     copied._columns.remove(copied.c.member_price_enabled)
                 if copied.name == "users":
                     for column_name in (

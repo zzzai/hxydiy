@@ -75,27 +75,43 @@ def upgrade() -> None:
     )
     op.create_index("ix_store_price_overrides_project_id", "store_price_overrides", ["project_id"])
 
-    with op.batch_alter_table("projects") as batch_op:
-        batch_op.add_column(sa.Column("template_id", sa.Integer(), nullable=True))
-        batch_op.add_column(
-            sa.Column("member_price_enabled", sa.Boolean(), nullable=False, server_default=sa.false())
-        )
-        batch_op.create_foreign_key(
-            "fk_projects_template_id", "project_templates", ["template_id"], ["id"]
-        )
-    op.create_index("ix_projects_template_id", "projects", ["template_id"])
+    # Plain ADD COLUMN instead of batch_alter_table: alembic's batch column
+    # reordering cannot handle the pre-existing projects <-> project_catalog_versions
+    # circular FK (20260815). FK is created on PostgreSQL only; SQLite cannot
+    # ALTER in constraints and gets the FK from model metadata create_all.
+    #
+    # Table-existence guards follow the 20260921_staff_scope precedent: some
+    # historical migration tests intentionally reconstruct only the tables their
+    # older revision needs; projects/products/price_book may be absent there.
+    bind = op.get_bind()
+    existing_tables = set(sa.inspect(bind).get_table_names())
 
-    with op.batch_alter_table("products") as batch_op:
-        batch_op.add_column(
-            sa.Column("member_price_enabled", sa.Boolean(), nullable=False, server_default=sa.false())
+    if "projects" in existing_tables:
+        op.add_column("projects", sa.Column("template_id", sa.Integer(), nullable=True))
+        op.add_column(
+            "projects",
+            sa.Column("member_price_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
         )
+        op.create_index("ix_projects_template_id", "projects", ["template_id"])
+        if bind.dialect.name != "sqlite":
+            op.create_foreign_key(
+                "fk_projects_template_id", "projects", "project_templates", ["template_id"], ["id"]
+            )
+
+    if "products" in existing_tables:
+        op.add_column(
+            "products",
+            sa.Column("member_price_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
+        )
+
+    if "projects" not in existing_tables:
+        return
 
     # Backfill: each existing store project becomes a brand template. Set-based
     # INSERT...SELECT keeps JSON columns database-native (dialect-safe for both
     # SQLite and PostgreSQL). Prices are snapshotted from the currently
     # effective price_book rows so every store's effective price resolves to
     # exactly what it was before the migration.
-    bind = op.get_bind()
     bind.execute(sa.text("""
         INSERT INTO project_templates
         (code, name, category, duration_min, desc, image_url, detail_modules, tags,
@@ -112,6 +128,9 @@ def upgrade() -> None:
             SELECT id FROM project_templates WHERE project_templates.code = projects.code
         )
     """))
+    if "price_book" not in existing_tables:
+        return
+
     bind.execute(sa.text("""
         INSERT INTO template_price_policies
         (template_id, price_type, standard_price_cents, override_allowed,
@@ -132,13 +151,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("products") as batch_op:
-        batch_op.drop_column("member_price_enabled")
-    op.drop_index("ix_projects_template_id", table_name="projects")
-    with op.batch_alter_table("projects") as batch_op:
-        batch_op.drop_constraint("fk_projects_template_id", type_="foreignkey")
-        batch_op.drop_column("member_price_enabled")
-        batch_op.drop_column("template_id")
+    existing_tables = set(sa.inspect(op.get_bind()).get_table_names())
+    if "products" in existing_tables:
+        op.drop_column("products", "member_price_enabled")
+    if "projects" in existing_tables:
+        if op.get_bind().dialect.name != "sqlite":
+            op.drop_constraint("fk_projects_template_id", "projects", type_="foreignkey")
+        op.drop_index("ix_projects_template_id", table_name="projects")
+        op.drop_column("projects", "member_price_enabled")
+        op.drop_column("projects", "template_id")
     op.drop_table("store_price_overrides")
     op.drop_table("template_price_policies")
     op.drop_table("project_templates")

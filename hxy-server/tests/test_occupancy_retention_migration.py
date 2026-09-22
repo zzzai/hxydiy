@@ -41,6 +41,8 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                         copied.constraints.discard(constraint)
                 copied._columns.remove(template_column)
                 copied._columns.remove(copied.c.member_price_enabled)
+            if copied.name == "products":
+                copied._columns.remove(copied.c.member_price_enabled)
             if copied.name == "audit_logs":
                 for column_name in ("assignment_id", "actor_role", "scope_type", "scope_id"):
                     column = copied.c[column_name]
