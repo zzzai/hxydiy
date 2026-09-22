@@ -19,6 +19,16 @@
 - 认证仍使用 `Authorization: Bearer <token>`。OpenAPI 中以 `StaffBearer` 表示，不把令牌写入规格或生成文件。
 - 本契约只描述现有服务端校验；前端生成类型不能替代服务端权限、门店范围和业务规则验证。
 
+## 账号、角色与工作区授权
+
+- `Staff` 继续作为登录身份；有效权限来自 `staff_scope_assignments`，角色为 `brand_admin | hq_operator | store_manager | store_staff`。品牌角色只能使用 `brand` 范围且不绑定门店，门店角色必须使用 `store` 范围并绑定存在的门店。
+- `POST /api/v1/admin/login` 在凭证通过后返回账号摘要、`selector_token` 和实时工作区列表。只有一个工作区时 `token` 已绑定该授权；多个工作区时不默认选择，`token` 与 `selector_token` 均为仅可选工作区的短期令牌；零个有效工作区返回 `403 STAFF_WORKSPACE_REQUIRED`。
+- `POST /api/v1/admin/workspaces/select` 只接受选择令牌和属于该账号的有效授权，返回绑定账号、授权 ID、角色、范围和凭证版本的作用域令牌。选择令牌不能调用普通业务接口。
+- 账号停用、凭证版本递增或授权停用会立即令相关作用域令牌失效。三阶段迁移期间，旧 `token_type=staff` 管理端令牌仅在账号实时存在唯一有效授权时映射到该授权；零授权按撤权拒绝，多授权要求重新登录选择工作区。授权新增或状态变化递增目标账号凭证版本，旧令牌不能借角色变更获得新权限；技师登录契约不变。
+- `brand_admin` 可管理全部授权；`hq_operator` 可管理除 `brand_admin` 外的授权；门店角色不可管理授权。最后一个有效品牌管理员不得停用。
+- 授权写审计保存操作账号、当前授权、角色、范围、目标账号、目标授权以及变更前后值；密码与令牌不得写入审计。
+- 历史 `admin` 账号迁移时保留密码哈希，清除固定门店并仅递增一次凭证版本；其他管理账号生成等价授权且不扩大权限，技师账号不迁移。
+
 ## 商品目录增量
 
 - 商品管理与公开目录新增可空 `member_price_cents`、非负 `display_order` 和受控 `detail_modules`。

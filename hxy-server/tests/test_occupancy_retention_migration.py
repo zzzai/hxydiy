@@ -22,9 +22,24 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
             if table.name in {
                 "service_position_qrs", "customer_profile_consents", "customer_profile_current",
                 "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
+                "staff_scope_assignments",
             }:
                 continue
             copied = table.to_metadata(previous_metadata)
+            if copied.name == "audit_logs":
+                for column_name in ("assignment_id", "actor_role", "scope_type", "scope_id"):
+                    column = copied.c[column_name]
+                    for index in list(copied.indexes):
+                        if column.name in index.columns:
+                            copied.indexes.discard(index)
+                    for constraint in list(copied.foreign_key_constraints):
+                        if any(foreign_key.parent is column for foreign_key in constraint.elements):
+                            for foreign_key in constraint.elements:
+                                foreign_key.parent.foreign_keys.discard(foreign_key)
+                                copied.foreign_keys.discard(foreign_key)
+                            copied.foreign_key_constraints.discard(constraint)
+                            copied.constraints.discard(constraint)
+                    copied._columns.remove(column)
             if copied.name == "position_occupancies" and "serviced_by_technician_id" in copied.c:
                 owner_column = copied.c.serviced_by_technician_id
                 for index in list(copied.indexes):

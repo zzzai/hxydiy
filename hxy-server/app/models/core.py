@@ -97,6 +97,12 @@ class AuditLog(Base):
     actor_id: Mapped[str] = mapped_column(String(64), default="")
     # 审计记录的明确门店归属。与 detail 中的业务快照分离，供权限过滤和索引查询使用。
     store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True, index=True)
+    assignment_id: Mapped[int | None] = mapped_column(
+        ForeignKey("staff_scope_assignments.id"), nullable=True, index=True
+    )
+    actor_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    scope_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    scope_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"), nullable=True)
     action: Mapped[str] = mapped_column(String(64), index=True)
     entity_type: Mapped[str] = mapped_column(String(32), index=True)
     entity_id: Mapped[str] = mapped_column(String(64), default="")
