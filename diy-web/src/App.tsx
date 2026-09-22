@@ -93,6 +93,12 @@ import {
   trackDiyEvent,
 } from './tracking';
 import {
+  MENU_SYNC_INTERVAL_MS,
+  isProjectInMenu,
+  menuFingerprint,
+  pruneDraftToMenu,
+} from './menuSync';
+import {
   CATALOG_SECTIONS,
   KIOSK_UNBOUND_COPY,
   TEA_SERVICE,
@@ -331,6 +337,19 @@ export default function App() {
                       : profileOpen ? 'profile'
                         : membershipKind ? 'membership'
                           : null;
+
+  // 菜单同步只在 boot/storeId 变化时重建定时器，其余最新值通过 ref 读取，避免频繁重建。
+  const menuFingerprintRef = useRef('');
+  const menuSyncStateRef = useRef({
+    saving: false,
+    submitting: false,
+    activeOverlay,
+    selectedProjectIds,
+    projectPreferences,
+    projectAddonIds,
+    projectCatalogSelections,
+    detailProjectId: detailProject?.id ?? null,
+  });
 
   const selectionItems = useMemo(() => buildSelectionItems({
     projects,
@@ -834,6 +853,7 @@ export default function App() {
       ]);
       setProjects(catalog);
       setAddons(addonCatalog);
+      menuFingerprintRef.current = menuFingerprint(catalog, addonCatalog);
       setPositions(publicMap.positions);
       setCouponTemplates(coupons);
       setPageContent(content);
@@ -1175,6 +1195,88 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [boot, session?.id, feedbackToken, accessToken, readOnly, hasSubmittedCustomerSession, positionCode]);
+
+  useEffect(() => {
+    menuSyncStateRef.current = {
+      saving,
+      submitting,
+      activeOverlay,
+      selectedProjectIds,
+      projectPreferences,
+      projectAddonIds,
+      projectCatalogSelections,
+      detailProjectId: detailProject?.id ?? null,
+    };
+  });
+
+  // 菜单同步：门店营业中改价或上下架后，顾客端要能感知，而不是一直显示旧价。
+  // 后端没有菜单版本接口，只能重拉全量后用本地指纹判断是否有变化。
+  useEffect(() => {
+    if (boot !== 'ready') return undefined;
+    let active = true;
+    const syncMenu = async () => {
+      // 草稿保存或提交进行中不打断，避免请求交错覆盖顾客刚做的选择。
+      const guard = menuSyncStateRef.current;
+      if (guard.saving || guard.submitting) return;
+      try {
+        const [catalog, addonCatalog] = await Promise.all([
+          getProjects(query.storeId),
+          getAddons(query.storeId).catch(() => null),
+        ]);
+        // 加项拉取失败时不能只更新项目，避免价格与可选项不一致。
+        if (!active || !addonCatalog) return;
+        const nextFingerprint = menuFingerprint(catalog, addonCatalog);
+        if (nextFingerprint === menuFingerprintRef.current) return;
+        menuFingerprintRef.current = nextFingerprint;
+        setProjects(catalog);
+        setAddons(addonCatalog);
+
+        const current = menuSyncStateRef.current;
+        const detailGone = current.detailProjectId !== null && !isProjectInMenu(catalog, current.detailProjectId);
+        const { draft, removedProjectIds } = pruneDraftToMenu({
+          selectedProjectIds: current.selectedProjectIds,
+          projectPreferences: current.projectPreferences,
+          projectAddonIds: current.projectAddonIds,
+          projectCatalogSelections: current.projectCatalogSelections,
+        }, catalog);
+        if (removedProjectIds.length > 0) {
+          setSelectedProjectIds(draft.selectedProjectIds);
+          setProjectPreferences(draft.projectPreferences);
+          setProjectAddonIds(draft.projectAddonIds);
+          setProjectCatalogSelections(draft.projectCatalogSelections);
+          flash(`门店菜单已更新，${removedProjectIds.length} 个项目已下架`);
+        }
+        // 正在看的项目被下架时收起详情页，否则详情会引用不存在的项目。
+        if (detailGone) {
+          if (current.activeOverlay === 'project-detail') dismissTopOverlay();
+          else setDetailProject(null);
+          flash(removedProjectIds.length > 0 ? '门店菜单已更新' : '该项目已下架，已返回菜单');
+        }
+      } catch {
+        // 菜单同步是增强能力；失败时保持当前已加载的菜单继续可用。
+      }
+    };
+    void syncMenu();
+    const startTimer = () => window.setInterval(() => void syncMenu(), MENU_SYNC_INTERVAL_MS);
+    let timer: number | null = document.visibilityState === 'visible' ? startTimer() : null;
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        if (timer !== null) { window.clearInterval(timer); timer = null; }
+        return;
+      }
+      if (timer === null) timer = startTimer();
+      void syncMenu();
+    };
+    const onOnline = () => void syncMenu();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', onOnline);
+    return () => {
+      active = false;
+      if (timer !== null) window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [boot, query.storeId]);
 
   useEffect(() => {
     if (boot !== 'ready') return undefined;

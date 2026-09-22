@@ -456,8 +456,8 @@ export function customerProjectPurchaseTags(project: CustomerProjectTagInput): s
 /** 顾客可见的项目特色：只描述服务内容，不暴露后台经营分类。 */
 const CUSTOMER_PROJECT_HIGHLIGHTS: Record<string, string[]> = {
   'hxy-qiqing-30': ['现煮草本', '五行茶饮'],
-  'hxy-xiangxiang-60': ['现熬草本', '泡脚按摩'],
-  'hxy-xiaoqi-90': ['现熬草本', '全身按摩'],
+  'hxy-xiangxiang-60': ['现煮草本', '泡脚按摩'],
+  'hxy-xiaoqi-90': ['现煮草本', '全身按摩'],
   'hxy-nvshen-60': ['现煮草本', '足部养护', '足膜润足'],
   'hxy-tuina-70': ['全身推拿', '草本热敷'],
   'hxy-spa-60': ['精油护理', '头部按摩', '经络梳'],
@@ -597,7 +597,7 @@ export function customerProjectSummaryText(project: CustomerProjectTagInput): st
     'hxy-xiangxiang-60': '养生茶饮+现煮草本泡脚+肩颈按摩+刮脚搓盐',
     'hxy-xiaoqi-90': '招牌草本泡脚按摩+草本热敷',
     'hxy-nvshen-60': '养生茶饮+现煮草本泡脚+足部养护',
-    'hxy-tuina-70': '全身推拿按摩+草木热敷+养生茶饮',
+    'hxy-tuina-70': '全身推拿按摩+草本热敷+养生茶饮',
     'hxy-spa-60': '清脚+高端精油SPA+头部按摩+养生茶饮',
     'hxy-spa-90': '清脚+高端精油SPA+头部按摩+养生茶饮',
     'hxy-taoke-60': '痛症调理：活络油+工具+热敷，10次/套',
