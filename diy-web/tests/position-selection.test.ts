@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import type { ServicePosition } from '../src/api.ts';
 import {
+  entryMenuNotice,
   getEntrySource,
   getPositionSelectionDecision,
   resolveEntryConflict,
@@ -10,6 +11,31 @@ import {
   resolveRequestedPosition,
   shouldResumeCurrentPosition,
 } from '../src/positionSelection.ts';
+
+test('扫码进入已有选单时只提示一次并继续展示菜单', () => {
+  assert.equal(entryMenuNotice({
+    collaborationMode: 'shared_draft',
+    resumed: true,
+    recovered: false,
+    positionLabel: '1号沙发',
+  }), '1号沙发已有选单，已进入菜单；同行人可以一起选择');
+  assert.equal(entryMenuNotice({
+    collaborationMode: 'browse_only',
+    resumed: true,
+    recovered: false,
+    positionLabel: '1号沙发',
+  }), '1号沙发已有已提交清单，您可以继续浏览项目或评价');
+  assert.equal(entryMenuNotice({
+    resumed: true,
+    recovered: false,
+    positionLabel: '1号沙发',
+  }), '已恢复1号沙发的本次选单');
+  assert.equal(entryMenuNotice({
+    resumed: false,
+    recovered: false,
+    positionLabel: '1号沙发',
+  }), undefined);
+});
 
 function position(overrides: Partial<ServicePosition> = {}): ServicePosition {
   return {

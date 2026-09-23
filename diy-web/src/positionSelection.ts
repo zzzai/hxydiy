@@ -53,6 +53,24 @@ export type EntrySourceInput = {
   positionCode: string;
 };
 
+export function entryMenuNotice(input: {
+  collaborationMode?: 'shared_draft' | 'browse_only' | '';
+  resumed: boolean;
+  recovered: boolean;
+  positionLabel: string;
+}): string | undefined {
+  if (input.collaborationMode === 'shared_draft' && input.resumed) {
+    return `${input.positionLabel}已有选单，已进入菜单；同行人可以一起选择`;
+  }
+  if (input.collaborationMode === 'browse_only') {
+    return `${input.positionLabel}已有已提交清单，您可以继续浏览项目或评价`;
+  }
+  if (input.recovered || input.resumed) {
+    return `已恢复${input.positionLabel}的本次选单`;
+  }
+  return undefined;
+}
+
 export function getEntrySource(input: EntrySourceInput): string {
   if (input.source) return input.source;
   if (!input.qrToken) return 'store_qr';

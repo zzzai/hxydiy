@@ -257,6 +257,86 @@ class SharedSelectionCollaborationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403, response.text)
         self.assertEqual(response.json()["detail"]["code"], "COLLABORATION_TOKEN_INVALID")
 
+    def test_signed_qr_can_join_an_occupied_position_when_browser_is_bound_elsewhere(self):
+        self.entry(self.first)
+        with self.SessionLocal() as db:
+            room = Room(
+                store_id=self.store_id,
+                code=f"occupied-{uuid.uuid4().hex[:8]}",
+                name="已有顾客的测试沙发",
+                room_type="sofa",
+                customer_label="已有顾客的测试位",
+                operational_status="active",
+                is_service_position=True,
+                is_space_container=False,
+            )
+            db.add(room)
+            db.flush()
+            qr = ServicePositionQr(
+                public_id=str(uuid.uuid4()), store_id=self.store_id,
+                room_id=room.id, source="personal_qr", status="active",
+            )
+            db.add(qr)
+            db.commit()
+            occupied_code = room.code
+            occupied_token = _managed_position_qr_token(qr, room.code)
+
+        with TestClient(app) as occupant:
+            occupied = occupant.post("/api/v1/entry-sessions", json={
+                "store_id": self.store_id,
+                "position_code": occupied_code,
+                "source": "personal_qr",
+                "device_label": "座位原顾客",
+                "entry_token": occupied_token,
+            })
+        joined = self.first.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id,
+            "position_code": occupied_code,
+            "source": "personal_qr",
+            "device_label": "同行人手机",
+            "entry_token": occupied_token,
+        })
+
+        self.assertEqual(occupied.status_code, 200, occupied.text)
+        self.assertEqual(joined.status_code, 200, joined.text)
+        self.assertEqual(joined.json()["session"]["id"], occupied.json()["session"]["id"])
+        self.assertEqual(joined.json()["collaboration_mode"], "shared_draft")
+
+    def test_signed_qr_does_not_let_one_browser_hold_two_empty_positions(self):
+        self.entry(self.first)
+        with self.SessionLocal() as db:
+            room = Room(
+                store_id=self.store_id,
+                code=f"empty-{uuid.uuid4().hex[:8]}",
+                name="空闲测试沙发",
+                room_type="sofa",
+                customer_label="空闲测试位",
+                operational_status="active",
+                is_service_position=True,
+                is_space_container=False,
+            )
+            db.add(room)
+            db.flush()
+            qr = ServicePositionQr(
+                public_id=str(uuid.uuid4()), store_id=self.store_id,
+                room_id=room.id, source="personal_qr", status="active",
+            )
+            db.add(qr)
+            db.commit()
+            empty_code = room.code
+            empty_token = _managed_position_qr_token(qr, room.code)
+
+        response = self.first.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id,
+            "position_code": empty_code,
+            "source": "personal_qr",
+            "device_label": "重复占位手机",
+            "entry_token": empty_token,
+        })
+
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "BROWSER_ACTIVE_ELSEWHERE")
+
     def test_repeated_signed_qr_entry_is_rate_limited_and_audited(self):
         with patch("app.api.occupancies.COLLABORATION_ENTRY_RATE_LIMIT", 1):
             first = self.entry(self.first)
