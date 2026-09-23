@@ -6,7 +6,7 @@ export type NavigationItem = {
   icon: string;
   roles: readonly NavigationRole[];
   requiresUnboundAdmin?: boolean;
-  requiresBoundStore?: boolean;
+  headquartersAccess?: boolean;
 };
 
 export type NavigationGroup = {
@@ -25,13 +25,13 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '今日运营',
     icon: 'dashboard',
     items: [
-      { path: '/today', label: '今日运营', icon: 'ordered-list', roles: storeRoles, requiresBoundStore: true },
-      { path: '/service-positions', label: '服务位看板', icon: 'environment', roles: storeRoles, requiresBoundStore: true },
-      { path: '/selection-sessions', label: '到店服务选单', icon: 'project', roles: storeRoles, requiresBoundStore: true },
-      { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles, requiresBoundStore: true },
-      { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles, requiresBoundStore: true },
-      { path: '/audit-logs', label: '审计日志', icon: 'file-search', roles: managementRoles },
-      { path: '/feedback', label: '低分评价', icon: 'message', roles: managementRoles, requiresBoundStore: true },
+      { path: '/today', label: '今日运营', icon: 'ordered-list', roles: storeRoles },
+      { path: '/service-positions', label: '服务位看板', icon: 'environment', roles: storeRoles },
+      { path: '/selection-sessions', label: '到店服务选单', icon: 'project', roles: storeRoles },
+      { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles },
+      { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles },
+      { path: '/audit-logs', label: '审计日志', icon: 'file-search', roles: managementRoles, headquartersAccess: true },
+      { path: '/feedback', label: '低分评价', icon: 'message', roles: managementRoles },
     ],
   },
   {
@@ -39,9 +39,9 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '服务与商品',
     icon: 'appstore',
     items: [
-      { path: '/projects', label: '服务项目', icon: 'project', roles: managementRoles },
-      { path: '/addons', label: '项目加项', icon: 'tags', roles: managementRoles },
-      { path: '/products', label: '商城商品', icon: 'shopping', roles: managementRoles },
+      { path: '/projects', label: '服务项目', icon: 'project', roles: managementRoles, headquartersAccess: true },
+      { path: '/addons', label: '项目加项', icon: 'tags', roles: managementRoles, headquartersAccess: true },
+      { path: '/products', label: '商城商品', icon: 'shopping', roles: managementRoles, headquartersAccess: true },
       { path: '/page-content', label: 'DIY 页面配置', icon: 'appstore', roles: managementRoles },
     ],
   },
@@ -51,7 +51,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     icon: 'team',
     items: [
       { path: '/techs', label: '技师管理', icon: 'idcard', roles: managementRoles },
-      { path: '/staff-accounts', label: '员工账号', icon: 'team', roles: ['admin'], requiresUnboundAdmin: true },
+      { path: '/staff-accounts', label: '员工账号', icon: 'team', roles: ['admin'], requiresUnboundAdmin: true, headquartersAccess: true },
       { path: '/users', label: '用户列表', icon: 'team', roles: managementRoles },
       { path: '/tags', label: '标签管理', icon: 'tags', roles: managementRoles },
       { path: '/segments', label: '用户分群', icon: 'pie-chart', roles: managementRoles },
@@ -62,7 +62,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '门店与资源',
     icon: 'desktop',
     items: [
-      { path: '/stores', label: '门店主数据', icon: 'environment', roles: ['admin'], requiresUnboundAdmin: true },
+      { path: '/stores', label: '门店主数据', icon: 'environment', roles: ['admin'], requiresUnboundAdmin: true, headquartersAccess: true },
       { path: '/rooms', label: '房间/床位', icon: 'environment', roles: managementRoles },
     ],
   },
@@ -86,8 +86,8 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
 
 function isVisible(item: NavigationItem, role?: string, storeId?: number | null): boolean {
   if (!role || !item.roles.includes(role as NavigationRole)) return false;
-  if (item.requiresBoundStore && !storeId && role === 'admin') return false;
-  return !item.requiresUnboundAdmin || (role === 'admin' && !storeId);
+  if (role === 'admin' && !storeId) return item.headquartersAccess === true;
+  return !item.requiresUnboundAdmin;
 }
 
 export function getVisibleNavigationGroups(role?: string, storeId?: number | null): NavigationGroup[] {

@@ -40,7 +40,7 @@ test('staff 不能通过地址直接进入管理员页面', () => {
 
 test('admin 可以进入全部已注册页面', () => {
   assert.equal(isPathAllowed('admin', '/analytics', 1), true);
-  assert.equal(isPathAllowed('admin', '/automation'), true);
+  assert.equal(isPathAllowed('admin', '/automation', 1), true);
   assert.equal(isPathAllowed('admin', '/addons'), true);
   assert.equal(isPathAllowed('staff', '/addons'), false);
 });
@@ -73,6 +73,17 @@ test('未知角色采用最小权限且默认进入今日运营', () => {
   assert.equal(isPathAllowed('unknown', '/today'), false);
   assert.equal(getDefaultPath('unknown'), '/forbidden');
   assert.equal(getDefaultPath('staff'), '/today');
+});
+
+test('headquarters only exposes pages backed by headquarters-scoped APIs', () => {
+  assert.deepEqual(getVisibleMenuPaths('admin', null), [
+    '/audit-logs', '/projects', '/addons', '/products', '/staff-accounts', '/stores',
+  ]);
+  assert.equal(isPathAllowed('admin', '/techs', null), false);
+  assert.equal(isPathAllowed('admin', '/page-content', null), false);
+  assert.equal(isPathAllowed('admin', '/users', null), false);
+  assert.equal(isPathAllowed('admin', '/automation', null), false);
+  assert.equal(isPathAllowed('admin', '/techs', 1), true);
 });
 
 test('unbound headquarters admin enters store management instead of store operations', () => {
