@@ -31,24 +31,36 @@ export type WorkspaceSelectResponse = {
 export type ReadyStaffSession = { kind: 'ready'; token: string; staff: StaffSummary };
 export type WorkspaceSelection = { kind: 'select'; selectorToken: string; workspaces: WorkspaceGrant[] };
 
+const sessionRoleByWorkspace = {
+  brand_admin: 'admin',
+  hq_operator: 'staff',
+  store_manager: 'manager',
+  store_staff: 'staff',
+} as const;
+
+function sessionStaff(staff: StaffSummary): StaffSummary {
+  const role = staff.role as WorkspaceGrant['role'];
+  return { ...staff, role: sessionRoleByWorkspace[role] ?? staff.role };
+}
+
 export function interpretStaffLogin(response: StaffLoginResponse): ReadyStaffSession | WorkspaceSelection {
   if (response.workspaces.length > 1) {
     if (!response.selector_token) throw new Error('工作区选择凭证无效，请重新登录');
     return { kind: 'select', selectorToken: response.selector_token, workspaces: response.workspaces };
   }
   if (!response.token || !response.staff?.role) throw new Error('登录响应无效，请重新登录');
-  return { kind: 'ready', token: response.token, staff: response.staff };
+  return { kind: 'ready', token: response.token, staff: sessionStaff(response.staff) };
 }
 
 export function finishWorkspaceSelection(response: WorkspaceSelectResponse, assignmentId: number): ReadyStaffSession {
   if (
     response.workspace.assignment_id !== assignmentId || !response.token || !response.staff?.role ||
-    response.staff.role !== ({ brand_admin: 'admin', hq_operator: 'staff', store_manager: 'manager', store_staff: 'staff' } as const)[response.workspace.role] ||
+    response.staff.role !== response.workspace.role ||
     response.staff.store_id !== response.workspace.scope_id
   ) {
     throw new Error('工作区选择结果不匹配，请重新登录');
   }
-  return { kind: 'ready', token: response.token, staff: response.staff };
+  return { kind: 'ready', token: response.token, staff: sessionStaff(response.staff) };
 }
 
 export function storeStaffSession(storage: Pick<Storage, 'setItem'>, session: ReadyStaffSession): void {
