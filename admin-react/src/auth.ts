@@ -37,6 +37,7 @@ export function isPathAllowed(role: string | undefined, pathname: string, storeI
 }
 
 export function getDefaultPath(role?: string, storeId?: number | null): string {
+  if (role === 'admin' && !storeId) return '/stores';
   return getVisibleMenuPaths(role, storeId)[0] || '/forbidden';
 }
 
