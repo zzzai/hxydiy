@@ -3,7 +3,7 @@
 ## 基本信息
 
 - Feature ID：`SERVICE-POSITION-SHORT-QR`
-- 当前状态：`In Development`
+- 当前状态：`Production Deployed / Field Acceptance Pending`
 - 总控负责人：总控窗口
 - 执行窗口：顾客端窗口
 - 权威 contract：`../contracts/service-position-short-qr-v1.md`
@@ -62,5 +62,6 @@
 
 - [x] 规格和 contract 一致。
 - [x] 权限、门店隔离、状态机、幂等、审计和隐私已有明确边界。
-- [ ] OpenAPI、实现、测试和共享记忆随 PR 合并。
-- [ ] 本地、PR、生产和现场状态分别记录。
+- [x] OpenAPI、实现、测试和共享记忆随 PR 合并。
+- [x] 本地、PR 和生产状态分别记录。
+- [ ] 8 张新码导出、打印与逐位真机现场验收。
