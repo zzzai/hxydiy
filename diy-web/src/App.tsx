@@ -1873,7 +1873,6 @@ export default function App() {
       </header>
 
       {boot === 'ready' && hasSubmittedCustomerSession && collaborationMode !== 'browse_only' && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
-      {boot === 'ready' && collaborationMode === 'shared_draft' && <div className="shared-cart-banner" role="status">同一服务位共用一份选单，同行人增删后会自动同步</div>}
       {boot === 'ready' && collaborationMode === 'browse_only' && <div className="shared-cart-banner read-only" role="status">本服务位清单已提交；可继续浏览项目或提交评价与建议</div>}
 
       <section className="miniapp-promo-strip" aria-label="门店推荐">
