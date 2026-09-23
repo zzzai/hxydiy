@@ -67,7 +67,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
   const openKeys = visibleMenuGroups.map(g => g.key);
 
   const page = (path: string, element: React.ReactNode) => (
-    isPathAllowed(role, path, staff?.store_id) ? element : <Navigate to="/forbidden" replace />
+    isPathAllowed(role, path, staff?.store_id) ? element : <Navigate to={role === 'admin' && !staff?.store_id ? getDefaultPath(role, staff?.store_id) : '/forbidden'} replace />
   );
 
   const navigation = (

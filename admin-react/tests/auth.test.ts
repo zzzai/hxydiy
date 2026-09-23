@@ -39,7 +39,7 @@ test('staff 不能通过地址直接进入管理员页面', () => {
 });
 
 test('admin 可以进入全部已注册页面', () => {
-  assert.equal(isPathAllowed('admin', '/analytics'), true);
+  assert.equal(isPathAllowed('admin', '/analytics', 1), true);
   assert.equal(isPathAllowed('admin', '/automation'), true);
   assert.equal(isPathAllowed('admin', '/addons'), true);
   assert.equal(isPathAllowed('staff', '/addons'), false);
@@ -78,6 +78,18 @@ test('未知角色采用最小权限且默认进入今日运营', () => {
 test('unbound headquarters admin enters store management instead of store operations', () => {
   assert.equal(getDefaultPath('admin', null), '/stores');
   assert.equal(getDefaultPath('admin', 1), '/today');
+});
+
+test('headquarters cannot open store-only operations from a retained URL or sidebar', () => {
+  assert.equal(isPathAllowed('admin', '/today', null), false);
+  assert.equal(isPathAllowed('admin', '/service-positions', null), false);
+  assert.equal(isPathAllowed('admin', '/selection-sessions', null), false);
+  assert.equal(isPathAllowed('admin', '/orders', null), false);
+  assert.equal(isPathAllowed('admin', '/analytics', null), false);
+  assert.equal(isPathAllowed('admin', '/feedback', null), false);
+  assert.equal(getVisibleMenuPaths('admin', null).includes('/today'), false);
+  assert.equal(isPathAllowed('admin', '/today', 1), true);
+  assert.equal(isPathAllowed('admin', '/stores', null), true);
 });
 
 test('技师入口使用独立移动路径', () => {
