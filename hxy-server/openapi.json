@@ -1611,9 +1611,11 @@
         "type": "object"
       },
       "FeedbackFollowUpIn": {
+        "additionalProperties": false,
         "properties": {
           "follow_up_note": {
             "default": "",
+            "maxLength": 1000,
             "title": "Follow Up Note",
             "type": "string"
           },
@@ -1638,7 +1640,7 @@
         "properties": {
           "note": {
             "default": "",
-            "maxLength": 1000,
+            "maxLength": 300,
             "title": "Note",
             "type": "string"
           },
@@ -1652,7 +1654,7 @@
             "items": {
               "type": "string"
             },
-            "maxItems": 6,
+            "maxItems": 3,
             "title": "Tags",
             "type": "array"
           }
@@ -6672,6 +6674,78 @@
         "title": "VisitCheckInIn",
         "type": "object"
       },
+      "VisitFeedbackEntryIn": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_token": {
+            "maxLength": 2048,
+            "minLength": 16,
+            "title": "Entry Token",
+            "type": "string"
+          },
+          "position_code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Position Code",
+            "type": "string"
+          },
+          "source": {
+            "pattern": "^(personal_qr|room_qr)$",
+            "title": "Source",
+            "type": "string"
+          },
+          "store_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Store Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "store_id",
+          "position_code",
+          "source",
+          "entry_token"
+        ],
+        "title": "VisitFeedbackEntryIn",
+        "type": "object"
+      },
+      "VisitFeedbackIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Note",
+            "type": "string"
+          },
+          "rating": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Rating",
+            "type": "integer"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Tags",
+            "type": "array"
+          },
+          "visit_feedback_token": {
+            "maxLength": 2048,
+            "minLength": 32,
+            "title": "Visit Feedback Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visit_feedback_token",
+          "rating"
+        ],
+        "title": "VisitFeedbackIn",
+        "type": "object"
+      },
       "WaterRecord": {
         "additionalProperties": false,
         "properties": {
@@ -10409,6 +10483,26 @@
           },
           {
             "in": "query",
+            "name": "feedback_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "service_review",
+                    "visit_feedback"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Feedback Type"
+            }
+          },
+          {
+            "in": "query",
             "name": "page",
             "required": false,
             "schema": {
@@ -10542,6 +10636,160 @@
           }
         },
         "summary": "Update Feedback Follow Up",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/feedback/{feedback_type}/{feedback_id}": {
+      "get": {
+        "operationId": "get_feedback_detail_api_v1_admin_v2_feedback__feedback_type___feedback_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "feedback_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "service_review",
+                "visit_feedback"
+              ],
+              "title": "Feedback Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "feedback_id",
+            "required": true,
+            "schema": {
+              "title": "Feedback Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Feedback Detail Api V1 Admin V2 Feedback  Feedback Type   Feedback Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Feedback Detail",
+        "tags": [
+          "admin-v2"
+        ]
+      },
+      "patch": {
+        "operationId": "update_feedback_follow_up_by_type_api_v1_admin_v2_feedback__feedback_type___feedback_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "feedback_type",
+            "required": true,
+            "schema": {
+              "enum": [
+                "service_review",
+                "visit_feedback"
+              ],
+              "title": "Feedback Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "feedback_id",
+            "required": true,
+            "schema": {
+              "title": "Feedback Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackFollowUpIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Feedback Follow Up By Type Api V1 Admin V2 Feedback  Feedback Type   Feedback Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Feedback Follow Up By Type",
         "tags": [
           "admin-v2"
         ]
@@ -20214,6 +20462,126 @@
         "summary": "Tasks",
         "tags": [
           "technician"
+        ]
+      }
+    },
+    "/api/v1/visit-feedback": {
+      "post": {
+        "operationId": "submit_visit_feedback_api_v1_visit_feedback_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitFeedbackIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Submit Visit Feedback Api V1 Visit Feedback Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Visit Feedback",
+        "tags": [
+          "visit-feedback"
+        ]
+      }
+    },
+    "/api/v1/visit-feedback/entry": {
+      "post": {
+        "operationId": "enter_visit_feedback_api_v1_visit_feedback_entry_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitFeedbackEntryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Enter Visit Feedback Api V1 Visit Feedback Entry Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enter Visit Feedback",
+        "tags": [
+          "visit-feedback"
         ]
       }
     },

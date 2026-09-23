@@ -223,7 +223,7 @@ class SelectionSessionApiTests(unittest.TestCase):
         blocked = self.client.post(
             f"/api/v1/selection-sessions/{session_id}/feedback",
             headers={"X-Selection-Token": token},
-            json={"rating": 5, "tags": ["服务细致"], "note": "很好"},
+            json={"rating": 5, "tags": ["手法专业"], "note": "很好"},
         )
         self.assertEqual(blocked.status_code, 409)
 
@@ -235,10 +235,23 @@ class SelectionSessionApiTests(unittest.TestCase):
 
         ready = self.client.get(f"/api/v1/selection-sessions/{session_id}/service-status", headers={"X-Selection-Token": token})
         self.assertTrue(ready.json()["can_evaluate"])
+        invalid_tag = self.client.post(
+            f"/api/v1/selection-sessions/{session_id}/feedback",
+            headers={"X-Selection-Token": token},
+            json={"rating": 5, "tags": ["等待较久"], "note": ""},
+        )
+        self.assertEqual(invalid_tag.status_code, 400, invalid_tag.text)
+        self.assertEqual(invalid_tag.json()["detail"]["code"], "FEEDBACK_TAG_INVALID")
+        too_long = self.client.post(
+            f"/api/v1/selection-sessions/{session_id}/feedback",
+            headers={"X-Selection-Token": token},
+            json={"rating": 5, "tags": [], "note": "好" * 301},
+        )
+        self.assertEqual(too_long.status_code, 422, too_long.text)
         feedback = self.client.post(
             f"/api/v1/selection-sessions/{session_id}/feedback",
             headers={"X-Selection-Token": token},
-            json={"rating": 5, "tags": ["服务细致", "环境安心"], "note": "很好"},
+            json={"rating": 5, "tags": ["手法专业", "环境舒适"], "note": "很好"},
         )
         self.assertEqual(feedback.status_code, 200)
         duplicate = self.client.post(
@@ -280,7 +293,7 @@ class SelectionSessionApiTests(unittest.TestCase):
         feedback = self.client.post(
             "/api/v1/selection-sessions/profile-completed-session/feedback",
             headers={"Authorization": f"Bearer {token}"},
-            json={"rating": 5, "tags": ["服务细致"], "note": "很好"},
+            json={"rating": 5, "tags": ["手法专业"], "note": "很好"},
         )
         self.assertEqual(feedback.status_code, 200, feedback.text)
 

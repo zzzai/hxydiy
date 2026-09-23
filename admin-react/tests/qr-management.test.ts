@@ -6,7 +6,19 @@ import {
   getServicePositionQrPermissions,
   servicePositionQrRenderOptions,
   servicePositionQrActions,
+  printablePositionQrs,
 } from '../src/servicePositionQr.ts';
+
+test('batch printing includes active beds even when customers cannot select the bed themselves', () => {
+  const positions = [
+    { id: 1, type: 'sofa', customer_selectable: true, operational_status: 'active' },
+    { id: 2, code: 'bed-01a', type: 'bed', customer_selectable: false, operational_status: 'active' },
+    { id: 3, type: 'bed', customer_selectable: false, operational_status: 'inactive' },
+    { id: 4, type: 'room', customer_selectable: false, operational_status: 'active' },
+    { id: -5, type: 'bed', customer_selectable: false, operational_status: 'active' },
+  ];
+  assert.deepEqual(printablePositionQrs(positions as any).map((position) => position.id), [1, 2]);
+});
 
 test('启用中的二维码可以停用、重新生成和换绑', () => {
   assert.deepEqual(servicePositionQrActions('active', false), ['disable', 'regenerate', 'rebind']);

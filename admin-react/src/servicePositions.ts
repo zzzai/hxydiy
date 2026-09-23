@@ -87,14 +87,27 @@ export function normalizeServicePositions(positions: ServicePosition[]): Service
   const valid = new Map<string, ServicePosition>();
   positions.forEach((position) => {
     const expected = canonical.get(position.code);
-    if (expected && expected.type === position.type && !valid.has(position.code)) valid.set(position.code, position);
+    const mismatchedPrefix = (position.code.startsWith('sofa-') && position.type !== 'sofa')
+      || (position.code.startsWith('bed-') && position.type !== 'bed');
+    if (position.id > 0 && (position.type === 'sofa' || position.type === 'bed')
+      && !mismatchedPrefix && (!expected || expected.type === position.type) && !valid.has(position.code)) {
+      valid.set(position.code, position);
+    }
   });
-  return DEFAULT_SERVICE_POSITION_LAYOUT.map((item, index) => valid.get(item.code) || {
+  const extra = [...valid.values()].filter((position) => !canonical.has(position.code));
+  extra.sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
+  const remaining = {
+    sofa: extra.filter((position) => position.type === 'sofa'),
+    bed: extra.filter((position) => position.type === 'bed'),
+  };
+  const normalized = DEFAULT_SERVICE_POSITION_LAYOUT.map((item, index) => valid.get(item.code)
+    || remaining[item.type].shift() || {
       id: -(index + 1), code: item.code, name: item.name, customer_label: item.name,
       type: item.type, state: 'unavailable' as const, is_current: false, customer_selectable: false,
       operational_status: 'inactive', map_x: 0, map_y: 0, map_width: 1, map_height: 1,
       maintenance_note: '', sort_order: 1000 + index, occupancy: null, selection: null,
     });
+  return [...normalized, ...remaining.sofa, ...remaining.bed];
 }
 
 export function splitPositionGroups(positions: ServicePosition[]) {

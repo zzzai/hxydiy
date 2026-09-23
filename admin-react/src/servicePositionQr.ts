@@ -17,6 +17,12 @@ export type PrintablePositionQr = {
   image: string;
 };
 
+export function printablePositionQrs<T extends { id: number; type: string; operational_status: string }>(positions: T[]): T[] {
+  return positions.filter((position) => position.id > 0
+    && (position.type === 'sofa' || position.type === 'bed')
+    && position.operational_status === 'active');
+}
+
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',

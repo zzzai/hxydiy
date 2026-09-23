@@ -1,6 +1,6 @@
 import { formatMoney, type PricingPreview } from './domain.ts';
 
-export const FEEDBACK_TAGS = ['技术专业', '环境舒适', '技师细致', '力度合适', '整体放松'] as const;
+export const FEEDBACK_TAGS = ['手法专业', '环境舒适', '沟通细致', '力度合适', '整体放松'] as const;
 
 const FEEDBACK_NEUTRAL_TAGS = ['手法一般', '力度需调整', '沟通可更清楚', '环境一般', '项目预期不一致'] as const;
 const FEEDBACK_IMPROVEMENT_TAGS = ['力度不合适', '沟通体验不好', '等待较久', '环境问题', '项目与预期不符', '其他问题'] as const;

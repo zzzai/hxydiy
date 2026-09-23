@@ -873,6 +873,7 @@ h1, h2, h3, p { margin-top: 0; }
 .submitted-browse-banner { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; color: var(--green-900); background: var(--green-100); font-size: 10px; }
 .submitted-browse-banner span { display: flex; align-items: center; gap: 6px; }
 .submitted-browse-banner button { flex: none; border: 0; color: var(--green-800); background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; }
+.submitted-browse-actions { display: flex; flex: none; align-items: center; gap: 10px; }
 .success-actions { display: grid; gap: 9px; margin-top: 22px; }
 .success-actions .primary-action, .success-actions .secondary-action { width: 100%; }
 .success-actions button:disabled { opacity: 0.48; cursor: not-allowed; }
@@ -1137,6 +1138,18 @@ h1, h2, h3, p { margin-top: 0; }
 .miniapp-promo .promo-copy strong { font-size: 15px; font-weight: 800; }
 .miniapp-promo .promo-copy em { font-size: 15px; }
 .miniapp-promo img { width: 88px; }
+.visit-feedback-entry {
+  min-width: 224px;
+  align-items: center;
+  border: 1px solid #dceae4;
+  background: linear-gradient(135deg, #f3fbf7 0%, #fff 100%);
+}
+.visit-feedback-entry .promo-copy { padding: 12px 34px 12px 50px; }
+.visit-feedback-entry .promo-copy small { color: #507168; background: #e8f4ee; }
+.visit-feedback-entry .promo-copy strong { color: #153f35; }
+.visit-feedback-entry .promo-copy em { color: #71817a; font-size: 10px; font-style: normal; font-weight: 500; line-height: 1.35; }
+.visit-feedback-icon { position: absolute; left: 14px; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; color: #176856; background: #e2f2eb; }
+.visit-feedback-arrow { position: absolute; right: 12px; color: #6f8d83; }
 .miniapp-catalog-layout {
   height: calc(100dvh - 156px);
   min-height: 0;
@@ -1759,6 +1772,7 @@ h1, h2, h3, p { margin-top: 0; }
 .feedback-complete h2 { margin: 8px 0 0; color: #163e34; font-size: 20px; }
 .feedback-complete p { margin: 0 0 14px; color: #77817c; font-size: 13px; line-height: 1.6; }
 .feedback-complete-actions { display: grid; width: 100%; grid-template-columns: 1fr 1fr; gap: 10px; }
+.feedback-complete-actions.single { grid-template-columns: 1fr; }
 @media (min-width: 768px) {
   .feedback-backdrop { align-items: center; padding: 24px; }
   .feedback-dialog { border-radius: 8px; }

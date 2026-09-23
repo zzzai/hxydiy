@@ -7,7 +7,7 @@ from alembic import op
 
 
 revision: str = "20260921_staff_scope"
-down_revision: Union[str, None] = "20260921_product_catalog"
+down_revision: Union[str, None] = "20260921_visit_feedback"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

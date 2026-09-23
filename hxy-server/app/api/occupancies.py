@@ -32,6 +32,7 @@ from app.domain.occupancy_release_policy import (
     list_release_candidates,
     release_selected_occupancies,
 )
+from app.domain.visit_feedback_tokens import create_visit_feedback_token
 from app.models import AuditLog, BrowserInstance, PositionOccupancy, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceLine, ServicePositionQr, Store, User
 from app.models.service import ServiceOrder, Visit
 from app.schemas.occupancy import (
@@ -114,13 +115,8 @@ def _qr_error(code: str, message: str) -> HTTPException:
     return HTTPException(status_code=403, detail={"code": code, "message": message})
 
 
-def _verify_position_qr_token(
-    db: Session,
-    token: str,
-    store_id: int,
-    position_code: str,
-    source: str,
-) -> ServicePositionQr | None:
+def resolve_position_qr_token(db: Session, token: str) -> tuple[ServicePositionQr | None, Room]:
+    """Resolve store and room exclusively from a signed, revocable entry token."""
     if token.startswith("v3."):
         try:
             version, public_id, signature = token.split(".")
@@ -140,10 +136,10 @@ def _verify_position_qr_token(
         if qr.status != "active":
             raise _qr_error("QR_DISABLED", "二维码已停用，请联系前台获取新二维码")
         room = db.get(Room, qr.room_id)
-        if not room or qr.store_id != store_id or room.code != position_code or qr.source != source:
+        if not room or room.store_id != qr.store_id or room.is_space_container or not room.is_service_position:
             raise _qr_error("QR_BINDING_INVALID", "二维码绑定信息已变化，请重新扫码")
         qr.last_accessed_at = utcnow()
-        return qr
+        return qr, room
 
     try:
         raw, signature = token.split(".", 1)
@@ -153,14 +149,17 @@ def _verify_position_qr_token(
         raise _qr_error("QR_BINDING_INVALID", "二维码无效，请重新扫码")
     if not hmac.compare_digest(signature, expected):
         raise _qr_error("QR_BINDING_INVALID", "二维码无效，请重新扫码")
-    if payload.get("store_id") != store_id or payload.get("position_code") != position_code or payload.get("source") != source:
-        raise _qr_error("QR_BINDING_INVALID", "二维码与门店或服务位不匹配，请重新扫码")
     version = payload.get("v")
     if version == 1:
         if settings.environment == "production":
             raise _qr_error("QR_VERSION_EXPIRED", "该二维码已过期，请联系门店更换新二维码")
-        # 本地迁移测试仍可读取 v1；生产入口只接受可撤销的 v2/v3 二维码。
-        return None
+        room = db.scalar(select(Room).where(
+            Room.store_id == payload.get("store_id"),
+            Room.code == payload.get("position_code"),
+        ))
+        if not room or room.is_space_container or not room.is_service_position:
+            raise _qr_error("QR_BINDING_INVALID", "二维码绑定信息已变化，请重新扫码")
+        return None, room
     if version != 2 or not payload.get("qr_id"):
         raise _qr_error("QR_BINDING_INVALID", "二维码版本无效，请重新扫码")
     qr = db.scalar(select(ServicePositionQr).where(ServicePositionQr.public_id == payload["qr_id"]))
@@ -169,10 +168,32 @@ def _verify_position_qr_token(
     if qr.status != "active":
         raise _qr_error("QR_DISABLED", "二维码已停用，请联系前台获取新二维码")
     room = db.get(Room, qr.room_id)
-    if not room or qr.store_id != store_id or room.code != position_code or qr.source != source:
+    if (
+        not room
+        or qr.store_id != payload.get("store_id")
+        or room.store_id != qr.store_id
+        or room.code != payload.get("position_code")
+        or qr.source != payload.get("source")
+        or room.is_space_container
+        or not room.is_service_position
+    ):
         raise _qr_error("QR_BINDING_INVALID", "二维码绑定信息已变化，请重新扫码")
     qr.last_accessed_at = utcnow()
-    return qr
+    return qr, room
+
+
+def _verify_position_qr_token(
+    db: Session,
+    token: str,
+    store_id: int,
+    position_code: str,
+    source: str,
+) -> ServicePositionQr | None:
+    resolved_qr, resolved_room = resolve_position_qr_token(db, token)
+    resolved_source = resolved_qr.source if resolved_qr else source
+    if resolved_room.store_id != store_id or resolved_room.code != position_code or resolved_source != source:
+        raise _qr_error("QR_BINDING_INVALID", "二维码与门店或服务位不匹配，请重新扫码")
+    return resolved_qr
 
 
 ANONYMOUS_COOKIE = "hxy_browser_token"
@@ -214,9 +235,10 @@ def _active_occupancy_for_room(db: Session, room_id: int) -> PositionOccupancy |
     return db.scalar(select(PositionOccupancy).where(PositionOccupancy.active_room_id == room_id))
 
 
-def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[SelectionSession, PositionOccupancy, Room, str, bool, str, bool]:
+def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[SelectionSession, PositionOccupancy, Room, str, bool, str, bool, ServicePositionQr | None]:
+    verified_qr = None
     if body.entry_token:
-        _verify_position_qr_token(db, body.entry_token, body.store_id, body.position_code, body.source)
+        verified_qr = _verify_position_qr_token(db, body.entry_token, body.store_id, body.position_code, body.source)
     elif settings.environment == "production" and body.source in {"personal_qr", "room_qr"}:
         raise HTTPException(status_code=403, detail={"code": "QR_BINDING_REQUIRED", "message": "请使用门店服务位二维码进入"})
     expire_stale_holds(db, body.store_id)
@@ -283,7 +305,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
             existing_session.access_token_hash = _hash_token(token)
             db.commit()
             db.refresh(existing_session)
-            return existing_session, existing, room, token, True, browser_token, returning_browser
+            return existing_session, existing, room, token, True, browser_token, returning_browser, verified_qr
         raise HTTPException(status_code=409, detail={
             "code": "POSITION_OCCUPIED",
             "message": "该服务位已有顾客，请核对二维码或联系前台",
@@ -343,7 +365,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
     db.commit()
     db.refresh(session)
     db.refresh(occupancy)
-    return session, occupancy, room, token, False, browser_token, returning_browser
+    return session, occupancy, room, token, False, browser_token, returning_browser, verified_qr
 
 
 @router.post("/entry-sessions")
@@ -358,7 +380,7 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
             "code": "ENTRY_SOURCE_FORBIDDEN",
             "message": "该入口来源仅由服务端在验证二维码后记录",
         })
-    session, occupancy, room, token, resumed, browser_token, returning_browser = _create_entry(db, body, request)
+    session, occupancy, room, token, resumed, browser_token, returning_browser, verified_qr = _create_entry(db, body, request)
     response.set_cookie(
         ANONYMOUS_COOKIE,
         browser_token,
@@ -368,6 +390,12 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
         max_age=60 * 60 * 24 * 365 * 2,
         path="/",
     )
+    # Feedback credentials are minted only for entries verified by a signed QR token.
+    # In production an unsigned store-level entry may still browse and select, but it
+    # must never receive a visit_feedback_token from stitched parameters alone.
+    visit_feedback_token = None
+    if body.entry_token or settings.environment != "production":
+        visit_feedback_token = create_visit_feedback_token(room, body.source, browser_token, verified_qr.id if verified_qr else None)
     return {
         "session": _selection_view(session),
         "occupancy": occupancy_view(occupancy),
@@ -375,6 +403,7 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
         "access_token": token,
         "resumed": resumed,
         "returning_browser": returning_browser,
+        "visit_feedback_token": visit_feedback_token,
     }
 
 
@@ -844,7 +873,7 @@ def create_kiosk_session(
     room = db.get(Room, body.room_id)
     if not room or room.store_id != store_id:
         raise HTTPException(status_code=404, detail="服务位不存在")
-    session, occupancy, room, token, _, _, _ = _create_entry(db, EntrySessionIn(
+    session, occupancy, room, token, _, _, _, _ = _create_entry(db, EntrySessionIn(
         store_id=store_id,
         position_code=room.code,
         source="kiosk",

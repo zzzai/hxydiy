@@ -864,6 +864,24 @@ export interface paths {
         patch: operations["update_feedback_follow_up_api_v1_admin_v2_feedback__feedback_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/v2/feedback/{feedback_type}/{feedback_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Feedback Detail */
+        get: operations["get_feedback_detail_api_v1_admin_v2_feedback__feedback_type___feedback_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Feedback Follow Up By Type */
+        patch: operations["update_feedback_follow_up_by_type_api_v1_admin_v2_feedback__feedback_type___feedback_id__patch"];
+        trace?: never;
+    };
     "/api/v1/admin/v2/page-content": {
         parameters: {
             query?: never;
@@ -3230,6 +3248,40 @@ export interface paths {
         get: operations["tasks_api_v1_technician_tasks_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visit-feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Visit Feedback */
+        post: operations["submit_visit_feedback_api_v1_visit_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/visit-feedback/entry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enter Visit Feedback */
+        post: operations["enter_visit_feedback_api_v1_visit_feedback_entry_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5792,6 +5844,31 @@ export interface components {
              */
             reason: string;
         };
+        /** VisitFeedbackEntryIn */
+        VisitFeedbackEntryIn: {
+            /** Entry Token */
+            entry_token: string;
+            /** Position Code */
+            position_code: string;
+            /** Source */
+            source: string;
+            /** Store Id */
+            store_id: number;
+        };
+        /** VisitFeedbackIn */
+        VisitFeedbackIn: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Rating */
+            rating: number;
+            /** Tags */
+            tags?: string[];
+            /** Visit Feedback Token */
+            visit_feedback_token: string;
+        };
         /** WaterRecord */
         WaterRecord: {
             /** Action */
@@ -7760,6 +7837,7 @@ export interface operations {
             query?: {
                 low_rating_only?: boolean;
                 follow_up_status?: string | null;
+                feedback_type?: ("service_review" | "visit_feedback") | null;
                 page?: number;
                 page_size?: number;
             };
@@ -7800,6 +7878,82 @@ export interface operations {
                 authorization?: string | null;
             };
             path: {
+                feedback_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackFollowUpIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_feedback_detail_api_v1_admin_v2_feedback__feedback_type___feedback_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                feedback_type: "service_review" | "visit_feedback";
+                feedback_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_feedback_follow_up_by_type_api_v1_admin_v2_feedback__feedback_type___feedback_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                feedback_type: "service_review" | "visit_feedback";
                 feedback_id: number;
             };
             cookie?: never;
@@ -13242,6 +13396,79 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_visit_feedback_api_v1_visit_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitFeedbackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enter_visit_feedback_api_v1_visit_feedback_entry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitFeedbackEntryIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

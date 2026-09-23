@@ -1,0 +1,34 @@
+# 2026-09-23 评价链路恢复集成
+
+## 范围与保全
+
+- 远端主干与本地 `origin/main` 均核实为 `25d230867d513d16edc2be407d8466f0d1d905ed`；`git fsck --connectivity-only --no-dangling` 退出 0。本结论不等于所有备份已经完成恢复演练，也不确定历史引用事故的根因。
+- 使用独立 worktree `feedback-recovery/hxy-diy` 和 `codex/feedback-recovery` 分支，不覆盖 WorkBuddy 原分支、原工作区及主仓库未跟踪文件。
+- 以最新主干起步，快进至 `0bf0444` 集成底座，再收拢签名入口修复 `a2cec58` 与顾客端评价入口 `a0d8e7f`。多门店扩展 `wb-multi-store` 保留但不纳入本批次。
+- 唯一 cherry-pick 冲突是迁移许可说明；保留“反馈迁移尚未获生产许可，需独立许可 PR”的一致含义。未改生产迁移允许清单。
+
+## 修复
+
+- 顾客端入口响应声明修正为可空反馈令牌，空值不写入有效凭证；续期取得空令牌不能显示“已更新，请再次提交”。
+- 原反馈令牌未绑定二维码 ID，已用 HTTP 测试复现旧码停用换新后仍返回 200；现在签发时记录验证过的二维码 ID，提交时核对该码仍有效。同位新码不再继承旧令牌。
+- 用户确认每床一张码。新增签名服务位码的独立到店评价入口，扫码可直接评价，无需先创建选单或占用；选择项目时才进入原占位流程。后端 HTTP 测试覆盖匿名直达、错床位拒绝与不产生选单/占用。顾客端入口在目录数据加载前可用，床位占用不应阻止评价。
+- 后台批量打印原来过滤 `customer_selectable`，而实际床位配置为 `false`；页面又将响应规范化为固定占位编码，可能漏掉真实床位。现从后台原始服务位响应选取启用中的真实沙发/床位打印，跳过停用和空间容器；页面保留真实床位编码供逐床管理，不改变顾客选位权限。
+- PR 后端 CI 增加临时 PostgreSQL 服务，专用库 `hxy_feedback_ci` 并发验证同身份同时提交的幂等唯一性和每小时 5 条限流。本机无 PostgreSQL，最终通过状态以该候选 HEAD 的 CI 为准。
+- 已核实 `6ec308e` 的 Backend tests、Customer tests and build、Admin tests and build、Static contracts 均通过，其中 Backend tests 包含上述 PostgreSQL 并发验证。Trusted PR Gate 因 PR #133 保持草稿而失败；草稿保留，避免自动合并。
+- 迁移安全检查：如果 `visit_feedback` 已存在，不再无条件跳过；必须具备预期列、可空性、唯一约束、检查约束及索引，否则失败并保持旧 Alembic revision。隔离 SQLite 测试覆盖“缺列拒绝”和“完整表继续”两种情形；生产库实际结构与 revision 仍未知，不能以此替代生产前核查。
+- Windows 发布脚本回归失败已复现为反斜杠环境路径被 Git Bash tar 错误解析；测试改用 `Path.as_posix()`，不修改生产发布脚本。
+
+## 本地证据
+
+- 合并后的反馈、品牌授权、授权迁移、迁移链和发布脚本专项：50 passed / 3 skipped（默认 shell 为 WSL launcher，因此有发布脚本跳过）。
+- 显式 Git Bash 重新执行发布脚本测试：修正前 1 failed / 13 passed / 1 skipped；修正后 14 passed / 1 skipped。剩余跳过为 Windows 不具备 POSIX 原子符号链接回滚语义，不能宣称此项已验收。
+- 顾客端生产构建通过；按 CI 顺序先构建再测试，206 passed / 1 skipped。首次未构建即测试有 1 项失败，不算通过证据。测试日志存在 Vite dep-scan 关闭时警告，最终测试退出 0。
+
+## 尚未关闭的发布门禁
+
+- 生产同构迁移恢复演练；CI 临时 PostgreSQL 并发测试已通过，但不等于生产迁移验收。
+- 2026-09-23 更正连接目标：本机 `devhxy` 与 `hxy` 指向同一 IP，但前者使用 6000 端口，后者使用生产发布所用 22 端口。此前从 `devhxy` 连接失败不能推断生产不可达。通过 `hxy` 只读核实当前 release 为 `github-cfa957c51257-35591215199`，`hxy-diy-db` 的 Alembic revision 为 `20260921_product_catalog`，`visit_feedback` 与 `staff_scope_assignments` 表均不存在。未执行迁移或其他数据库写操作；生产迁移仍需独立许可和恢复演练。
+- 品牌授权迁移被重新指定父 revision 的实际数据库应用历史核查；不得仅依据 Git 合并状态决定安全性。
+- 后续候选 HEAD 的精确 CI、独立审查及三端业务联调。
+- 各服务位签名二维码的运营交付、微信真机和门店现场验收；门店未贴码，不索取旧物料。不是每店一张门店码。
+- 本批次未合并主干、未执行生产迁移或发布。不得将本地集成作为生产可用声明。

@@ -62,7 +62,7 @@ import {
 } from '../servicePositions';
 import { canManageConfiguration } from '../auth';
 import { buildServicePositionConfigurationPayload, canManageServicePositionConfiguration } from '../servicePositionConfiguration';
-import { buildPositionQrPrintDocument, getServicePositionQrPermissions, servicePositionQrActions, servicePositionQrRenderOptions } from '../servicePositionQr';
+import { buildPositionQrPrintDocument, getServicePositionQrPermissions, printablePositionQrs, servicePositionQrActions, servicePositionQrRenderOptions } from '../servicePositionQr';
 
 type ActionMode = 'start_service' | 'kiosk' | null;
 
@@ -144,6 +144,7 @@ export default function ServicePositionsPage() {
   const qrPermissions = getServicePositionQrPermissions(staff?.role);
   const canManageServicePosition = canManageConfiguration(staff?.role) && Boolean(staff?.store_id);
   const [positions, setPositions] = useState<ServicePosition[]>([]);
+  const [serverPositions, setServerPositions] = useState<ServicePosition[]>([]);
   const [updatedAt, setUpdatedAt] = useState('');
   const [selected, setSelected] = useState<ServicePosition | null>(null);
   const [loading, setLoading] = useState(true);
@@ -167,6 +168,7 @@ export default function ServicePositionsPage() {
     if (!silent) setLoading(true);
     try {
       const response = await getLiveServicePositionMap();
+      setServerPositions(response.data.positions);
       setPositions(normalizeServicePositions(response.data.positions));
       setUpdatedAt(response.data.updated_at);
       setSelected((current) => current
@@ -395,9 +397,7 @@ export default function ServicePositionsPage() {
     printWindow.document.write('<p>正在生成服务位二维码，请勿关闭此窗口。</p>');
     setBatchPrintBusy(true);
     try {
-      const printablePositions = positions.filter((position) => (
-        position.id > 0 && position.customer_selectable && position.operational_status === 'active'
-      ));
+      const printablePositions = printablePositionQrs(serverPositions);
       const qrs = await Promise.all(printablePositions.map(async (position) => {
         const response = await getPositionQrLink(position.id);
         return { position, qr: response.data };

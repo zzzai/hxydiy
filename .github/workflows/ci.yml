@@ -164,6 +164,22 @@ jobs:
     name: Backend tests
     needs: static
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: feedback_ci
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: hxy_feedback_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U feedback_ci -d hxy_feedback_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      HXY_FEEDBACK_TEST_POSTGRES_URL: postgresql+psycopg://feedback_ci:testpass@127.0.0.1:5432/hxy_feedback_ci
     outputs:
       available: ${{ steps.detect.outputs.available }}
     steps:

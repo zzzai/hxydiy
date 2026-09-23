@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.domain.automatic_coupon import select_automatic_coupon
+from app.domain.feedback_validation import validate_feedback_tags
 from app.domain.occupancy import refresh_hold
 from app.domain.membership_pricing import PriceContext
 from app.domain.selection_pricing import calculate_selection_pricing, price_type_for_member
@@ -46,8 +47,8 @@ SYNTHETIC_PROJECTS = {
 
 class FeedbackIn(BaseModel):
     rating: int = Field(ge=1, le=5)
-    tags: list[str] = Field(default_factory=list, max_length=6)
-    note: str = Field(default="", max_length=1000)
+    tags: list[str] = Field(default_factory=list, max_length=3)
+    note: str = Field(default="", max_length=300)
 
 
 def _hash_token(token: str) -> str:
@@ -176,6 +177,7 @@ def submit_feedback(session_id: str, body: FeedbackIn, x_selection_token: str | 
     existing = db.scalar(select(ServiceFeedback).where(ServiceFeedback.selection_session_id == session.id))
     if existing:
         return {"id": existing.id, "rating": existing.rating, "tags": existing.tags or [], "note": existing.note, "submitted": True}
+    validate_feedback_tags(body.rating, body.tags)
     feedback = ServiceFeedback(
         store_id=session.store_id,
         selection_session_id=session.id,

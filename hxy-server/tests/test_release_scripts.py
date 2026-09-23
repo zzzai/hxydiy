@@ -52,6 +52,7 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("20260906_wellness_profile_current.py", deploy)
         self.assertIn("20260910_membership_closure.py", deploy)
         self.assertIn("20260921_product_catalog_management.py", deploy)
+        self.assertNotIn("'20260921_visit_feedback.py'", deploy)
         self.assertNotIn("'20260921_staff_scope_assignments.py'", deploy)
         self.assertIn('for migration in "${added_migrations[@]}"', deploy)
         self.assertIn("Unapproved Alembic migration change detected.", deploy)
@@ -163,7 +164,7 @@ class ReleaseScriptTests(unittest.TestCase):
             (workspace / "hxy-server/.env").write_text("SECRET=do-not-package", encoding="utf-8")
             (workspace / "hxy-server/app/__pycache__").mkdir(parents=True)
             (workspace / "hxy-server/app/__pycache__/module.pyc").write_bytes(b"bytecode")
-            environment = {**os.environ, "HXY_DIY_RELEASE_ROOT": str(release_root)}
+            environment = {**os.environ, "HXY_DIY_RELEASE_ROOT": release_root.as_posix()}
 
             copied_create = workspace / "deploy/diy/create-release.sh"
             copied_activate = workspace / "deploy/diy/activate-release.sh"
