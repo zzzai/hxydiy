@@ -26,11 +26,12 @@ def _browser_hash(browser_token: str) -> str:
     return hashlib.sha256(f"browser:{browser_token}".encode()).hexdigest()
 
 
-def create_visit_feedback_token(room: Room, source: str, browser_token: str) -> str:
+def create_visit_feedback_token(room: Room, source: str, browser_token: str, qr_id: int | None = None) -> str:
     payload = {
         "v": 1,
         "store_id": room.store_id,
         "room_id": room.id,
+        "qr_id": qr_id,
         "source": source,
         "browser_hash": _browser_hash(browser_token),
         "exp": int(time.time() + TOKEN_TTL.total_seconds()),
@@ -72,9 +73,19 @@ def resolve_visit_feedback_token(
         or not room.is_service_position
     ):
         raise _error("VISIT_FEEDBACK_TOKEN_INVALID", "到店反馈入口已失效，请重新扫码")
-    qr = db.scalar(select(ServicePositionQr).where(
-        ServicePositionQr.room_id == room.id,
-        ServicePositionQr.store_id == room.store_id,
-        ServicePositionQr.status == "active",
-    ).order_by(ServicePositionQr.id.desc()))
+    qr_id = payload.get("qr_id")
+    if qr_id is None:
+        if settings.environment == "production":
+            raise _error("VISIT_FEEDBACK_TOKEN_INVALID", "到店反馈入口已失效，请重新扫码")
+        qr = db.scalar(select(ServicePositionQr).where(
+            ServicePositionQr.room_id == room.id,
+            ServicePositionQr.store_id == room.store_id,
+            ServicePositionQr.status == "active",
+        ).order_by(ServicePositionQr.id.desc()))
+    else:
+        if not isinstance(qr_id, int) or isinstance(qr_id, bool):
+            raise _error("VISIT_FEEDBACK_TOKEN_INVALID", "到店反馈入口已失效，请重新扫码")
+        qr = db.get(ServicePositionQr, qr_id)
+        if not qr or qr.room_id != room.id or qr.store_id != room.store_id or qr.source != payload.get("source") or qr.status != "active":
+            raise _error("VISIT_FEEDBACK_TOKEN_INVALID", "到店反馈入口已失效，请重新扫码")
     return room, qr, str(payload.get("source") or "store_qr")

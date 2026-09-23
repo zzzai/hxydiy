@@ -455,6 +455,8 @@ class OpenVisitFeedbackTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         token = response.json()["visit_feedback_token"]
         self.assertTrue(token.startswith("vf1."))
+        token_payload = json.loads(base64.urlsafe_b64decode(token.split(".")[1] + "=="))
+        self.assertEqual(token_payload["qr_id"], self.verified_qr_id)
         # The entry sets a Secure cookie under the production patch; re-set it without
         # the Secure attribute so the plain-HTTP test transport sends it back.
         entry_cookie = browser.cookies.get("hxy_browser_token")
@@ -490,6 +492,39 @@ class OpenVisitFeedbackTests(unittest.TestCase):
             row = db.get(VisitFeedback, logged_in.json()["id"])
             self.assertEqual(row.customer_id, customer_id)
         browser.close()
+
+    def test_replaced_qr_invalidates_existing_visit_feedback_token(self):
+        with self.SessionLocal() as db:
+            original = db.get(ServicePositionQr, self.verified_qr_id)
+            room = db.get(Room, self.verified_room_id)
+            feedback_token = create_visit_feedback_token(room, "personal_qr", self.browser_token, original.id)
+        with self.SessionLocal() as db:
+            original = db.get(ServicePositionQr, self.verified_qr_id)
+            original.status = "disabled"
+            replacement = ServicePositionQr(
+                public_id=str(uuid.uuid4()),
+                store_id=self.store_id,
+                room_id=self.verified_room_id,
+                source="personal_qr",
+                status="active",
+            )
+            db.add(replacement)
+            db.commit()
+            replacement_id = replacement.id
+        try:
+            response = self.client.post(
+                "/api/v1/visit-feedback",
+                headers={"Idempotency-Key": "replaced-qr-feedback-test"},
+                json={"visit_feedback_token": feedback_token, "rating": 5, "tags": [], "note": ""},
+            )
+            self.assertEqual(response.status_code, 403, response.text)
+            self.assertEqual(response.json()["detail"]["code"], "VISIT_FEEDBACK_TOKEN_INVALID")
+        finally:
+            with self.SessionLocal() as db:
+                db.delete(db.get(ServicePositionQr, replacement_id))
+                db.flush()
+                db.get(ServicePositionQr, self.verified_qr_id).status = "active"
+                db.commit()
 
     def test_expired_visit_feedback_token_is_rejected(self):
         payload = {
