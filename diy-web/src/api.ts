@@ -287,7 +287,7 @@ export function createEntrySession(input: {
     occupancy: Occupancy;
     position: ServicePosition;
     access_token: string;
-    visit_feedback_token: string;
+    visit_feedback_token: string | null;
     resumed: boolean;
     returning_browser: boolean;
   }>('/entry-sessions', { method: 'POST', body: JSON.stringify(input) }));

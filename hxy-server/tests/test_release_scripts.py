@@ -164,7 +164,7 @@ class ReleaseScriptTests(unittest.TestCase):
             (workspace / "hxy-server/.env").write_text("SECRET=do-not-package", encoding="utf-8")
             (workspace / "hxy-server/app/__pycache__").mkdir(parents=True)
             (workspace / "hxy-server/app/__pycache__/module.pyc").write_bytes(b"bytecode")
-            environment = {**os.environ, "HXY_DIY_RELEASE_ROOT": str(release_root)}
+            environment = {**os.environ, "HXY_DIY_RELEASE_ROOT": release_root.as_posix()}
 
             copied_create = workspace / "deploy/diy/create-release.sh"
             copied_activate = workspace / "deploy/diy/activate-release.sh"

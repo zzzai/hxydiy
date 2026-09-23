@@ -766,7 +766,7 @@ export default function App() {
         start_new_after_service: startNewAfterService || undefined,
       });
       setAccessToken(entry.access_token);
-      setVisitFeedbackToken(entry.visit_feedback_token);
+      setVisitFeedbackToken(entry.visit_feedback_token ?? '');
       setSession(entry.session);
       setServiceStatus(null);
       setOccupancy(entry.occupancy);
@@ -777,7 +777,7 @@ export default function App() {
         storeId: query.storeId,
         positionCode: code,
         accessToken: entry.access_token,
-        visitFeedbackToken: entry.visit_feedback_token,
+        visitFeedbackToken: entry.visit_feedback_token ?? undefined,
         session: entry.session,
         occupancy: entry.occupancy,
         position: entry.position,
@@ -1467,6 +1467,7 @@ export default function App() {
               device_label: deviceLabel(),
               entry_token: query.qrToken,
             });
+            if (!renewed.visit_feedback_token) throw new Error('Trusted QR entry required');
             setVisitFeedbackToken(renewed.visit_feedback_token);
             if (stored) writeRecord({ ...stored, visitFeedbackToken: renewed.visit_feedback_token });
             flash('到店信息已更新，请再次提交');
