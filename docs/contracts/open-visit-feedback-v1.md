@@ -23,6 +23,7 @@
 - `Authorization: Bearer <token>`：可选。提供时必须有效；失效令牌不得静默降级为匿名。
 - 现有 `POST /api/v1/entry-sessions` 成功响应包含 `visit_feedback_token`（可空）。该令牌由服务端根据已经验证的签名二维码入口签发，12 小时有效并绑定门店、服务位、入口来源和当前 HttpOnly `hxy_browser_token`。生产环境中只有携带并通过 v2/v3 签名 `entry_token` 验证的进入才会签发；未经签名验证的 `store_qr` 进入可以继续选位选购，但响应的 `visit_feedback_token` 为 `null`，客户端不得据拼接参数自行构造反馈凭证。非生产环境保留未签名进入的签发以便联调。既有正式二维码物料无需重印；门店尚未张贴二维码，无无签名旧码需要兼容。
 - `POST /api/v1/visit-feedback/entry` 接收签名床位码中的 `store_id`、`position_code`、`source=personal_qr|room_qr` 和 `entry_token`。服务端核验这四者属于同一个启用的二维码及服务位，返回 `visit_feedback_token`、门店 ID、服务位编码和展示标签，设置同站 HttpOnly 浏览器 Cookie。此调用不创建选单、订单或占用；床位已被使用时仍可评价。无效、停用、跨店或错床位的码不得换取凭证。
+- 新短链接二维码只负责解析并跳转到上述签名入口，不直接签发反馈令牌；短码停用或轮换后无法继续换取 v3 入口。反馈令牌的浏览器、二维码、门店和服务位绑定不变。
 - 顾客端扫描床位码后直接调用 `POST /api/v1/entry-sessions` 进入菜单；响应同时提供可空的到店反馈令牌。评价入口不读取共享选单或他人订单，令牌过期续期仍只调用独立到店入口。
 - 未登录时使用现有 HttpOnly `hxy_browser_token` 作为第一方匿名浏览器身份；登录提交仍须携带同一浏览器 Cookie。它不等于手机号账号或自然人身份。
 - 顾客端入口响应类型必须保留 `visit_feedback_token: string | null`；空令牌不能用于提交，也不能当作续期成功。续期失败保留评价草稿并提示重新扫描可信二维码。

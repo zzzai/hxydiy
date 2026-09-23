@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -51,6 +52,8 @@ from app.schemas.selection import SelectionSessionOut
 router = APIRouter(tags=["service-position-occupancy"])
 COLLABORATION_ENTRY_RATE_LIMIT = 300
 COLLABORATION_ENTRY_RATE_WINDOW = timedelta(hours=1)
+SHORT_QR_RESOLVE_RATE_LIMIT = 300
+SHORT_QR_RESOLVE_RATE_WINDOW = timedelta(hours=1)
 
 
 class ServicePositionConfigurationIn(BaseModel):
@@ -141,6 +144,35 @@ def _managed_position_qr_token(qr: ServicePositionQr, position_code: str) -> str
     return f"{payload}.{signature}"
 
 
+def _managed_position_short_code(qr: ServicePositionQr) -> str:
+    """Return a stable 128-bit bearer code without storing its plaintext."""
+    digest = hmac.new(
+        settings.jwt_secret.encode(),
+        f"service-position-short:{qr.public_id}".encode(),
+        hashlib.sha256,
+    ).digest()[:16]
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
+def _ensure_position_short_code_hash(qr: ServicePositionQr) -> str:
+    code = _managed_position_short_code(qr)
+    qr.short_code_hash = _hash_token(code)
+    return code
+
+
+def _managed_position_long_url(qr: ServicePositionQr, room: Room) -> str:
+    from urllib.parse import urlencode
+
+    token = _managed_position_qr_token(qr, room.code)
+    base = settings.h5_public_base_url.rstrip("/") + "/"
+    return base + "?" + urlencode({
+        "store": qr.store_id,
+        "seat": room.code,
+        "source": qr.source,
+        "qr": token,
+    })
+
+
 def _qr_error(code: str, message: str) -> HTTPException:
     return HTTPException(status_code=403, detail={"code": code, "message": message})
 
@@ -224,6 +256,68 @@ def _verify_position_qr_token(
     if resolved_room.store_id != store_id or resolved_room.code != position_code or resolved_source != source:
         raise _qr_error("QR_BINDING_INVALID", "二维码与门店或服务位不匹配，请重新扫码")
     return resolved_qr
+
+
+@router.get(
+    "/q/{short_code}",
+    status_code=307,
+    response_class=RedirectResponse,
+    responses={307: {"description": "Redirect to the signed customer H5 entry"}},
+)
+def resolve_short_position_qr(
+    short_code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if (
+        len(short_code) != 22
+        or any(char not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for char in short_code)
+    ):
+        raise _qr_error("QR_BINDING_INVALID", "二维码无效，请重新扫码")
+    qr = db.scalar(select(ServicePositionQr).where(
+        ServicePositionQr.short_code_hash == _hash_token(short_code),
+    ))
+    if not qr:
+        raise _qr_error("QR_BINDING_INVALID", "二维码不存在，请联系前台")
+    if qr.status != "active":
+        raise _qr_error("QR_DISABLED", "二维码已停用，请联系前台获取新二维码")
+    room = db.get(Room, qr.room_id)
+    if (
+        not room
+        or room.store_id != qr.store_id
+        or room.is_space_container
+        or not room.is_service_position
+        or room.operational_status != "active"
+    ):
+        raise _qr_error("QR_BINDING_INVALID", "二维码绑定信息已变化，请重新扫码")
+
+    identity = _collaboration_entry_identity(request)
+    cutoff = datetime.now(timezone.utc) - SHORT_QR_RESOLVE_RATE_WINDOW
+    count = db.scalar(select(func.count()).select_from(AuditLog).where(
+        AuditLog.action == "service_position_short_link_resolved",
+        AuditLog.entity_type == "service_position_qr",
+        AuditLog.entity_id == str(qr.id),
+        AuditLog.actor_id == identity,
+        AuditLog.created_at >= cutoff,
+    )) or 0
+    if count >= SHORT_QR_RESOLVE_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "QR_RESOLVE_RATE_LIMITED", "message": "扫码进入过于频繁，请稍后再试"},
+            headers={"Retry-After": str(int(SHORT_QR_RESOLVE_RATE_WINDOW.total_seconds()))},
+        )
+    qr.last_accessed_at = utcnow()
+    db.add(AuditLog(
+        actor_type="anonymous",
+        actor_id=identity,
+        store_id=qr.store_id,
+        action="service_position_short_link_resolved",
+        entity_type="service_position_qr",
+        entity_id=str(qr.id),
+        detail={"store_id": qr.store_id, "room_id": qr.room_id},
+    ))
+    db.commit()
+    return RedirectResponse(_managed_position_long_url(qr, room), status_code=307)
 
 
 ANONYMOUS_COOKIE = "hxy_browser_token"
@@ -484,7 +578,7 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
 @router.get("/admin/service-positions/{room_id}/qr-link")
 def admin_position_qr_link(room_id: int, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     staff = _current_staff(authorization, db)
-    room = db.get(Room, room_id)
+    room = db.scalar(select(Room).where(Room.id == room_id).with_for_update())
     store_id = _staff_store_id(staff)
     if not room or room.store_id != store_id:
         raise HTTPException(status_code=404, detail="服务位不存在")
@@ -505,6 +599,10 @@ def admin_position_qr_link(room_id: int, authorization: str | None = Header(defa
             raise HTTPException(status_code=403, detail={"code": "MANAGER_REQUIRED", "message": "仅店长可创建服务位二维码"})
         qr = _create_managed_qr(db, room, staff.id)
         _audit_qr(db, staff, qr, "service_position_qr_created", {"room_id": room.id})
+        db.commit()
+        db.refresh(qr)
+    elif not qr.short_code_hash:
+        _ensure_position_short_code_hash(qr)
         db.commit()
         db.refresh(qr)
     return _managed_qr_view(qr, room)
@@ -614,14 +712,17 @@ def _create_managed_qr(db: Session, room: Room, staff_id: int) -> ServicePositio
     )
     db.add(qr)
     db.flush()
+    _ensure_position_short_code_hash(qr)
     return qr
 
 
 def _managed_qr_view(qr: ServicePositionQr, room: Room) -> dict:
     token = _managed_position_qr_token(qr, room.code)
-    base = settings.h5_public_base_url.rstrip("/") + "/"
-    from urllib.parse import urlencode
-    url = base + "?" + urlencode({"store": qr.store_id, "seat": room.code, "source": qr.source, "qr": token})
+    short_code = _managed_position_short_code(qr)
+    if not qr.short_code_hash or not hmac.compare_digest(qr.short_code_hash, _hash_token(short_code)):
+        raise RuntimeError("service_position_qr_short_code_hash_mismatch")
+    base = settings.h5_public_base_url.rstrip("/")
+    url = f"{base}/api/v1/q/{short_code}"
     return {
         "qr_id": qr.id,
         "store_id": qr.store_id,
@@ -687,6 +788,7 @@ def update_service_position_qr(
     else:
         qr.disabled_at = utcnow()
     qr.status = target_status
+    _ensure_position_short_code_hash(qr)
     _audit_qr(db, staff, qr, f"service_position_qr_{target_status}", {"reason": str(body.get("reason") or "")[:256]})
     db.commit()
     db.refresh(qr)
