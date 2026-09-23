@@ -1,7 +1,35 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { getServiceStatus, submitFeedback, submitVisitFeedback } from '../src/api.ts';
+import { createVisitFeedbackEntry, getServiceStatus, submitFeedback, submitVisitFeedback } from '../src/api.ts';
+
+test('bed QR obtains a feedback token without creating a selection session', async () => {
+  const calls: Array<{ url: string; options: RequestInit }> = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, options = {}) => {
+    calls.push({ url: String(input), options });
+    return new Response(JSON.stringify({
+      visit_feedback_token: 'vf1.signed.feedback',
+      store_id: 7,
+      position_code: 'bed-01',
+      position_label: '1',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  try {
+    const entry = await createVisitFeedbackEntry({
+      store_id: 7, position_code: 'bed-01', source: 'room_qr', entry_token: 'signed-bed-qr',
+    });
+    assert.equal(entry.visit_feedback_token, 'vf1.signed.feedback');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, '/api/v1/visit-feedback/entry');
+    assert.equal(calls[0].options.credentials, 'include');
+    assert.deepEqual(JSON.parse(String(calls[0].options.body)), {
+      store_id: 7, position_code: 'bed-01', source: 'room_qr', entry_token: 'signed-bed-qr',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('评价 API 使用选单令牌并传递评价内容', async () => {
   const calls: Array<{ url: string; options: RequestInit }> = [];

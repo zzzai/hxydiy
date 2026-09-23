@@ -4,18 +4,19 @@ import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.occupancies import ANONYMOUS_COOKIE
+from app.api.occupancies import ANONYMOUS_COOKIE, _browser_customer, _verify_position_qr_token
+from app.core.config import settings
 from app.core.customer_auth import current_customer_id
 from app.db.session import get_db
 from app.domain.feedback_validation import validate_feedback_tags
-from app.domain.visit_feedback_tokens import resolve_visit_feedback_token
-from app.models import EventLog, VisitFeedback
+from app.domain.visit_feedback_tokens import create_visit_feedback_token, resolve_visit_feedback_token
+from app.models import EventLog, Room, VisitFeedback
 
 
 router = APIRouter(tags=["visit-feedback"])
@@ -30,6 +31,15 @@ class VisitFeedbackIn(BaseModel):
     rating: int = Field(ge=1, le=5)
     tags: list[str] = Field(default_factory=list, max_length=3)
     note: str = Field(default="", max_length=300)
+
+
+class VisitFeedbackEntryIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: int = Field(gt=0)
+    position_code: str = Field(min_length=1, max_length=64)
+    source: str = Field(pattern="^(personal_qr|room_qr)$")
+    entry_token: str = Field(min_length=16, max_length=2048)
 
 
 def _error(status: int, code: str, message: str) -> HTTPException:
@@ -65,6 +75,38 @@ def _lock_submission_scope(db: Session, identity_hash: str, room_id: int, qr_id:
     raw = hashlib.sha256(f"{identity_hash}:{room_id}:{qr_id or 0}".encode()).digest()[:8]
     lock_key = int.from_bytes(raw, byteorder="big", signed=True)
     db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
+
+
+@router.post("/visit-feedback/entry")
+def enter_visit_feedback(
+    body: VisitFeedbackEntryIn,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> dict:
+    qr = _verify_position_qr_token(db, body.entry_token, body.store_id, body.position_code, body.source)
+    if qr is None:
+        raise _error(403, "QR_BINDING_INVALID", "请使用门店服务位二维码进入")
+    room = db.get(Room, qr.room_id)
+    if not room or room.operational_status != "active":
+        raise _error(404, "POSITION_UNAVAILABLE", "服务位暂不可用")
+    _, browser_token, _ = _browser_customer(db, request)
+    db.commit()
+    response.set_cookie(
+        ANONYMOUS_COOKIE,
+        browser_token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.environment == "production",
+        max_age=60 * 60 * 24 * 365 * 2,
+        path="/",
+    )
+    return {
+        "visit_feedback_token": create_visit_feedback_token(room, qr.source, browser_token, qr.id),
+        "store_id": room.store_id,
+        "position_code": room.code,
+        "position_label": room.customer_label,
+    }
 
 
 @router.post("/visit-feedback")

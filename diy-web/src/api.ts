@@ -293,6 +293,20 @@ export function createEntrySession(input: {
   }>('/entry-sessions', { method: 'POST', body: JSON.stringify(input) }));
 }
 
+export function createVisitFeedbackEntry(input: {
+  store_id: number;
+  position_code: string;
+  source: 'personal_qr' | 'room_qr';
+  entry_token: string;
+}) {
+  return request<{
+    visit_feedback_token: string;
+    store_id: number;
+    position_code: string;
+    position_label: string;
+  }>('/visit-feedback/entry', { method: 'POST', body: JSON.stringify(input) });
+}
+
 export function getSelectionSession(sessionId: string, token: string) {
   return request<SelectionSession>(`/selection-sessions/${sessionId}`, {
     headers: { 'X-Selection-Token': token },

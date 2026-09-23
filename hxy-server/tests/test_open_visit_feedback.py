@@ -179,6 +179,90 @@ class OpenVisitFeedbackTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertTrue(response.json()["visit_feedback_token"].startswith("vf1."))
 
+    def test_signed_bed_qr_allows_feedback_without_selection_or_occupancy(self):
+        with self.SessionLocal() as db:
+            qr = db.get(ServicePositionQr, self.verified_qr_id)
+            room = db.get(Room, self.verified_room_id)
+            entry_token = _managed_position_qr_token(qr, room.code)
+            before_sessions = db.scalar(select(func.count()).select_from(SelectionSession))
+            before_occupancies = db.scalar(select(func.count()).select_from(PositionOccupancy))
+        self.client.cookies.clear()
+        entry = self.client.post("/api/v1/visit-feedback/entry", json={
+            "store_id": self.store_id,
+            "position_code": "visit-feedback-verified",
+            "source": "personal_qr",
+            "entry_token": entry_token,
+        })
+        self.assertEqual(entry.status_code, 200, entry.text)
+        self.assertTrue(entry.json()["visit_feedback_token"].startswith("vf1."))
+        self.assertEqual(entry.json()["position_label"], "4")
+        self.assertTrue(self.client.cookies.get("hxy_browser_token"))
+        feedback = self.client.post("/api/v1/visit-feedback", headers={
+            "Idempotency-Key": f"direct-bed-feedback-{uuid.uuid4().hex}",
+        }, json={
+            "visit_feedback_token": entry.json()["visit_feedback_token"],
+            "rating": 5,
+            "tags": [],
+            "note": "扫码直接评价",
+        })
+        self.assertEqual(feedback.status_code, 200, feedback.text)
+        with self.SessionLocal() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(SelectionSession)), before_sessions)
+            self.assertEqual(db.scalar(select(func.count()).select_from(PositionOccupancy)), before_occupancies)
+            row = db.get(VisitFeedback, feedback.json()["id"])
+            self.assertEqual((row.store_id, row.room_id, row.service_position_qr_id),
+                             (self.store_id, self.verified_room_id, self.verified_qr_id))
+
+    def test_direct_feedback_entry_rejects_mismatched_bed(self):
+        with self.SessionLocal() as db:
+            qr = db.get(ServicePositionQr, self.verified_qr_id)
+            room = db.get(Room, self.verified_room_id)
+            entry_token = _managed_position_qr_token(qr, room.code)
+        response = self.client.post("/api/v1/visit-feedback/entry", json={
+            "store_id": self.store_id,
+            "position_code": "visit-feedback-entry",
+            "source": "personal_qr",
+            "entry_token": entry_token,
+        })
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "QR_BINDING_INVALID")
+
+    def test_occupied_bed_qr_still_allows_direct_feedback(self):
+        code = f"busy-feedback-{uuid.uuid4().hex[:12]}"
+        with self.SessionLocal() as db:
+            room = Room(
+                store_id=self.store_id, code=code, name="已占用的评价床位", room_type="bed",
+                customer_label="9", operational_status="active", is_service_position=True,
+                is_space_container=False,
+            )
+            db.add(room)
+            db.flush()
+            qr = ServicePositionQr(
+                public_id=str(uuid.uuid4()), store_id=self.store_id, room_id=room.id,
+                source="room_qr", status="active",
+            )
+            db.add(qr)
+            db.commit()
+            entry_token = _managed_position_qr_token(qr, code)
+        occupied = self.client.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id, "position_code": code, "source": "room_qr",
+            "device_label": "另一位顾客", "entry_token": entry_token,
+        })
+        self.assertEqual(occupied.status_code, 200, occupied.text)
+        self.client.cookies.clear()
+        feedback_entry = self.client.post("/api/v1/visit-feedback/entry", json={
+            "store_id": self.store_id, "position_code": code, "source": "room_qr",
+            "entry_token": entry_token,
+        })
+        self.assertEqual(feedback_entry.status_code, 200, feedback_entry.text)
+        submitted = self.client.post("/api/v1/visit-feedback", headers={
+            "Idempotency-Key": f"busy-bed-feedback-{uuid.uuid4().hex}",
+        }, json={
+            "visit_feedback_token": feedback_entry.json()["visit_feedback_token"],
+            "rating": 4, "tags": [], "note": "服务位使用中也可以反馈",
+        })
+        self.assertEqual(submitted.status_code, 200, submitted.text)
+
     def test_logged_in_feedback_uses_verified_customer_without_session_link(self):
         with self.SessionLocal() as db:
             customer = User(openid=f"visit-login-{uuid.uuid4().hex}", phone="")

@@ -4,11 +4,19 @@ import test from 'node:test';
 
 import {
   createVisitFeedbackIntent,
+  shouldEnterDirectFeedback,
   markVisitFeedbackAttempt,
   shouldRenewVisitFeedbackToken,
   updateVisitFeedbackDraft,
   visitFeedbackErrorMessage,
 } from '../src/visitFeedback.ts';
+
+test('signed service-position QR offers direct feedback before selection, unsigned entry does not', () => {
+  assert.equal(shouldEnterDirectFeedback({ positionCode: 'bed-01', source: 'room_qr', qrToken: 'signed-qr' }), true);
+  assert.equal(shouldEnterDirectFeedback({ positionCode: 'bed-01', source: 'room_qr', qrToken: '' }), false);
+  assert.equal(shouldEnterDirectFeedback({ positionCode: '', source: 'room_qr', qrToken: 'signed-qr' }), false);
+  assert.equal(shouldEnterDirectFeedback({ positionCode: 'bed-01', source: 'kiosk', qrToken: 'signed-qr' }), false);
+});
 
 test('弱网重试沿用同一个幂等键，修改内容后创建新意图', () => {
   const keys = ['intent-0001', 'intent-0002'];

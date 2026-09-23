@@ -23,6 +23,7 @@ import {
   ApiError,
   bindSelectionCustomer,
   createEntrySession,
+  createVisitFeedbackEntry,
   getAddons,
   getCouponTemplates,
   getCurrentCustomer,
@@ -78,7 +79,7 @@ import TeaDetailPage from './components/TeaDetailPage';
 import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision } from './selectionFlow';
 import { isEdgeSwipeBack, shouldReturnToProjectListFromSubmittedScreen } from './swipeBack';
 import { shouldHydrateStoredSelection, shouldRestartStoredEntry } from './submittedSelectionRestore';
-import { createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldRenewVisitFeedbackToken, updateVisitFeedbackDraft, visitFeedbackErrorMessage } from './visitFeedback';
+import { createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldEnterDirectFeedback, shouldRenewVisitFeedbackToken, updateVisitFeedbackDraft, visitFeedbackErrorMessage } from './visitFeedback';
 import { createDiyPageTracking } from './pageTracking';
 import {
   activePromotion,
@@ -124,7 +125,7 @@ import {
   type Addon,
 } from './domain';
 
-type BootState = 'loading' | 'pick-position' | 'ready' | 'occupied' | 'expired' | 'kiosk-unbound' | 'submitted' | 'error';
+type BootState = 'loading' | 'pick-position' | 'direct-feedback' | 'ready' | 'occupied' | 'expired' | 'kiosk-unbound' | 'submitted' | 'error';
 
 type EntryRecord = {
   storeId: number;
@@ -291,6 +292,7 @@ export default function App() {
   const [session, setSession] = useState<SelectionSession | null>(null);
   const [accessToken, setAccessToken] = useState('');
   const [visitFeedbackToken, setVisitFeedbackToken] = useState('');
+  const [directPositionLabel, setDirectPositionLabel] = useState('');
   const [feedbackToken, setFeedbackToken] = useState('');
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus | null>(null);
   const [feedbackMode, setFeedbackMode] = useState<'service' | 'visit' | null>(null);
@@ -749,7 +751,7 @@ export default function App() {
     return { map, current };
   };
 
-  const enterPosition = async (code: string, recovered = false, startNewAfterService = false) => {
+  const enterPosition = async (code: string, recovered = false, startNewAfterService = false, fromDirectFeedback = false) => {
     setBoot('loading');
     setBootMessage('正在为您确认服务位');
     try {
@@ -803,6 +805,11 @@ export default function App() {
         if (browserHint) flash(browserHint);
       }
     } catch (error) {
+      if (fromDirectFeedback) {
+        setBoot('direct-feedback');
+        flash(error instanceof Error ? error.message : '暂时无法选项目，仍可提交到店评价');
+        return;
+      }
       if (startNewAfterService) {
         setBoot('ready');
         flash(error instanceof Error ? error.message : '暂时无法开始新一轮选购，请稍后重试');
@@ -842,6 +849,18 @@ export default function App() {
   const initialize = async () => {
     setBoot('loading');
     try {
+      if (shouldEnterDirectFeedback(query)) {
+        const entry = await createVisitFeedbackEntry({
+          store_id: query.storeId,
+          position_code: query.positionCode,
+          source: query.source as 'personal_qr' | 'room_qr',
+          entry_token: query.qrToken,
+        });
+        setVisitFeedbackToken(entry.visit_feedback_token);
+        setDirectPositionLabel(entry.position_label);
+        setBoot('direct-feedback');
+        return;
+      }
       const [catalog, addonCatalog, publicMap, coupons, content] = await Promise.all([
         getProjects(query.storeId),
         getAddons(query.storeId).catch(() => []),
@@ -1460,13 +1479,20 @@ export default function App() {
         if (stored) writeRecord({ ...stored, visitFeedbackToken: undefined });
         if (query.qrToken) {
           try {
-            const renewed = await createEntrySession({
-              store_id: query.storeId,
-              position_code: positionCode,
-              source: getEntrySource({ source: query.source, qrToken: query.qrToken, positionCode }),
-              device_label: deviceLabel(),
-              entry_token: query.qrToken,
-            });
+            const renewed = boot === 'direct-feedback'
+              ? await createVisitFeedbackEntry({
+                store_id: query.storeId,
+                position_code: positionCode,
+                source: query.source as 'personal_qr' | 'room_qr',
+                entry_token: query.qrToken,
+              })
+              : await createEntrySession({
+                store_id: query.storeId,
+                position_code: positionCode,
+                source: getEntrySource({ source: query.source, qrToken: query.qrToken, positionCode }),
+                device_label: deviceLabel(),
+                entry_token: query.qrToken,
+              });
             if (!renewed.visit_feedback_token) throw new Error('Trusted QR entry required');
             setVisitFeedbackToken(renewed.visit_feedback_token);
             if (stored) writeRecord({ ...stored, visitFeedbackToken: renewed.visit_feedback_token });
@@ -1487,11 +1513,58 @@ export default function App() {
   const finishVisitFeedback = () => {
     setVisitFeedbackSubmitted(false);
     setVisitFeedbackIntent(createVisitFeedbackIntent());
-    dismissTopOverlay();
+    if (boot === 'direct-feedback') setFeedbackMode(null);
+    else dismissTopOverlay();
+  };
+
+  const selectProjectsFromQr = async () => {
+    setBoot('loading');
+    setBootMessage('正在打开项目列表');
+    try {
+      const [catalog, addonCatalog, coupons, content] = await Promise.all([
+        getProjects(query.storeId),
+        getAddons(query.storeId).catch(() => []),
+        getCouponTemplates(customerAuth?.token).catch(() => []),
+        getPageContent(query.storeId).catch(() => null),
+      ]);
+      setProjects(catalog);
+      setAddons(addonCatalog);
+      setCouponTemplates(coupons);
+      setPageContent(content);
+      await enterPosition(query.positionCode, false, false, true);
+    } catch (error) {
+      setBoot('direct-feedback');
+      flash(error instanceof Error ? error.message : '项目列表暂不可用，仍可提交到店评价');
+    }
   };
 
   if (boot === 'loading') {
     return <main className="loading-screen"><span className="loading-mark">荷</span><div className="loading-line" /><p>{bootMessage}</p></main>;
+  }
+  if (boot === 'direct-feedback') {
+    return <main className="success-screen">
+      <div className="success-top"><span className="eyebrow">荷小悦 · 到店体验</span><h1>{directPositionLabel || '当前服务位'}</h1><p>无需选项目或订单，也可以直接告诉我们您的到店感受。</p></div>
+      <div className="success-actions">
+        <button className="primary-action" type="button" onClick={() => setFeedbackMode('visit')}><MessageSquareText size={18} />评价与建议</button>
+        <button className="secondary-action" type="button" onClick={() => { void selectProjectsFromQr(); }}><ListChecks size={18} />选项目</button>
+      </div>
+      {toast && <div className="toast" role="status">{toast}</div>}
+      <FeedbackDialog
+        open={feedbackMode === 'visit'}
+        submitting={feedbackSubmitting}
+        submitted={visitFeedbackSubmitted}
+        title="反馈本次到店体验"
+        lead="这次到店感觉怎么样？"
+        successTitle="感谢您的反馈"
+        successMessage="您的感受我们已收到，会用来继续改进门店体验。"
+        continueLabel="完成"
+        value={visitFeedbackIntent.draft}
+        onChange={(draft) => setVisitFeedbackIntent((current) => updateVisitFeedbackDraft(current, draft))}
+        onClose={visitFeedbackSubmitted ? finishVisitFeedback : () => setFeedbackMode(null)}
+        onSubmit={submitOpenVisitFeedback}
+        onContinueShopping={finishVisitFeedback}
+      />
+    </main>;
   }
   if (boot === 'pick-position') {
     return <InitialPositionPicker positions={positions} onSelect={selectInitialPosition} onBlocked={setBootMessage} busy={false} message={bootMessage === '正在连接门店服务' ? '' : bootMessage} />;
