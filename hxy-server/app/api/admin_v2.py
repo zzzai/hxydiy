@@ -843,6 +843,7 @@ def list_feedback(
     authorization: str | None = Header(None),
 ) -> Paginated:
     staff = _current_staff(authorization, db)
+    _require_admin(staff)
     store_id = _staff_store_id(staff)
     queries = []
     if feedback_type in {None, "service_review"}:
@@ -926,6 +927,7 @@ def get_feedback_detail(
     authorization: str | None = Header(None),
 ) -> dict:
     staff = _current_staff(authorization, db)
+    _require_admin(staff)
     feedback = _feedback_by_type(db, feedback_type, feedback_id)
     if not feedback or feedback.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail="评价不存在")
@@ -941,6 +943,7 @@ def update_feedback_follow_up_by_type(
     authorization: str | None = Header(None),
 ) -> dict:
     staff = _current_staff(authorization, db)
+    _require_admin(staff)
     feedback = _feedback_by_type(db, feedback_type, feedback_id)
     if not feedback or feedback.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail="评价不存在")
@@ -965,6 +968,7 @@ def update_feedback_follow_up(
     authorization: str | None = Header(None),
 ) -> dict:
     staff = _current_staff(authorization, db)
+    _require_admin(staff)
     feedback = db.get(ServiceFeedback, feedback_id)
     if not feedback or feedback.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail="评价不存在")

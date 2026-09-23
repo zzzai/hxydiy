@@ -12,14 +12,14 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.admin import hash_password
+from app.api.admin import create_staff_token, hash_password
 from app.api.occupancies import _managed_position_qr_token
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.session import Base, get_db
 from app.domain.visit_feedback_tokens import create_visit_feedback_token
 from app.main import app
-from app.models import AuditLog, EventLog, PositionOccupancy, Room, SelectionSession, ServiceFeedback, ServicePositionQr, Staff, Store, User, VisitFeedback
+from app.models import AuditLog, EventLog, PositionOccupancy, Room, SelectionSession, ServiceFeedback, ServicePositionQr, Staff, Store, Technician, User, VisitFeedback
 
 
 class OpenVisitFeedbackTests(unittest.TestCase):
@@ -37,10 +37,14 @@ class OpenVisitFeedbackTests(unittest.TestCase):
             other_store = Store(store_code="visit-feedback-other", name="其他门店", address="其他地址")
             db.add_all([store, other_store])
             db.flush()
+            technician = Technician(store_id=store.id, code="VISIT-FEEDBACK-TECH", name="反馈技师")
+            db.add(technician)
+            db.flush()
             db.add_all([
                 Staff(username="visit-feedback-manager", password_hash=hash_password("test-password"), name="反馈店长", role="manager", store_id=store.id),
                 Staff(username="visit-feedback-other-manager", password_hash=hash_password("test-password"), name="其他店长", role="manager", store_id=other_store.id),
                 Staff(username="visit-feedback-staff", password_hash=hash_password("test-password"), name="普通员工", role="staff", store_id=store.id),
+                Staff(username="visit-feedback-technician", password_hash=hash_password("test-password"), name="技师", role="technician", store_id=store.id, technician_id=technician.id),
             ])
             room = Room(
                 store_id=store.id,
@@ -467,6 +471,40 @@ class OpenVisitFeedbackTests(unittest.TestCase):
             headers=self.manager_headers("visit-feedback-staff"),
         )
         self.assertEqual(response.status_code, 403, response.text)
+
+    def test_technician_cannot_read_or_update_customer_feedback(self):
+        created = self.submit(f"visit-feedback-private-{uuid.uuid4().hex}", note="private customer complaint")
+        self.assertEqual(created.status_code, 200, created.text)
+        feedback_id = created.json()["id"]
+        with self.SessionLocal() as db:
+            session = SelectionSession(
+                id=str(uuid.uuid4()), access_token_hash="private-service-review", store_id=self.store_id,
+                status="confirmed", items=[], pricing_snapshot={},
+            )
+            db.add(session)
+            db.flush()
+            service_review = ServiceFeedback(
+                store_id=self.store_id, selection_session_id=session.id, rating=2,
+                tags=["沟通体验不好"], note="private service review",
+            )
+            db.add(service_review)
+            db.commit()
+            service_review_id = service_review.id
+            technician = db.scalar(select(Staff).where(Staff.username == "visit-feedback-technician"))
+            token = create_staff_token(technician.id, technician.role, technician.credentials_version)
+        headers = {"Authorization": f"Bearer {token}"}
+        paths = [
+            ("get", "/api/v1/admin/v2/feedback", None),
+            ("get", f"/api/v1/admin/v2/feedback/visit_feedback/{feedback_id}", None),
+            ("patch", f"/api/v1/admin/v2/feedback/visit_feedback/{feedback_id}", {"follow_up_status": "resolved"}),
+            ("patch", f"/api/v1/admin/v2/feedback/{service_review_id}", {"follow_up_status": "resolved"}),
+        ]
+        for method, path, body in paths:
+            response = self.client.request(method, path, headers=headers, json=body)
+            self.assertEqual(response.status_code, 403, (path, response.text))
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(VisitFeedback, feedback_id).follow_up_status, "open")
+            self.assertEqual(db.get(ServiceFeedback, service_review_id).follow_up_status, "open")
 
     def test_production_store_qr_without_signed_entry_receives_no_feedback_token(self):
         browser = TestClient(app)
