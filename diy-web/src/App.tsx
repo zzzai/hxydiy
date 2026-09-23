@@ -96,6 +96,11 @@ import {
   trackDiyEvent,
 } from './tracking';
 import {
+  MENU_SYNC_INTERVAL_MS,
+  loadMenuSyncUpdate,
+  menuFingerprint,
+} from './menuSync';
+import {
   CATALOG_SECTIONS,
   KIOSK_UNBOUND_COPY,
   TEA_SERVICE,
@@ -340,6 +345,20 @@ export default function App() {
                       : profileOpen ? 'profile'
                         : membershipKind ? 'membership'
                           : null;
+
+  const menuFingerprintRef = useRef('');
+  const menuSyncRequestRef = useRef(0);
+  const menuSyncStateRef = useRef({
+    storeId: query.storeId,
+    saving: false,
+    submitting: false,
+    activeOverlay,
+    selectedProjectIds,
+    projectPreferences,
+    projectAddonIds,
+    projectCatalogSelections,
+    detailProjectId: detailProject?.id ?? null,
+  });
 
   const selectionItems = useMemo(() => buildSelectionItems({
     projects,
@@ -870,6 +889,7 @@ export default function App() {
       ]);
       setProjects(catalog);
       setAddons(addonCatalog);
+      menuFingerprintRef.current = menuFingerprint(catalog, addonCatalog);
       setPositions(publicMap.positions);
       setCouponTemplates(coupons);
       setPageContent(content);
@@ -1127,6 +1147,7 @@ export default function App() {
   useEffect(() => {
     if (boot !== 'ready' || !session || session.status !== 'draft' || !accessToken || !hydrated.current) return undefined;
     const timer = window.setTimeout(async () => {
+      menuSyncStateRef.current.saving = true;
       setSaving(true);
       try {
         const saved = await saveSelectionSession(session.id, accessToken, selectionItems, deviceLabel());
@@ -1150,6 +1171,7 @@ export default function App() {
           flash('选单暂未同步，网络恢复后请再试');
         }
       } finally {
+        menuSyncStateRef.current.saving = false;
         setSaving(false);
       }
     }, 500);
@@ -1216,6 +1238,104 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [boot, session?.id, feedbackToken, accessToken, readOnly, hasSubmittedCustomerSession, positionCode]);
+
+  useEffect(() => {
+    menuSyncStateRef.current = {
+      storeId: query.storeId,
+      saving,
+      submitting,
+      activeOverlay,
+      selectedProjectIds,
+      projectPreferences,
+      projectAddonIds,
+      projectCatalogSelections,
+      detailProjectId: detailProject?.id ?? null,
+    };
+  });
+
+  useEffect(() => {
+    if (boot !== 'ready') return undefined;
+    let active = true;
+
+    const syncMenu = async () => {
+      const beforeRequest = menuSyncStateRef.current;
+      if (beforeRequest.saving || beforeRequest.submitting) return;
+      const requestStoreId = query.storeId;
+      const requestId = ++menuSyncRequestRef.current;
+      try {
+        const update = await loadMenuSyncUpdate({
+          requestStoreId,
+          requestId,
+          loadProjects: getProjects,
+          loadAddons: getAddons,
+          readContext: () => {
+            const latest = menuSyncStateRef.current;
+            return {
+              currentStoreId: latest.storeId,
+              latestRequestId: menuSyncRequestRef.current,
+              saving: latest.saving,
+              submitting: latest.submitting,
+              previousFingerprint: menuFingerprintRef.current,
+              draft: {
+                selectedProjectIds: latest.selectedProjectIds,
+                projectPreferences: latest.projectPreferences,
+                projectAddonIds: latest.projectAddonIds,
+                projectCatalogSelections: latest.projectCatalogSelections,
+              },
+              detailProjectId: latest.detailProjectId,
+            };
+          },
+        });
+        if (!active || !update) return;
+
+        menuFingerprintRef.current = update.fingerprint;
+        setProjects(update.projects);
+        setAddons(update.addons);
+        if (update.reconciliation.changed) {
+          setSelectedProjectIds(update.reconciliation.draft.selectedProjectIds);
+          setProjectPreferences(update.reconciliation.draft.projectPreferences);
+          setProjectAddonIds(update.reconciliation.draft.projectAddonIds);
+          setProjectCatalogSelections(update.reconciliation.draft.projectCatalogSelections || {});
+        }
+        if (update.detailGone) {
+          if (menuSyncStateRef.current.activeOverlay === 'project-detail') dismissTopOverlay();
+          else setDetailProject(null);
+        } else if (update.detailProject) {
+          setDetailProject(update.detailProject);
+        }
+        flash(update.notice);
+      } catch {
+        // Background menu refresh must never block the active selection flow.
+      }
+    };
+
+    void syncMenu();
+    const startTimer = () => window.setInterval(() => void syncMenu(), MENU_SYNC_INTERVAL_MS);
+    let timer: number | null = document.visibilityState === 'visible' ? startTimer() : null;
+    const syncWhenVisible = () => {
+      if (document.visibilityState !== 'visible') {
+        if (timer !== null) {
+          window.clearInterval(timer);
+          timer = null;
+        }
+        return;
+      }
+      if (timer === null) timer = startTimer();
+      void syncMenu();
+    };
+    const syncWhenOnline = () => void syncMenu();
+    document.addEventListener('visibilitychange', syncWhenVisible);
+    window.addEventListener('focus', syncWhenVisible);
+    window.addEventListener('online', syncWhenOnline);
+    return () => {
+      active = false;
+      menuSyncRequestRef.current += 1;
+      if (timer !== null) window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', syncWhenVisible);
+      window.removeEventListener('focus', syncWhenVisible);
+      window.removeEventListener('online', syncWhenOnline);
+    };
+  }, [boot, query.storeId]);
 
   useEffect(() => {
     if (boot !== 'ready') return undefined;
@@ -1373,6 +1493,7 @@ export default function App() {
 
   const submitRevision = async () => {
     if (!session || !accessToken) return;
+    menuSyncStateRef.current.submitting = true;
     setSubmitting(true);
     try {
       await submitSelectionRevision(session.id, accessToken, submissionItems, deviceLabel());
@@ -1399,6 +1520,7 @@ export default function App() {
     } catch (error) {
       flash(error instanceof Error ? error.message : '提交失败，请稍后重试');
     } finally {
+      menuSyncStateRef.current.submitting = false;
       setSubmitting(false);
     }
   };
@@ -1410,6 +1532,7 @@ export default function App() {
       const proceed = window.confirm('您还未选择服务项目，本次仅提交免费茶饮。建议先逛逛项目，是否继续提交茶饮？');
       if (!proceed) return;
     }
+    menuSyncStateRef.current.submitting = true;
     setSubmitting(true);
     try {
       if (customerAuth) {
@@ -1436,6 +1559,7 @@ export default function App() {
     } catch (error) {
       flash(error instanceof Error ? error.message : '报价失败，请稍后重试');
     } finally {
+      menuSyncStateRef.current.submitting = false;
       setSubmitting(false);
     }
   };
