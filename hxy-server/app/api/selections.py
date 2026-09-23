@@ -5,7 +5,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +21,7 @@ from app.domain.selection_options import (
     merge_linked_service_units,
     resolve_catalog_selection,
 )
+from app.domain.selection_collaboration_tokens import BROWSER_COOKIE, resolve_collaboration_token
 from app.models import Addon, CouponTemplate, PositionOccupancy, Project, ProjectCatalogVersion, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
 from app.schemas.selection import (
     MySelectionRecordOut,
@@ -96,6 +97,37 @@ def _latest_service_occupancy(db: Session, session_id: str) -> PositionOccupancy
     return db.scalar(select(PositionOccupancy).where(
         PositionOccupancy.selection_session_id == session_id,
     ).order_by(PositionOccupancy.id.desc()))
+
+
+def _selection_view(session: SelectionSession, occupancy: PositionOccupancy | None = None) -> dict:
+    return SelectionSessionOut.model_validate(session).model_copy(update={
+        "cart_version": occupancy.version if occupancy else 0,
+    }).model_dump(mode="json")
+
+
+def _collaboration_view(
+    session: SelectionSession,
+    occupancy: PositionOccupancy | None,
+    *,
+    include_items: bool = True,
+) -> dict:
+    view = _selection_view(session, occupancy)
+    view.update({
+        "pricing_snapshot": {}, "store_total_cents": 0,
+        "group_total_cents": 0, "member_total_cents": 0,
+    })
+    if not include_items:
+        view.update({"items": [], "diy_preferences": {}})
+    return view
+
+
+def _cart_version_conflict(session: SelectionSession, occupancy: PositionOccupancy) -> HTTPException:
+    return HTTPException(status_code=409, detail={
+        "code": "CART_VERSION_CONFLICT",
+        "message": "清单刚刚被更新，请确认后继续",
+        "cart_version": occupancy.version,
+        "session": _collaboration_view(session, occupancy),
+    })
 
 
 def _session_price_type(
@@ -413,12 +445,23 @@ def _added_items(previous_items: list[dict], current_items: list[dict]) -> list[
 def quote_selection_session(
     session_id: str,
     body: SelectionSaveIn,
+    request: Request,
     x_selection_token: str | None = Header(default=None),
+    x_collaboration_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    session = _get_session(db, session_id, x_selection_token)
+    context = resolve_collaboration_token(
+        db, x_collaboration_token, request.cookies.get(BROWSER_COOKIE), session_id,
+    ) if x_collaboration_token else None
+    session = context.session if context else _get_session(db, session_id, x_selection_token)
+    if context and (context.mode != "shared_draft" or session.status != "draft"):
+        raise HTTPException(status_code=403, detail={
+            "code": "COLLABORATION_READ_ONLY", "message": "该清单已提交，不能继续报价",
+        })
     normalized = _validate_items(db, session.store_id, body.items)
-    customer = db.get(User, session.customer_id) if session.customer_id else None
+    request_user_id = current_customer_id(authorization, db, optional=True) if context else None
+    customer = db.get(User, request_user_id or session.customer_id) if (request_user_id or session.customer_id) else None
     pricing = calculate_selection_pricing(
         db,
         normalized,
@@ -430,7 +473,7 @@ def quote_selection_session(
     )
     automatic_coupon = select_automatic_coupon(
         db,
-        customer_id=session.customer_id,
+        customer_id=request_user_id if context else session.customer_id,
         pricing=pricing,
         now=datetime.now(timezone.utc),
     )
@@ -477,29 +520,65 @@ def bind_selection_customer(
 def submit_selection_revision(
     session_id: str,
     body: SelectionSaveIn,
+    request: Request,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     x_selection_token: str | None = Header(default=None),
+    x_collaboration_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     if not idempotency_key or len(idempotency_key) > 96:
         raise HTTPException(status_code=400, detail="请提供有效的幂等键")
-    session = _get_locked_session(db, session_id, x_selection_token)
+    context = None
+    if x_collaboration_token:
+        session = db.scalar(select(SelectionSession).where(
+            SelectionSession.id == session_id,
+        ).with_for_update().execution_options(populate_existing=True))
+        if not session:
+            raise HTTPException(status_code=404, detail="选单会话不存在")
+        context = resolve_collaboration_token(
+            db, x_collaboration_token, request.cookies.get(BROWSER_COOKIE), session_id,
+        )
+        if context.mode != "shared_draft":
+            raise HTTPException(status_code=403, detail={
+                "code": "COLLABORATION_READ_ONLY", "message": "该清单已提交，不能继续修改",
+            })
+    else:
+        session = _get_locked_session(db, session_id, x_selection_token)
     existing = db.scalar(select(SelectionRevision).where(
         SelectionRevision.selection_session_id == session.id,
         SelectionRevision.idempotency_key == idempotency_key,
     ))
     if existing:
         return _revision_view(existing)
+    if context and session.status != "draft":
+        raise HTTPException(status_code=403, detail={
+            "code": "COLLABORATION_READ_ONLY", "message": "该清单已提交，不能继续修改",
+        })
+    occupancy = db.scalar(select(PositionOccupancy).where(
+        PositionOccupancy.id == context.occupancy.id,
+    ).with_for_update().execution_options(populate_existing=True)) if context else _latest_service_occupancy(db, session.id)
+    if context and (body.expected_version is None or not occupancy or body.expected_version != occupancy.version):
+        raise _cart_version_conflict(session, occupancy or context.occupancy)
     if session.status in {"cancelled", "expired"}:
         raise HTTPException(status_code=409, detail="当前服务状态不能继续加选")
     normalized = _validate_items(db, session.store_id, body.items)
     if not normalized:
         raise HTTPException(status_code=400, detail="请至少选择一个项目")
+    if context:
+        request_user_id = current_customer_id(authorization, db, optional=True)
+        if request_user_id:
+            current = db.get(User, session.customer_id) if session.customer_id else None
+            if session.customer_id and current and not _is_anonymous_customer(current) and session.customer_id != request_user_id:
+                raise HTTPException(status_code=409, detail={
+                    "code": "SELECTION_ALREADY_BOUND",
+                    "message": "当前清单已由同行人绑定，请使用原账号继续",
+                })
+            session.customer_id = request_user_id
     pricing = calculate_selection_pricing(db, normalized, _session_price_type(db, session))
     previous = db.scalar(select(SelectionRevision).where(
         SelectionRevision.selection_session_id == session.id,
     ).order_by(SelectionRevision.revision_no.desc()))
-    occupancy = _latest_service_occupancy(db, session.id)
     if occupancy and occupancy.status in {"post_service_present", "cleaning", "released"}:
         raise HTTPException(status_code=409, detail="当前服务已结束，不能继续加选")
     if session.status == "confirmed" and (not occupancy or occupancy.status != "in_service"):
@@ -618,23 +697,57 @@ def customer_selection_detail(session_id: str, authorization: str | None = Heade
 @router.get("/{session_id}", response_model=SelectionSessionOut)
 def get_selection_session(
     session_id: str,
+    request: Request,
     x_selection_token: str | None = Header(default=None),
+    x_collaboration_token: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> SelectionSession:
-    session = _get_session(db, session_id, x_selection_token)
+) -> SelectionSession | dict:
+    context = resolve_collaboration_token(
+        db, x_collaboration_token, request.cookies.get(BROWSER_COOKIE), session_id,
+    ) if x_collaboration_token else None
+    session = context.session if context else _get_session(db, session_id, x_selection_token)
     if _expire_if_needed(session):
         db.commit()
-    return session
+    occupancy = context.occupancy if context else _latest_service_occupancy(db, session.id)
+    view = _collaboration_view(
+        session, occupancy,
+        include_items=context.mode == "shared_draft" and session.status == "draft",
+    ) if context else _selection_view(session, occupancy)
+    return view
 
 
 @router.patch("/{session_id}", response_model=SelectionSessionOut)
 def save_selection_session(
     session_id: str,
     body: SelectionSaveIn,
+    request: Request,
     x_selection_token: str | None = Header(default=None),
+    x_collaboration_token: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> SelectionSession:
-    session = _get_session(db, session_id, x_selection_token)
+) -> SelectionSession | dict:
+    context = None
+    if x_collaboration_token:
+        session = db.scalar(select(SelectionSession).where(
+            SelectionSession.id == session_id,
+        ).with_for_update().execution_options(populate_existing=True))
+        if not session:
+            raise HTTPException(status_code=404, detail="选单会话不存在")
+        context = resolve_collaboration_token(
+            db, x_collaboration_token, request.cookies.get(BROWSER_COOKIE), session_id,
+        )
+        if context.mode != "shared_draft" or session.status != "draft":
+            raise HTTPException(status_code=403, detail={
+                "code": "COLLABORATION_READ_ONLY",
+                "message": "该清单已提交，不能继续修改",
+            })
+        occupancy = db.scalar(select(PositionOccupancy).where(
+            PositionOccupancy.id == context.occupancy.id,
+        ).with_for_update().execution_options(populate_existing=True))
+        if body.expected_version is None or not occupancy or body.expected_version != occupancy.version:
+            raise _cart_version_conflict(session, occupancy or context.occupancy)
+    else:
+        session = _get_session(db, session_id, x_selection_token)
+        occupancy = _latest_service_occupancy(db, session.id)
     if _expire_if_needed(session):
         db.commit()
     if session.status != "draft":
@@ -648,9 +761,13 @@ def save_selection_session(
         session.device_label = body.device_label
     if changed:
         refresh_hold(db, session.id)
+        if context and occupancy:
+            occupancy.version += 1
     db.commit()
     db.refresh(session)
-    return session
+    if occupancy:
+        db.refresh(occupancy)
+    return _collaboration_view(session, occupancy) if context else _selection_view(session, occupancy)
 
 
 @router.post("/{session_id}/submit", response_model=SelectionSessionOut)

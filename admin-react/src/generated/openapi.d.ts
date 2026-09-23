@@ -3980,6 +3980,34 @@ export interface components {
             /** Store Id */
             store_id: number;
         };
+        /** EntrySessionOut */
+        EntrySessionOut: {
+            /** Access Token */
+            access_token: string;
+            /** Cart Version */
+            cart_version: number;
+            /** Collaboration Mode */
+            collaboration_mode?: ("shared_draft" | "browse_only") | null;
+            /** Collaboration Token */
+            collaboration_token?: string | null;
+            occupancy: components["schemas"]["OccupancyOut"];
+            /** Position */
+            position: {
+                [key: string]: unknown;
+            };
+            /** Resumed */
+            resumed: boolean;
+            /** Returning Browser */
+            returning_browser: boolean;
+            session: components["schemas"]["SelectionSessionOut"];
+            /**
+             * Shared Cart
+             * @default false
+             */
+            shared_cart: boolean;
+            /** Visit Feedback Token */
+            visit_feedback_token?: string | null;
+        };
         /** FeedbackFollowUpIn */
         FeedbackFollowUpIn: {
             /**
@@ -4174,6 +4202,11 @@ export interface components {
              * @default false
              */
             can_evaluate: boolean;
+            /**
+             * Cart Version
+             * @default 0
+             */
+            cart_version: number;
             /** Confirmed At */
             confirmed_at?: string | null;
             /** Created At */
@@ -4252,6 +4285,46 @@ export interface components {
             reason_code: string;
             /** Target State */
             target_state?: ("released" | "cleaning") | null;
+        };
+        /** OccupancyOut */
+        OccupancyOut: {
+            /** Active Room Id */
+            active_room_id?: number | null;
+            /** Active Session Id */
+            active_session_id?: string | null;
+            /** Actual Service End At */
+            actual_service_end_at?: string | null;
+            /** Actual Start At */
+            actual_start_at?: string | null;
+            /** Departed At */
+            departed_at?: string | null;
+            /** Expected End At */
+            expected_end_at?: string | null;
+            /** Hold Expires At */
+            hold_expires_at?: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Release Reason
+             * @default
+             */
+            release_reason: string;
+            /** Released At */
+            released_at?: string | null;
+            /** Retained Until */
+            retained_until?: string | null;
+            /** Room Id */
+            room_id: number;
+            /** Selection Session Id */
+            selection_session_id: string;
+            /** Source */
+            source: string;
+            /** Status */
+            status: string;
+            /** Store Id */
+            store_id: number;
+            /** Version */
+            version: number;
         };
         /** OptionChoiceIn */
         OptionChoiceIn: {
@@ -5076,11 +5149,18 @@ export interface components {
             diy_preferences?: {
                 [key: string]: unknown;
             };
+            /** Expected Version */
+            expected_version?: number | null;
             /** Items */
             items?: components["schemas"]["SelectionItemIn"][];
         };
         /** SelectionSessionOut */
         SelectionSessionOut: {
+            /**
+             * Cart Version
+             * @default 0
+             */
+            cart_version: number;
             /** Confirmed At */
             confirmed_at?: string | null;
             /** Created At */
@@ -11531,9 +11611,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EntrySessionOut"];
                 };
             };
             /** @description Validation Error */
@@ -12477,6 +12555,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-selection-token"?: string | null;
+                "x-collaboration-token"?: string | null;
             };
             path: {
                 session_id: string;
@@ -12510,6 +12589,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-selection-token"?: string | null;
+                "x-collaboration-token"?: string | null;
             };
             path: {
                 session_id: string;
@@ -12656,6 +12736,8 @@ export interface operations {
             query?: never;
             header?: {
                 "x-selection-token"?: string | null;
+                "x-collaboration-token"?: string | null;
+                authorization?: string | null;
             };
             path: {
                 session_id: string;
@@ -12696,6 +12778,8 @@ export interface operations {
             header?: {
                 "Idempotency-Key"?: string | null;
                 "x-selection-token"?: string | null;
+                "x-collaboration-token"?: string | null;
+                authorization?: string | null;
             };
             path: {
                 session_id: string;

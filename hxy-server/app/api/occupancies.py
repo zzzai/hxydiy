@@ -6,11 +6,11 @@ import hmac
 import json
 import secrets
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,12 +32,14 @@ from app.domain.occupancy_release_policy import (
     list_release_candidates,
     release_selected_occupancies,
 )
+from app.domain.selection_collaboration_tokens import create_collaboration_token
 from app.domain.visit_feedback_tokens import create_visit_feedback_token
 from app.models import AuditLog, BrowserInstance, PositionOccupancy, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceLine, ServicePositionQr, Store, User
 from app.models.service import ServiceOrder, Visit
 from app.schemas.occupancy import (
     BulkReleaseIn,
     EntrySessionIn,
+    EntrySessionOut,
     KioskSessionIn,
     MoveOccupancyIn,
     OccupancyActionIn,
@@ -47,6 +49,8 @@ from app.schemas.selection import SelectionSessionOut
 
 
 router = APIRouter(tags=["service-position-occupancy"])
+COLLABORATION_ENTRY_RATE_LIMIT = 300
+COLLABORATION_ENTRY_RATE_WINDOW = timedelta(hours=1)
 
 
 class ServicePositionConfigurationIn(BaseModel):
@@ -66,12 +70,38 @@ class ServicePositionConfigurationIn(BaseModel):
         return self
 
 
-def _selection_view(session: SelectionSession) -> dict:
-    return SelectionSessionOut.model_validate(session).model_dump()
+def _selection_view(session: SelectionSession, occupancy: PositionOccupancy | None = None) -> dict:
+    return SelectionSessionOut.model_validate(session).model_copy(update={
+        "cart_version": occupancy.version if occupancy else 0,
+    }).model_dump(mode="json")
 
 
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _collaboration_entry_identity(request: Request) -> str:
+    address = request.client.host if request.client else "unknown"
+    return hmac.new(settings.jwt_secret.encode(), f"shared-entry:{address}".encode(), hashlib.sha256).hexdigest()
+
+
+def _check_collaboration_entry_rate(db: Session, request: Request, qr: ServicePositionQr) -> str:
+    identity = _collaboration_entry_identity(request)
+    cutoff = datetime.now(timezone.utc) - COLLABORATION_ENTRY_RATE_WINDOW
+    count = db.scalar(select(func.count()).select_from(AuditLog).where(
+        AuditLog.action == "shared_selection_joined",
+        AuditLog.entity_type == "service_position_qr",
+        AuditLog.entity_id == str(qr.id),
+        AuditLog.actor_id == identity,
+        AuditLog.created_at >= cutoff,
+    )) or 0
+    if count >= COLLABORATION_ENTRY_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "SHARED_ENTRY_RATE_LIMITED", "message": "扫码进入过于频繁，请稍后再试"},
+            headers={"Retry-After": str(int(COLLABORATION_ENTRY_RATE_WINDOW.total_seconds()))},
+        )
+    return identity
 
 
 def create_position_qr_token(store_id: int, position_code: str, source: str = "personal_qr") -> str:
@@ -299,6 +329,10 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
             })
     if existing:
         existing_session = db.get(SelectionSession, existing.active_session_id)
+        if verified_qr and existing_session:
+            # A verified position QR grants a browser-bound collaboration capability.
+            # Never rotate or disclose the legacy single-browser selection token.
+            return existing_session, existing, room, "", True, browser_token, returning_browser, verified_qr
         if existing_session and existing_session.customer_id == anonymous_customer_id and existing_session.status in {"draft", "submitted", "confirmed"}:
             # 旋转访问凭证，允许本浏览器在 localStorage 丢失后安全恢复自己的选单。
             token = secrets.token_urlsafe(32)
@@ -368,7 +402,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
     return session, occupancy, room, token, False, browser_token, returning_browser, verified_qr
 
 
-@router.post("/entry-sessions")
+@router.post("/entry-sessions", response_model=EntrySessionOut)
 def create_entry_session(body: EntrySessionIn, request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
     if body.source == "kiosk":
         raise HTTPException(status_code=403, detail={
@@ -380,6 +414,11 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
             "code": "ENTRY_SOURCE_FORBIDDEN",
             "message": "该入口来源仅由服务端在验证二维码后记录",
         })
+    collaboration_identity = None
+    if body.entry_token:
+        rate_qr = _verify_position_qr_token(db, body.entry_token, body.store_id, body.position_code, body.source)
+        if rate_qr:
+            collaboration_identity = _check_collaboration_entry_rate(db, request, rate_qr)
     session, occupancy, room, token, resumed, browser_token, returning_browser, verified_qr = _create_entry(db, body, request)
     response.set_cookie(
         ANONYMOUS_COOKIE,
@@ -394,16 +433,51 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
     # In production an unsigned store-level entry may still browse and select, but it
     # must never receive a visit_feedback_token from stitched parameters alone.
     visit_feedback_token = None
+    collaboration_token = None
+    collaboration_mode = None
     if body.entry_token or settings.environment != "production":
         visit_feedback_token = create_visit_feedback_token(room, body.source, browser_token, verified_qr.id if verified_qr else None)
+    if verified_qr:
+        collaboration_mode = "shared_draft" if session.status == "draft" else "browse_only"
+        collaboration_token = create_collaboration_token(
+            session, occupancy, room, verified_qr, browser_token, collaboration_mode,
+        )
+        db.add(AuditLog(
+            actor_type="browser",
+            actor_id=collaboration_identity or _collaboration_entry_identity(request),
+            store_id=room.store_id,
+            action="shared_selection_joined",
+            entity_type="service_position_qr",
+            entity_id=str(verified_qr.id),
+            detail={
+                "room_id": room.id,
+                "selection_session_id": session.id,
+                "collaboration_mode": collaboration_mode,
+            },
+        ))
+        db.commit()
+    session_view = _selection_view(session, occupancy)
+    if collaboration_mode:
+        session_view.update({
+            "pricing_snapshot": {},
+            "store_total_cents": 0,
+            "group_total_cents": 0,
+            "member_total_cents": 0,
+        })
+    if collaboration_mode == "browse_only":
+        session_view.update({"items": [], "diy_preferences": {}})
     return {
-        "session": _selection_view(session),
+        "session": session_view,
         "occupancy": occupancy_view(occupancy),
         "position": position_view(room, occupancy, current=True),
         "access_token": token,
         "resumed": resumed,
         "returning_browser": returning_browser,
         "visit_feedback_token": visit_feedback_token,
+        "collaboration_token": collaboration_token,
+        "collaboration_mode": collaboration_mode,
+        "cart_version": occupancy.version,
+        "shared_cart": collaboration_mode == "shared_draft",
     }
 
 

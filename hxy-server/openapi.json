@@ -1610,6 +1610,90 @@
         "title": "EntrySessionIn",
         "type": "object"
       },
+      "EntrySessionOut": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "cart_version": {
+            "title": "Cart Version",
+            "type": "integer"
+          },
+          "collaboration_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "shared_draft",
+                  "browse_only"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collaboration Mode"
+          },
+          "collaboration_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collaboration Token"
+          },
+          "occupancy": {
+            "$ref": "#/components/schemas/OccupancyOut"
+          },
+          "position": {
+            "additionalProperties": true,
+            "title": "Position",
+            "type": "object"
+          },
+          "resumed": {
+            "title": "Resumed",
+            "type": "boolean"
+          },
+          "returning_browser": {
+            "title": "Returning Browser",
+            "type": "boolean"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SelectionSessionOut"
+          },
+          "shared_cart": {
+            "default": false,
+            "title": "Shared Cart",
+            "type": "boolean"
+          },
+          "visit_feedback_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit Feedback Token"
+          }
+        },
+        "required": [
+          "session",
+          "occupancy",
+          "position",
+          "access_token",
+          "resumed",
+          "returning_browser",
+          "cart_version"
+        ],
+        "title": "EntrySessionOut",
+        "type": "object"
+      },
       "FeedbackFollowUpIn": {
         "additionalProperties": false,
         "properties": {
@@ -2185,6 +2269,11 @@
             "title": "Can Evaluate",
             "type": "boolean"
           },
+          "cart_version": {
+            "default": 0,
+            "title": "Cart Version",
+            "type": "integer"
+          },
           "confirmed_at": {
             "anyOf": [
               {
@@ -2402,6 +2491,160 @@
           }
         },
         "title": "OccupancyActionIn",
+        "type": "object"
+      },
+      "OccupancyOut": {
+        "properties": {
+          "active_room_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Room Id"
+          },
+          "active_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Session Id"
+          },
+          "actual_service_end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Service End At"
+          },
+          "actual_start_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Start At"
+          },
+          "departed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Departed At"
+          },
+          "expected_end_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected End At"
+          },
+          "hold_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Expires At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "release_reason": {
+            "default": "",
+            "title": "Release Reason",
+            "type": "string"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "retained_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retained Until"
+          },
+          "room_id": {
+            "title": "Room Id",
+            "type": "integer"
+          },
+          "selection_session_id": {
+            "title": "Selection Session Id",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "room_id",
+          "selection_session_id",
+          "status",
+          "source",
+          "version"
+        ],
+        "title": "OccupancyOut",
         "type": "object"
       },
       "OptionChoiceIn": {
@@ -4448,6 +4691,18 @@
             "title": "Diy Preferences",
             "type": "object"
           },
+          "expected_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/SelectionItemIn"
@@ -4462,6 +4717,11 @@
       },
       "SelectionSessionOut": {
         "properties": {
+          "cart_version": {
+            "default": 0,
+            "title": "Cart Version",
+            "type": "integer"
+          },
           "confirmed_at": {
             "anyOf": [
               {
@@ -17195,9 +17455,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Entry Session Api V1 Entry Sessions Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EntrySessionOut"
                 }
               }
             },
@@ -18823,6 +19081,22 @@
               ],
               "title": "X-Selection-Token"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-collaboration-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Collaboration-Token"
+            }
           }
         ],
         "responses": {
@@ -18878,6 +19152,22 @@
                 }
               ],
               "title": "X-Selection-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-collaboration-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Collaboration-Token"
             }
           }
         ],
@@ -19168,6 +19458,38 @@
               ],
               "title": "X-Selection-Token"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-collaboration-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Collaboration-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
         "requestBody": {
@@ -19253,6 +19575,38 @@
                 }
               ],
               "title": "X-Selection-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-collaboration-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Collaboration-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],

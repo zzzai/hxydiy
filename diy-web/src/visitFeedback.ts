@@ -16,7 +16,8 @@ const emptyDraft = (): FeedbackDraft => ({ rating: null, tags: [], note: '' });
 const defaultKeyFactory = () => crypto.randomUUID();
 
 export function shouldEnterDirectFeedback(entry: { positionCode: string; source: string; qrToken: string }): boolean {
-  return Boolean(entry.positionCode && entry.qrToken && ['personal_qr', 'room_qr'].includes(entry.source));
+  void entry;
+  return false;
 }
 
 function draftSignature(draft: FeedbackDraft) {

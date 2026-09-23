@@ -290,6 +290,8 @@ h1, h2, h3, p { margin-top: 0; }
 .hold-timer.danger { color: var(--danger); background: #fff8f7; }
 
 .catalog-layout { display: grid; grid-template-columns: 70px minmax(0, 1fr); align-items: start; }
+.shared-cart-banner { padding: 7px 14px; border-bottom: 1px solid #dcece5; color: #315f50; background: #f2faf6; font-size: 11px; line-height: 1.45; text-align: center; }
+.shared-cart-banner.read-only { color: #6f6447; border-bottom-color: #ece6d4; background: #fffaf0; }
 .category-nav {
   position: sticky;
   z-index: 15;

@@ -28,6 +28,7 @@ class SelectionSaveIn(BaseModel):
     items: list[SelectionItemIn] = Field(default_factory=list, max_length=50)
     diy_preferences: dict = Field(default_factory=dict)
     device_label: str = Field(default="", max_length=64)
+    expected_version: int | None = Field(default=None, ge=1)
 
 
 class SelectionCreateIn(BaseModel):
@@ -53,6 +54,7 @@ class SelectionSessionOut(BaseModel):
     updated_at: datetime | None = None
     submitted_at: datetime | None = None
     confirmed_at: datetime | None = None
+    cart_version: int = 0
 
     model_config = {"from_attributes": True}
 
