@@ -15,6 +15,37 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     inspector = sa.inspect(op.get_bind())
     if "visit_feedback" in inspector.get_table_names():
+        required_columns = {
+            "id", "store_id", "room_id", "service_position_qr_id", "customer_id", "source",
+            "identity_hash", "idempotency_key_hash", "request_fingerprint", "rating", "tags",
+            "note", "follow_up_status", "follow_up_staff_id", "follow_up_note", "followed_up_at",
+            "created_at", "updated_at",
+        }
+        columns = {column["name"]: column for column in inspector.get_columns("visit_feedback")}
+        required_not_null = required_columns - {
+            "service_position_qr_id", "customer_id", "follow_up_staff_id", "followed_up_at",
+        }
+        unique_keys = {
+            frozenset(item["column_names"])
+            for item in inspector.get_unique_constraints("visit_feedback")
+        }
+        checks = {item["name"] for item in inspector.get_check_constraints("visit_feedback")}
+        indexes = {item["name"] for item in inspector.get_indexes("visit_feedback")}
+        required_indexes = {
+            "ix_visit_feedback_store_id", "ix_visit_feedback_room_id",
+            "ix_visit_feedback_service_position_qr_id", "ix_visit_feedback_customer_id",
+            "ix_visit_feedback_follow_up_status", "ix_visit_feedback_follow_up_staff_id",
+            "ix_visit_feedback_created_at", "ix_visit_feedback_rate_scope",
+        }
+        if (
+            set(columns) != required_columns
+            or any(columns[name]["nullable"] for name in required_not_null)
+            or any(not columns[name]["nullable"] for name in required_columns - required_not_null)
+            or frozenset({"identity_hash", "idempotency_key_hash"}) not in unique_keys
+            or not {"ck_visit_feedback_rating", "ck_visit_feedback_follow_up_status"}.issubset(checks)
+            or not required_indexes.issubset(indexes)
+        ):
+            raise RuntimeError("Incomplete existing visit_feedback table; inspect and repair it before migration")
         return
     op.create_table(
         "visit_feedback",
