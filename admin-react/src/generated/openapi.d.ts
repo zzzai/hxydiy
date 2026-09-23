@@ -1493,6 +1493,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/staff/accounts/{staff_id}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Staff Scope Assignments */
+        get: operations["list_staff_scope_assignments_api_v1_admin_v2_staff_accounts__staff_id__assignments_get"];
+        put?: never;
+        /** Create Staff Scope Assignment */
+        post: operations["create_staff_scope_assignment_api_v1_admin_v2_staff_accounts__staff_id__assignments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/staff/accounts/{staff_id}/assignments/{assignment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Staff Scope Assignment */
+        patch: operations["update_staff_scope_assignment_api_v1_admin_v2_staff_accounts__staff_id__assignments__assignment_id__patch"];
+        trace?: never;
+    };
     "/api/v1/admin/v2/staff/{staff_id}": {
         parameters: {
             query?: never;
@@ -1960,6 +1995,23 @@ export interface paths {
         put?: never;
         /** Revoke Customer Trusted Device */
         post: operations["revoke_customer_trusted_device_api_v1_admin_v2_users__user_id__trusted_device_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/workspaces/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Select Staff Workspace */
+        post: operations["select_staff_workspace_api_v1_admin_workspaces_select_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3526,6 +3578,17 @@ export interface components {
             idempotency_key: string;
             /** Service Line Id */
             service_line_id: string;
+        };
+        /** ApiErrorDetail */
+        ApiErrorDetail: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** ApiErrorResponse */
+        ApiErrorResponse: {
+            detail: components["schemas"]["ApiErrorDetail"];
         };
         /** AssignIn */
         AssignIn: {
@@ -5383,6 +5446,98 @@ export interface components {
             /** Store Id */
             store_id?: number | null;
         };
+        /** StaffLoginRequest */
+        StaffLoginRequest: {
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
+        };
+        /** StaffLoginResponse */
+        StaffLoginResponse: {
+            /** Selector Token */
+            selector_token: string | null;
+            staff: components["schemas"]["StaffSummaryOut"];
+            /** Token */
+            token: string;
+            /** Workspaces */
+            workspaces: components["schemas"]["WorkspaceGrantOut"][];
+        };
+        /** StaffScopeAssignmentCreate */
+        StaffScopeAssignmentCreate: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "brand_admin" | "hq_operator" | "store_manager" | "store_staff";
+            /** Scope Id */
+            scope_id?: number | null;
+            /**
+             * Scope Type
+             * @enum {string}
+             */
+            scope_type: "brand" | "store";
+        };
+        /** StaffScopeAssignmentList */
+        StaffScopeAssignmentList: {
+            /** Items */
+            items: components["schemas"]["StaffScopeAssignmentOut"][];
+            /** Total */
+            total: number;
+        };
+        /** StaffScopeAssignmentOut */
+        StaffScopeAssignmentOut: {
+            /** Created At */
+            created_at: string | null;
+            /** Created By Staff Id */
+            created_by_staff_id: number | null;
+            /** Id */
+            id: number;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "brand_admin" | "hq_operator" | "store_manager" | "store_staff";
+            /** Scope Id */
+            scope_id: number | null;
+            /**
+             * Scope Type
+             * @enum {string}
+             */
+            scope_type: "brand" | "store";
+            /** Staff Id */
+            staff_id: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "disabled";
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** StaffScopeAssignmentPatch */
+        StaffScopeAssignmentPatch: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "disabled";
+        };
+        /** StaffSummaryOut */
+        StaffSummaryOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string;
+            /** Store Id */
+            store_id: number | null;
+            /** Store Name */
+            store_name: string;
+            /** Technician Id */
+            technician_id: number | null;
+        };
         /** StoreMasterIn */
         StoreMasterIn: {
             /** Address */
@@ -5645,6 +5800,37 @@ export interface components {
             feedback?: ("suitable" | "still_unsuitable") | null;
             /** Request */
             request?: ("lower" | "suitable" | "higher") | null;
+        };
+        /** WorkspaceGrantOut */
+        WorkspaceGrantOut: {
+            /** Assignment Id */
+            assignment_id: number;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "brand_admin" | "hq_operator" | "store_manager" | "store_staff";
+            /** Scope Id */
+            scope_id: number | null;
+            /** Scope Name */
+            scope_name: string;
+            /**
+             * Scope Type
+             * @enum {string}
+             */
+            scope_type: "brand" | "store";
+        };
+        /** WorkspaceSelectRequest */
+        WorkspaceSelectRequest: {
+            /** Assignment Id */
+            assignment_id: number;
+        };
+        /** WorkspaceSelectResponse */
+        WorkspaceSelectResponse: {
+            staff: components["schemas"]["StaffSummaryOut"];
+            /** Token */
+            token: string;
+            workspace: components["schemas"]["WorkspaceGrantOut"];
         };
         /** ActionIn */
         app__api__operations__ActionIn: {
@@ -5973,9 +6159,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["StaffLoginRequest"];
             };
         };
         responses: {
@@ -5985,9 +6169,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StaffLoginResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9291,6 +9491,162 @@ export interface operations {
             };
         };
     };
+    list_staff_scope_assignments_api_v1_admin_v2_staff_accounts__staff_id__assignments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                staff_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffScopeAssignmentList"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_staff_scope_assignment_api_v1_admin_v2_staff_accounts__staff_id__assignments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                staff_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffScopeAssignmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffScopeAssignmentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_staff_scope_assignment_api_v1_admin_v2_staff_accounts__staff_id__assignments__assignment_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                staff_id: number;
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffScopeAssignmentPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffScopeAssignmentOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_staff_account_api_v1_admin_v2_staff__staff_id__patch: {
         parameters: {
             query?: never;
@@ -10456,6 +10812,57 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_staff_workspace_api_v1_admin_workspaces_select_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceSelectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSelectResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             /** @description Validation Error */
