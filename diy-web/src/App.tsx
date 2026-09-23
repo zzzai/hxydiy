@@ -72,7 +72,7 @@ import {
   shouldRunDeferredSwipeBack,
   type OverlayHistoryKind,
 } from './overlayHistory';
-import { getEntrySource, getPositionSelectionDecision, resolveActivePositionCode, resolveEntryConflict, resolveRequestedPosition, shouldResumeCurrentPosition } from './positionSelection';
+import { entryMenuNotice, getEntrySource, getPositionSelectionDecision, resolveActivePositionCode, resolveEntryConflict, resolveRequestedPosition, shouldResumeCurrentPosition } from './positionSelection';
 import { detailMotion, fadeInMotion, sheetMotion, toastMotion } from './motionPresets';
 import SeatMapDialog from './components/SeatMapDialog';
 import TeaDetailPage from './components/TeaDetailPage';
@@ -829,10 +829,14 @@ export default function App() {
       }
       hydrated.current = true;
       setBoot(entry.collaboration_mode === 'browse_only' ? 'ready' : canEditSelection(entry.session.status, entry.occupancy.status) ? 'ready' : 'submitted');
-      if (entry.collaboration_mode === 'shared_draft' && entry.resumed) flash('已加入本服务位的共享选单，其他人修改后会自动同步');
-      if (entry.collaboration_mode === 'browse_only') flash('本服务位已有已提交清单，您仍可浏览项目和提交评价建议');
-      if (recovered || entry.resumed) {
-        flash(`已恢复${entry.position.customer_label}的本次选单`);
+      const menuNotice = entryMenuNotice({
+        collaborationMode: entry.collaboration_mode,
+        resumed: entry.resumed,
+        recovered,
+        positionLabel: entry.position.customer_label,
+      });
+      if (menuNotice) {
+        flash(menuNotice);
       } else {
         const browserHint = anonymousBrowserEntryHint({
           returningBrowser: entry.returning_browser,

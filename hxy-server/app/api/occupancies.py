@@ -282,6 +282,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
     if not room or room.operational_status != "active" or not room.is_service_position or room.is_space_container:
         raise HTTPException(status_code=404, detail="服务位不存在或暂不可用")
     anonymous_customer_id, browser_token, returning_browser = _browser_customer(db, request)
+    existing = _active_occupancy_for_room(db, room.id)
     browser_occupancy = db.scalar(
         select(PositionOccupancy)
         .join(SelectionSession, SelectionSession.id == PositionOccupancy.active_session_id)
@@ -291,14 +292,13 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
             SelectionSession.customer_id == anonymous_customer_id,
         )
     )
-    if browser_occupancy and browser_occupancy.active_room_id != room.id:
+    if browser_occupancy and browser_occupancy.active_room_id != room.id and not (verified_qr and existing):
         current_room = db.get(Room, browser_occupancy.active_room_id)
         raise HTTPException(status_code=409, detail={
             "code": "BROWSER_ACTIVE_ELSEWHERE",
             "message": f"当前设备已绑定{current_room.customer_label if current_room else '其他服务位'}，请核对二维码或联系前台",
             "current_position_code": current_room.code if current_room else None,
         })
-    existing = _active_occupancy_for_room(db, room.id)
     rolled_over_after_service = False
     if existing:
         existing_session = db.get(SelectionSession, existing.active_session_id)
