@@ -3271,6 +3271,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/visit-feedback/entry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enter Visit Feedback */
+        post: operations["enter_visit_feedback_api_v1_visit_feedback_entry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wechat/jssdk-config": {
         parameters: {
             query?: never;
@@ -5826,6 +5843,17 @@ export interface components {
              * @default
              */
             reason: string;
+        };
+        /** VisitFeedbackEntryIn */
+        VisitFeedbackEntryIn: {
+            /** Entry Token */
+            entry_token: string;
+            /** Position Code */
+            position_code: string;
+            /** Source */
+            source: string;
+            /** Store Id */
+            store_id: number;
         };
         /** VisitFeedbackIn */
         VisitFeedbackIn: {
@@ -13404,6 +13432,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VisitFeedbackIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enter_visit_feedback_api_v1_visit_feedback_entry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitFeedbackEntryIn"];
             };
         };
         responses: {

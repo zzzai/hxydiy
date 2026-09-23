@@ -6674,6 +6674,41 @@
         "title": "VisitCheckInIn",
         "type": "object"
       },
+      "VisitFeedbackEntryIn": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_token": {
+            "maxLength": 2048,
+            "minLength": 16,
+            "title": "Entry Token",
+            "type": "string"
+          },
+          "position_code": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Position Code",
+            "type": "string"
+          },
+          "source": {
+            "pattern": "^(personal_qr|room_qr)$",
+            "title": "Source",
+            "type": "string"
+          },
+          "store_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Store Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "store_id",
+          "position_code",
+          "source",
+          "entry_token"
+        ],
+        "title": "VisitFeedbackEntryIn",
+        "type": "object"
+      },
       "VisitFeedbackIn": {
         "additionalProperties": false,
         "properties": {
@@ -20502,6 +20537,49 @@
           }
         },
         "summary": "Submit Visit Feedback",
+        "tags": [
+          "visit-feedback"
+        ]
+      }
+    },
+    "/api/v1/visit-feedback/entry": {
+      "post": {
+        "operationId": "enter_visit_feedback_api_v1_visit_feedback_entry_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitFeedbackEntryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Enter Visit Feedback Api V1 Visit Feedback Entry Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enter Visit Feedback",
         "tags": [
           "visit-feedback"
         ]
