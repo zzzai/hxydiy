@@ -75,6 +75,11 @@ test('未知角色采用最小权限且默认进入今日运营', () => {
   assert.equal(getDefaultPath('staff'), '/today');
 });
 
+test('unbound headquarters admin enters store management instead of store operations', () => {
+  assert.equal(getDefaultPath('admin', null), '/stores');
+  assert.equal(getDefaultPath('admin', 1), '/today');
+});
+
 test('技师入口使用独立移动路径', () => {
   assert.equal(isTechnicianEntry('/technician/'), true);
   assert.equal(isTechnicianEntry('/technician/today'), true);
