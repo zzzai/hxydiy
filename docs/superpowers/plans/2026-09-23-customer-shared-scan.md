@@ -88,4 +88,3 @@
 - [ ] Run backend focused suites, customer full tests/build, contract checks, and `git diff --check`.
 - [ ] Review the final diff for generated files, secrets, migration absence, and cross-end contract consistency.
 - [ ] Commit, push the exact HEAD, create the PR, wait for required CI, and report local/PR/merge/production/field-acceptance states separately.
-
