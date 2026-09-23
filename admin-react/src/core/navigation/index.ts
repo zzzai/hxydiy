@@ -6,6 +6,7 @@ export type NavigationItem = {
   icon: string;
   roles: readonly NavigationRole[];
   requiresUnboundAdmin?: boolean;
+  requiresBoundStore?: boolean;
 };
 
 export type NavigationGroup = {
@@ -24,13 +25,13 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '今日运营',
     icon: 'dashboard',
     items: [
-      { path: '/today', label: '今日运营', icon: 'ordered-list', roles: storeRoles },
-      { path: '/service-positions', label: '服务位看板', icon: 'environment', roles: storeRoles },
-      { path: '/selection-sessions', label: '到店服务选单', icon: 'project', roles: storeRoles },
-      { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles },
-      { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles },
+      { path: '/today', label: '今日运营', icon: 'ordered-list', roles: storeRoles, requiresBoundStore: true },
+      { path: '/service-positions', label: '服务位看板', icon: 'environment', roles: storeRoles, requiresBoundStore: true },
+      { path: '/selection-sessions', label: '到店服务选单', icon: 'project', roles: storeRoles, requiresBoundStore: true },
+      { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles, requiresBoundStore: true },
+      { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles, requiresBoundStore: true },
       { path: '/audit-logs', label: '审计日志', icon: 'file-search', roles: managementRoles },
-      { path: '/feedback', label: '低分评价', icon: 'message', roles: managementRoles },
+      { path: '/feedback', label: '低分评价', icon: 'message', roles: managementRoles, requiresBoundStore: true },
     ],
   },
   {
@@ -85,6 +86,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
 
 function isVisible(item: NavigationItem, role?: string, storeId?: number | null): boolean {
   if (!role || !item.roles.includes(role as NavigationRole)) return false;
+  if (item.requiresBoundStore && !storeId && role === 'admin') return false;
   return !item.requiresUnboundAdmin || (role === 'admin' && !storeId);
 }
 
