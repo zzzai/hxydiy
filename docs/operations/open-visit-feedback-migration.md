@@ -1,21 +1,22 @@
 # 到店反馈迁移与回滚说明
 
-更新日期：2026-09-22
+更新日期：2026-09-23
 
 ## 影响范围
 
 - 新增 Alembic revision：`20260921_visit_feedback`。
 - 仅新增 `visit_feedback` 表、外键、检查约束和索引，不修改或搬迁 `service_feedback`、选单、订单、服务单、顾客、技师或价格数据。
 - 新表保存独立到店反馈、幂等指纹、匿名/登录身份的不可逆哈希、处理状态和门店归属；不保存手机号、JWT、Cookie 原值或二维码签名令牌。
+- 本次发布同时从 `20260921_visit_feedback` 升级到 `20260921_staff_scope`：新增账号作用域授权表和审计字段，并按现有账号迁移角色。受保护的 `admin` 账号会解绑固定门店并提升为品牌管理员，其旧登录会话失效。
 
 ## 发布前验证
 
 1. 对生产库执行校验后的 `pg_dump -Fc` 并生成 SHA-256。
-2. 将备份恢复到隔离数据库，先升级到 `20260921_visit_feedback`。
-3. 验证新表约束、同身份幂等唯一性、匿名/登录提交、门店隔离和并发重试。
-4. 隔离库执行应用回归后，才允许生产库 `alembic upgrade head`。
+2. 将备份恢复到隔离数据库，按迁移链升级到 `20260921_staff_scope`，确认 `visit_feedback` 与 `staff_scope_assignments` 表和 Alembic revision。
+3. CI 验证反馈约束、同身份幂等、门店隔离与 PostgreSQL 并发重试；隔离库验证历史账号迁移结果。
+4. 隔离库升级成功后，才允许生产库 `alembic upgrade head`；发布后检查实际 revision 和关键接口。
 
-仓库 `deploy/diy/deploy-production.sh` 当前**未**将 `20260921_visit_feedback.py` 加入显式允许清单，发布门禁会拦截该迁移（与 `tests/test_release_scripts.py` 的断言一致）。沿用商品目录迁移的两步模式：业务 PR 合入迁移文件后，由发布前独立的迁移许可 PR 将文件名加入 `approved_migrations`，并保持"备份校验 → 隔离恢复 → 隔离升级 → 生产升级"的顺序。
+本独立迁移许可 PR 将 `20260921_visit_feedback.py` 和 `20260921_staff_scope_assignments.py` 加入显式允许清单。发布脚本保持“备份校验 → 隔离恢复 → 隔离升级 → 生产升级”的顺序；清单之外的新增或任何移除迁移仍被拦截。
 
 ## 回滚策略
 
