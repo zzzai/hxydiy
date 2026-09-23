@@ -11,11 +11,14 @@ import {
   visitFeedbackErrorMessage,
 } from '../src/visitFeedback.ts';
 
-test('signed service-position QR offers direct feedback before selection, unsigned entry does not', () => {
-  assert.equal(shouldEnterDirectFeedback({ positionCode: 'bed-01', source: 'room_qr', qrToken: 'signed-qr' }), true);
+test('signed service-position QR opens the menu first instead of direct feedback', () => {
+  assert.equal(shouldEnterDirectFeedback({ positionCode: 'bed-01', source: 'room_qr', qrToken: 'signed-qr' }), false);
   assert.equal(shouldEnterDirectFeedback({ positionCode: 'bed-01', source: 'room_qr', qrToken: '' }), false);
   assert.equal(shouldEnterDirectFeedback({ positionCode: '', source: 'room_qr', qrToken: 'signed-qr' }), false);
   assert.equal(shouldEnterDirectFeedback({ positionCode: 'bed-01', source: 'kiosk', qrToken: 'signed-qr' }), false);
+  const appSource = fs.readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.equal(appSource.includes('if (shouldEnterDirectFeedback(query))'), false);
+  assert.ok(appSource.includes('评价与建议'));
 });
 
 test('弱网重试沿用同一个幂等键，修改内容后创建新意图', () => {

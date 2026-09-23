@@ -79,7 +79,7 @@ import TeaDetailPage from './components/TeaDetailPage';
 import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision } from './selectionFlow';
 import { isEdgeSwipeBack, shouldReturnToProjectListFromSubmittedScreen } from './swipeBack';
 import { shouldHydrateStoredSelection, shouldRestartStoredEntry } from './submittedSelectionRestore';
-import { createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldEnterDirectFeedback, shouldRenewVisitFeedbackToken, updateVisitFeedbackDraft, visitFeedbackErrorMessage } from './visitFeedback';
+import { createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldRenewVisitFeedbackToken, updateVisitFeedbackDraft, visitFeedbackErrorMessage } from './visitFeedback';
 import { createDiyPageTracking } from './pageTracking';
 import {
   activePromotion,
@@ -136,6 +136,9 @@ type EntryRecord = {
   storeId: number;
   positionCode: string;
   accessToken: string;
+  collaborationToken?: string;
+  collaborationMode?: 'shared_draft' | 'browse_only';
+  cartVersion?: number;
   visitFeedbackToken?: string;
   session: SelectionSession;
   occupancy: Occupancy;
@@ -296,6 +299,9 @@ export default function App() {
   const [occupancy, setOccupancy] = useState<Occupancy | null>(null);
   const [session, setSession] = useState<SelectionSession | null>(null);
   const [accessToken, setAccessToken] = useState('');
+  const [collaborationToken, setCollaborationToken] = useState('');
+  const [collaborationMode, setCollaborationMode] = useState<'shared_draft' | 'browse_only' | ''>('');
+  const [cartVersion, setCartVersion] = useState(0);
   const [visitFeedbackToken, setVisitFeedbackToken] = useState('');
   const [directPositionLabel, setDirectPositionLabel] = useState('');
   const [feedbackToken, setFeedbackToken] = useState('');
@@ -332,6 +338,7 @@ export default function App() {
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const swipeBackTimer = useRef<number | null>(null);
   const visitFeedbackLock = useRef(false);
+  const selectionSubmitIntent = useRef<{ signature: string; key: string }>({ signature: '', key: '' });
   const feedbackOpen = feedbackMode !== null;
   const activeOverlay: OverlayHistoryKind | null = feedbackOpen ? 'feedback'
     : recordLoginOpen ? 'record-login'
@@ -404,7 +411,7 @@ export default function App() {
     isMember,
   }), [projects, addons, selectionDraft, isMember]);
   const selectionPromotion = useMemo(() => activePromotion(preview, isMember), [preview, isMember]);
-  const readOnly = !canEditSelection(session?.status, occupancy?.status);
+  const readOnly = collaborationMode === 'browse_only' || !canEditSelection(session?.status, occupancy?.status);
   const hasSubmittedCustomerSession = session?.status === 'submitted' || session?.status === 'confirmed';
   const serviceProgress = customerServiceProgress(serviceStatus?.occupancy_status ?? occupancy?.status);
   const serviceFeedbackActionLabel = serviceFeedbackAction(Boolean(serviceStatus?.can_evaluate), Boolean(serviceStatus?.evaluated));
@@ -714,11 +721,14 @@ export default function App() {
     nextCode = positionCode,
     draftClearedAfterSubmit = false,
   ) => {
-    if (!nextSession || !nextOccupancy || !nextPosition || !accessToken || !nextCode) return;
+    if (!nextSession || !nextOccupancy || !nextPosition || !(accessToken || collaborationToken) || !nextCode) return;
     writeRecord({
       storeId: query.storeId,
       positionCode: nextCode,
       accessToken,
+      collaborationToken: collaborationToken || undefined,
+      collaborationMode: collaborationMode || undefined,
+      cartVersion,
       visitFeedbackToken,
       session: nextSession,
       occupancy: nextOccupancy,
@@ -760,7 +770,7 @@ export default function App() {
   };
 
   const loadMap = async (nextSession = session, token = accessToken) => {
-    const map = await getServicePositionMap(query.storeId, nextSession?.id, token || undefined);
+    const map = await getServicePositionMap(query.storeId, token ? nextSession?.id : undefined, token || undefined);
     setPositions(map.positions);
     const current = resolveRequestedPosition(map.positions, resolveActivePositionCode(positionCode, query.positionCode));
     if (current) {
@@ -787,6 +797,9 @@ export default function App() {
         start_new_after_service: startNewAfterService || undefined,
       });
       setAccessToken(entry.access_token);
+      setCollaborationToken(entry.collaboration_token ?? '');
+      setCollaborationMode(entry.collaboration_mode ?? '');
+      setCartVersion(entry.cart_version ?? entry.session.cart_version ?? entry.occupancy.version);
       setVisitFeedbackToken(entry.visit_feedback_token ?? '');
       setSession(entry.session);
       setServiceStatus(null);
@@ -798,13 +811,16 @@ export default function App() {
         storeId: query.storeId,
         positionCode: code,
         accessToken: entry.access_token,
+        collaborationToken: entry.collaboration_token,
+        collaborationMode: entry.collaboration_mode,
+        cartVersion: entry.cart_version,
         visitFeedbackToken: entry.visit_feedback_token ?? undefined,
         session: entry.session,
         occupancy: entry.occupancy,
         position: entry.position,
       };
       writeRecord(record);
-      const map = await getServicePositionMap(query.storeId, entry.session.id, entry.access_token);
+      const map = await getServicePositionMap(query.storeId, entry.access_token ? entry.session.id : undefined, entry.access_token || undefined);
       setPositions(map.positions);
       const current = resolveRequestedPosition(map.positions, code);
       if (current) {
@@ -812,7 +828,9 @@ export default function App() {
         if (current.occupancy) setOccupancy(current.occupancy);
       }
       hydrated.current = true;
-      setBoot(canEditSelection(entry.session.status, entry.occupancy.status) ? 'ready' : 'submitted');
+      setBoot(entry.collaboration_mode === 'browse_only' ? 'ready' : canEditSelection(entry.session.status, entry.occupancy.status) ? 'ready' : 'submitted');
+      if (entry.collaboration_mode === 'shared_draft' && entry.resumed) flash('已加入本服务位的共享选单，其他人修改后会自动同步');
+      if (entry.collaboration_mode === 'browse_only') flash('本服务位已有已提交清单，您仍可浏览项目和提交评价建议');
       if (recovered || entry.resumed) {
         flash(`已恢复${entry.position.customer_label}的本次选单`);
       } else {
@@ -868,18 +886,6 @@ export default function App() {
   const initialize = async () => {
     setBoot('loading');
     try {
-      if (shouldEnterDirectFeedback(query)) {
-        const entry = await createVisitFeedbackEntry({
-          store_id: query.storeId,
-          position_code: query.positionCode,
-          source: query.source as 'personal_qr' | 'room_qr',
-          entry_token: query.qrToken,
-        });
-        setVisitFeedbackToken(entry.visit_feedback_token);
-        setDirectPositionLabel(entry.position_label);
-        setBoot('direct-feedback');
-        return;
-      }
       const [catalog, addonCatalog, publicMap, coupons, content] = await Promise.all([
         getProjects(query.storeId),
         getAddons(query.storeId).catch(() => []),
@@ -948,7 +954,7 @@ export default function App() {
         return;
       }
       try {
-        const restoredSession = await getSelectionSession(record.session.id, record.accessToken);
+        const restoredSession = await getSelectionSession(record.session.id, record.accessToken, record.collaborationToken);
         if (restoredSession.status === 'cancelled' || restoredSession.status === 'expired') {
           clearRecord(query.storeId, query.positionCode);
           if (requiresStaffKioskBinding(query.source, false)) {
@@ -959,12 +965,15 @@ export default function App() {
           return;
         }
         setAccessToken(record.accessToken);
+        setCollaborationToken(record.collaborationToken ?? '');
+        setCollaborationMode(record.collaborationMode ?? '');
+        setCartVersion(restoredSession.cart_version ?? record.cartVersion ?? record.occupancy.version);
         setVisitFeedbackToken(record.visitFeedbackToken);
         setSession(restoredSession);
         setOccupancy(record.occupancy);
         setPosition(record.position);
         setPositionCode(record.positionCode);
-        const map = await getServicePositionMap(query.storeId, restoredSession.id, record.accessToken);
+        const map = await getServicePositionMap(query.storeId, record.accessToken ? restoredSession.id : undefined, record.accessToken || undefined);
         setPositions(map.positions);
         const current = resolveRequestedPosition(map.positions, query.positionCode || record.positionCode);
         if (shouldRestartStoredEntry({
@@ -995,7 +1004,7 @@ export default function App() {
           startFreshSelectionDraft();
         }
         hydrated.current = true;
-        setBoot(canEditSelection(restoredSession.status, restoredOccupancyStatus) ? 'ready' : 'submitted');
+        setBoot(record.collaborationMode === 'browse_only' ? 'ready' : canEditSelection(restoredSession.status, restoredOccupancyStatus) ? 'ready' : 'submitted');
       } catch {
         clearRecord(query.storeId, query.positionCode);
         if (requiresStaffKioskBinding(query.source, false)) {
@@ -1145,13 +1154,17 @@ export default function App() {
   }, [boot, occupancy?.hold_expires_at]);
 
   useEffect(() => {
-    if (boot !== 'ready' || !session || session.status !== 'draft' || !accessToken || !hydrated.current) return undefined;
+    if (boot !== 'ready' || !session || session.status !== 'draft' || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || !hydrated.current) return undefined;
     const timer = window.setTimeout(async () => {
       menuSyncStateRef.current.saving = true;
       setSaving(true);
       try {
-        const saved = await saveSelectionSession(session.id, accessToken, selectionItems, deviceLabel());
+        const saved = await saveSelectionSession(session.id, accessToken, selectionItems, deviceLabel(), collaborationToken ? {
+          collaborationToken,
+          expectedVersion: cartVersion,
+        } : undefined);
         setSession(saved);
+        setCartVersion(saved.cart_version ?? cartVersion);
         if (position?.type === 'sofa') {
           const { current } = await loadMap(saved, accessToken);
           if (current?.occupancy) persistCurrent(saved, current.occupancy, current, current.code);
@@ -1165,7 +1178,15 @@ export default function App() {
           persistCurrent(saved, refreshed, position);
         }
       } catch (error) {
-        if (error instanceof ApiError && error.status === 409) {
+        if (error instanceof ApiError && error.code === 'CART_VERSION_CONFLICT') {
+          const latest = error.detail.session as SelectionSession | undefined;
+          if (latest) {
+            setSession(latest);
+            setCartVersion(Number(error.detail.cart_version || latest.cart_version || cartVersion));
+            hydrateSelection(latest);
+          }
+          flash('选单刚被同行人更新，已显示最新内容');
+        } else if (error instanceof ApiError && error.status === 409) {
           setBoot('expired');
         } else {
           flash('选单暂未同步，网络恢复后请再试');
@@ -1177,6 +1198,51 @@ export default function App() {
     }, 500);
     return () => window.clearTimeout(timer);
   }, [selectionSignature]);
+
+  useEffect(() => {
+    if (boot !== 'ready' || !session || !collaborationToken) return undefined;
+    let active = true;
+    const refreshSharedDraft = async () => {
+      if (menuSyncStateRef.current.saving || menuSyncStateRef.current.submitting) return;
+      try {
+        const latest = await getSelectionSession(session.id, accessToken, collaborationToken);
+        if (!active) return;
+        if (latest.status !== 'draft') {
+          setSession(latest);
+          if (!accessToken) {
+            setCollaborationMode('browse_only');
+            startFreshSelectionDraft();
+            flash('本服务位清单已提交；您仍可继续浏览和评价建议');
+          } else {
+            setBoot('submitted');
+          }
+          return;
+        }
+        const nextVersion = latest.cart_version ?? 0;
+        if (nextVersion > cartVersion) {
+          setSession(latest);
+          setCartVersion(nextVersion);
+          hydrateSelection(latest);
+          flash('同行人更新了选单，已同步');
+        }
+      } catch {
+        // Shared polling is best-effort; writes still use version checks.
+      }
+    };
+    void refreshSharedDraft();
+    const timer = window.setInterval(() => void refreshSharedDraft(), 3000);
+    const refreshVisible = () => { if (document.visibilityState === 'visible') void refreshSharedDraft(); };
+    document.addEventListener('visibilitychange', refreshVisible);
+    window.addEventListener('focus', refreshVisible);
+    window.addEventListener('online', refreshVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshVisible);
+      window.removeEventListener('focus', refreshVisible);
+      window.removeEventListener('online', refreshVisible);
+    };
+  }, [boot, session?.id, accessToken, collaborationToken, cartVersion]);
 
   useEffect(() => {
     const canWatchPositionChanges = position?.type === 'sofa'
@@ -1492,14 +1558,26 @@ export default function App() {
   };
 
   const submitRevision = async () => {
-    if (!session || !accessToken) return;
+    if (!session || !(accessToken || collaborationToken)) return;
     menuSyncStateRef.current.submitting = true;
     setSubmitting(true);
     try {
-      await submitSelectionRevision(session.id, accessToken, submissionItems, deviceLabel());
-      const submitted = await getSelectionSession(session.id, accessToken);
+      const submissionSignature = JSON.stringify(submissionItems);
+      if (selectionSubmitIntent.current.signature !== submissionSignature) {
+        selectionSubmitIntent.current = { signature: submissionSignature, key: crypto.randomUUID() };
+      }
+      await submitSelectionRevision(session.id, accessToken, submissionItems, deviceLabel(), collaborationToken ? {
+        collaborationToken,
+        expectedVersion: cartVersion,
+        authToken: customerAuth?.token,
+        idempotencyKey: selectionSubmitIntent.current.key,
+      } : { idempotencyKey: selectionSubmitIntent.current.key });
+      selectionSubmitIntent.current = { signature: '', key: '' };
+      const submitted = accessToken
+        ? await getSelectionSession(session.id, accessToken)
+        : { ...session, status: 'submitted' as const };
       setSession(submitted);
-      setFeedbackToken(accessToken);
+      if (accessToken) setFeedbackToken(accessToken);
       const preserveInService = shouldPreserveOccupancyAfterRevision(occupancy?.status);
       const clearSharedDevice = shouldClearDeviceSessionAfterSubmit(session.source || query.source);
       if (occupancy) {
@@ -1511,7 +1589,10 @@ export default function App() {
         else persistCurrent(submitted, nextOccupancy, position);
       }
       if (clearSharedDevice) setAccessToken('');
-      if (preserveInService) {
+      if (collaborationToken && !accessToken) {
+        setCollaborationMode('browse_only');
+        setBoot('submitted');
+      } else if (preserveInService) {
         flash('加选已提交，等待前台确认');
         setBoot('ready');
       } else {
@@ -1526,7 +1607,7 @@ export default function App() {
   };
 
   const submit = async () => {
-    if (!session || !accessToken || submitting) return;
+    if (!session || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || submitting) return;
     if (!hasChargeableService) {
       // 仅选择茶饮时允许提交，但先提示顾客补充服务项目。
       const proceed = window.confirm('您还未选择服务项目，本次仅提交免费茶饮。建议先逛逛项目，是否继续提交茶饮？');
@@ -1535,7 +1616,7 @@ export default function App() {
     menuSyncStateRef.current.submitting = true;
     setSubmitting(true);
     try {
-      if (customerAuth) {
+      if (customerAuth && !collaborationToken) {
         try {
           await bindSelectionCustomer(session.id, accessToken, customerAuth.token);
         } catch (error) {
@@ -1548,7 +1629,11 @@ export default function App() {
           throw error;
         }
       }
-      const quote = await quoteSelectionSession(session.id, accessToken, submissionItems, deviceLabel());
+      const quote = await quoteSelectionSession(session.id, accessToken, submissionItems, deviceLabel(), collaborationToken ? {
+        collaborationToken,
+        expectedVersion: cartVersion,
+        authToken: customerAuth?.token,
+      } : undefined);
       if (quote.saving_hint?.kind === 'member') {
         setSavingHint(quote.saving_hint);
         setSavingHintOpen(true);
@@ -1787,7 +1872,9 @@ export default function App() {
         </button>
       </header>
 
-      {boot === 'ready' && hasSubmittedCustomerSession && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
+      {boot === 'ready' && hasSubmittedCustomerSession && collaborationMode !== 'browse_only' && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
+      {boot === 'ready' && collaborationMode === 'shared_draft' && <div className="shared-cart-banner" role="status">同一服务位共用一份选单，同行人增删后会自动同步</div>}
+      {boot === 'ready' && collaborationMode === 'browse_only' && <div className="shared-cart-banner read-only" role="status">本服务位清单已提交；可继续浏览项目或提交评价与建议</div>}
 
       <section className="miniapp-promo-strip" aria-label="门店推荐">
         <button type="button" className="miniapp-promo visit-feedback-entry" onClick={openVisitFeedback}>

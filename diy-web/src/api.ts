@@ -20,7 +20,24 @@ export type SelectionSession = {
   service_completed_at?: string | null;
   can_evaluate?: boolean;
   evaluated?: boolean;
+  cart_version?: number;
 };
+
+export type SelectionAccess = {
+  selectionToken?: string;
+  collaborationToken?: string;
+  expectedVersion?: number;
+  authToken?: string;
+  idempotencyKey?: string;
+};
+
+function selectionHeaders(access: SelectionAccess, includeAuth = false): Record<string, string> {
+  return {
+    ...(access.collaborationToken ? { 'X-Collaboration-Token': access.collaborationToken } : {}),
+    ...(!access.collaborationToken && access.selectionToken ? { 'X-Selection-Token': access.selectionToken } : {}),
+    ...(includeAuth && access.authToken ? { Authorization: `Bearer ${access.authToken}` } : {}),
+  };
+}
 
 export type SavingHint = {
   kind: 'member' | 'coupon';
@@ -290,6 +307,10 @@ export function createEntrySession(input: {
     visit_feedback_token: string | null;
     resumed: boolean;
     returning_browser: boolean;
+    collaboration_token?: string;
+    collaboration_mode?: 'shared_draft' | 'browse_only';
+    cart_version?: number;
+    shared_cart?: boolean;
   }>('/entry-sessions', { method: 'POST', body: JSON.stringify(input) }));
 }
 
@@ -307,17 +328,17 @@ export function createVisitFeedbackEntry(input: {
   }>('/visit-feedback/entry', { method: 'POST', body: JSON.stringify(input) });
 }
 
-export function getSelectionSession(sessionId: string, token: string) {
+export function getSelectionSession(sessionId: string, token: string, collaborationToken?: string) {
   return request<SelectionSession>(`/selection-sessions/${sessionId}`, {
-    headers: { 'X-Selection-Token': token },
+    headers: selectionHeaders({ selectionToken: token, collaborationToken }),
   });
 }
 
-export function saveSelectionSession(sessionId: string, token: string, items: SelectionItem[], deviceLabel: string) {
+export function saveSelectionSession(sessionId: string, token: string, items: SelectionItem[], deviceLabel: string, access?: SelectionAccess) {
   return request<SelectionSession>(`/selection-sessions/${sessionId}`, {
     method: 'PATCH',
-    headers: { 'X-Selection-Token': token },
-    body: JSON.stringify({ items, diy_preferences: {}, device_label: deviceLabel }),
+    headers: selectionHeaders({ selectionToken: token, ...access }),
+    body: JSON.stringify({ items, diy_preferences: {}, device_label: deviceLabel, expected_version: access?.expectedVersion }),
   });
 }
 
@@ -329,11 +350,11 @@ export function submitSelectionSession(sessionId: string, token: string, items: 
   });
 }
 
-export function quoteSelectionSession(sessionId: string, token: string, items: SelectionItem[], deviceLabel: string) {
+export function quoteSelectionSession(sessionId: string, token: string, items: SelectionItem[], deviceLabel: string, access?: SelectionAccess) {
   return request<SelectionQuote>(`/selection-sessions/${sessionId}/quote`, {
     method: 'POST',
-    headers: { 'X-Selection-Token': token },
-    body: JSON.stringify({ items, diy_preferences: {}, device_label: deviceLabel }),
+    headers: selectionHeaders({ selectionToken: token, ...access }, true),
+    body: JSON.stringify({ items, diy_preferences: {}, device_label: deviceLabel, expected_version: access?.expectedVersion }),
   });
 }
 
@@ -347,14 +368,14 @@ export function bindSelectionCustomer(sessionId: string, selectionToken: string,
   });
 }
 
-export function submitSelectionRevision(sessionId: string, token: string, items: SelectionItem[], deviceLabel: string) {
+export function submitSelectionRevision(sessionId: string, token: string, items: SelectionItem[], deviceLabel: string, access?: SelectionAccess) {
   return runTrackedOperation('selection_submit', {
     selection_session_id: sessionId,
     item_count: items.length,
   }, () => request<SelectionRevision>(`/selection-sessions/${sessionId}/revisions`, {
     method: 'POST',
-    headers: { 'X-Selection-Token': token, 'Idempotency-Key': crypto.randomUUID() },
-    body: JSON.stringify({ items, diy_preferences: {}, device_label: deviceLabel }),
+    headers: { ...selectionHeaders({ selectionToken: token, ...access }, true), 'Idempotency-Key': access?.idempotencyKey || crypto.randomUUID() },
+    body: JSON.stringify({ items, diy_preferences: {}, device_label: deviceLabel, expected_version: access?.expectedVersion }),
   }));
 }
 
