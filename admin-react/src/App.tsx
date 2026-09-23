@@ -24,6 +24,15 @@ export default function App() {
     setChecking(false);
   }, []);
 
+  useEffect(() => {
+    const onSessionExpired = () => {
+      dataProvider.setStoreId(null);
+      setLoggedIn(false);
+    };
+    window.addEventListener('hxy-admin-session-expired', onSessionExpired);
+    return () => window.removeEventListener('hxy-admin-session-expired', onSessionExpired);
+  }, []);
+
   const handleLogin = () => {
     dataProvider.setStoreId(getStaff()?.store_id);
     setLoggedIn(true);
