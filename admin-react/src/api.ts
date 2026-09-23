@@ -22,7 +22,7 @@ const getStaff = () => {
 
 client.interceptors.request.use((config) => {
   const token = getToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (token && !config.headers.Authorization) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
@@ -41,6 +41,7 @@ client.interceptors.response.use(
       if (isTechnicianEntry()) {
         window.location.replace(getEntryLoginPath(true));
       } else {
+        window.dispatchEvent(new Event('hxy-admin-session-expired'));
         window.location.hash = '#/login';
       }
       return Promise.reject(err);
@@ -54,7 +55,14 @@ client.interceptors.response.use(
 
 // Auth
 export const login = (username: string, password: string) =>
-  client.post('/admin/login', { username, password });
+  client.post<import('./workspaceLogin.ts').StaffLoginResponse>('/admin/login', { username, password });
+
+export const selectStaffWorkspace = (assignmentId: number, selectorToken: string) =>
+  client.post<import('./workspaceLogin.ts').WorkspaceSelectResponse>(
+    '/admin/workspaces/select',
+    { assignment_id: assignmentId },
+    { headers: { Authorization: `Bearer ${selectorToken}` } },
+  );
 
 export const getTechnicianMe = () => client.get('/technician/me');
 export const getTechnicianTasks = () => client.get('/technician/tasks');
