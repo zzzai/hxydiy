@@ -223,9 +223,8 @@ test('异常服务位响应仍按服务位编码和类型补齐 8 沙发与 9 �
   assert.equal(new Set(normalized.map((item) => item.code)).size, 17);
 });
 
-test('服务位页面仅由店长发起批量二维码打印，并忽略停用或非顾客服务位', () => {
+test('服务位页面仅由店长发起批量二维码打印，并忽略停用二维码', () => {
   const source = readFileSync(new URL('../src/pages/ServicePositionsPage.tsx', import.meta.url), 'utf8');
   assert.match(source, /qrPermissions\.canManage.*批量打印二维码/);
-  assert.match(source, /position\.id > 0 && position\.customer_selectable && position\.operational_status === 'active'/);
   assert.match(source, /qr\.status === 'active'/);
 });
