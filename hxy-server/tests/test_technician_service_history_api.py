@@ -440,6 +440,7 @@ def test_legacy_backfill_only_assigns_a_unique_audited_technician():
             connection.execute(text("CREATE TABLE technicians (id INTEGER PRIMARY KEY, store_id INTEGER)"))
             connection.execute(text("CREATE TABLE staff (id INTEGER PRIMARY KEY, store_id INTEGER, technician_id INTEGER)"))
             connection.execute(text("CREATE TABLE selection_sessions (id VARCHAR(36) PRIMARY KEY)"))
+            connection.execute(text("CREATE TABLE service_position_qrs (id INTEGER PRIMARY KEY)"))
             connection.execute(text("CREATE TABLE position_occupancies (id INTEGER PRIMARY KEY, store_id INTEGER, actual_service_end_at DATETIME)"))
             connection.execute(text("CREATE TABLE audit_logs (id INTEGER PRIMARY KEY, actor_type VARCHAR(16), actor_id VARCHAR(64), store_id INTEGER, action VARCHAR(64), entity_type VARCHAR(32), entity_id VARCHAR(64))"))
             connection.execute(text("INSERT INTO stores(id) VALUES (1), (2)"))

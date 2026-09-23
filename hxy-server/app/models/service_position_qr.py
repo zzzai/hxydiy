@@ -22,6 +22,7 @@ class ServicePositionQr(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True)
+    short_code_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
     room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True)
     source: Mapped[str] = mapped_column(String(16), default="personal_qr")

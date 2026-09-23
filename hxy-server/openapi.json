@@ -18946,6 +18946,41 @@
         ]
       }
     },
+    "/api/v1/q/{short_code}": {
+      "get": {
+        "operationId": "resolve_short_position_qr_api_v1_q__short_code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "short_code",
+            "required": true,
+            "schema": {
+              "title": "Short Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Redirect to the signed customer H5 entry"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Short Position Qr",
+        "tags": [
+          "service-position-occupancy"
+        ]
+      }
+    },
     "/api/v1/selection-sessions": {
       "post": {
         "operationId": "create_selection_session_api_v1_selection_sessions_post",

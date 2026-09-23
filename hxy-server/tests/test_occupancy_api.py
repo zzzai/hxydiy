@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -658,7 +659,9 @@ class OccupancyApiTests(unittest.TestCase):
             payload = response.json()
             self.assertEqual(payload["position_code"], "qr-bed-a")
             self.assertEqual(payload["source"], "room_qr")
-            self.assertIn("seat=qr-bed-a", payload["url"])
+            resolved = self.client.get(urlparse(payload["url"]).path, follow_redirects=False)
+            self.assertEqual(resolved.status_code, 307, resolved.text)
+            self.assertIn("seat=qr-bed-a", resolved.headers["location"])
             self.assertNotIn("qr-room-container", payload["url"])
         finally:
             with self.SessionLocal() as db:
@@ -679,7 +682,138 @@ class OccupancyApiTests(unittest.TestCase):
         self.assertEqual(payload["position_code"], "sofa-06")
         self.assertIsInstance(payload["qr_id"], int)
         self.assertEqual(payload["status"], "active")
-        self.assertIn("qr=", payload["url"])
+        self.assertIn("/api/v1/q/", payload["url"])
+
+    def test_admin_qr_link_uses_revocable_short_url_that_opens_the_existing_signed_entry(self):
+        self.release_if_active("sofa-06")
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-06"))
+        first = self.client.get(
+            f"/api/v1/admin/service-positions/{room.id}/qr-link",
+            headers=self.admin_headers,
+        )
+        repeated = self.client.get(
+            f"/api/v1/admin/service-positions/{room.id}/qr-link",
+            headers=self.admin_headers,
+        )
+
+        self.assertEqual(first.status_code, 200, first.text)
+        payload = first.json()
+        self.assertEqual(repeated.json()["url"], payload["url"])
+        short_path = urlparse(payload["url"]).path
+        short_code = short_path.rsplit("/", 1)[-1]
+        self.assertTrue(short_path.startswith("/api/v1/q/"))
+        self.assertEqual(len(short_code), 22)
+        self.assertNotIn("store=", payload["url"])
+        self.assertNotIn("seat=", payload["url"])
+        self.assertNotIn("qr=", payload["url"])
+        self.assertLessEqual(len(payload["url"]), 60)
+
+        resolved = self.client.get(short_path, follow_redirects=False)
+        self.assertEqual(resolved.status_code, 307, resolved.text)
+        query = parse_qs(urlparse(resolved.headers["location"]).query)
+        self.assertEqual(query["store"], [str(self.store_id)])
+        self.assertEqual(query["seat"], ["sofa-06"])
+        self.assertEqual(query["source"], [payload["source"]])
+        self.assertTrue(query["qr"][0].startswith("v3."))
+
+        for store_id, position_code in (
+            (self.store_id + 999, "sofa-06"),
+            (self.store_id, "sofa-05"),
+        ):
+            with self.subTest(store_id=store_id, position_code=position_code):
+                tampered = self.client.post("/api/v1/entry-sessions", json={
+                    "store_id": store_id,
+                    "position_code": position_code,
+                    "source": payload["source"],
+                    "entry_token": query["qr"][0],
+                    "device_label": "篡改短码参数",
+                })
+                self.assertEqual(tampered.status_code, 403, tampered.text)
+                self.assertEqual(tampered.json()["detail"]["code"], "QR_BINDING_INVALID")
+
+        self.client.cookies.delete("hxy_browser_token")
+        entry = self.client.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id,
+            "position_code": "sofa-06",
+            "source": payload["source"],
+            "entry_token": query["qr"][0],
+            "device_label": "短码扫码手机",
+        })
+        self.assertEqual(entry.status_code, 200, entry.text)
+
+        feedback_entry = self.client.post("/api/v1/visit-feedback/entry", json={
+            "store_id": self.store_id,
+            "position_code": "sofa-06",
+            "source": payload["source"],
+            "entry_token": query["qr"][0],
+        })
+        self.assertEqual(feedback_entry.status_code, 200, feedback_entry.text)
+        self.assertTrue(feedback_entry.json()["visit_feedback_token"])
+
+        with self.SessionLocal() as db:
+            qr = db.get(ServicePositionQr, payload["qr_id"])
+            self.assertEqual(len(qr.short_code_hash), 64)
+            self.assertNotEqual(qr.short_code_hash, short_code)
+            audit = db.scalar(select(AuditLog).where(
+                AuditLog.action == "service_position_short_link_resolved",
+                AuditLog.entity_id == str(qr.id),
+            ))
+            self.assertIsNotNone(audit)
+
+    def test_short_qr_link_resolution_is_rate_limited(self):
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-04"))
+        payload = self.client.get(
+            f"/api/v1/admin/service-positions/{room.id}/qr-link",
+            headers=self.admin_headers,
+        ).json()
+        short_path = urlparse(payload["url"]).path
+
+        with mock.patch("app.api.occupancies.SHORT_QR_RESOLVE_RATE_LIMIT", 1):
+            first = self.client.get(short_path, follow_redirects=False)
+            second = self.client.get(short_path, follow_redirects=False)
+
+        self.assertEqual(first.status_code, 307, first.text)
+        self.assertEqual(second.status_code, 429, second.text)
+        self.assertEqual(second.json()["detail"]["code"], "QR_RESOLVE_RATE_LIMITED")
+
+    def test_short_qr_link_stops_resolving_after_disable_and_rotation(self):
+        self.release_if_active("sofa-05")
+        with self.SessionLocal() as db:
+            room = db.scalar(select(Room).where(Room.code == "sofa-05"))
+        original = self.client.get(
+            f"/api/v1/admin/service-positions/{room.id}/qr-link",
+            headers=self.admin_headers,
+        ).json()
+        original_path = urlparse(original["url"]).path
+
+        disabled = self.client.patch(
+            f"/api/v1/admin/service-position-qrs/{original['qr_id']}",
+            headers=self.admin_headers,
+            json={"status": "disabled", "reason": "测试短码停用"},
+        )
+        self.assertEqual(disabled.status_code, 200, disabled.text)
+        blocked = self.client.get(original_path, follow_redirects=False)
+        self.assertEqual(blocked.status_code, 403, blocked.text)
+        self.assertEqual(blocked.json()["detail"]["code"], "QR_DISABLED")
+
+        restored = self.client.patch(
+            f"/api/v1/admin/service-position-qrs/{original['qr_id']}",
+            headers=self.admin_headers,
+            json={"status": "active", "reason": "恢复后轮换"},
+        )
+        self.assertEqual(restored.status_code, 200, restored.text)
+        replacement = self.client.post(
+            f"/api/v1/admin/service-position-qrs/{original['qr_id']}/regenerate",
+            headers=self.admin_headers,
+            json={"reason": "测试短码轮换"},
+        )
+        self.assertEqual(replacement.status_code, 200, replacement.text)
+        self.assertNotEqual(replacement.json()["url"], original["url"])
+        rotated_out = self.client.get(original_path, follow_redirects=False)
+        self.assertEqual(rotated_out.status_code, 403, rotated_out.text)
+        self.assertEqual(rotated_out.json()["detail"]["code"], "QR_DISABLED")
 
     def test_disabled_managed_qr_cannot_create_entry(self):
         self.release_if_active("sofa-05")
@@ -1116,6 +1250,9 @@ class OccupancyApiTests(unittest.TestCase):
         })
         self.assertEqual(old_entry.status_code, 403, old_entry.text)
         self.assertEqual(old_entry.json()["detail"]["code"], "QR_DISABLED")
+        old_short_link = self.client.get(urlparse(original["url"]).path, follow_redirects=False)
+        self.assertEqual(old_short_link.status_code, 403, old_short_link.text)
+        self.assertEqual(old_short_link.json()["detail"]["code"], "QR_DISABLED")
 
         self.client.cookies.delete("hxy_browser_token")
         new_entry = self.client.post("/api/v1/entry-sessions", json={

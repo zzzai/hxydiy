@@ -21,6 +21,7 @@ class StaffScopeAssignmentMigrationTests(unittest.TestCase):
                 connection.execute(text("INSERT INTO alembic_version VALUES ('20260921_product_catalog')"))
                 connection.execute(text("CREATE TABLE stores (id INTEGER PRIMARY KEY, name VARCHAR(128) NOT NULL)"))
                 connection.execute(text("INSERT INTO stores VALUES (1, '一号店'), (2, '二号店')"))
+                connection.execute(text("CREATE TABLE service_position_qrs (id INTEGER PRIMARY KEY)"))
                 connection.execute(text("""
                     CREATE TABLE staff (
                         id INTEGER PRIMARY KEY,

@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20260921_staff_scope"])
+        self.assertEqual(scripts.get_heads(), ["20260923_qr_short_code"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -442,9 +442,10 @@ class AlembicContractTests(unittest.TestCase):
             }
             self.assertTrue({"customer_id", "store_id", "source_record_id", "valid_until"}.issubset(current_profile_columns))
             qr_columns = {column["name"] for column in inspector.get_columns("service_position_qrs")}
-            self.assertTrue({"public_id", "store_id", "room_id", "status", "replaced_by_id"}.issubset(qr_columns))
+            self.assertTrue({"public_id", "short_code_hash", "store_id", "room_id", "status", "replaced_by_id"}.issubset(qr_columns))
             qr_indexes = {index["name"] for index in inspector.get_indexes("service_position_qrs")}
             self.assertIn("ix_service_position_qrs_public_id", qr_indexes)
+            self.assertIn("ix_service_position_qrs_short_code_hash", qr_indexes)
             self.assertIn("uq_service_position_qrs_active_room", qr_indexes)
             project_columns = {column["name"] for column in inspector.get_columns("projects")}
             self.assertIn("current_published_version_id", project_columns)
