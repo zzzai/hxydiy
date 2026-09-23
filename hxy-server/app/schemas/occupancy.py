@@ -1,7 +1,9 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+from app.schemas.selection import SelectionSessionOut
 
 
 EntrySource = Literal["personal_qr", "room_qr", "store_qr", "kiosk", "bound_qr"]
@@ -70,3 +72,17 @@ class OccupancyOut(BaseModel):
     version: int
 
     model_config = {"from_attributes": True}
+
+
+class EntrySessionOut(BaseModel):
+    session: SelectionSessionOut
+    occupancy: OccupancyOut
+    position: dict[str, Any]
+    access_token: str
+    visit_feedback_token: str | None = None
+    resumed: bool
+    returning_browser: bool
+    collaboration_token: str | None = None
+    collaboration_mode: Literal["shared_draft", "browse_only"] | None = None
+    cart_version: int
+    shared_cart: bool = False
