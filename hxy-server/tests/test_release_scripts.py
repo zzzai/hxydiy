@@ -55,6 +55,7 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("'20260921_visit_feedback.py'", deploy)
         self.assertIn("'20260921_staff_scope_assignments.py'", deploy)
         self.assertIn("'20260923_service_position_qr_short_code.py'", deploy)
+        self.assertIn("'20260924_aux_menu_visibility.py'", deploy)
         self.assertIn('for migration in "${added_migrations[@]}"', deploy)
         self.assertIn("Unapproved Alembic migration change detected.", deploy)
         self.assertIn('"$rehearsal_db"', deploy)
