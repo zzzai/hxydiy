@@ -58,7 +58,9 @@ export function entryMenuNotice(input: {
   resumed: boolean;
   recovered: boolean;
   positionLabel: string;
+  serverNotice?: string | null;
 }): string | undefined {
+  if (input.serverNotice) return input.serverNotice;
   if (input.collaborationMode === 'shared_draft' && input.resumed) {
     return `${input.positionLabel}已有选单，已进入菜单；同行人可以一起选择`;
   }

@@ -110,6 +110,50 @@ class SharedSelectionCollaborationTests(unittest.TestCase):
         self.assertEqual(second.json()["session"]["pricing_snapshot"], {})
         self.assertEqual(second.json()["session"]["store_total_cents"], 0)
 
+    def test_signed_qr_opens_menu_when_position_is_physically_occupied_without_an_active_selection(self):
+        with self.SessionLocal() as db:
+            previous_room = Room(
+                store_id=self.store_id,
+                code=f"previous-{uuid.uuid4().hex[:8]}",
+                name="此前扫码沙发",
+                room_type="sofa",
+                customer_label="此前沙发",
+                operational_status="active",
+                is_service_position=True,
+                is_space_container=False,
+            )
+            db.add(previous_room)
+            db.flush()
+            previous_qr = ServicePositionQr(
+                public_id=str(uuid.uuid4()),
+                store_id=self.store_id,
+                room_id=previous_room.id,
+                source="personal_qr",
+                status="active",
+            )
+            db.add(previous_qr)
+            room = db.query(Room).filter(Room.code == self.position_code).one()
+            room.status = "occupied"
+            db.commit()
+            previous_code = previous_room.code
+            previous_token = _managed_position_qr_token(previous_qr, previous_room.code)
+
+        previous = self.first.post("/api/v1/entry-sessions", json={
+            "store_id": self.store_id,
+            "position_code": previous_code,
+            "source": "personal_qr",
+            "device_label": "扫码手机",
+            "entry_token": previous_token,
+        })
+        self.assertEqual(previous.status_code, 200, previous.text)
+
+        response = self.entry(self.first)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["session"]["status"], "draft")
+        self.assertEqual(response.json()["collaboration_mode"], "shared_draft")
+        self.assertEqual(response.json()["entry_notice"], "该位置当前有人，已进入菜单")
+
     def test_stale_shared_write_returns_latest_snapshot_without_overwrite(self):
         first = self.entry(self.first).json()
         second = self.entry(self.second).json()

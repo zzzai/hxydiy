@@ -359,7 +359,7 @@ def _active_occupancy_for_room(db: Session, room_id: int) -> PositionOccupancy |
     return db.scalar(select(PositionOccupancy).where(PositionOccupancy.active_room_id == room_id))
 
 
-def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[SelectionSession, PositionOccupancy, Room, str, bool, str, bool, ServicePositionQr | None]:
+def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[SelectionSession, PositionOccupancy, Room, str, bool, str, bool, ServicePositionQr | None, str | None]:
     verified_qr = None
     if body.entry_token:
         verified_qr = _verify_position_qr_token(db, body.entry_token, body.store_id, body.position_code, body.source)
@@ -386,7 +386,8 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
             SelectionSession.customer_id == anonymous_customer_id,
         )
     )
-    if browser_occupancy and browser_occupancy.active_room_id != room.id and not (verified_qr and existing):
+    signed_qr_occupied_entry = bool(verified_qr and room.status == "occupied")
+    if browser_occupancy and browser_occupancy.active_room_id != room.id and not (verified_qr and (existing or signed_qr_occupied_entry)):
         current_room = db.get(Room, browser_occupancy.active_room_id)
         raise HTTPException(status_code=409, detail={
             "code": "BROWSER_ACTIVE_ELSEWHERE",
@@ -426,21 +427,21 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
         if verified_qr and existing_session:
             # A verified position QR grants a browser-bound collaboration capability.
             # Never rotate or disclose the legacy single-browser selection token.
-            return existing_session, existing, room, "", True, browser_token, returning_browser, verified_qr
+            return existing_session, existing, room, "", True, browser_token, returning_browser, verified_qr, None
         if existing_session and existing_session.customer_id == anonymous_customer_id and existing_session.status in {"draft", "submitted", "confirmed"}:
             # 旋转访问凭证，允许本浏览器在 localStorage 丢失后安全恢复自己的选单。
             token = secrets.token_urlsafe(32)
             existing_session.access_token_hash = _hash_token(token)
             db.commit()
             db.refresh(existing_session)
-            return existing_session, existing, room, token, True, browser_token, returning_browser, verified_qr
+            return existing_session, existing, room, token, True, browser_token, returning_browser, verified_qr, None
         raise HTTPException(status_code=409, detail={
             "code": "POSITION_OCCUPIED",
             "message": "该服务位已有顾客，请核对二维码或联系前台",
             "position_code": room.code,
             "state": existing.status,
         })
-    if room.status != "available" and not rolled_over_after_service:
+    if room.status != "available" and not rolled_over_after_service and not signed_qr_occupied_entry:
         raise HTTPException(status_code=409, detail={
             "code": "POSITION_UNAVAILABLE",
             "message": "该服务位暂不可用，请联系前台安排",
@@ -493,7 +494,8 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
     db.commit()
     db.refresh(session)
     db.refresh(occupancy)
-    return session, occupancy, room, token, False, browser_token, returning_browser, verified_qr
+    entry_notice = "该位置当前有人，已进入菜单" if signed_qr_occupied_entry else None
+    return session, occupancy, room, token, False, browser_token, returning_browser, verified_qr, entry_notice
 
 
 @router.post("/entry-sessions", response_model=EntrySessionOut)
@@ -513,7 +515,7 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
         rate_qr = _verify_position_qr_token(db, body.entry_token, body.store_id, body.position_code, body.source)
         if rate_qr:
             collaboration_identity = _check_collaboration_entry_rate(db, request, rate_qr)
-    session, occupancy, room, token, resumed, browser_token, returning_browser, verified_qr = _create_entry(db, body, request)
+    session, occupancy, room, token, resumed, browser_token, returning_browser, verified_qr, entry_notice = _create_entry(db, body, request)
     response.set_cookie(
         ANONYMOUS_COOKIE,
         browser_token,
@@ -572,6 +574,7 @@ def create_entry_session(body: EntrySessionIn, request: Request, response: Respo
         "collaboration_mode": collaboration_mode,
         "cart_version": occupancy.version,
         "shared_cart": collaboration_mode == "shared_draft",
+        "entry_notice": entry_notice,
     }
 
 
@@ -1049,7 +1052,7 @@ def create_kiosk_session(
     room = db.get(Room, body.room_id)
     if not room or room.store_id != store_id:
         raise HTTPException(status_code=404, detail="服务位不存在")
-    session, occupancy, room, token, _, _, _, _ = _create_entry(db, EntrySessionIn(
+    session, occupancy, room, token, _, _, _, _, _ = _create_entry(db, EntrySessionIn(
         store_id=store_id,
         position_code=room.code,
         source="kiosk",
