@@ -377,17 +377,19 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
         raise HTTPException(status_code=404, detail="服务位不存在或暂不可用")
     anonymous_customer_id, browser_token, returning_browser = _browser_customer(db, request)
     existing = _active_occupancy_for_room(db, room.id)
-    browser_occupancy = db.scalar(
-        select(PositionOccupancy)
-        .join(SelectionSession, SelectionSession.id == PositionOccupancy.active_session_id)
-        .where(
-            PositionOccupancy.store_id == body.store_id,
-            PositionOccupancy.active_room_id.is_not(None),
-            SelectionSession.customer_id == anonymous_customer_id,
+    browser_occupancy = None
+    if not verified_qr:
+        browser_occupancy = db.scalar(
+            select(PositionOccupancy)
+            .join(SelectionSession, SelectionSession.id == PositionOccupancy.active_session_id)
+            .where(
+                PositionOccupancy.store_id == body.store_id,
+                PositionOccupancy.active_room_id.is_not(None),
+                SelectionSession.customer_id == anonymous_customer_id,
+            )
         )
-    )
     signed_qr_occupied_entry = bool(verified_qr and room.status == "occupied")
-    if browser_occupancy and browser_occupancy.active_room_id != room.id and not (verified_qr and (existing or signed_qr_occupied_entry)):
+    if browser_occupancy and browser_occupancy.active_room_id != room.id:
         current_room = db.get(Room, browser_occupancy.active_room_id)
         raise HTTPException(status_code=409, detail={
             "code": "BROWSER_ACTIVE_ELSEWHERE",
