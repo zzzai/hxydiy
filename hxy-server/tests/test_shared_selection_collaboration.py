@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.occupancies import _managed_position_qr_token
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import Project, Room, ServicePositionQr, Store
+from app.models import PositionOccupancy, Project, Room, ServicePositionQr, Store
 
 
 class SharedSelectionCollaborationTests(unittest.TestCase):
@@ -346,8 +346,8 @@ class SharedSelectionCollaborationTests(unittest.TestCase):
         self.assertEqual(joined.json()["session"]["id"], occupied.json()["session"]["id"])
         self.assertEqual(joined.json()["collaboration_mode"], "shared_draft")
 
-    def test_signed_qr_does_not_let_one_browser_hold_two_empty_positions(self):
-        self.entry(self.first)
+    def test_signed_qr_enters_another_available_position_without_releasing_the_previous_one(self):
+        previous = self.entry(self.first)
         with self.SessionLocal() as db:
             room = Room(
                 store_id=self.store_id,
@@ -378,8 +378,18 @@ class SharedSelectionCollaborationTests(unittest.TestCase):
             "entry_token": empty_token,
         })
 
-        self.assertEqual(response.status_code, 409, response.text)
-        self.assertEqual(response.json()["detail"]["code"], "BROWSER_ACTIVE_ELSEWHERE")
+        self.assertEqual(previous.status_code, 200, previous.text)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["position"]["code"], empty_code)
+        self.assertNotEqual(response.json()["session"]["id"], previous.json()["session"]["id"])
+        with self.SessionLocal() as db:
+            active_occupancies = db.query(PositionOccupancy).filter(
+                PositionOccupancy.active_room_id.is_not(None),
+                PositionOccupancy.active_session_id.is_not(None),
+            ).all()
+        active_session_ids = {item.active_session_id for item in active_occupancies}
+        self.assertIn(previous.json()["session"]["id"], active_session_ids)
+        self.assertIn(response.json()["session"]["id"], active_session_ids)
 
     def test_repeated_signed_qr_entry_is_rate_limited_and_audited(self):
         with patch("app.api.occupancies.COLLABORATION_ENTRY_RATE_LIMIT", 1):
