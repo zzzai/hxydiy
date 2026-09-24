@@ -220,7 +220,6 @@ export const LOCAL_DETAIL_PROFILES: Record<(typeof LOCAL_PARTS)[number], { descr
 };
 
 export const CATALOG_SECTIONS = [
-  { id: 'tea', mark: '茶', label: '茶饮', categories: [] },
   { id: 'bath', mark: '泡', label: '泡脚沐足', categories: ['bath'] },
   { id: 'balance', mark: '调', label: '推拿', categories: ['balance'] },
   { id: 'care', mark: '补', label: '精油SPA', categories: ['care'] },
@@ -667,16 +666,6 @@ export function buildSelectionItems(input: BuildSelectionInput): SelectionItem[]
     });
   }
 
-  if (input.tea) {
-    items.push({
-      project_id: 'tea',
-      quantity: 1,
-      addon_ids: [],
-      diy_preferences: [input.tea],
-      item_type: 'preference',
-      chargeable: false,
-    });
-  }
   return items;
 }
 

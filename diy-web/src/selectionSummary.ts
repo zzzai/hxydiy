@@ -101,7 +101,7 @@ export function countSelectionDraft(draft: SelectionDraft): number {
     count + new Set(draft.projectAddonIds[projectId] || []).size
       * draft.selectedProjectIds.filter((id) => id === projectId).length
   ), 0);
-  return draft.selectedProjectIds.length + addonCount + draft.localParts.length + (draft.tea ? 1 : 0);
+  return draft.selectedProjectIds.length + addonCount + draft.localParts.length;
 }
 
 function orderedCounts<T extends string | number>(values: T[]): Array<[T, number]> {
@@ -176,22 +176,6 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
         ? priceOf(localProject, 'member') * quantity
         : null,
       target: { kind: 'local', part },
-      children: [],
-    });
-  }
-
-  if (draft.tea) {
-    groups.push({
-      key: 'tea',
-      kind: 'tea',
-      title: draft.tea,
-      detail: '到店现泡茶饮',
-      quantity: 1,
-      priceCents: 0,
-      originalPriceCents: null,
-      memberPriceCents: null,
-      priceLabel: '赠饮',
-      target: { kind: 'tea' },
       children: [],
     });
   }

@@ -27,6 +27,7 @@ import {
   customerProjectTagGroups,
   customerProjectDisplayTagGroups,
   supportsFootBathBundle,
+  buildSelectionItems,
   CATALOG_SECTIONS,
   displayProjectName,
   customerProjectSummaryText,
@@ -105,11 +106,25 @@ test('追加新茶饮替换原茶饮，其他已提交服务不受影响', () =>
   assert.deepEqual(merged.find((item) => item.project_id === 'tea')?.diy_preferences, ['玫瑰茶']);
 });
 
-test('顾客端分类导航保留六个品牌分类并将局部调理并入养生小项', () => {
-  assert.deepEqual(CATALOG_SECTIONS.map((section) => section.id), ['tea', 'bath', 'balance', 'care', 'small', 'kit']);
+test('顾客端分类导航移除茶饮选择并将局部调理并入养生小项', () => {
+  assert.deepEqual(CATALOG_SECTIONS.map((section) => section.id), ['bath', 'balance', 'care', 'small', 'kit']);
   assert.equal(CATALOG_SECTIONS.find((section) => section.id === 'small')?.label, '更多服务');
   assert.deepEqual(CATALOG_SECTIONS.find((section) => section.id === 'small')?.categories, ['small', 'local-strength']);
   assert.equal(CATALOG_SECTIONS.find((section) => section.id === 'kit')?.label, '功夫套盒');
+});
+
+test('顾客端新选单不再提交茶饮偏好', () => {
+  const items = buildSelectionItems({
+    projects: [],
+    selectedProjectIds: [],
+    projectAddonIds: {},
+    addons: [],
+    projectPreferences: {},
+    localParts: [],
+    tea: '老姜茶',
+  });
+
+  assert.deepEqual(items, []);
 });
 
 test('两个 SPA 使用可区分的顾客名称', () => {
