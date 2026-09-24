@@ -1,4 +1,7 @@
-"""幂等同步已确认菜单到指定门店；不删除价格历史，也不改动选项目录。"""
+"""Idempotently sync the confirmed menu without deleting price history.
+
+The combined care project receives its required single-choice catalog.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models import PriceBook, Project, Store
 from app.seed import PROJECTS
+from scripts.reconcile_aux_menu import ensure_combined_options
 
 
 def sync_final_menu(db: Session, store_id: int, *, apply: bool = False) -> dict[str, int]:
@@ -29,6 +33,7 @@ def sync_final_menu(db: Session, store_id: int, *, apply: bool = False) -> dict[
             "category": category, "category_mark": mark, "name": name, "duration_min": duration,
             "summary": summary, "image_url": image, "price_label": label,
             "tags": [label], "display_order": display_order,
+            "independently_visible": code not in {"hxy-baguan-1", "hxy-guasha-1"},
             "publication_status": "published", "content_version": "menu-20260820",
         }.items():
             setattr(project, key, value)
@@ -52,6 +57,8 @@ def sync_final_menu(db: Session, store_id: int, *, apply: bool = False) -> dict[
                                   version="menu-20260820", publisher="menu-sheet-sync", published_at=sync_at))
                 prices_added += 1
                 updated += int(latest is not None)
+        if code == "hxy-cupping-scraping-1":
+            ensure_combined_options(db, project)
     if apply:
         db.commit()
     else:

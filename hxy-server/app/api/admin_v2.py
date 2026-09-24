@@ -1946,6 +1946,7 @@ class AdminProject(BaseModel):
     detail_modules: list[Any] = Field(default_factory=list)
     diy_options: list[Any] = Field(default_factory=list)
     display_order: int = 0
+    independently_visible: bool = True
     price_label: str = ""
     publication_status: str
     prices: dict[str, int] = Field(default_factory=dict)
@@ -2032,6 +2033,7 @@ def list_projects_admin(
             "summary": p.summary, "image_url": p.image_url,
             "tags": p.tags, "detail_modules": p.detail_modules,
             "diy_options": p.diy_options, "display_order": p.display_order,
+            "independently_visible": p.independently_visible,
             "price_label": p.price_label,
             "publication_status": p.publication_status,
             "prices": price_map,  # {"store": 8900, "member": 6900, "group": 2990}
@@ -2080,6 +2082,7 @@ class ProjectCreate(_StrictProjectModel):
     # 保留历史 DIY 选项字段，管理端编辑器仍会维护该兼容结构。
     diy_options: list = Field(default_factory=list)
     display_order: StrictInt = Field(default=0, ge=0)
+    independently_visible: bool = True
     price_label: StrictStr = Field(default="", max_length=32)
     publication_status: ProjectPublicationStatus = "draft"
     prices: dict[ProjectPriceType, StrictInt] = Field(default_factory=dict)
@@ -2103,6 +2106,7 @@ class ProjectPatch(_StrictProjectModel):
     detail_modules: list | None = None
     diy_options: list | None = None
     display_order: StrictInt | None = Field(default=None, ge=0)
+    independently_visible: bool | None = None
     price_label: StrictStr | None = Field(default=None, max_length=32)
     publication_status: ProjectPublicationStatus | None = None
     prices: dict[ProjectPriceType, StrictInt] | None = None
@@ -2270,6 +2274,7 @@ def duplicate_project(proj_id: int, body: ProjectDuplicateIn, db: Session = Depe
         detail_modules=list(source.detail_modules or []),
         diy_options=[],
         display_order=source.display_order,
+        independently_visible=source.independently_visible,
         price_label=source.price_label,
         publication_status="draft",
     )

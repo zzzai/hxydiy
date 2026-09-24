@@ -14,6 +14,7 @@ export default function ProjectBasicFields({ form, editing }: { form: FormInstan
       <Form.Item name="category_mark" label="标识"><Select allowClear options={['茶', '清', '泡', '调', '补', '养', '辅'].map((value) => ({ value, label: value }))} /></Form.Item></Space>
     <Space wrap><Form.Item name="duration_min" label="时长(分)"><InputNumber min={0} /></Form.Item>
       <Form.Item name="display_order" label="展示顺序" initialValue={0}><InputNumber min={0} /></Form.Item>
+      <Form.Item name="independently_visible" label="顾客独立列表" initialValue={true}><Select options={[{ value: true, label: '展示' }, { value: false, label: '隐藏（保留关联）' }]} /></Form.Item>
       <Form.Item name="publication_status" label="状态" initialValue="published"><Select options={[{ value: 'draft', label: '草稿' }, { value: 'published', label: '已发布' }]} /></Form.Item></Space>
     <Space wrap><Form.Item name="store_price" label="门店价(元)"><InputNumber min={0} /></Form.Item>
       <Form.Item name="member_price" label="会员价(元)"><InputNumber min={0} /></Form.Item>

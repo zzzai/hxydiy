@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, func
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -33,6 +33,7 @@ class Project(Base):
     # DIY 选项由后端发布；价格仍以项目/加项价格表为准。
     diy_options: Mapped[list] = mapped_column(JSON, default=list)
     display_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    independently_visible: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     price_label: Mapped[str] = mapped_column(String(32), default="")
     # draft / candidate / published / archived —— 只有 published 可被顾客端看到
     publication_status: Mapped[str] = mapped_column(String(16), default="draft", index=True)

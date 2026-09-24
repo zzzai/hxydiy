@@ -163,6 +163,7 @@ approved_migrations=(
   '20260921_visit_feedback.py'
   '20260921_staff_scope_assignments.py'
   '20260923_service_position_qr_short_code.py'
+  '20260924_aux_menu_visibility.py'
 )
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \

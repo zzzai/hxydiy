@@ -36,7 +36,7 @@ class DiyBootstrapTests(unittest.TestCase):
             room_containers = list(db.scalars(select(Room).where(Room.is_space_container.is_(True))))
             beds = list(db.scalars(select(Room).where(Room.room_type == "bed")))
 
-            self.assertEqual(first_counts, {"stores": 1, "projects": 13, "rooms": 24, "content": 1})
+            self.assertEqual(first_counts, {"stores": 1, "projects": 15, "rooms": 24, "content": 1})
         self.assertEqual(second_counts, first_counts)
         self.assertEqual(len(sofas), 8)
         self.assertEqual(len(room_containers), 7)
