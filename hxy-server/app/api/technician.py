@@ -499,7 +499,17 @@ def _occupancy_action(db: Session, occupancy: PositionOccupancy, action: str) ->
         if occupancy.status == "in_service":
             return
     if action == "finish":
-        if occupancy.status in {"waiting_service", "in_service"}:
+        # 技师端只暴露「确认服务 / 服务结束」两个主动作，未确认即结束与前端动作口径
+        # 不一致：结束时间会落在服务开始之前，污染服务时长与顾客画像入口。
+        if occupancy.status == "waiting_service":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "TECHNICIAN_SERVICE_NOT_CONFIRMED",
+                    "message": "请先确认服务，再结束服务",
+                },
+            )
+        if occupancy.status == "in_service":
             occupancy.status = "post_service_present"
             occupancy.actual_service_end_at = datetime.now(timezone.utc)
             occupancy.version += 1
@@ -552,6 +562,14 @@ def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str |
             )
         return replay.result_snapshot
     _reject_conflicted_room_action(db, occupancy)
+    if action == "finish" and occupancy.status == "waiting_service":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "TECHNICIAN_SERVICE_NOT_CONFIRMED",
+                "message": "请先确认服务，再结束服务",
+            },
+        )
     if occupancy.serviced_by_technician_id is None and occupancy.status == "in_service":
         owner = _resolve_legacy_service_owner(db, occupancy)
         if owner is None:

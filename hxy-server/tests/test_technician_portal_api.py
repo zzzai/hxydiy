@@ -278,6 +278,29 @@ class TestTechnicianPortalApi:
         denied = self.client.get("/api/v1/technician/me", headers=headers)
         assert denied.status_code == 401
 
+    def test_technician_cannot_finish_service_before_confirming(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-finish-guard", password_hash=hash_password("tech-pass"), name="守序技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            session = SelectionSession(id="tech-finish-guard-session", access_token_hash="hash", store_id=self.store_id, status="confirmed")
+            room = Room(store_id=self.store_id, code="TECH-FINISH-GUARD", name="服务位", status="occupied")
+            user = User(openid="tech-finish-guard-user")
+            db.add_all([staff, session, room, user]); db.flush(); session.customer_id = user.id
+            occupancy = PositionOccupancy(store_id=self.store_id, room_id=room.id, selection_session_id=session.id, active_room_id=room.id, active_session_id=session.id, status="waiting_service")
+            db.add(occupancy); db.commit(); staff_id = staff.id; occupancy_id = occupancy.id
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        denied = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/finish", headers=headers, json={"idempotency_key": "finish-before-confirm"})
+        assert denied.status_code == 409, denied.text
+        assert denied.json()["detail"]["code"] == "TECHNICIAN_SERVICE_NOT_CONFIRMED"
+        with self.SessionLocal() as db:
+            saved = db.get(PositionOccupancy, occupancy_id)
+            assert saved.status == "waiting_service"
+            assert saved.actual_service_end_at is None
+        confirmed = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/confirm", headers=headers, json={"idempotency_key": "confirm-then-finish"})
+        assert confirmed.status_code == 200, confirmed.text
+        finished = self.client.post(f"/api/v1/technician/occupancies/{occupancy_id}/finish", headers=headers, json={"idempotency_key": "finish-after-confirm"})
+        assert finished.status_code == 200, finished.text
+        assert finished.json()["status"] == "post_service_present"
+
     def test_technician_service_actions_only_update_diy_occupancy_and_are_idempotent_without_assignment(self):
         with self.SessionLocal() as db:
             staff = Staff(username="tech-actions", password_hash=hash_password("tech-pass"), name="小悦技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)

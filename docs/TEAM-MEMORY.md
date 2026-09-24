@@ -143,6 +143,9 @@
 | 2026-08-31 | 可撤销的服务位二维码最低版本为 v2；生产环境必须拒绝不关联二维码记录的 v1 凭证（`403 QR_VERSION_EXPIRED`），以保证停用、重新生成和换绑可立即失效。v2 与新生成的 v3 保持兼容。 | 顾客端入口、管理端、后端安全契约 |
 | 2026-09-01 | 房间配置页必须展示服务位 DIY 运营状态；店长仅可对无活动占用的本店服务位执行停用/重新启用，复用 `/api/v1/admin/service-positions/{room_id}/operational-status`；房间列表响应补充 `operational_status` 字段 | 管理端、管理端 API |
 | 2026-09-09 | 实际服务位的维修备注与展示顺序复用 `Room.note`、`Room.sort_order`，由严格 `PATCH /api/v1/admin/service-positions/{room_id}/configuration` 更新；仅绑定门店店长可操作本店，普通员工没有写入口且实时服务位地图不接收备注字段。请求审计前后值，不新建迁移，不改变启停、占用、二维码或智慧宝物理资源。详见 `contracts/service-position-configuration-v1.md`。 | 管理端、后端 |
+| 2026-09-20 | 服务位超时自动释放时，若占用已开始服务（`actual_start_at` 非空）却缺少 `actual_service_end_at`，DIY 用 `expected_end_at` 回填、缺失时回落为释放时刻，审计 `detail.actual_service_end_at_source` 标注 `auto_release_expected_end` / `auto_release_released_at`。未确认即超时（`waiting_service`）不回填。这修复技师漏点「服务结束」后该单不进服务历史、服务时长无法计算、画像快记入口消失的问题。详见 `contracts/technician-service-lifecycle-v1.md`。 | 技师端、后端、数据口径 |
+| 2026-09-20 | 超时自动释放只覆盖沙发（`list_release_candidates` 的 `position_types` 默认 `("sofa",)`），这是有意划定的边界而非漏配：房间床位在 DIY 侧恒带智慧宝履约单（`fulfillment_order_id` 非空即跳过），物理资源由智慧宝释放，DIY 不越界；沙发存在无履约单的快速位才需要 DIY 兜底。该范围已由测试锁定，调整须同步更新契约与文档。 | 技师端、后端、智慧宝边界 |
+| 2026-09-20 | 技师端不允许未确认即结束服务：`waiting_service` 状态下调用 `POST /api/v1/technician/occupancies/{id}/finish` 返回 `409 TECHNICIAN_SERVICE_NOT_CONFIRMED`，与前端只暴露「确认服务 / 服务结束」两个主动作的口径一致。管理端 legacy 结束路径走另一套实现，不受影响。 | 技师端、后端 |
 
 ## 2026-09-10 招牌草本泡服务记录 v6（开发中）
 
