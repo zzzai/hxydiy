@@ -108,7 +108,7 @@ function draft(overrides: Partial<SelectionDraft> = {}): SelectionDraft {
   };
 }
 
-test('清单按主项目、挂载加项、局部调理和赠饮生成可操作条目', () => {
+test('清单只按主项目、挂载加项和局部调理生成可操作条目', () => {
   const summary = buildSelectionSummary({
     projects: [footBath, local],
     addons: [addon],
@@ -116,15 +116,14 @@ test('清单按主项目、挂载加项、局部调理和赠饮生成可操作�
     isMember: true,
   });
 
-  assert.equal(summary.totalCount, 5);
-  assert.deepEqual(summary.groups.map((item) => item.kind), ['project', 'local', 'local', 'tea']);
+  assert.equal(summary.totalCount, 4);
+  assert.deepEqual(summary.groups.map((item) => item.kind), ['project', 'local', 'local']);
   assert.equal(summary.groups[0].title, '草本泡脚');
   assert.equal(summary.groups[0].detail, '适中');
   assert.equal(summary.groups[0].priceCents, 2990);
   assert.equal(summary.groups[0].children[0].kind, 'addon');
   assert.equal(summary.groups[0].children[0].priceCents, 800);
   assert.equal(summary.groups[1].title, '肩颈调理');
-  assert.equal(summary.groups[3].priceLabel, '赠饮');
 });
 
 test('会员已选清单保留门店价对比值，匿名清单逐项保留会员价参考', () => {
@@ -172,7 +171,7 @@ test('未达成条件不展示减免，达成后只展示当前价格带的实�
   assert.equal(activePromotion({ ...base, qualified: true }, true)?.amountCents, -2990);
 });
 
-test('删除主项目同时清理它的偏好和加项但保留独立局部调理与赠饮', () => {
+test('删除主项目同时清理它的偏好和加项但保留独立局部调理', () => {
   const next = removeSelectionEntry(draft(), { kind: 'project', projectId: 1 });
 
   assert.deepEqual(next.selectedProjectIds, []);
@@ -180,7 +179,7 @@ test('删除主项目同时清理它的偏好和加项但保留独立局部调�
   assert.deepEqual(next.projectAddonIds, {});
   assert.deepEqual(next.localParts, ['肩颈', '腿部']);
   assert.equal(next.tea, '老姜茶');
-  assert.equal(countSelectionDraft(next), 3);
+  assert.equal(countSelectionDraft(next), 2);
 });
 
 test('删除加项、单个局部和赠饮时不会影响其他选择', () => {
@@ -214,7 +213,7 @@ test('重复的服务选择会合并为数量并按数量计算清单金额', ()
   assert.equal(summary.groups[1].title, '肩颈调理');
   assert.equal(summary.groups[1].quantity, 2);
   assert.equal(summary.groups[1].priceCents, 9800);
-  assert.equal(summary.totalCount, 8);
+  assert.equal(summary.totalCount, 7);
 });
 
 test('提交项目和前端预计金额沿用清单中的数量', () => {
@@ -233,7 +232,6 @@ test('提交项目和前端预计金额沿用清单中的数量', () => {
     [1, 2],
     [2, 2],
     [2, 1],
-    ['tea', 1],
   ]);
 
   const preview = calculatePreviewPricing(input);

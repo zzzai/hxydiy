@@ -54,7 +54,7 @@ import RecordLoginDialog from './components/RecordLoginDialog';
 import SavingHintDialog from './components/SavingHintDialog';
 import SelectionSummarySheet from './components/SelectionSummarySheet';
 import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL_MS, readCustomerAuth, shouldOfferRecordBinding, writeCustomerAuth, type CustomerAuth } from './customerAuth';
-import { anonymousBrowserEntryHint, customerPageSubtitle, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
+import { anonymousBrowserEntryHint, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
 import { customerServiceProgress, shouldPollCustomerServiceStatus } from './customerServiceStatus';
 import { shareProjectLink } from './projectShare';
 import { configureWeChatProjectShare } from './wechatShare';
@@ -75,7 +75,6 @@ import {
 import { entryMenuNotice, getEntrySource, getPositionSelectionDecision, resolveActivePositionCode, resolveEntryConflict, resolveRequestedPosition, shouldResumeCurrentPosition } from './positionSelection';
 import { detailMotion, fadeInMotion, sheetMotion, toastMotion } from './motionPresets';
 import SeatMapDialog from './components/SeatMapDialog';
-import TeaDetailPage from './components/TeaDetailPage';
 import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision } from './selectionFlow';
 import { isEdgeSwipeBack, shouldReturnToProjectListFromSubmittedScreen } from './swipeBack';
 import { shouldHydrateStoredSelection, shouldRestartStoredEntry } from './submittedSelectionRestore';
@@ -103,7 +102,6 @@ import {
 import {
   CATALOG_SECTIONS,
   KIOSK_UNBOUND_COPY,
-  TEA_SERVICE,
   buildSelectionItems,
   mergeSubmittedSelectionItems,
   calculatePreviewPricing,
@@ -124,7 +122,6 @@ import {
   projectListPricePresentation,
   projectImage,
   requiresStaffKioskBinding,
-  replaceTea,
   shouldClearDeviceSessionAfterSubmit,
   type Project,
   type Addon,
@@ -316,12 +313,10 @@ export default function App() {
   const [projectAddonIds, setProjectAddonIds] = useState<Record<number, number[]>>({});
   const [projectCatalogSelections, setProjectCatalogSelections] = useState<SelectionDraft['projectCatalogSelections']>({});
   const [localParts, setLocalParts] = useState<string[]>([]);
-  const [tea, setTea] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState('tea');
+  const [activeSection, setActiveSection] = useState('bath');
   const catalogMainRef = useRef<HTMLElement | null>(null);
   const sectionScrollTargetRef = useRef<string | null>(null);
   const [detailProject, setDetailProject] = useState<Project | null>(null);
-  const [teaDetailOpen, setTeaDetailOpen] = useState(false);
   const [localDetailOpen, setLocalDetailOpen] = useState(false);
   const [seatMapOpen, setSeatMapOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(() => shouldRestoreProfileOverlay(window.history.state));
@@ -346,8 +341,7 @@ export default function App() {
           : savingHintOpen ? 'saving-hint'
             : detailProject ? 'project-detail'
               : localDetailOpen ? 'local-detail'
-                : teaDetailOpen ? 'tea-detail'
-                  : selectionSummaryOpen ? 'selection-summary'
+                : selectionSummaryOpen ? 'selection-summary'
                     : seatMapOpen ? 'seat-map'
                       : profileOpen ? 'profile'
                         : membershipKind ? 'membership'
@@ -375,8 +369,8 @@ export default function App() {
     projectPreferences,
     projectCatalogSelections,
     localParts,
-    tea,
-  }), [projects, selectedProjectIds, projectAddonIds, addons, projectPreferences, projectCatalogSelections, localParts, tea]);
+    tea: null,
+  }), [projects, selectedProjectIds, projectAddonIds, addons, projectPreferences, projectCatalogSelections, localParts]);
   // submitted 会话返回菜单后只保存新增草稿；再次提交时再与服务器原快照合并。
   const submissionItems = useMemo(() => (
     session?.status === 'submitted'
@@ -402,8 +396,8 @@ export default function App() {
     projectAddonIds,
     projectCatalogSelections,
     localParts,
-    tea,
-  }), [selectedProjectIds, projectPreferences, projectAddonIds, projectCatalogSelections, localParts, tea]);
+    tea: null,
+  }), [selectedProjectIds, projectPreferences, projectAddonIds, projectCatalogSelections, localParts]);
   const selectionSummary = useMemo(() => buildSelectionSummary({
     projects,
     addons,
@@ -470,7 +464,6 @@ export default function App() {
     setSelectionSummaryOpen(includes('selection-summary'));
     setDetailProject((current) => includes('project-detail') ? current : null);
     setLocalDetailOpen(includes('local-detail'));
-    setTeaDetailOpen(includes('tea-detail'));
     setSeatMapOpen(includes('seat-map'));
     setProfileOpen(includes('profile'));
     setMembershipKind((current) => includes('membership') ? current : null);
@@ -522,11 +515,6 @@ export default function App() {
     if (outcome === 'unavailable') flash('暂时无法分享，请复制浏览器地址发送给好友');
   };
 
-  const openTeaDetail = () => {
-    setTeaDetailOpen(true);
-    openOverlay('tea-detail');
-  };
-
   const openLocalDetail = () => {
     setLocalDetailOpen(true);
     openOverlay('local-detail');
@@ -550,7 +538,7 @@ export default function App() {
       openLocalDetail();
       return;
     }
-    openTeaDetail();
+    flash('该选项已停止提供');
   };
 
   const handleSummaryRemove = (target: SelectionTarget) => {
@@ -561,7 +549,6 @@ export default function App() {
     setProjectAddonIds(next.projectAddonIds);
     setProjectCatalogSelections(next.projectCatalogSelections || {});
     setLocalParts(next.localParts);
-    setTea(next.tea);
 
     if (target.kind === 'project') {
       const name = projects.find((project) => project.id === target.projectId)?.name || '项目';
@@ -587,7 +574,6 @@ export default function App() {
     setProjectAddonIds(next.projectAddonIds);
     setProjectCatalogSelections(next.projectCatalogSelections || projectCatalogSelections);
     setLocalParts(next.localParts);
-    setTea(next.tea);
   };
 
   const startFreshSelectionDraft = () => {
@@ -597,7 +583,6 @@ export default function App() {
     setProjectAddonIds(empty.projectAddonIds);
     setProjectCatalogSelections(empty.projectCatalogSelections || {});
     setLocalParts(empty.localParts);
-    setTea(empty.tea);
     setSelectionSummaryOpen(false);
     setSavingHint(null);
     setSavingHintOpen(false);
@@ -686,10 +671,9 @@ export default function App() {
     const addonSelections: Record<number, number[]> = {};
     const catalogSelections: NonNullable<SelectionDraft['projectCatalogSelections']> = {};
     const parts: string[] = [];
-    let selectedTea: string | null = null;
     for (const item of nextSession.items || []) {
       if (item.project_id === 'tea') {
-        selectedTea = item.diy_preferences?.[0] || null;
+        continue;
       } else if (item.category === 'local-strength' || item.project_id === 'local-strength') {
         const part = item.diy_preferences?.[0];
         if (part) {
@@ -711,7 +695,6 @@ export default function App() {
     setProjectAddonIds(addonSelections);
     setProjectCatalogSelections(catalogSelections);
     setLocalParts(parts);
-    setTea(selectedTea);
   };
 
   const persistCurrent = (
@@ -1462,13 +1445,6 @@ export default function App() {
     await enterPosition(next.code);
   };
 
-  const selectTea = (nextTea: string) => {
-    if (readOnly) return;
-    setTea((current) => replaceTea(current, nextTea));
-    dismissTopOverlay();
-    flash(`${nextTea}已选`);
-  };
-
   const saveLocalParts = (parts: string[]) => {
     if (readOnly) return;
     setLocalParts((current) => [...new Set(parts)].flatMap((part) => {
@@ -1929,21 +1905,7 @@ export default function App() {
         </nav>
 
         <main className="catalog-main" ref={(element) => { catalogMainRef.current = element; }}>
-          <section className="catalog-section tea-section" id="section-tea">
-            <div className="section-heading"><div><span className="eyebrow">{pageContent?.title || '到店赠饮'}</span><h2>茶｜茶饮</h2></div><span>{customerPageSubtitle(pageContent?.subtitle)}</span></div>
-            <article className={`project-card mini-project-row preference-project-row ${tea ? 'selected' : ''}`} onClick={openTeaDetail} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTeaDetail(); } }} role="button" tabIndex={0}>
-              <div className="project-photo"><img src={TEA_SERVICE.image} alt="" loading="lazy" decoding="async" /></div>
-              <div className="project-copy">
-                <div className="project-title-row"><h3>{TEA_SERVICE.name}</h3></div>
-                <p>{TEA_SERVICE.summary}</p>
-                <div className="project-badges"><span>到店奉茶</span><span>随项目</span></div>
-                <div className="preference-project-foot"><strong>{tea ? `已选：${tea}` : '免费到店茶饮 · 可选配方'}</strong></div>
-              </div>
-              <button className={`detail-arrow luckin-add ${tea ? 'selected' : ''}`} type="button" aria-label="选择茶饮" aria-pressed={Boolean(tea)} onClick={(event) => { event.stopPropagation(); openTeaDetail(); }}><Plus size={18} /></button>
-            </article>
-          </section>
-
-          {CATALOG_SECTIONS.filter((section) => section.id !== 'tea').map((section) => {
+          {CATALOG_SECTIONS.map((section) => {
             const sectionProjects = projects.filter((project) => section.categories.includes(project.category as never) && project.category !== 'local-strength');
             if (!sectionProjects.length) return null;
             return (
@@ -2033,7 +1995,6 @@ export default function App() {
 
       <SeatMapDialog open={seatMapOpen} current={position} positions={positions} moving={moving} source={session?.source || occupancy?.source || query.source} onClose={dismissTopOverlay} onSelect={handleMove} onBlocked={flash} />
       <AnimatePresence initial={false} mode="wait">
-      {teaDetailOpen && <TeaDetailPage open selectedTea={tea} teaOptions={pageContent?.tea_options} positionLabel={position?.customer_label || '服务位待核对'} readOnly={readOnly} onClose={dismissTopOverlay} onConfirm={selectTea} />}
       {localDetailOpen && <LocalDetailPage open project={localProject || null} selectedParts={localParts} positionLabel={position?.customer_label || '服务位待核对'} isMember={isMember} readOnly={readOnly} onClose={dismissTopOverlay} onConfirm={saveLocalParts} />}
       {detailProject && <ProjectDetailPage
         project={detailProject}

@@ -16,7 +16,6 @@ test('项目卡片具备键盘可操作语义并响应 Enter 和 Space', () => {
 
 test('顾客端列表非首屏图片使用 lazy 加载并异步解码', () => {
   assert.match(appSource, /<img src=\{projectImage\(project\)\} alt="" loading="lazy" decoding="async" \/>/);
-  assert.match(appSource, /<img src=\{TEA_SERVICE\.image\} alt="" loading="lazy" decoding="async" \/>/);
 });
 
 test('局部推拿加购按钮无障碍名称跟随项目名称', () => {
