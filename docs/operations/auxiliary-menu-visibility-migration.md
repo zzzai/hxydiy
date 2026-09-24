@@ -14,7 +14,7 @@ all existing projects default to visible. Only then migrate production. The
 release script permits this one new migration and still blocks unknown or
 removed migrations.
 
-After deployment, run `python scripts/reconcile_aux_menu.py --store-id 1`
+After deployment, run `python -m scripts.reconcile_aux_menu --store-id 1`
 without `--apply` and inspect its plan. Apply only if the six old project
 codes, prices, and states match the expected preflight. After `--apply`, verify
 the six public standalone items and their order/prices, hidden old projects'

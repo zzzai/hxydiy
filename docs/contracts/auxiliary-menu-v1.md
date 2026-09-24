@@ -15,6 +15,6 @@ Existing `hxy-baguan-1` and `hxy-guasha-1` remain published with their IDs, pric
 
 The combined project's published option catalog requires exactly one free care method. Its selected choice is preserved in selection and service-line snapshots. Neither choice adds a separate charge.
 
-Deploy the visibility migration before running `python scripts/reconcile_aux_menu.py --store-id 1 --apply`. The script defaults to dry-run and checks expected codes/prices. Apply only after a database backup and restore rehearsal. Successful re-execution must be a no-op. The schema migration supports downgrade; operational menu rollback must use new audited catalog and price versions rather than rewrite frozen snapshots.
+Deploy the visibility migration before running `python -m scripts.reconcile_aux_menu --store-id 1 --apply`. The script defaults to dry-run and checks expected codes/prices. Apply only after a database backup and restore rehearsal. Successful re-execution must be a no-op. The schema migration supports downgrade; operational menu rollback must use new audited catalog and price versions rather than rewrite frozen snapshots.
 
 The historical `腰臀` choice in already-published parent catalogs is not silently rewritten by this change. It requires a separate versioned parent-catalog update; the customer UI wording must be synchronized by its owning window. Browser, phone and store acceptance remain human tasks.
