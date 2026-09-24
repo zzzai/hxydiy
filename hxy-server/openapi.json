@@ -560,6 +560,11 @@
             "title": "Image Url",
             "type": "string"
           },
+          "independently_visible": {
+            "default": true,
+            "title": "Independently Visible",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3828,6 +3833,11 @@
             "title": "Image Url",
             "type": "string"
           },
+          "independently_visible": {
+            "default": true,
+            "title": "Independently Visible",
+            "type": "boolean"
+          },
           "name": {
             "maxLength": 64,
             "minLength": 1,
@@ -4147,6 +4157,17 @@
               }
             ],
             "title": "Image Url"
+          },
+          "independently_visible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Independently Visible"
           },
           "name": {
             "anyOf": [

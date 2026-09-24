@@ -30,6 +30,10 @@ class FinalMenuSyncTests(unittest.TestCase):
       assert result["created"] == len(PROJECTS) - 1
       spa = db_session.scalar(select(Project).where(Project.code == "hxy-spa-60"))
       assert spa is not None and spa.duration_min == 60
+      combined = db_session.scalar(select(Project).where(Project.code == "hxy-cupping-scraping-1"))
+      assert combined.current_published_version_id is not None
+      legacy_cupping = db_session.scalar(select(Project).where(Project.code == "hxy-baguan-1"))
+      assert legacy_cupping.publication_status == "published" and legacy_cupping.independently_visible is False
       ordered_codes = list(db_session.scalars(
         select(Project.code).where(Project.store_id == store.id).order_by(Project.display_order, Project.id)
       ))

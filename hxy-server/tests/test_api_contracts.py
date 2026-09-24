@@ -777,7 +777,7 @@ class AdminV2ContractTests(unittest.TestCase):
         project = SimpleNamespace(
             id=1, store_id=1, code="P-OWN", category="bath", category_mark="",
             name="本店项目", duration_min=None, summary="", image_url="", tags=[],
-            detail_modules=[], diy_options=[], display_order=0, price_label="",
+            detail_modules=[], diy_options=[], display_order=0, independently_visible=True, price_label="",
             publication_status="published",
         )
         latest_price = SimpleNamespace(price_type="store", amount_cents=7_900)
@@ -817,6 +817,32 @@ class AdminV2ContractTests(unittest.TestCase):
             "ORDER BY price_book.price_type, price_book.published_at DESC, price_book.id DESC",
             compiled,
         )
+
+    def test_only_headquarters_can_change_project_standalone_visibility(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        try:
+            updated = self.client.patch(
+                f"/api/v1/admin/v2/projects/{self.own_project_id}",
+                json={"independently_visible": False},
+            )
+            self.assertEqual(updated.status_code, 200, updated.text)
+            listing = self.client.get("/api/v1/admin/v2/projects")
+            self.assertEqual(listing.status_code, 200, listing.text)
+            item = next(project for project in listing.json() if project["id"] == self.own_project_id)
+            self.assertIs(item["independently_visible"], False)
+            self.__class__.current_staff_id = self.staff_id
+            blocked = self.client.patch(
+                f"/api/v1/admin/v2/projects/{self.own_project_id}",
+                json={"independently_visible": True},
+            )
+            self.assertEqual(blocked.status_code, 403, blocked.text)
+        finally:
+            self.__class__.current_staff_id = self.headquarters_admin_id
+            self.client.patch(
+                f"/api/v1/admin/v2/projects/{self.own_project_id}",
+                json={"independently_visible": True},
+            )
+            self.__class__.current_staff_id = self.staff_id
 
     def test_store_staff_only_lists_users_with_an_own_store_order(self):
         response = self.client.get("/api/v1/admin/v2/users")

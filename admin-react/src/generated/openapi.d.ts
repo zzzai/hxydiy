@@ -3578,6 +3578,11 @@ export interface components {
              * @default
              */
             image_url: string;
+            /**
+             * Independently Visible
+             * @default true
+             */
+            independently_visible: boolean;
             /** Name */
             name: string;
             /**
@@ -4819,6 +4824,11 @@ export interface components {
              * @default
              */
             image_url: string;
+            /**
+             * Independently Visible
+             * @default true
+             */
+            independently_visible: boolean;
             /** Name */
             name: string;
             /**
@@ -4930,6 +4940,8 @@ export interface components {
             duration_min?: number | null;
             /** Image Url */
             image_url?: string | null;
+            /** Independently Visible */
+            independently_visible?: boolean | null;
             /** Name */
             name?: string | null;
             /** Price Label */

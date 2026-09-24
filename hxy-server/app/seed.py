@@ -7,8 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
-    Addon, CouponTemplate, MemberPlan, PriceBook, Product, Project, Store, UserCoupon, User,
+    Addon, CouponTemplate, MemberPlan, PriceBook, Product, Project,
+    ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, Store, UserCoupon, User,
 )
+from app.domain.catalog_options import _snapshot_hash
 
 STORE = {
     "store_code": "hxy-anyang-ziwei-001",
@@ -46,19 +48,23 @@ PROJECTS = [
     ("hxy-taoke-60", "kit", "养", "功夫调理", 60,
      "痛症调理（活络油20分钟+工具20分钟+热敷20分钟）-10次每套",
      None, None, 98000, "/assets/products/family-relax-card.png", "利润款"),
+    ("hxy-head-30", "small", "辅", "头疗", 30,
+     "头部轻养按摩(30分钟头面耳按摩+经络梳+眼罩/眼贴)", 7900, 5900, 4900, "/assets/products/daily-care-pack.png", "小项"),
+    ("hxy-foot-refine-1", "small", "辅", "足部精修", None,
+     "现煮草本泡脚+脚底精修", 6900, 3900, 3900, "/assets/products/daily-care-pack.png", "按次"),
+    ("hxy-oil-back-30", "small", "辅", "精油开背", 30,
+     "背部精油按摩30分钟", 9900, None, 6900, "/assets/projects/hxy-spa-60.webp", "小项"),
     ("hxy-caier-30", "small", "辅", "采耳", 30,
      "耳部清洁+耳部按摩", 8900, 6900, 5900, "/assets/products/daily-care-pack.png", "小项"),
+    ("hxy-jubu-30", "local-strength", "辅", "局部推拿", 30,
+     "肩颈、腰背、腿部、腹部、足部（任选其一）", 7900, 5900, 4900,
+     "/assets/products/herbal-heat-pack.png", "加强项"),
+    ("hxy-cupping-scraping-1", "small", "辅", "拔罐/刮痧", None,
+     "拔罐护理或刮痧护理（任选其一）", 5900, None, 2900, "/assets/hxy-mascot.webp", "按次"),
     ("hxy-baguan-1", "small", "辅", "拔罐", None,
      "拔竹罐+草本功效膏贴", 5900, 3900, 2900, "/assets/ip-paopao-running-bucket.png", "按次"),
     ("hxy-guasha-1", "small", "辅", "刮痧", None,
      "刮痧+草本功效膏贴", 5900, 3900, 2900, "/assets/products/home-relax-gift.png", "按次"),
-    ("hxy-head-30", "small", "辅", "头疗", 30,
-     "头部轻养按摩(30分钟头面耳按摩+经络梳+眼罩/眼贴)", 7900, 5900, 4900, "/assets/products/daily-care-pack.png", "小项"),
-    ("hxy-jubu-30", "local-strength", "辅", "局部推拿", 30,
-     "肩颈、腰臀、腿部、腹部、足部（任选其一）", 7900, 5900, 4900,
-     "/assets/products/herbal-heat-pack.png", "加强项"),
-    ("hxy-foot-refine-1", "small", "辅", "足部精修", None,
-     "", 5900, 3900, 3900, "/assets/products/daily-care-pack.png", "按次"),
 ]
 
 ADDONS = [
@@ -167,20 +173,42 @@ def seed(db: Session) -> None:
     db.add(store)
     db.flush()
 
+    combined_project = None
     for display_order, (code, cat, mark, name, dur, summary, store_p, group_p, member_p, img, label) in enumerate(PROJECTS):
         proj = Project(
             store_id=store.id, code=code, category=cat, category_mark=mark, name=name,
             duration_min=dur, summary=summary, image_url=img, price_label=label,
             tags=[label], display_order=display_order, publication_status="published",
+            independently_visible=code not in {"hxy-baguan-1", "hxy-guasha-1"},
             content_version="menu-20260820",
         )
         db.add(proj)
         db.flush()
+        if code == "hxy-cupping-scraping-1":
+            combined_project = proj
         if store_p is not None:
             db.add(PriceBook(project_id=proj.id, price_type="store", amount_cents=store_p))
         if group_p is not None:
             db.add(PriceBook(project_id=proj.id, price_type="group", amount_cents=group_p))
         db.add(PriceBook(project_id=proj.id, price_type="member", amount_cents=member_p))
+
+    version = ProjectCatalogVersion(project_id=combined_project.id, version=1, status="published")
+    db.add(version)
+    db.flush()
+    combined_project.current_published_version_id = version.id
+    group = ProjectOptionGroup(
+        catalog_version_id=version.id, code="care_method", name="护理方式",
+        selection_mode="single", required=True, min_select=1, max_select=1,
+    )
+    db.add(group)
+    db.flush()
+    for order, (code, name) in enumerate((("cupping", "拔罐护理"), ("scraping", "刮痧护理"))):
+        db.add(ProjectOptionChoice(
+            option_group_id=group.id, code=code, name=name, choice_type="preference",
+            charge_mode="free", display_order=order,
+        ))
+    db.flush()
+    version.snapshot_hash = _snapshot_hash(db, version.id)
 
     for code, name, dur, price in ADDONS:
         db.add(Addon(store_id=store.id, code=code, name=name, duration_min=dur,

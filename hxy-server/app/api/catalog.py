@@ -308,7 +308,8 @@ def list_projects(
 ) -> ProjectListResponse:
     """已发布项目列表（publication_status=published），价格来自 price_book。"""
     stmt = select(Project).where(
-        Project.store_id == store_id, Project.publication_status == "published"
+        Project.store_id == store_id, Project.publication_status == "published",
+        Project.independently_visible.is_(True),
     )
     if category:
         stmt = stmt.where(Project.category == category)
