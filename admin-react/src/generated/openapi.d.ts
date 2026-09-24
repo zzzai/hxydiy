@@ -4007,6 +4007,8 @@ export interface components {
             collaboration_mode?: ("shared_draft" | "browse_only") | null;
             /** Collaboration Token */
             collaboration_token?: string | null;
+            /** Entry Notice */
+            entry_notice?: string | null;
             occupancy: components["schemas"]["OccupancyOut"];
             /** Position */
             position: {

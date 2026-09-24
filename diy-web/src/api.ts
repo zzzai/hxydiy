@@ -311,6 +311,7 @@ export function createEntrySession(input: {
     collaboration_mode?: 'shared_draft' | 'browse_only';
     cart_version?: number;
     shared_cart?: boolean;
+    entry_notice?: string | null;
   }>('/entry-sessions', { method: 'POST', body: JSON.stringify(input) }));
 }
 

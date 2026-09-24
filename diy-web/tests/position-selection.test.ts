@@ -15,6 +15,13 @@ import {
 test('扫码进入已有选单时只提示一次并继续展示菜单', () => {
   assert.equal(entryMenuNotice({
     collaborationMode: 'shared_draft',
+    resumed: false,
+    recovered: false,
+    positionLabel: '1号沙发',
+    serverNotice: '该位置当前有人，已进入菜单',
+  }), '该位置当前有人，已进入菜单');
+  assert.equal(entryMenuNotice({
+    collaborationMode: 'shared_draft',
     resumed: true,
     recovered: false,
     positionLabel: '1号沙发',

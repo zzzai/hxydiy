@@ -86,3 +86,4 @@ class EntrySessionOut(BaseModel):
     collaboration_mode: Literal["shared_draft", "browse_only"] | None = None
     cart_version: int
     shared_cart: bool = False
+    entry_notice: str | None = None

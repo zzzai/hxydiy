@@ -834,6 +834,7 @@ export default function App() {
         resumed: entry.resumed,
         recovered,
         positionLabel: entry.position.customer_label,
+        serverNotice: entry.entry_notice,
       });
       if (menuNotice) {
         flash(menuNotice);

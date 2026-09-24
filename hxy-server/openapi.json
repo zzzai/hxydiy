@@ -1646,6 +1646,17 @@
             ],
             "title": "Collaboration Token"
           },
+          "entry_notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Notice"
+          },
           "occupancy": {
             "$ref": "#/components/schemas/OccupancyOut"
           },
