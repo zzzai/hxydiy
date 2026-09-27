@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-import { projectDetailVisuals } from '../src/projectDetailVisuals.ts';
+import { projectDetailVisuals, usesNaturalDetailHero } from '../src/projectDetailVisuals.ts';
 
 test('所有已上线项目均提供统一长详情视觉模块', () => {
   const sections = projectDetailVisuals('hxy-xiaoqi-90');
@@ -28,6 +28,17 @@ test('详情视觉为每张图提供可读替代文本和顾客说明', () => {
     assert.ok(section.body.length >= 12);
     assert.doesNotMatch(`${section.title}${section.body}`, /治疗|治愈|疗效|根治/);
   }
+});
+
+test('精油开背使用自然比例主图并提供专属长详情图', () => {
+  assert.equal(usesNaturalDetailHero('hxy-oil-back-30'), true);
+  assert.equal(usesNaturalDetailHero('hxy-spa-60'), false);
+
+  const sections = projectDetailVisuals('hxy-oil-back-30');
+  assert.equal(sections.length, 1);
+  assert.match(sections[0]?.image || '', /projects\/hxy-oil-back-30-detail\.webp$/);
+  assert.match(`${sections[0]?.title}${sections[0]?.body}`, /精油|背部|30 分钟/);
+  assert.doesNotMatch(`${sections[0]?.title}${sections[0]?.body}`, /治疗|治愈|疗效|根治/);
 });
 
 test('选购详情页不展示与详情视觉不成套的品牌收尾卡', () => {

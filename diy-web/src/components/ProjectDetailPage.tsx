@@ -20,7 +20,7 @@ import FootBathBundleProgress from './project-options/FootBathBundleProgress';
 import ProjectDetailVisualSections from './ProjectDetailVisualSections';
 import DetailIntroduction from './DetailIntroduction';
 import DetailPrice from './DetailPrice';
-import { projectDetailVisuals } from '../projectDetailVisuals';
+import { projectDetailVisuals, usesNaturalDetailHero } from '../projectDetailVisuals';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
 import {
@@ -253,7 +253,7 @@ export default function ProjectDetailPage({
       </header>
 
       <main className="mini-detail-scroll">
-        <img className="mini-detail-hero" src={projectImage(project)} alt={`${displayName}服务场景`} />
+        <img className={`mini-detail-hero${usesNaturalDetailHero(project.code) ? ' natural-ratio' : ''}`} src={projectImage(project)} alt={`${displayName}服务场景`} />
 
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
