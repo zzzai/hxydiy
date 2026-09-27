@@ -14,12 +14,22 @@ test('项目列表使用克制的绿色普通价和金色会员价区分身份',
   assert.match(styles, /\.miniapp-catalog-layout \.project-meta del\s*\{[^}]*color:\s*var\(--price-reference\)/s);
 });
 
-test('项目列表把插画控制为辅助信息，优先留出项目与价格的扫读空间', () => {
+test('项目列表统一插画框但完整保留不同源图比例', () => {
   const styles = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 
-  assert.match(styles, /\.miniapp-catalog-layout \.mini-project-row\s*\{[^}]*min-height:\s*108px/s);
-  assert.match(styles, /\.miniapp-catalog-layout \.project-photo\s*\{[^}]*width:\s*72px[^}]*height:\s*80px[^}]*flex:\s*0 0 72px/s);
-  assert.match(styles, /\.miniapp-catalog-layout \.project-photo\s*\{[^}]*border-radius:\s*8px/s);
+  assert.match(styles, /\.miniapp-catalog-layout \.mini-project-row\s*\{[^}]*min-height:\s*120px/s);
+  assert.match(styles, /\.miniapp-catalog-layout \.project-photo\s*\{[^}]*width:\s*78px[^}]*height:\s*86px[^}]*flex:\s*0 0 78px/s);
+  assert.match(styles, /\.miniapp-catalog-layout \.project-photo img\s*\{[^}]*object-fit:\s*contain/s);
+  assert.match(styles, /\.miniapp-catalog-layout \.project-photo img\s*\{[^}]*padding:\s*3px/s);
+});
+
+test('长项目名最多显示两行且顶部推荐卡提供明确的横滑节奏', () => {
+  const styles = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+
+  assert.match(styles, /\.miniapp-catalog-layout \.project-title-row h3\s*\{[^}]*-webkit-line-clamp:\s*2/s);
+  assert.match(styles, /\.miniapp-catalog-layout \.project-title-row h3\s*\{[^}]*white-space:\s*normal/s);
+  assert.match(styles, /\.miniapp-promo-strip\s*\{[^}]*scroll-snap-type:\s*x proximity/s);
+  assert.match(styles, /\.miniapp-promo\s*\{[^}]*scroll-snap-align:\s*start/s);
 });
 
 test('分类导航与项目列表使用紧凑分栏，避免在两者之间留下无意义空白', () => {
