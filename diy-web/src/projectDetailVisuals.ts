@@ -91,6 +91,15 @@ const OIL_BACK_VISUALS: ProjectDetailVisualSection[] = [
   },
 ];
 
+const CUPPING_SCRAPING_VISUALS: ProjectDetailVisualSection[] = [
+  {
+    image: assetPath('projects/hxy-cupping-scraping-1-detail.webp'),
+    title: '两种选择，按当下需要来',
+    body: '拔罐或刮痧任选其一，到店后可以说明偏好，由门店按标准准备器具。',
+    alt: '荷小悦人物在护理床旁展示拔罐器具、刮痧板与毛巾',
+  },
+];
+
 export function usesNaturalDetailHero(code: string): boolean {
   return code === 'hxy-oil-back-30';
 }
@@ -103,6 +112,7 @@ export function projectDetailVisuals(code: string): ProjectDetailVisualSection[]
   if (code === 'hxy-nvshen-60') return GODDESS_FOOT_CARE_VISUALS;
   if (code === 'hxy-qiqing-30') return HERBAL_FOOTBATH_VISUALS;
   if (code === 'hxy-oil-back-30') return OIL_BACK_VISUALS;
+  if (code === 'hxy-cupping-scraping-1') return CUPPING_SCRAPING_VISUALS;
   const copy: Record<string, [string, string, string]> = {
     'hxy-xiangxiang-60': ['先暖足，再慢慢放松', '给双脚和小腿留出完整时间，按需要自由搭配。', '不赶步骤，按门店最终确认清单服务。'],
     'hxy-tuina-70': ['从肩背开始，慢慢松开', '先选手法力度，再按需要加选服务内容。', '服务完成后统一线下结算。'],

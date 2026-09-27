@@ -41,6 +41,14 @@ test('精油开背使用自然比例主图并提供专属长详情图', () => {
   assert.doesNotMatch(`${sections[0]?.title}${sections[0]?.body}`, /治疗|治愈|疗效|根治/);
 });
 
+test('拔罐刮痧使用专属详情图且不承诺疗效', () => {
+  const sections = projectDetailVisuals('hxy-cupping-scraping-1');
+  assert.equal(sections.length, 1);
+  assert.match(sections[0]?.image || '', /projects\/hxy-cupping-scraping-1-detail\.webp$/);
+  assert.match(`${sections[0]?.title}${sections[0]?.body}`, /拔罐|刮痧|任选其一/);
+  assert.doesNotMatch(`${sections[0]?.title}${sections[0]?.body}`, /治疗|治愈|疗效|根治|祛湿|排毒/);
+});
+
 test('选购详情页不展示与详情视觉不成套的品牌收尾卡', () => {
   const source = fs.readFileSync(new URL('../src/components/ProjectDetailPage.tsx', import.meta.url), 'utf8');
 
