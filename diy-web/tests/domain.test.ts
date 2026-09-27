@@ -33,6 +33,7 @@ import {
   customerProjectSummaryText,
   projectListPricePresentation,
   projectImage,
+  relaxAddOnProjects,
   mergeSubmittedSelectionItems,
   type Project,
 } from '../src/domain.ts';
@@ -151,6 +152,27 @@ test('足部精修使用专属荷小悦主图资源', () => {
 test('拔罐刮痧使用专属荷小悦主图资源', () => {
   const item = project({ id: 15, code: 'hxy-cupping-scraping-1', category: 'small', name: '拔罐/刮痧' });
   assert.match(projectImage(item), /projects\/hxy-cupping-scraping-1\.webp$/);
+});
+
+test('再放松一会仅按既有可售项目补齐六项并保持顾客顺序', () => {
+  const items = [
+    project({ id: 17, code: 'hxy-oil-back-30', category: 'small', name: '精油开背' }),
+    project({ id: 99, code: 'unrelated', category: 'small', name: '其他服务' }),
+    project({ id: 11, code: 'hxy-jubu-30', category: 'local-strength', name: '局部推拿' }),
+    project({ id: 7, code: 'hxy-caier-30', category: 'small', name: '采耳' }),
+    project({ id: 18, code: 'hxy-cupping-scraping-1', category: 'small', name: '拔罐/刮痧' }),
+    project({ id: 15, code: 'hxy-foot-refine-1', category: 'small', name: '足部精修' }),
+    project({ id: 10, code: 'hxy-head-30', category: 'small', name: '头疗' }),
+  ];
+
+  assert.deepEqual(relaxAddOnProjects(items).map((item) => item.code), [
+    'hxy-head-30',
+    'hxy-caier-30',
+    'hxy-foot-refine-1',
+    'hxy-jubu-30',
+    'hxy-oil-back-30',
+    'hxy-cupping-scraping-1',
+  ]);
 });
 
 test('项目列表价格单行突出会员价且不使用门店价和可省文案', () => {

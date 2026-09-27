@@ -625,6 +625,22 @@ export function diyAddOnProjects(projects: Project[]): Project[] {
   return projects.filter((project) => project.category === 'small');
 }
 
+const RELAX_ADD_ON_CODES = [
+  'hxy-head-30',
+  'hxy-caier-30',
+  'hxy-foot-refine-1',
+  'hxy-jubu-30',
+  'hxy-oil-back-30',
+  'hxy-cupping-scraping-1',
+] as const;
+
+export function relaxAddOnProjects(projects: Project[]): Project[] {
+  const byCode = new Map(projects.map((project) => [project.code, project]));
+  return RELAX_ADD_ON_CODES
+    .map((code) => byCode.get(code))
+    .filter((project): project is Project => Boolean(project));
+}
+
 export function formatCouponReminder(coupon: CouponReminder): string {
   return `${coupon.name} · 满${formatMoney(coupon.min_spend_cents)}可减${formatMoney(coupon.amount_cents)}`;
 }
