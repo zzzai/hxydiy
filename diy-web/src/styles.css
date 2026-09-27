@@ -1123,25 +1123,34 @@ h1, h2, h3, p { margin-top: 0; }
 }
 .miniapp-coupon-entry { min-height: 28px; padding: 0 8px; }
 .miniapp-promo-strip {
-  height: 112px;
-  gap: 12px;
-  padding: 12px 16px;
+  height: 118px;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 12px 16px 14px;
+  overscroll-behavior-inline: contain;
+  scroll-padding-inline: 16px;
+  scroll-snap-type: x proximity;
+  touch-action: pan-x;
 }
 .miniapp-promo {
-  width: 224px;
-  min-width: 224px;
-  height: 88px;
+  width: min(308px, calc(100vw - 64px));
+  min-width: min(308px, calc(100vw - 64px));
+  height: 92px;
   border-radius: 12px;
   background: #f8faf7;
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
+  transition: transform 180ms var(--ease), border-color 180ms ease-out, background-color 180ms ease-out;
 }
+.miniapp-promo:active { transform: scale(.985); }
 .miniapp-promo.primary { background: #176856; }
 .miniapp-promo .promo-copy { gap: 2px; padding: 12px 88px 12px 14px; }
 .miniapp-promo .promo-copy small { padding: 3px 7px; border-radius: 8px; font-size: 9px; }
-.miniapp-promo .promo-copy strong { font-size: 15px; font-weight: 800; }
+.miniapp-promo .promo-copy strong { display: -webkit-box; overflow: hidden; font-size: 15px; font-weight: 800; line-height: 1.28; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .miniapp-promo .promo-copy em { font-size: 15px; }
 .miniapp-promo img { width: 88px; }
 .visit-feedback-entry {
-  min-width: 224px;
+  min-width: min(308px, calc(100vw - 64px));
   align-items: center;
   border: 1px solid #dceae4;
   background: linear-gradient(135deg, #f3fbf7 0%, #fff 100%);
@@ -1153,7 +1162,7 @@ h1, h2, h3, p { margin-top: 0; }
 .visit-feedback-icon { position: absolute; left: 14px; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; color: #176856; background: #e2f2eb; }
 .visit-feedback-arrow { position: absolute; right: 12px; color: #6f8d83; }
 .miniapp-catalog-layout {
-  height: calc(100dvh - 156px);
+  height: calc(100dvh - 162px);
   min-height: 0;
   border-top: 1px solid #eef3f0;
 }
@@ -1203,25 +1212,27 @@ h1, h2, h3, p { margin-top: 0; }
   position: relative;
   display: flex;
   width: 100%;
-  min-height: 108px;
+  min-height: 120px;
   gap: 12px;
-  padding: 14px 0;
+  padding: 15px 0;
   border: 0;
   border-bottom: 1px solid #f0f4ef;
   border-radius: 0;
   box-shadow: none;
+  transition: background-color 180ms ease-out;
 }
-.miniapp-catalog-layout .mini-project-row.selected { padding-left: 0; box-shadow: none; }
+.miniapp-catalog-layout .mini-project-row.selected { padding-left: 0; background: linear-gradient(90deg, rgba(238, 248, 243, .72), rgba(255, 255, 255, 0) 78%); box-shadow: none; }
 .miniapp-catalog-layout .project-photo {
   position: relative;
-  width: 72px;
-  height: 80px;
-  flex: 0 0 72px;
+  width: 78px;
+  height: 86px;
+  flex: 0 0 78px;
   overflow: hidden;
   border-radius: 8px;
-  background: #eef2ee;
+  border: 1px solid #edf2ef;
+  background: #fbfdfc;
 }
-.miniapp-catalog-layout .project-photo img { width: 100%; height: 100%; object-fit: cover; }
+.miniapp-catalog-layout .project-photo img { width: 100%; height: 100%; padding: 3px; object-fit: contain; }
 .miniapp-catalog-layout .signature-badge {
   position: absolute;
   top: 6px;
@@ -1235,14 +1246,14 @@ h1, h2, h3, p { margin-top: 0; }
   font-weight: 800;
   line-height: 1;
 }
-.miniapp-catalog-layout .project-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
-.miniapp-catalog-layout .project-title-row { gap: 5px; }
-.miniapp-catalog-layout .project-title-row h3 { overflow: hidden; flex: 1; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.miniapp-catalog-layout .project-title-row span { flex: none; padding: 0; color: #9ba7a1; background: transparent; font-size: 10px; font-weight: 400; }
-.miniapp-catalog-layout .project-copy > p { min-height: 16px; margin: 0; color: #8c9791; font-size: 11px; line-height: 1.45; -webkit-line-clamp: 1; }
+.miniapp-catalog-layout .project-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 5px; }
+.miniapp-catalog-layout .project-title-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; align-items: start; }
+.miniapp-catalog-layout .project-title-row h3 { display: -webkit-box; overflow: hidden; min-width: 0; font-size: 15px; line-height: 1.35; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.miniapp-catalog-layout .project-title-row span { flex: none; padding: 2px 0 0; color: #9ba7a1; background: transparent; font-size: 10px; font-weight: 400; }
+.miniapp-catalog-layout .project-copy > p { display: -webkit-box; overflow: hidden; min-height: 16px; margin: 0; color: #7e8c85; font-size: 11px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .project-badge-groups { display: flex; min-width: 0; flex-wrap: wrap; gap: 4px; }
 .project-badges { display: flex; min-height: 20px; flex-wrap: wrap; gap: 4px; }
-.project-badges span { padding: 3px 7px; border-radius: 4px; color: #176856; background: #eef6f2; font-size: 10px; font-weight: 600; line-height: 1.25; }
+.project-badges span { padding: 3px 6px; border-radius: 4px; color: #176856; background: #eef6f2; font-size: 9px; font-weight: 600; line-height: 1.25; }
 .project-badges-summary span { color: #536d66; background: #f1f5f3; }
 .project-badges-purchase span { color: #93621c; background: #fff6df; }
 .project-badges span.diy { color: #93621c; background: #fff6df; }
@@ -1265,18 +1276,21 @@ h1, h2, h3, p { margin-top: 0; }
 .miniapp-catalog-layout .detail-arrow {
   position: absolute;
   right: 0;
-  bottom: 17px;
+  bottom: 16px;
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   padding: 0;
   border: 1px solid #d9e7df;
   border-radius: 50%;
   color: #176856;
   background: #fff;
+  box-shadow: 0 3px 10px rgba(23, 104, 86, .08);
+  transition: transform 170ms var(--ease), color 170ms ease-out, background-color 170ms ease-out, box-shadow 170ms ease-out;
 }
-.miniapp-catalog-layout .detail-arrow.selected { color: #fff; background: #1f8f75; }
+.miniapp-catalog-layout .detail-arrow:active { transform: scale(.9); }
+.miniapp-catalog-layout .detail-arrow.selected { color: #fff; background: #1f8f75; box-shadow: 0 4px 12px rgba(31, 143, 117, .2); }
 .preference-project-row .project-copy { justify-content: center; }
 .preference-project-row .project-badges { margin-top: 1px; }
 .preference-project-foot { margin-top: auto; padding-right: 34px; }
