@@ -162,8 +162,8 @@ export default function ProjectDetailPage({
       .filter((group) => usesFrontendHerbalFormula && customerPreferenceLabel(group.label) === '泡脚液')
       .flatMap((group) => group.options));
     const nextChoices = initialChoices.filter((choice) => !legacyFormulaChoices.has(choice));
-    if (usesFrontendHerbalFormula && !nextChoices.some((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.name === choice))) {
-      nextChoices.unshift(FOOTBATH_HERBAL_FORMULAS[0].name);
+    if (usesFrontendHerbalFormula && !nextChoices.some((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.value === choice))) {
+      nextChoices.unshift(FOOTBATH_HERBAL_FORMULAS[0].value);
     }
     setChoices(nextChoices);
     setDraftAddOnIds(selectedAddonIds);
@@ -216,8 +216,8 @@ export default function ProjectDetailPage({
   };
   const chooseHerbalFormula = (formula: HerbalFormula) => {
     if (readOnly) return;
-    const formulaNames = new Set(FOOTBATH_HERBAL_FORMULAS.map((item) => item.name));
-    setChoices((current) => [...current.filter((choice) => !formulaNames.has(choice)), formula.name]);
+    const formulaValues = new Set(FOOTBATH_HERBAL_FORMULAS.map((item) => item.value));
+    setChoices((current) => [...current.filter((choice) => !formulaValues.has(choice)), formula.value]);
   };
   const toggleAddOn = (id: number) => {
     if (readOnly) return;
@@ -278,7 +278,7 @@ export default function ProjectDetailPage({
         {!detailOnly && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong><small>请确认位置无误</small></section>}
 
         {usesFrontendHerbalFormula && <FallbackHerbalFormulaGroup
-          selectedName={choices.find((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.name === choice))}
+          selectedName={choices.find((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.value === choice))}
           onSelect={chooseHerbalFormula}
           readOnly={readOnly}
         />}

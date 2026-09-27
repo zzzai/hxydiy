@@ -4,29 +4,41 @@ import { createServer } from 'vite';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-test('草本方详情随选中项切换，保留真实选项标识与只读状态', async () => {
+const formulaCases = [
+  { code: 'formula-metal', element: '金', legacy: '清润放松', name: '玉竹百合汤', benefit: '清润舒缓', count: 16, herbs: '桑叶、菊花、芦根、甘草、玉竹、麦冬、百合、薄荷、桔梗、苦杏仁、紫苏叶、桑白皮、枇杷叶、陈皮、艾叶、鱼腥草' },
+  { code: 'formula-wood', element: '木', legacy: '舒心解压', name: '玫瑰郁金汤', benefit: '疏肝调气', count: 16, herbs: '白芍、合欢皮、夜交藤、玫瑰花、茯苓、柴胡、香附、郁金、青皮、佛手、远志、枳壳、当归、薄荷、甘草、艾叶' },
+  { code: 'formula-water', element: '水', legacy: '温暖养护', name: '杜仲菟丝汤', benefit: '固本护腰', count: 16, herbs: '杜仲、牛膝、桑寄生、艾叶、干姜、续断、狗脊、五加皮、淫羊藿、肉桂、红花、补骨脂、独活、木瓜、花椒、甘草' },
+  { code: 'formula-fire', element: '火', legacy: '筋骨轻松', name: '丹参当归汤', benefit: '活络养身', count: 14, herbs: '桂枝、艾叶、当归、川芎、丹参、鸡血藤、红花、苏木、赤芍、泽兰、花椒、干姜、伸筋草、甘草' },
+  { code: 'formula-earth', element: '土', legacy: '轻盈畅快', name: '茯苓薏仁汤', benefit: '健脾化湿', count: 15, herbs: '茯苓、薏苡仁、白术、陈皮、藿香、艾叶、泽泻、苍术、白扁豆、赤小豆、砂仁、厚朴、紫苏叶、山楂、甘草' },
+];
+const formulaReminder = '功效说明为所用药材的常规功效介绍，足浴外用效果仅供参考。';
+
+test('已发布目录保留真实选项 ID，按金木水火土切换完整方剂介绍', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
     const { default: HerbalFormulaGroup } = await server.ssrLoadModule('/src/components/project-options/HerbalFormulaGroup.tsx');
-    const group = { choices: [
-      { id: 201, code: 'formula-wood', name: '舒心解压', description: '最近有点忙，想松一松\n玫瑰花 · 佛手 · 合欢皮' },
-      { id: 205, code: 'formula-water', name: '温暖养护', description: '手脚容易凉，想暖一暖\n杜仲 · 桑寄生 · 淫羊藿' },
-    ] };
+    const group = { choices: [...formulaCases].reverse().map((formula, index) => ({ id: 201 + index, code: formula.code, name: formula.legacy, description: '旧简介', status: 'active' })) };
     const render = (id: number, readOnly = false) => renderToStaticMarkup(createElement(HerbalFormulaGroup, {
       group, selectedChoiceIds: [id], readOnly, onSelect: () => {},
     }));
-    assert.match(render(201), /玫瑰花 · 佛手 · 合欢皮/);
-    assert.doesNotMatch(render(201), /杜仲 · 桑寄生 · 淫羊藿/);
-    assert.match(render(205), /杜仲 · 桑寄生 · 淫羊藿/);
-    assert.doesNotMatch(render(205), /玫瑰花 · 佛手 · 合欢皮/);
-    assert.equal((render(205).match(/aria-pressed="true"/g) || []).length, 1);
-    assert.equal((render(205, true).match(/disabled=""/g) || []).length, 2);
-    assert.match(render(201), /<button[^>]*aria-label="木 舒心解压"[^>]*><span[^>]*>木<\/span><\/button>/);
-    assert.doesNotMatch(render(201), /<i(?:\s|>)/);
+    const ordered = render(group.choices.find((choice) => choice.code === 'formula-metal')!.id);
+    assert.deepEqual([...ordered.matchAll(/aria-label="([金木水火土]) /g)].map((match) => match[1]), ['金', '木', '水', '火', '土']);
+    for (const formula of formulaCases) {
+      const choice = group.choices.find((item) => item.code === formula.code)!;
+      const markup = render(choice.id);
+      assert.match(markup, new RegExp(formula.name));
+      assert.match(markup, new RegExp(formula.benefit));
+      assert.match(markup, new RegExp(`草本配方 · 共${formula.count}味`));
+      assert.match(markup, new RegExp(formula.herbs));
+      assert.match(markup, new RegExp(formulaReminder));
+      assert.equal((markup.match(/aria-pressed="true"/g) || []).length, 1);
+    }
+    assert.equal((render(group.choices[0].id, true).match(/disabled=""/g) || []).length, 5);
+    assert.doesNotMatch(ordered, /<img|herbal-formula-art|herbal-formula-caption/);
   } finally { await server.close(); }
 });
 
-test('未配置后台目录的沐足项目使用前端五方默认值', async () => {
+test('未发布目录沿用旧选择值并共用同一五方展示', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
     const module = await server.ssrLoadModule('/src/components/project-options/FallbackHerbalFormulaGroup.tsx');
@@ -34,12 +46,12 @@ test('未配置后台目录的沐足项目使用前端五方默认值', async ()
       selectedName, readOnly: false, onSelect: () => {},
     }));
     const markup = render();
-    for (const name of ['舒心解压', '筋骨轻松', '轻盈畅快', '清润放松', '温暖养护']) assert.match(markup, new RegExp(name));
-    assert.match(markup, /玫瑰花 · 佛手 · 合欢皮/);
-    assert.match(markup, /<button[^>]*aria-label="木 舒心解压"[^>]*><span[^>]*>木<\/span><\/button>/);
-    assert.doesNotMatch(markup, /<i(?:\s|>)/);
+    for (const formula of formulaCases) assert.match(markup, new RegExp(formula.name));
+    assert.match(markup, /玉竹百合汤/);
+    assert.match(markup, /草本配方 · 共16味/);
+    assert.match(markup, new RegExp(formulaCases[0].herbs));
     assert.equal((markup.match(/aria-pressed="true"/g) || []).length, 1);
-    assert.match(render('温暖养护'), /杜仲 · 桑寄生 · 淫羊藿/);
+    assert.match(render('温暖养护'), /杜仲菟丝汤/);
   } finally { await server.close(); }
 });
 
