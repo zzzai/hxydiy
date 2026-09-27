@@ -13,6 +13,7 @@ import { fallbackAttachableAddons, fallbackOptionGroups, withFallbackOptionGroup
 import { linkedProjectIdsForChoices, catalogChoicesByType } from '../selectionSummary';
 import { catalogDraftResetKey, validateCatalogSelection, withRequiredCatalogDefaults } from '../catalogOptions';
 import RelaxProjectGroup from './project-options/RelaxProjectGroup';
+import LocalStrengthGroup from './project-options/LocalStrengthGroup';
 import HerbalFormulaGroup from './project-options/HerbalFormulaGroup';
 import FallbackHerbalFormulaGroup, { FOOTBATH_HERBAL_FORMULAS, type HerbalFormula } from './project-options/FallbackHerbalFormulaGroup';
 import FootBathBundleProgress from './project-options/FootBathBundleProgress';
@@ -121,7 +122,8 @@ export default function ProjectDetailPage({
   const catalogPublished = Boolean(project?.catalog_version_id && catalogGroups.length > 0);
   const catalogChoices = useMemo(() => catalogGroups.flatMap((group) => group.choices).filter((choice) => choice.status === 'active'), [catalogGroups]);
   const catalogLinkedChoices = useMemo(() => catalogChoicesByType(catalogGroups, 'linked_project'), [catalogGroups]);
-  const relaxProjects = useMemo(() => relaxAddOnProjects(projects), [projects]);
+  const relaxProjects = useMemo(() => relaxAddOnProjects(projects).filter((item) => item.category !== 'local-strength'), [projects]);
+  const catalogLocalChoices = useMemo(() => catalogLinkedChoices.filter((choice) => projects.some((item) => item.id === choice.linked_project_id && item.category === 'local-strength')), [catalogLinkedChoices, projects]);
   const relaxProjectIds = useMemo(() => new Set(relaxProjects.map((item) => item.id)), [relaxProjects]);
   const catalogRelaxChoices = useMemo(() => catalogLinkedChoices.filter((choice) => choice.linked_project_id !== null && relaxProjectIds.has(choice.linked_project_id)), [catalogLinkedChoices, relaxProjectIds]);
   const initialDirectRelaxProjectIds = useMemo(() => {
@@ -252,7 +254,7 @@ export default function ProjectDetailPage({
   const detailVisualSections = projectDetailVisuals(project.code);
   const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
   const hasAdditions = !detailOnly && (catalogPublished
-    ? isCatalogOptions && relaxProjects.length > 0
+    ? isCatalogOptions && (relaxProjects.length > 0 || catalogLocalChoices.length > 0)
     : (isCatalogOptions && attachableAddons.length > 0) || (isFootbathOptions && Boolean(localProject)));
 
   return (
@@ -348,8 +350,11 @@ export default function ProjectDetailPage({
         ))}
 
         {hasAdditions && catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
+        {isFootbathOptions && catalogPublished && catalogLocalChoices.length > 0 && (
+          <LocalStrengthGroup choice={catalogLocalChoices} parts={draftLocalParts} onToggle={toggleCatalogLocal} projects={projects} isMember={isMember} readOnly={readOnly} />
+        )}
         {isCatalogOptions && catalogPublished && relaxProjects.length > 0 && (
-          <RelaxProjectGroup projects={relaxProjects} catalogChoices={catalogRelaxChoices} selectedChoiceIds={draftChoiceIds} selectedProjectIds={draftRelaxProjectIds} localParts={draftLocalParts} onToggleChoice={toggleChoice} onToggleProject={toggleRelaxProject} onToggleLocalPart={toggleCatalogLocal} isMember={isMember} readOnly={readOnly} />
+          <RelaxProjectGroup projects={relaxProjects} catalogChoices={catalogRelaxChoices} selectedChoiceIds={draftChoiceIds} selectedProjectIds={draftRelaxProjectIds} onToggleChoice={toggleChoice} onToggleProject={toggleRelaxProject} isMember={isMember} readOnly={readOnly} />
         )}
 
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
