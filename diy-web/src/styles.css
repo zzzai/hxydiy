@@ -1350,24 +1350,22 @@ h1, h2, h3, p { margin-top: 0; }
 .herbal-formula-group { font-family: inherit; container-type: inline-size; --herbal-gap: clamp(3px, 1cqw, 7px); padding: 14px; }
 .herbal-formula-options { display: grid; grid-template-columns: repeat(var(--herbal-columns, 5), minmax(0, 1fr)); gap: var(--herbal-gap); }
 .herbal-formula-options button { display: flex; min-width: 0; min-height: 44px; height: clamp(44px, 8.8cqw, 56px); align-items: center; justify-content: center; padding: 4px 1px; border: 1.5px solid #dce6e9; border-radius: clamp(8px, 1.8cqw, 12px); background: #fff; color: #31424d; box-shadow: inset 0 0 0 1px #f4f8f9; transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease; }
-.herbal-formula-options button.active { border-color: #94dbcf; background: #f1fcf9; box-shadow: inset 0 0 0 1px #e5f8f2; color: #172e38; }
+.herbal-formula-options button.active { border-color: #58bea8; background: #ecf9f5; box-shadow: inset 0 0 0 1px #dff3ed; color: #13745f; }
 .herbal-formula-options button:focus-visible { outline: 2px solid #176856; outline-offset: 2px; }
 .herbal-formula-options button > span { min-width: 0; font-size: clamp(14px, 3.4cqw, 18px); font-weight: 650; letter-spacing: .08em; line-height: 1; white-space: nowrap; }
-.herbal-formula-options button.active > span { font-weight: 700; }
+.herbal-formula-options button.active > span { color: #13745f; font-weight: 700; }
 .herbal-formula-indicator { display: grid; height: 10px; grid-template-columns: repeat(var(--herbal-columns, 5), minmax(0, 1fr)); gap: var(--herbal-gap); margin-top: 4px; }
-.herbal-formula-indicator span { width: 10px; height: 10px; grid-column: var(--herbal-selected-column); align-self: end; justify-self: center; margin-bottom: -5px; border-radius: 2px; background: #eff8f8; transform: rotate(45deg); transition: grid-column 180ms cubic-bezier(.22, 1, .36, 1); }
-.herbal-formula-detail { position: relative; z-index: 1; display: grid; grid-template-columns: 53% minmax(0, 1fr); align-items: center; min-height: 108px; margin-top: 0; padding: clamp(11px, 2.8cqw, 19px) clamp(10px, 3.3cqw, 22px); border: 0; border-radius: clamp(11px, 2.3cqw, 16px); background: #eff8f8; }
-.herbal-formula-copy { grid-column: 1; grid-row: 1; min-width: 0; position: relative; z-index: 1; }
-.herbal-formula-heading { display: flex; align-items: center; gap: clamp(5px, 1.5cqw, 10px); white-space: nowrap; }
-.herbal-formula-heading::before { width: clamp(3px, 1cqw, 7px); height: clamp(18px, 4.5cqw, 31px); flex: none; border-radius: 4px; background: var(--herbal-color); content: ''; }
-.herbal-formula-heading strong { color: #172b36; font-size: 14px; letter-spacing: -.025em; font-weight: 700; line-height: 1.2; }
-.herbal-formula-heading > span { padding: 3px clamp(5px, 1.6cqw, 11px); border-radius: 999px; background: #d9f3ec; color: #378c80; font-size: 9px; line-height: 1.25; white-space: nowrap; }
-.herbal-formula-copy p { margin: clamp(9px, 1.6cqw, 12px) 0 0 clamp(9px, 2.5cqw, 17px); white-space: pre-line; color: #617985; font-size: 11px; line-height: 2.05; }
-.herbal-formula-art { grid-column: 2; grid-row: 1; position: relative; width: 88%; aspect-ratio: 2; overflow: hidden; pointer-events: none; mix-blend-mode: multiply; }
-.herbal-formula-art img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.herbal-formula-caption { position: absolute; top: 12%; right: 4%; display: flex; flex-direction: row-reverse; gap: clamp(2px, .7cqw, 5px); color: var(--herbal-color); font-size: 9px; font-weight: 500; line-height: 1.4; letter-spacing: .12em; pointer-events: none; }
-.herbal-formula-caption span { writing-mode: vertical-rl; }
-.herbal-formula-caption span + span { padding-top: 1.25em; }
+.herbal-formula-indicator span { width: 10px; height: 10px; grid-column: var(--herbal-selected-column); align-self: end; justify-self: center; margin-bottom: -5px; border-radius: 2px; background: #edf8f5; transform: rotate(45deg); transition: grid-column 180ms cubic-bezier(.22, 1, .36, 1); }
+.herbal-formula-detail { position: relative; z-index: 1; margin-top: 0; padding: 13px 14px 12px; border: 0; border-radius: clamp(11px, 2.3cqw, 16px); background: #edf8f5; }
+.herbal-formula-copy { min-width: 0; }
+.herbal-formula-heading { display: flex; align-items: center; gap: 8px; }
+.herbal-formula-heading::before { width: 3px; height: 19px; flex: none; border-radius: 3px; background: #1f8f75; content: ''; }
+.herbal-formula-heading strong { color: #172b36; font-size: 17px; letter-spacing: -.025em; font-weight: 700; line-height: 1.25; }
+.herbal-formula-benefit { margin: 6px 0 0 11px; color: #577169; font-size: 12px; line-height: 1.5; }
+.herbal-formula-divider { height: 1px; margin: 10px 0; background: #dcece7; }
+.herbal-formula-count { display: inline-flex; min-height: 22px; align-items: center; padding: 0 9px; border-radius: 999px; color: #176856; background: #dcf2eb; font-size: 11px; line-height: 22px; }
+.herbal-formula-herbs { margin: 8px 0 0; color: #263934; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.herbal-formula-reminder { margin: 9px 0 0; padding-top: 8px; border-top: 1px dashed #d7e7e2; color: #7b8b86; font-size: 10px; line-height: 1.45; }
 @media (max-width: 340px) {
   .herbal-formula-group { margin-right: 8px; margin-left: 8px; padding: 10px 6px; }
   .herbal-formula-options button { gap: 1px; padding-right: 0; padding-left: 0; border-width: 1px; }
