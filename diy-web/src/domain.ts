@@ -839,7 +839,7 @@ export function projectImage(project: Project): string {
 const GENERATED_PROJECT_ASSETS = new Set([
   'hxy-qiqing-30', 'hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-tuina-70', 'hxy-spa-60', 'hxy-spa-90',
   'hxy-taoke-60', 'hxy-caier-30', 'hxy-baguan-1', 'hxy-guasha-1', 'hxy-head-30', 'hxy-jubu-30',
-  'hxy-foot-refine-1', 'hxy-nvshen-60',
+  'hxy-foot-refine-1', 'hxy-nvshen-60', 'hxy-cupping-scraping-1',
 ]);
 
 export function generatedProjectAsset(code: string): string | null {

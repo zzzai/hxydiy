@@ -148,6 +148,11 @@ test('足部精修使用专属荷小悦主图资源', () => {
   assert.match(projectImage(item), /projects\/hxy-foot-refine-1\.webp$/);
 });
 
+test('拔罐刮痧使用专属荷小悦主图资源', () => {
+  const item = project({ id: 15, code: 'hxy-cupping-scraping-1', category: 'small', name: '拔罐/刮痧' });
+  assert.match(projectImage(item), /projects\/hxy-cupping-scraping-1\.webp$/);
+});
+
 test('项目列表价格单行突出会员价且不使用门店价和可省文案', () => {
   const item = project({ id: 1, code: 'hxy-qiqing-30', category: 'bath' });
   assert.deepEqual(projectListPricePresentation(item, null), {
