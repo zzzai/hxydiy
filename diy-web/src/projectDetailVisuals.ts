@@ -82,6 +82,19 @@ const HERBAL_FOOTBATH_VISUALS: ProjectDetailVisualSection[] = [
   },
 ];
 
+const OIL_BACK_VISUALS: ProjectDetailVisualSection[] = [
+  {
+    image: assetPath('projects/hxy-oil-back-30-detail.webp'),
+    title: '精油准备好，让背部慢慢放松',
+    body: '用 30 分钟完成背部精油按摩，力度和细节到店后可以随时沟通。',
+    alt: '荷小悦人物在护理床旁准备精油、毛巾与背部护理用品',
+  },
+];
+
+export function usesNaturalDetailHero(code: string): boolean {
+  return code === 'hxy-oil-back-30';
+}
+
 export function projectDetailVisuals(code: string): ProjectDetailVisualSection[] {
   // 招牌草本沐足与 60 分钟精油 SPA 使用专属流程插画；其他项目沿用统一信息结构和画风。
   if (code === 'hxy-xiaoqi-90') return SIGNATURE_FOOTBATH_VISUALS;
@@ -89,6 +102,7 @@ export function projectDetailVisuals(code: string): ProjectDetailVisualSection[]
   if (code === 'hxy-foot-refine-1') return FOOT_REFINEMENT_VISUALS;
   if (code === 'hxy-nvshen-60') return GODDESS_FOOT_CARE_VISUALS;
   if (code === 'hxy-qiqing-30') return HERBAL_FOOTBATH_VISUALS;
+  if (code === 'hxy-oil-back-30') return OIL_BACK_VISUALS;
   const copy: Record<string, [string, string, string]> = {
     'hxy-xiangxiang-60': ['先暖足，再慢慢放松', '给双脚和小腿留出完整时间，按需要自由搭配。', '不赶步骤，按门店最终确认清单服务。'],
     'hxy-tuina-70': ['从肩背开始，慢慢松开', '先选手法力度，再按需要加选服务内容。', '服务完成后统一线下结算。'],
