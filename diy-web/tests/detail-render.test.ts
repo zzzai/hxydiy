@@ -52,6 +52,40 @@ test('四个草本泡项目在未发布目录时均进入前端五方兜底，�
   } finally { await server.close(); }
 });
 
+test('再放松一会展示六个真实项目且拔罐刮痧只出现合并项', async () => {
+  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const { default: RelaxProjectGroup } = await server.ssrLoadModule('/src/components/project-options/RelaxProjectGroup.tsx');
+    const codes = ['hxy-head-30', 'hxy-caier-30', 'hxy-foot-refine-1', 'hxy-jubu-30', 'hxy-oil-back-30', 'hxy-cupping-scraping-1'];
+    const names = ['头疗', '采耳', '足部精修', '局部推拿', '精油开背', '拔罐/刮痧'];
+    const projects = codes.map((code, index) => ({
+      id: index + 1,
+      code,
+      name: names[index],
+      category: code === 'hxy-jubu-30' ? 'local-strength' : 'small',
+      duration_min: 30,
+      summary: '',
+      image_url: '',
+      tags: [],
+      prices: [{ price_type: 'store', amount_cents: 7900 }, { price_type: 'member', amount_cents: 4900 }],
+    }));
+    const markup = renderToStaticMarkup(createElement(RelaxProjectGroup, {
+      projects,
+      catalogChoices: [],
+      selectedChoiceIds: [],
+      selectedProjectIds: [],
+      localParts: [],
+      onToggleChoice: () => {},
+      onToggleProject: () => {},
+      onToggleLocalPart: () => {},
+      isMember: false,
+    }));
+    for (const name of names) assert.match(markup, new RegExp(name.replace('/', '\\/')));
+    assert.equal((markup.match(/拔罐\/刮痧/g) || []).length, 1);
+    assert.doesNotMatch(markup, />拔罐<|>刮痧</);
+  } finally { await server.close(); }
+});
+
 test('详情价格渲染：匿名与非会员参考价不划线，同价合并，会员保留门店价对比', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {

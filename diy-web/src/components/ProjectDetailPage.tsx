@@ -12,8 +12,7 @@ import { customerPreferenceLabel, customerPreferenceNote, preferenceSummary, pro
 import { fallbackAttachableAddons, fallbackOptionGroups, withFallbackOptionGroups, type FallbackOptionGroup } from '../projectOptionFallbacks';
 import { linkedProjectIdsForChoices, catalogChoicesByType } from '../selectionSummary';
 import { catalogDraftResetKey, validateCatalogSelection, withRequiredCatalogDefaults } from '../catalogOptions';
-import CatalogLinkedProjectGroup from './project-options/CatalogLinkedProjectGroup';
-import LocalStrengthGroup from './project-options/LocalStrengthGroup';
+import RelaxProjectGroup from './project-options/RelaxProjectGroup';
 import HerbalFormulaGroup from './project-options/HerbalFormulaGroup';
 import FallbackHerbalFormulaGroup, { FOOTBATH_HERBAL_FORMULAS, type HerbalFormula } from './project-options/FallbackHerbalFormulaGroup';
 import FootBathBundleProgress from './project-options/FootBathBundleProgress';
@@ -44,6 +43,7 @@ import {
   detailPriceComparison,
   displayProjectName,
   projectImage,
+  relaxAddOnProjects,
   customerProjectTagGroups,
   customerProjectSummaryText,
   type Addon,
@@ -121,8 +121,14 @@ export default function ProjectDetailPage({
   const catalogPublished = Boolean(project?.catalog_version_id && catalogGroups.length > 0);
   const catalogChoices = useMemo(() => catalogGroups.flatMap((group) => group.choices).filter((choice) => choice.status === 'active'), [catalogGroups]);
   const catalogLinkedChoices = useMemo(() => catalogChoicesByType(catalogGroups, 'linked_project'), [catalogGroups]);
-  const catalogSmallChoices = useMemo(() => catalogLinkedChoices.filter((choice) => projects.some((item) => item.id === choice.linked_project_id && item.category === 'small')), [catalogLinkedChoices, projects]);
-  const catalogLocalChoices = useMemo(() => catalogLinkedChoices.filter((choice) => projects.some((item) => item.id === choice.linked_project_id && item.category === 'local-strength')), [catalogLinkedChoices, projects]);
+  const relaxProjects = useMemo(() => relaxAddOnProjects(projects), [projects]);
+  const relaxProjectIds = useMemo(() => new Set(relaxProjects.map((item) => item.id)), [relaxProjects]);
+  const catalogRelaxChoices = useMemo(() => catalogLinkedChoices.filter((choice) => choice.linked_project_id !== null && relaxProjectIds.has(choice.linked_project_id)), [catalogLinkedChoices, relaxProjectIds]);
+  const initialDirectRelaxProjectIds = useMemo(() => {
+    const catalogLinkedIds = new Set(catalogRelaxChoices.map((choice) => choice.linked_project_id));
+    return selectedProjectIds.filter((id) => relaxProjectIds.has(id) && !catalogLinkedIds.has(id) && projects.find((item) => item.id === id)?.category !== 'local-strength');
+  }, [catalogRelaxChoices, projects, relaxProjectIds, selectedProjectIds]);
+  const directRelaxResetKey = [...initialDirectRelaxProjectIds].sort((left, right) => left - right).join(',');
   const catalogPreferenceGroups = useMemo(() => catalogGroups
     .map((group) => ({ ...group, choices: group.choices.filter((choice) => choice.status === 'active' && choice.choice_type === 'preference') }))
     .filter((group) => group.choices.length > 0), [catalogGroups]);
@@ -138,6 +144,7 @@ export default function ProjectDetailPage({
   const [draftAddOnIds, setDraftAddOnIds] = useState<number[]>(selectedAddonIds);
   const [draftLocalParts, setDraftLocalParts] = useState<string[]>(localParts);
   const [draftChoiceIds, setDraftChoiceIds] = useState<number[]>(withRequiredCatalogDefaults(catalogGroups, catalogSelection?.optionChoiceIds || []));
+  const [draftRelaxProjectIds, setDraftRelaxProjectIds] = useState<number[]>([]);
   const draftResetKey = catalogDraftResetKey({
     projectId: project?.id,
     preferences,
@@ -160,7 +167,8 @@ export default function ProjectDetailPage({
     setDraftAddOnIds(selectedAddonIds);
     setDraftLocalParts(localParts);
     setDraftChoiceIds(withRequiredCatalogDefaults(catalogGroups, catalogSelection?.optionChoiceIds || []));
-  }, [draftResetKey, groups, catalogGroups, usesFrontendHerbalFormula]);
+    setDraftRelaxProjectIds(initialDirectRelaxProjectIds);
+  }, [draftResetKey, directRelaxResetKey, groups, catalogGroups, usesFrontendHerbalFormula]);
 
   useEffect(() => {
     if (!project) return undefined;
@@ -178,8 +186,8 @@ export default function ProjectDetailPage({
     if (!project) return selectedProjectIds;
     const linkedIds = linkedProjectIdsForChoices(catalogGroups, draftChoiceIds)
       .filter((id) => projects.some((item) => item.id === id && item.category !== 'local-strength'));
-    return detailPreviewProjectIds(project.id, linkedIds);
-  }, [catalogGroups, draftChoiceIds, project, projects]);
+    return detailPreviewProjectIds(project.id, [...linkedIds, ...draftRelaxProjectIds]);
+  }, [catalogGroups, draftChoiceIds, draftRelaxProjectIds, project, projects]);
 
   const preview = useMemo(() => {
     if (!project) {
@@ -234,14 +242,17 @@ export default function ProjectDetailPage({
     toggleLocalPart(part);
     if (choiceId !== undefined) toggleChoice(choiceId);
   };
-  const selectedCatalogSmallCount = catalogSmallChoices.filter((choice) => draftChoiceIds.includes(choice.id)).length;
+  const toggleRelaxProject = (projectId: number) => {
+    if (readOnly) return;
+    setDraftRelaxProjectIds((current) => current.includes(projectId) ? current.filter((id) => id !== projectId) : [...current, projectId]);
+  };
   const catalogErrors = catalogPublished ? validateCatalogSelection(catalogGroups, draftChoiceIds) : [];
   const basePrices = detailBasePriceComparison(project, isMember);
   const configuredPrices = detailPriceComparison(preview, isMember);
   const detailVisualSections = projectDetailVisuals(project.code);
   const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
   const hasAdditions = !detailOnly && (catalogPublished
-    ? catalogSmallChoices.length > 0 || (isFootbathOptions && catalogLocalChoices.length > 0)
+    ? isCatalogOptions && relaxProjects.length > 0
     : (isCatalogOptions && attachableAddons.length > 0) || (isFootbathOptions && Boolean(localProject)));
 
   return (
@@ -337,12 +348,8 @@ export default function ProjectDetailPage({
         ))}
 
         {hasAdditions && catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
-        {isFootbathOptions && catalogPublished && catalogLocalChoices.length > 0 && (
-          <LocalStrengthGroup choice={catalogLocalChoices} parts={draftLocalParts} onToggle={toggleCatalogLocal} projects={projects} isMember={isMember} readOnly={readOnly} />
-        )}
-
-        {isCatalogOptions && catalogPublished && catalogSmallChoices.length > 0 && (
-          <CatalogLinkedProjectGroup title="再放松一会" choices={catalogSmallChoices} selectedChoiceIds={draftChoiceIds} onToggle={toggleChoice} projects={projects} isMember={isMember} readOnly={readOnly} />
+        {isCatalogOptions && catalogPublished && relaxProjects.length > 0 && (
+          <RelaxProjectGroup projects={relaxProjects} catalogChoices={catalogRelaxChoices} selectedChoiceIds={draftChoiceIds} selectedProjectIds={draftRelaxProjectIds} localParts={draftLocalParts} onToggleChoice={toggleChoice} onToggleProject={toggleRelaxProject} onToggleLocalPart={toggleCatalogLocal} isMember={isMember} readOnly={readOnly} />
         )}
 
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
@@ -372,7 +379,7 @@ export default function ProjectDetailPage({
       {(!detailOnly || (project && isFixedProject(project) && project.category === 'small')) && <footer className="mini-detail-footer">
         <div className="mini-detail-total"><span>{configuredPrices.currentLabel}{isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>}</span><strong>{formatMoney(configuredPrices.currentCents)}</strong></div>
         <div className="mini-detail-actions">
-          <button className="primary" type="button" disabled={readOnly || catalogErrors.length > 0} onClick={() => onConfirm({ project, preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, ...(catalogPublished && project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds, linkedProjectIds: catalogChoices.filter((choice) => draftChoiceIds.includes(choice.id) && choice.linked_project_id !== null).map((choice) => choice.linked_project_id as number) } : {}) })}>{projectDetailActionLabel(selected, readOnly, catalogErrors.length > 0)}<ChevronRight size={17} /></button>
+          <button className="primary" type="button" disabled={readOnly || catalogErrors.length > 0} onClick={() => onConfirm({ project, preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, ...(catalogPublished && project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds, linkedProjectIds: [...new Set([...catalogChoices.filter((choice) => draftChoiceIds.includes(choice.id) && choice.linked_project_id !== null).map((choice) => choice.linked_project_id as number), ...draftRelaxProjectIds])] } : {}) })}>{projectDetailActionLabel(selected, readOnly, catalogErrors.length > 0)}<ChevronRight size={17} /></button>
         </div>
       </footer>}
     </motion.div>
