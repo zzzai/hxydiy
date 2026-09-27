@@ -52,7 +52,7 @@ test('四个草本泡项目在未发布目录时均进入前端五方兜底，�
   } finally { await server.close(); }
 });
 
-test('再放松一会展示六个真实项目且拔罐刮痧只出现合并项', async () => {
+test('再放松一会仅展示五个小项且不堆叠项目长简介', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
   try {
     const { default: RelaxProjectGroup } = await server.ssrLoadModule('/src/components/project-options/RelaxProjectGroup.tsx');
@@ -64,7 +64,7 @@ test('再放松一会展示六个真实项目且拔罐刮痧只出现合并项',
       name: names[index],
       category: code === 'hxy-jubu-30' ? 'local-strength' : 'small',
       duration_min: 30,
-      summary: '',
+      summary: `${names[index]}的项目长简介，不应该出现在加购卡片中`,
       image_url: '',
       tags: [],
       prices: [{ price_type: 'store', amount_cents: 7900 }, { price_type: 'member', amount_cents: 4900 }],
@@ -74,13 +74,14 @@ test('再放松一会展示六个真实项目且拔罐刮痧只出现合并项',
       catalogChoices: [],
       selectedChoiceIds: [],
       selectedProjectIds: [],
-      localParts: [],
       onToggleChoice: () => {},
       onToggleProject: () => {},
-      onToggleLocalPart: () => {},
       isMember: false,
     }));
-    for (const name of names) assert.match(markup, new RegExp(name.replace('/', '\\/')));
+    for (const name of names.filter((name) => name !== '局部推拿')) assert.match(markup, new RegExp(name.replace('/', '\\/')));
+    assert.doesNotMatch(markup, /局部推拿/);
+    assert.doesNotMatch(markup, /项目长简介/);
+    assert.equal((markup.match(/约30分钟/g) || []).length, 5);
     assert.equal((markup.match(/拔罐\/刮痧/g) || []).length, 1);
     assert.doesNotMatch(markup, />拔罐<|>刮痧</);
   } finally { await server.close(); }
