@@ -24,7 +24,7 @@ def aware_time(value):
         raise ValueError("record requires an original timezone-aware date") from None
 
 
-def import_cards(db, payload, allowed_phones, *, apply=False, confirm_annual_mapping=False):
+def import_cards(db, payload, allowed_phones, *, apply=False):
     source = payload.get("source")
     if not isinstance(source, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", source):
         raise ValueError("invalid source")
@@ -52,8 +52,6 @@ def import_cards(db, payload, allowed_phones, *, apply=False, confirm_annual_map
             raise ValueError("unconfirmed source card classification")
         name = row.get("card_name")
         if name == "荷小悦年度权益会员卡":
-            if not confirm_annual_mapping:
-                raise ValueError("annual mapping requires explicit confirmation")
             kind = "annual"
         elif name == "荷小悦会员卡":
             kind = "stored"
@@ -132,7 +130,6 @@ def main():
     parser.add_argument("input", type=Path)
     parser.add_argument("--phones-file", type=Path, required=True)
     parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--confirm-annual-name-mapping", action="store_true")
     parser.add_argument("--backup-file", type=Path)
     parser.add_argument("--backup-sha256")
     args = parser.parse_args()
@@ -151,8 +148,7 @@ def main():
             if digest != args.backup_sha256:
                 raise ValueError("backup SHA256 mismatch")
         with SessionLocal.begin() as db:
-            report = import_cards(db, payload, phones, apply=args.apply,
-                                  confirm_annual_mapping=args.confirm_annual_name_mapping)
+            report = import_cards(db, payload, phones, apply=args.apply)
         print(json.dumps(report, ensure_ascii=False))
     except ValueError as exc:
         parser.exit(1, str(exc) + "\n")

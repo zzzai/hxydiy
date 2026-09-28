@@ -36,17 +36,17 @@
 python -m scripts.import_member_cards /private/member-cards.json --phones-file /private/authorized-phones.txt
 ```
 
-年度权益名称与源“储值消费卡”类型冲突时默认拒绝，包括预览。只有用户确认按年度名称和原始起止时间识别后才能加 `--confirm-annual-name-mapping`；年度卡缺真实到期日或期限超过原始一年均拒绝。不是按导入日续一年。
+用户已确认两类卡均可享会员权益：表中5条“荷小悦年度权益会员卡”按具体名称和已有原起止日期认定年度权益，14条“荷小悦会员卡”认定储值卡，通用“储值消费卡”类型栏不覆盖具体年度名称。脚本直接采用此映射，不再要求重复确认开关；未知名称、年度卡缺真实到期日或期限超过原始一年仍拒绝。不是按导入日续一年，也不由该分类确认推定卡在用。
 
 ## 写入与可恢复要求
 
 执行前核实服务器版本包含迁移 `20260928_membership_cards`，完成目标数据库备份、SHA256验证及隔离恢复演练；脚本只验证文件存在及哈希，不证明备份属于该库或可恢复，恢复演练仍由发布流程负责。
 
 ```bash
-python -m scripts.import_member_cards /private/member-cards.json --phones-file /private/authorized-phones.txt --confirm-annual-name-mapping --apply --backup-file /private/verified-database-backup.dump --backup-sha256 VERIFIED_SHA256
+python -m scripts.import_member_cards /private/member-cards.json --phones-file /private/authorized-phones.txt --apply --backup-file /private/verified-database-backup.dump --backup-sha256 VERIFIED_SHA256
 ```
 
-必须先取得映射确认，以上不是当前执行授权替代物。脚本在同一事务写新增身份/卡与审计；异常回滚，报告只有计数和新增卡ID，不含手机号、原始卡号或密钥。记录执行版本、备份哈希和报告到私有运维资料；提交后核对19人绑定、每人卡种/期限/余额、门店范围并二次预览应为0新增。已有用户资料和财务事实必须不变。
+卡种映射已确认，缺失的卡状态仍须有据核实；以上命令不替代备份恢复验证和真实输入核对。脚本在同一事务写新增身份/卡与审计；异常回滚，报告只有计数和新增卡ID，不含手机号、原始卡号或密钥。记录执行版本、备份哈希和报告到私有运维资料；提交后核对19人绑定、每人卡种/期限/余额、门店范围并二次预览应为0新增。已有用户资料和财务事实必须不变。
 
 提交前失败依赖事务回滚；提交后若需恢复，先停相关写入并沿已验证数据库备份恢复流程评估，不能自动删顾客或覆盖后续业务。报告中的新增卡ID供定向核对与受审计权益撤销；本脚本不提供删除用户或自动回滚生产入口。
 

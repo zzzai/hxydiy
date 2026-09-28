@@ -49,11 +49,9 @@ def test_preview_is_readonly_and_apply_is_idempotent_without_profile_overwrite(d
     assert (user.nickname, user.openid, user.balance_cents, user.is_member) == ("Keep", "verified-existing", 777, False)
 
 
-def test_ambiguous_annual_card_requires_explicit_mapping_and_keeps_original_dates(db):
+def test_specific_annual_name_overrides_generic_type_and_keeps_original_dates(db):
     data = payload(card_name="荷小悦年度权益会员卡", expires_at="2027-09-01T00:00:00+08:00", balance_cents=0)
-    with pytest.raises(ValueError, match="annual mapping"):
-        import_cards(db, data, {PHONE}, apply=True)
-    result = import_cards(db, data, {PHONE}, apply=True, confirm_annual_mapping=True)
+    result = import_cards(db, data, {PHONE}, apply=True)
     row = db.scalar(select(MembershipCard))
     assert result["new_cards"] == 1
     assert row.card_type == "annual"
@@ -79,7 +77,16 @@ def test_changed_snapshot_is_rejected_not_silently_updated(db):
 def test_annual_import_cannot_extend_original_rights_to_multiple_years(db):
     with pytest.raises(ValueError, match="one original year"):
         import_cards(db, payload(card_name="荷小悦年度权益会员卡", expires_at="2036-09-01T00:00:00+08:00"),
-                     {PHONE}, apply=True, confirm_annual_mapping=True)
+                     {PHONE}, apply=True)
+    assert db.scalar(select(func.count()).select_from(User)) == 0
+
+
+def test_confirmed_two_card_mapping_does_not_invent_missing_status_or_dates(db):
+    for changes in [{"status": None}, {"expires_at": None}, {"card_name": "unknown"}]:
+        data = payload(card_name="荷小悦年度权益会员卡", expires_at="2027-09-01T00:00:00+08:00")
+        data["cards"][0].update(changes)
+        with pytest.raises(ValueError):
+            import_cards(db, data, {PHONE}, apply=True)
     assert db.scalar(select(func.count()).select_from(User)) == 0
 
 
