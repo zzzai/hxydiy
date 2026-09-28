@@ -15,4 +15,4 @@
 原 PNG：`diy-web/design-assets/herbs-20260928/formula-{metal,wood,water,fire,earth}.png`。
 透明 WebP：`diy-web/public/assets/herbal/formula-{element}-representatives-20260928.webp`。
 
-本地生产构建通过。真实 H5 使用本地 API fixture，375px/390px 五方切换共 10 项通过：加载成功、contain、固定44px；模拟失败后正文保留。截图：`output/imagegen/detail-system-20260928/formula-{金,木,水,火,土}-{375,390}.png`。截图仅隐藏固定结算栏以避免遮挡，本身不改变产品布局。无生产会话写入。尚未发布这批药材图，微信/门店验收未执行。
+本地生产构建通过，全量测试238项通过、1项跳过。真实 H5 使用本地 API fixture，375px/390px 五方切换共 10 项通过：加载成功、contain、固定44px；模拟失败后正文保留。截图：`output/imagegen/detail-system-20260928/formula-{金,木,水,火,土}-{375,390}.png`。截图仅隐藏固定结算栏以避免遮挡，本身不改变产品布局。无生产会话写入。PR #174 已合并，部署36404982746成功，五张公网图均200，线上脚本已引用；微信/门店验收未执行。
