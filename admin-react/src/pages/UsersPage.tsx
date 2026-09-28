@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
+import { getMembershipEntitlements } from '../api';
+import { explainMemberCard, type MembershipExplanation } from '../memberCards';
 
 export default function UsersPage() {
   const { message } = App.useApp();
@@ -18,6 +20,10 @@ export default function UsersPage() {
   const [profileCustomerId, setProfileCustomerId] = useState<number>();
   const [deviceCustomer, setDeviceCustomer] = useState<any>();
   const [deviceState, setDeviceState] = useState<any>();
+  const [rightsCustomer, setRightsCustomer] = useState<any>();
+  const [rights, setRights] = useState<MembershipExplanation>();
+  const [rightsLoading, setRightsLoading] = useState(false);
+  const rightsRequest = useRef(0);
   const [membershipCustomer, setMembershipCustomer] = useState<any>();
   const [membershipMode, setMembershipMode] = useState<'enroll' | 'renew' | 'cancel' | 'recover'>('enroll');
   const [membershipForm] = Form.useForm();
@@ -70,6 +76,13 @@ export default function UsersPage() {
     }
   };
   const openDevice = async (user: any) => { setDeviceCustomer(user); const response = await getCustomerTrustedDevice(user.id); setDeviceState(response.data); };
+  const openRights = async (user: any) => {
+    const request = ++rightsRequest.current;
+    setRightsCustomer(user); setRights(undefined); setRightsLoading(true);
+    try { const response = await getMembershipEntitlements(user.id); if (request === rightsRequest.current) setRights(response.data); }
+    catch { if (request === rightsRequest.current) message.error('权益资料加载失败，请重新打开'); }
+    finally { if (request === rightsRequest.current) setRightsLoading(false); }
+  };
   const revokeDevice = async () => { if (!deviceCustomer) return; await revokeCustomerTrustedDevice(deviceCustomer.id, '顾客申请换机，店长确认撤销旧设备'); message.success('旧可信设备和未使用会员码已撤销'); const response = await getCustomerTrustedDevice(deviceCustomer.id); setDeviceState(response.data); };
 
   return (
@@ -77,15 +90,15 @@ export default function UsersPage() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <Input prefix={<SearchOutlined />} placeholder="搜索昵称或手机号" value={search} onChange={e => setSearch(e.target.value)} onPressEnter={() => load()} style={{ width: 200 }} />
         <Select placeholder="全部标签" allowClear value={tagFilter} onChange={setTagFilter} style={{ width: 160 }} options={tags.map((t: any) => ({ value: t.id, label: t.name }))} />
-        <Select placeholder="全部身份" allowClear value={memberFilter} onChange={setMemberFilter} style={{ width: 120 }} options={[{ value: '1', label: '会员' }, { value: '0', label: '非会员' }]} />
+        <Select placeholder="全部DIY标记" allowClear value={memberFilter} onChange={setMemberFilter} style={{ width: 180 }} options={[{ value: '1', label: '有DIY会员标记' }, { value: '0', label: '无DIY会员标记' }]} />
         <Button type="primary" onClick={() => load()}>搜索</Button>
       </div>
       <Table dataSource={data} loading={loading} rowKey="id" size="small"
         pagination={{ current: page, total, pageSize: 30, onChange: (p) => { setPage(p); load(p); } }}
         columns={[
-          { title: '用户', dataIndex: 'nickname', render: (v: string, r: any) => <>{v} {r.is_member && <Tag color="gold">会员</Tag>}</> },
+          { title: '用户', dataIndex: 'nickname', render: (v: string, r: any) => <>{v} {r.has_store_membership && <Tag color="gold">本店权益有效</Tag>}</> },
           { title: '手机号', dataIndex: 'phone_masked', width: 130 },
-          { title: '余额', dataIndex: 'balance_cents', width: 100, render: (v: number) => `¥${(v / 100).toFixed(2)}` },
+          { title: 'DIY钱包余额', dataIndex: 'balance_cents', width: 120, render: (v: number) => `¥${(v / 100).toFixed(2)}` },
           { title: '标签', width: 240, render: (_: any, r: any) => (r.tags || []).map((t: any) => <Tag key={t.id} color={t.color}>{t.name}</Tag>) },
           { title: '注册时间', dataIndex: 'created_at', width: 140, render: (v: string) => v?.slice(0, 10) },
           {
@@ -93,8 +106,9 @@ export default function UsersPage() {
             render: (_: any, r: any) => (
               <>
                 <Button size="small" onClick={() => doAddTag(r.id)}>打标</Button>
+                <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openRights(r)}>权益说明</Button>
                 {canCreateProfile && <Button size="small" style={{ marginLeft: 6 }} onClick={() => setProfileCustomerId(r.id)}>画像记录</Button>}
-                {r.is_member && canManageDevice && <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openDevice(r)}>可信设备</Button>}
+                {r.has_store_membership && canManageDevice && <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openDevice(r)}>可信设备</Button>}
                 {r.is_member ? <>
                   <Button size="small" style={{ marginLeft: 6 }} onClick={() => openMembership(r, 'renew')}>续费</Button>
                   <Popconfirm title="确认取消/退款？未使用年度赠送权益会作废，已核销权益不会回退。" onConfirm={() => openMembership(r, 'cancel')}>
@@ -110,6 +124,21 @@ export default function UsersPage() {
         ]}
       />
       <ProfileRecordForm customerId={profileCustomerId} open={profileCustomerId !== undefined} onClose={() => setProfileCustomerId(undefined)} onSaved={() => load(page)} />
+      <Modal title="本店会员权益说明" open={Boolean(rightsCustomer)} onCancel={() => { rightsRequest.current += 1; setRightsCustomer(undefined); }} footer={null}>
+        {rightsLoading ? <p>正在加载…</p> : rights ? <>
+          <p>本店当前权益：{rights.active ? '有效' : '不可用'}；原DIY权益：{rights.legacy_active ? '有效' : '不可用'}</p>
+          <p>外部卡余额仅代表记录时点，尚未与外部消费实时同步，也不是DIY钱包余额。日常会员价仍需本人动态码核验。</p>
+          {rights.cards.map((card, index) => {
+            const view = explainMemberCard(card);
+            return <Descriptions key={index} title={view.kind} column={1} size="small" items={[
+              { label: '来源', children: card.source }, { label: '状态', children: view.state },
+              { label: '开始时间', children: card.started_at }, { label: '到期时间', children: view.expiry },
+              { label: '本金余额', children: view.balance }, { label: '记录时间', children: card.recorded_at },
+            ]} />;
+          })}
+          {!rights.cards.length && <p>本店暂无来源卡记录。</p>}
+        </> : <p>未取得权益资料。</p>}
+      </Modal>
       <Modal title={{ enroll: '办理年度会员', renew: '续费年度会员', cancel: '取消/退款年度会员', recover: '异常恢复会员周期' }[membershipMode]} open={Boolean(membershipCustomer)} onCancel={() => setMembershipCustomer(undefined)} onOk={() => void submitMembership()} okText="确认提交" destroyOnClose>
         <p>{membershipCustomer?.nickname || membershipCustomer?.phone_masked || '顾客'}{membershipCustomer?.member_expire_at ? `，当前到期：${membershipCustomer.member_expire_at.slice(0, 10)}` : ''}</p>
         <Form form={membershipForm} layout="vertical">

@@ -17,6 +17,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, Strict
 from sqlalchemy import delete, select, func as sa_func, and_, literal, or_, union, union_all
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from app.models.membership import MembershipCard
+from app.domain.membership_entitlements import card_state, has_membership, legacy_membership_active
+from app.schemas.member_cards import MembershipExplanation
 
 from app.api.admin import _current_staff, hash_password, normalize_staff_role
 from app.db.session import get_db
@@ -170,7 +173,8 @@ def _store_user_ids(store_id: int):
         User.is_member == True,
         User.membership_store_id == store_id,
     )
-    return union(order_users, selection_users, member_users)
+    card_users = select(MembershipCard.user_id).where(MembershipCard.store_id == store_id)
+    return union(order_users, selection_users, member_users, card_users)
 
 
 def _require_store_user(db: Session, user_id: int, staff: Staff) -> User:
@@ -3891,6 +3895,34 @@ def get_customer_profile_current(
 # 6. 用户列表（带标签/分层筛选 + 打标/移除标签）
 # ──────────────────────────────────────────────────────
 
+@router.get("/users/{user_id}/membership-entitlements", response_model=MembershipExplanation)
+def get_membership_entitlements(
+    user_id: int, store_id: int | None = Query(None),
+    authorization: str | None = Header(None), db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    if _is_headquarters_admin(staff):
+        if store_id is None:
+            raise HTTPException(status_code=422, detail="请选择权益门店")
+        user = db.scalar(select(User).where(User.id == user_id, User.id.in_(_store_user_ids(store_id))))
+        if user is None:
+            raise HTTPException(status_code=404, detail="顾客不存在")
+    else:
+        _require_admin(staff)
+        store_id = _scoped_store_id(staff, store_id)
+        user = _require_store_user(db, user_id, staff)
+    now = datetime.now(UTC)
+    cards = db.scalars(select(MembershipCard).where(
+        MembershipCard.user_id == user_id, MembershipCard.store_id == store_id,
+    ).order_by(MembershipCard.id)).all()
+    return {"active": has_membership(db, user, store_id=store_id, now=now),
+            "store_id": store_id, "legacy_active": legacy_membership_active(user, now),
+            "cards": [{"source": card.source, "card_type": card.card_type,
+                       "state": card_state(card, now), "started_at": card.started_at,
+                       "expires_at": card.expires_at, "balance_cents": card.balance_cents,
+                       "recorded_at": card.observed_at, "balance_realtime": False} for card in cards]}
+
+
 @router.get("/users")
 def list_users(
     tag_id: int | None = Query(None),
@@ -3964,6 +3996,7 @@ def list_users(
             "phone_tail": u.phone[-4:] if u.phone else "",
             "phone_masked": _masked_phone(u.phone),
             "is_member": u.is_member, "member_type": u.member_type,
+            "has_store_membership": has_membership(db, u, store_id=store_id),
             "membership_cycle_id": u.annual_membership_cycle_id,
             "member_expire_at": u.member_expire_at.isoformat() if u.member_expire_at else None,
             "balance_cents": u.balance_cents,

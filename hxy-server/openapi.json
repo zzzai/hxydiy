@@ -2016,6 +2016,77 @@
         "title": "MassageRecord",
         "type": "object"
       },
+      "MemberCardExplanation": {
+        "properties": {
+          "balance_cents": {
+            "title": "Balance Cents",
+            "type": "integer"
+          },
+          "balance_realtime": {
+            "const": false,
+            "default": false,
+            "title": "Balance Realtime",
+            "type": "boolean"
+          },
+          "card_type": {
+            "enum": [
+              "annual",
+              "stored"
+            ],
+            "title": "Card Type",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "disabled",
+              "scheduled",
+              "expired",
+              "invalid",
+              "exhausted"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "card_type",
+          "state",
+          "started_at",
+          "expires_at",
+          "balance_cents",
+          "recorded_at"
+        ],
+        "title": "MemberCardExplanation",
+        "type": "object"
+      },
       "MembershipCancellationIn": {
         "additionalProperties": false,
         "properties": {
@@ -2044,6 +2115,37 @@
           "refund_disposition"
         ],
         "title": "MembershipCancellationIn",
+        "type": "object"
+      },
+      "MembershipExplanation": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/MemberCardExplanation"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "legacy_active": {
+            "title": "Legacy Active",
+            "type": "boolean"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "store_id",
+          "legacy_active",
+          "cards"
+        ],
+        "title": "MembershipExplanation",
         "type": "object"
       },
       "MembershipPaymentIn": {
@@ -16087,6 +16189,80 @@
           }
         },
         "summary": "Set User Membership",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/users/{user_id}/membership-entitlements": {
+      "get": {
+        "operationId": "get_membership_entitlements_api_v1_admin_v2_users__user_id__membership_entitlements_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipExplanation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Membership Entitlements",
         "tags": [
           "admin-v2"
         ]

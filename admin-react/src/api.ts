@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { MembershipExplanation } from './memberCards';
 import type { LiveServicePositionMap, PositionOccupancy } from './servicePositions.ts';
 import { getEntryLoginPath, isTechnicianEntry } from './auth.ts';
 import type { TechnicianServiceReferenceResponse } from './technician/serviceReference.ts';
@@ -341,6 +342,7 @@ export const deleteTag = (id: number) => client.delete(`/admin/v2/tags/${id}`);
 
 // Users
 export const getUsers = (params?: any) => client.get('/admin/v2/users', { params });
+export const getMembershipEntitlements = (userId: number, storeId?: number) => client.get<MembershipExplanation>(`/admin/v2/users/${userId}/membership-entitlements`, { params: { store_id: storeId } });
 export const getCustomerTrustedDevice = (userId: number) => client.get(`/admin/v2/users/${userId}/trusted-device`);
 export const revokeCustomerTrustedDevice = (userId: number, reason: string) => client.post(`/admin/v2/users/${userId}/trusted-device/revoke`, { reason });
 export const addUserTag = (userId: number, tagId: number) =>
