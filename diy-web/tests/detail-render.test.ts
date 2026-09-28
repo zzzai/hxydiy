@@ -12,6 +12,7 @@ const formulaCases = [
   { code: 'formula-earth', element: '土', legacy: '轻盈畅快', name: '茯苓薏仁汤', benefit: '健脾化湿', count: 15, herbs: '茯苓、薏苡仁、白术、陈皮、藿香、艾叶、泽泻、苍术、白扁豆、赤小豆、砂仁、厚朴、紫苏叶、山楂、甘草' },
 ];
 const formulaReminder = '功效说明为所用药材的常规功效介绍，足浴外用效果仅供参考。';
+const representativeHerbs = ['玉竹、百合、麦冬', '玫瑰花、郁金、白芍', '杜仲、牛膝、桑寄生', '丹参、当归、鸡血藤', '茯苓、薏苡仁、白术'];
 
 test('已发布目录保留真实选项 ID，按金木水火土切换完整方剂介绍', async () => {
   const server = await createServer({ server: { middlewareMode: true }, appType: 'custom' });
@@ -31,10 +32,14 @@ test('已发布目录保留真实选项 ID，按金木水火土切换完整方�
       assert.match(markup, new RegExp(`草本配方 · 共${formula.count}味`));
       assert.match(markup, new RegExp(formula.herbs));
       assert.match(markup, new RegExp(formulaReminder));
+      assert.match(markup, new RegExp(`${formula.code}-representatives-20260928.webp`));
+      const representatives = representativeHerbs[formulaCases.indexOf(formula)];
+      assert.match(markup, new RegExp(`alt="代表药材：${representatives}"`));
+      for (const herb of representatives.split('、')) assert.ok(formula.herbs.split('、').includes(herb));
       assert.equal((markup.match(/aria-pressed="true"/g) || []).length, 1);
     }
     assert.equal((render(group.choices[0].id, true).match(/disabled=""/g) || []).length, 5);
-    assert.doesNotMatch(ordered, /<img|herbal-formula-art|herbal-formula-caption/);
+    assert.doesNotMatch(ordered, /herbal-formula-art|herbal-formula-caption/);
   } finally { await server.close(); }
 });
 
