@@ -121,7 +121,8 @@ def import_cards(db, payload, allowed_phones, *, apply=False):
         if new_cards:
             db.add(AuditLog(actor_type="system", actor_id="member-card-import", store_id=store.id,
                             action="member_cards_imported", entity_type="store", entity_id=str(store.id),
-                            detail={"source": source, "card_ids": report["created_card_ids"], "balance_realtime": False}))
+                            detail={"source": source, "card_ids": report["created_card_ids"], "balance_realtime": False,
+                                    "classification_basis": "user_confirmed_card_classes_20260928"}))
     return report
 
 

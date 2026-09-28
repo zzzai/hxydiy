@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.session import Base
-from app.models import MembershipCard, Store, User
+from app.models import AuditLog, MembershipCard, Store, User
 from scripts.import_member_cards import import_cards
 
 
@@ -47,6 +47,7 @@ def test_preview_is_readonly_and_apply_is_idempotent_without_profile_overwrite(d
     assert db.scalar(select(func.count()).select_from(User)) == 1
     assert db.scalar(select(func.count()).select_from(MembershipCard)) == 1
     assert (user.nickname, user.openid, user.balance_cents, user.is_member) == ("Keep", "verified-existing", 777, False)
+    assert db.scalar(select(AuditLog)).detail["classification_basis"] == "user_confirmed_card_classes_20260928"
 
 
 def test_specific_annual_name_overrides_generic_type_and_keeps_original_dates(db):
@@ -114,3 +115,18 @@ def test_cli_apply_requires_backup_before_touching_database(tmp_path):
     assert result.returncode == 1
     assert "backup file and SHA256 required" in result.stderr
     assert PHONE not in result.stdout + result.stderr
+
+
+def test_masked_phone_cannot_be_used_as_an_import_identity(db):
+    masked = "138****8000"
+    with pytest.raises(ValueError, match="invalid phone"):
+        import_cards(db, payload(phone=masked), {masked}, apply=True)
+    assert db.scalar(select(func.count()).select_from(User)) == 0
+
+
+def test_valid_customer_status_does_not_imply_active_card(db):
+    data = payload(status=None, customer_status="有效客", member_stage="临界会员",
+                   card_name="荷小悦年度权益会员卡", expires_at="2027-09-01T00:00:00+08:00")
+    with pytest.raises(ValueError, match="source card status"):
+        import_cards(db, data, {PHONE}, apply=True)
+    assert db.scalar(select(func.count()).select_from(MembershipCard)) == 0
