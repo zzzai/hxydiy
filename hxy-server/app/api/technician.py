@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.api.admin import _current_staff, create_staff_token, hash_password, normalize_staff_role
 from app.db.session import get_db
+from app.domain.membership_entitlements import has_membership
 from app.models import AuditLog, CustomerProfileRecord, CustomerTrustedDevice, MembershipCode, PositionOccupancy, SelectionSession, Staff, User
 from app.models.operations import Room, Technician
 from app.models.catalog import Addon, Project
@@ -95,10 +96,7 @@ def scan_membership_code(body: MembershipScanIn, authorization: str | None = Hea
     if now >= expires_at:
         code.status = "expired"; db.commit(); raise HTTPException(status_code=409, detail={"code": "MEMBER_CODE_EXPIRED", "message": "会员码已过期，请顾客刷新"})
     user = db.get(User, code.user_id); device = db.get(CustomerTrustedDevice, code.trusted_device_id)
-    member_expiry = user.member_expire_at if user else None
-    if member_expiry and member_expiry.tzinfo is None:
-        member_expiry = member_expiry.replace(tzinfo=timezone.utc)
-    if not user or not user.is_member or (member_expiry and member_expiry <= now) or not device or device.status != "active":
+    if not has_membership(db, user, store_id=staff.store_id, now=now) or not device or device.status != "active":
         code.status = "rejected"; db.commit(); raise HTTPException(status_code=409, detail={"code": "MEMBERSHIP_INACTIVE", "message": "会员权益当前不可用"})
     code.status = "scanned_pending"; code.scanned_by_staff_id = staff.id; code.store_id = staff.store_id; code.scanned_at = now
     db.commit()
@@ -131,10 +129,7 @@ def consume_membership_code(body: MembershipVerificationIn, authorization: str |
         raise HTTPException(status_code=403, detail={"code": "MEMBER_CODE_RESERVED", "message": "该会员码已由其他员工扫码"})
     user = db.get(User, code.user_id)
     device = db.get(CustomerTrustedDevice, code.trusted_device_id)
-    member_expiry = user.member_expire_at if user else None
-    if member_expiry and member_expiry.tzinfo is None:
-        member_expiry = member_expiry.replace(tzinfo=timezone.utc)
-    if not user or not user.is_member or (member_expiry and member_expiry <= now) or not device or device.status != "active":
+    if not has_membership(db, user, store_id=staff.store_id, now=now) or not device or device.status != "active":
         code.status = "rejected"; db.commit()
         raise HTTPException(status_code=409, detail={"code": "MEMBERSHIP_INACTIVE", "message": "会员权益当前不可用"})
     if session.customer_id and session.customer_id != user.id:

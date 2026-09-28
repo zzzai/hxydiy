@@ -59,7 +59,7 @@ class MembershipSyncApiTests(unittest.TestCase):
         app.dependency_overrides.clear()
         cls.engine.dispose()
 
-    def test_external_membership_sync_is_secret_protected_and_is_used_by_phone_login(self):
+    def test_legacy_sync_without_annual_dates_does_not_grant_login_rights(self):
         with patch.object(settings, "third_party_membership_sync_key", "sync-test-key"):
             blocked = self.client.post("/api/v1/integrations/memberships/sync", json={
                 "phone": "13600136000", "is_member": True,
@@ -77,8 +77,8 @@ class MembershipSyncApiTests(unittest.TestCase):
             code = self.client.post("/api/v1/auth/h5/send-code", json={"phone": "13600136000"}).json()["debug_code"]
             login = self.client.post("/api/v1/auth/h5/login", json={"phone": "13600136000", "code": code})
             self.assertEqual(login.status_code, 200, login.text)
-            self.assertTrue(login.json()["user"]["is_member"])
-            self.assertEqual(login.json()["user"]["member_type"], "annual")
+            self.assertFalse(login.json()["user"]["is_member"])
+            self.assertIsNone(login.json()["user"]["member_type"])
 
     def test_phone_login_keeps_a_bound_draft_at_store_price_for_an_annual_member_without_expiry(self):
         created = self.client.post("/api/v1/selection-sessions", json={"store_id": self.store_id})

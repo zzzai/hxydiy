@@ -12,6 +12,7 @@ from app.db.session import Base, get_db
 from app.main import app
 from app.models import CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, PositionOccupancy, SelectionSession, Staff, Store, User
 from app.models.operations import Room, Technician
+from app.models.membership import MembershipCard
 
 
 class TestMembershipVerification:
@@ -48,6 +49,53 @@ class TestMembershipVerification:
 
     def customer_headers(self):
         return {"Authorization": f"Bearer {create_access_token(str(self.member_id), 'member_code_user', 2)}"}
+
+    def source_card(self, balance=100):
+        with self.SessionLocal() as db:
+            user = db.get(User, self.member_id)
+            user.is_member, user.member_type, user.member_expire_at = False, None, None
+            db.add(MembershipCard(user_id=user.id, store_id=self.store_id,
+                                  source="test", source_card_key="stored-test",
+                                  card_type="stored", balance_cents=balance, status="active",
+                                  started_at=datetime.now(timezone.utc) - timedelta(days=1)))
+            db.commit()
+
+    def test_source_card_grants_device_and_code_without_legacy_flags(self):
+        self.source_card()
+        snapshot = self.client.get("/api/v1/auth/h5/me", headers=self.customer_headers())
+        assert snapshot.status_code == 200
+        assert snapshot.json()["is_member"] is True
+        response = self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())
+        assert response.status_code == 200, response.text
+        response = self.client.post("/api/v1/auth/h5/member-code", headers=self.customer_headers())
+        assert response.status_code == 200, response.text
+
+    def test_depleted_card_snapshot_does_not_report_membership(self):
+        self.source_card(balance=0)
+        response = self.client.get("/api/v1/auth/h5/me", headers=self.customer_headers())
+        assert response.status_code == 200
+        assert response.json()["is_member"] is False
+
+    def test_source_card_rejects_other_store_and_exhaustion_after_issue(self):
+        self.source_card()
+        self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())
+        issued = self.client.post("/api/v1/auth/h5/member-code", headers=self.customer_headers())
+        assert issued.status_code == 200, issued.text
+        with self.SessionLocal() as db:
+            other = db.get(Staff, self.other_manager_id)
+            other_headers = {"Authorization": "Bearer " + create_staff_token(other.id, "manager")}
+        response = self.client.post("/api/v1/technician/membership-verification/scan", headers=other_headers, json={"code_token": issued.json()["code_token"]})
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "MEMBERSHIP_INACTIVE"
+        issued = self.client.post("/api/v1/auth/h5/member-code", headers=self.customer_headers())
+        with self.SessionLocal() as db:
+            db.scalar(select(MembershipCard)).balance_cents = 0
+            manager = db.get(Staff, self.manager_id)
+            headers = {"Authorization": "Bearer " + create_staff_token(manager.id, "manager")}
+            db.commit()
+        response = self.client.post("/api/v1/technician/membership-verification/consume", headers=headers, json={"code_token": issued.json()["code_token"], "selection_session_id": self.selection_id, "idempotency_key": "source-card-consume"})
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "MEMBERSHIP_INACTIVE"
 
     def test_trusted_device_issues_only_one_30_second_code(self):
         trusted = self.client.post("/api/v1/auth/h5/trusted-device/enroll", headers=self.customer_headers())

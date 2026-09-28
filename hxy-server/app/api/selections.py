@@ -15,7 +15,8 @@ from app.domain.automatic_coupon import select_automatic_coupon
 from app.domain.feedback_validation import validate_feedback_tags
 from app.domain.occupancy import refresh_hold
 from app.domain.membership_pricing import PriceContext
-from app.domain.selection_pricing import calculate_selection_pricing, price_type_for_member
+from app.domain.membership_entitlements import has_membership
+from app.domain.selection_pricing import calculate_selection_pricing
 from app.domain.selection_options import (
     CatalogSelectionError,
     merge_linked_service_units,
@@ -136,12 +137,9 @@ def _session_price_type(
     confirmed_at: datetime | None = None,
 ) -> str:
     user = db.get(User, session.customer_id) if session.customer_id else None
-    return price_type_for_member(
-        bool(user and user.is_member and session.membership_verified_at),
-        member_expire_at=user.member_expire_at if user else None,
-        confirmed_at=confirmed_at,
-        member_type=user.member_type if user else None,
-    )
+    return "member" if session.membership_verified_at and has_membership(
+        db, user, store_id=session.store_id, now=confirmed_at,
+    ) else "store"
 
 
 def refresh_session_pricing(
@@ -465,11 +463,7 @@ def quote_selection_session(
     pricing = calculate_selection_pricing(
         db,
         normalized,
-        price_type_for_member(
-            bool(customer and customer.is_member),
-            member_expire_at=customer.member_expire_at if customer else None,
-            member_type=customer.member_type if customer else None,
-        ),
+        "member" if has_membership(db, customer, store_id=session.store_id) else "store",
     )
     automatic_coupon = select_automatic_coupon(
         db,

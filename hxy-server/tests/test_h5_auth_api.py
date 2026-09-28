@@ -1,6 +1,6 @@
 import hashlib
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -226,6 +226,7 @@ class H5AuthApiTests(unittest.TestCase):
             token = create_access_token(str(user.id), user.openid)
             user.is_member = True
             user.member_type = "annual"
+            user.member_expire_at = datetime.now(timezone.utc) + timedelta(days=365)
             db.commit()
 
         response = self.client.get("/api/v1/auth/h5/me", headers={"Authorization": f"Bearer {token}"})
