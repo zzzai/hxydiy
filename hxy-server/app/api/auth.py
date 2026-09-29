@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.core.customer_auth import current_customer_id
 from app.db.session import get_db
+from app.domain.membership_entitlements import has_membership, membership_snapshot
 from app.models import AuditLog, CouponTemplate, CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
 from app.models.service import Visit
 from app.schemas.auth import (
@@ -46,7 +47,7 @@ def _trusted_device(db: Session, user_id: int, token: str | None) -> CustomerTru
 def enroll_trusted_device(response: Response, authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     user_id = current_customer_id(authorization, db)
     user = db.get(User, user_id)
-    if not user or not user.is_member:
+    if not has_membership(db, user):
         raise HTTPException(status_code=403, detail={"code": "MEMBERSHIP_REQUIRED", "message": "仅有效会员可绑定可信设备"})
     existing = db.scalar(select(CustomerTrustedDevice).where(CustomerTrustedDevice.user_id == user_id, CustomerTrustedDevice.status == "active"))
     if existing:
@@ -63,7 +64,7 @@ def rebind_trusted_device(body: TrustedDeviceRebindRequest, response: Response, 
     """Allow the currently logged-in phone holder to replace a lost browser binding."""
     user_id = current_customer_id(authorization, db)
     user = db.scalar(select(User).where(User.id == user_id).with_for_update())
-    if not user or not user.is_member or not user.phone:
+    if not has_membership(db, user) or not user.phone:
         raise HTTPException(status_code=403, detail={"code": "MEMBERSHIP_REQUIRED", "message": "仅有效会员可切换会员核验入口"})
     now = datetime.now(timezone.utc)
     record = _latest_code(db, user.phone)
@@ -104,10 +105,7 @@ def issue_member_code(authorization: str | None = Header(default=None), device_t
     user_id = current_customer_id(authorization, db)
     user = db.get(User, user_id)
     now = datetime.now(timezone.utc)
-    expiry = user.member_expire_at if user else None
-    if expiry and expiry.tzinfo is None:
-        expiry = expiry.replace(tzinfo=timezone.utc)
-    if not user or not user.is_member or (expiry and expiry <= now):
+    if not has_membership(db, user, now=now):
         raise HTTPException(status_code=403, detail={"code": "MEMBERSHIP_INACTIVE", "message": "会员权益当前不可用"})
     device = _trusted_device(db, user_id, device_token)
     if not device:
@@ -311,7 +309,7 @@ def h5_login(
                 refresh_session_pricing(db, session)
     db.commit()
     db.refresh(user)
-    return LoginResponse(token=create_access_token(str(user.id), openid, login_version), user=UserOut.model_validate(user))
+    return LoginResponse(token=create_access_token(str(user.id), openid, login_version), user=UserOut.model_validate(user).model_copy(update=membership_snapshot(db, user)))
 
 
 @router.get("/h5/me", response_model=UserOut)
@@ -323,7 +321,7 @@ def h5_current_user(
     user = db.get(User, current_customer_id(authorization, db))
     if user is None:
         raise HTTPException(status_code=401, detail="登录已失效，请重新登录")
-    return UserOut.model_validate(user)
+    return UserOut.model_validate(user).model_copy(update=membership_snapshot(db, user))
 
 
 def grant_new_user_coupons(db: Session, user_id: int) -> None:

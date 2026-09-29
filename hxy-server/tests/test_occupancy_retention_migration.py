@@ -22,7 +22,7 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
             if table.name in {
                 "service_position_qrs", "customer_profile_consents", "customer_profile_current",
                 "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
-                "staff_scope_assignments",
+                "staff_scope_assignments", "membership_cards",
             }:
                 continue
             copied = table.to_metadata(previous_metadata)

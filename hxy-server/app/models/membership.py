@@ -8,6 +8,32 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.session import Base
 
 
+class MembershipCard(Base):
+    """Source-card rights, independent of DIY wallet and annual gifts."""
+
+    __tablename__ = "membership_cards"
+    __table_args__ = (
+        UniqueConstraint("source", "source_card_key", name="uq_membership_card_source"),
+        CheckConstraint("card_type IN ('annual', 'stored')", name="ck_membership_card_type"),
+        CheckConstraint("status IN ('active', 'disabled')", name="ck_membership_card_status"),
+        CheckConstraint("balance_cents >= 0", name="ck_membership_card_balance"),
+        CheckConstraint("card_type <> 'annual' OR expires_at IS NOT NULL", name="ck_membership_card_annual_expiry"),
+        CheckConstraint("expires_at IS NULL OR expires_at > started_at", name="ck_membership_card_dates"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
+    source: Mapped[str] = mapped_column(String(32))
+    source_card_key: Mapped[str] = mapped_column(String(64))
+    card_type: Mapped[str] = mapped_column(String(16))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    balance_cents: Mapped[int] = mapped_column(default=0)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class MembershipBenefitGrant(Base):
     __tablename__ = "membership_benefit_grants"
     __table_args__ = (
