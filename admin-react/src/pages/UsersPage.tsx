@@ -98,7 +98,6 @@ export default function UsersPage() {
         columns={[
           { title: '用户', dataIndex: 'nickname', render: (v: string, r: any) => <>{v} {r.has_store_membership && <Tag color="gold">本店权益有效</Tag>}</> },
           { title: '手机号', dataIndex: 'phone_masked', width: 130 },
-          { title: 'DIY钱包余额', dataIndex: 'balance_cents', width: 120, render: (v: number) => `¥${(v / 100).toFixed(2)}` },
           { title: '标签', width: 240, render: (_: any, r: any) => (r.tags || []).map((t: any) => <Tag key={t.id} color={t.color}>{t.name}</Tag>) },
           { title: '注册时间', dataIndex: 'created_at', width: 140, render: (v: string) => v?.slice(0, 10) },
           {
@@ -127,13 +126,13 @@ export default function UsersPage() {
       <Modal title="本店会员权益说明" open={Boolean(rightsCustomer)} onCancel={() => { rightsRequest.current += 1; setRightsCustomer(undefined); }} footer={null}>
         {rightsLoading ? <p>正在加载…</p> : rights ? <>
           <p>本店当前权益：{rights.active ? '有效' : '不可用'}；原DIY权益：{rights.legacy_active ? '有效' : '不可用'}</p>
-          <p>外部卡余额仅代表记录时点，尚未与外部消费实时同步，也不是DIY钱包余额。日常会员价仍需本人动态码核验。</p>
+          <p>日常会员价仍需本人动态码核验。</p>
           {rights.cards.map((card, index) => {
             const view = explainMemberCard(card);
             return <Descriptions key={index} title={view.kind} column={1} size="small" items={[
               { label: '来源', children: card.source }, { label: '状态', children: view.state },
               { label: '开始时间', children: card.started_at }, { label: '到期时间', children: view.expiry },
-              { label: '本金余额', children: view.balance }, { label: '记录时间', children: card.recorded_at },
+              { label: '记录时间', children: card.recorded_at },
             ]} />;
           })}
           {!rights.cards.length && <p>本店暂无来源卡记录。</p>}
