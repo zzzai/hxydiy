@@ -1880,6 +1880,23 @@ export interface paths {
         patch: operations["set_user_membership_api_v1_admin_v2_users__user_id__membership_patch"];
         trace?: never;
     };
+    "/api/v1/admin/v2/users/{user_id}/membership-entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Membership Entitlements */
+        get: operations["get_membership_entitlements_api_v1_admin_v2_users__user_id__membership_entitlements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/users/{user_id}/membership/cancel": {
         parameters: {
             query?: never;
@@ -4141,6 +4158,41 @@ export interface components {
              */
             side: "left" | "right" | "both" | "unspecified";
         };
+        /** MemberCardExplanation */
+        MemberCardExplanation: {
+            /** Balance Cents */
+            balance_cents: number;
+            /**
+             * Balance Realtime
+             * @default false
+             * @constant
+             */
+            balance_realtime: false;
+            /**
+             * Card Type
+             * @enum {string}
+             */
+            card_type: "annual" | "stored";
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Source */
+            source: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "active" | "disabled" | "scheduled" | "expired" | "invalid" | "exhausted";
+        };
         /** MembershipCancellationIn */
         MembershipCancellationIn: {
             /** Cycle Id */
@@ -4149,6 +4201,17 @@ export interface components {
             reason: string;
             /** Refund Disposition */
             refund_disposition: string;
+        };
+        /** MembershipExplanation */
+        MembershipExplanation: {
+            /** Active */
+            active: boolean;
+            /** Cards */
+            cards: components["schemas"]["MemberCardExplanation"][];
+            /** Legacy Active */
+            legacy_active: boolean;
+            /** Store Id */
+            store_id: number;
         };
         /** MembershipPaymentIn */
         MembershipPaymentIn: {
@@ -10774,6 +10837,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_membership_entitlements_api_v1_admin_v2_users__user_id__membership_entitlements_get: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipExplanation"];
                 };
             };
             /** @description Validation Error */

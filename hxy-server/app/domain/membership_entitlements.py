@@ -25,6 +25,21 @@ def legacy_membership_active(user: User, now: datetime) -> bool:
     return True
 
 
+def card_state(card: MembershipCard, now: datetime) -> str:
+    current = _utc(now)
+    if card.status != "active":
+        return "disabled"
+    if _utc(card.started_at) > current:
+        return "scheduled"
+    if card.expires_at is not None and _utc(card.expires_at) <= current:
+        return "expired"
+    if card.card_type == "annual" and card.expires_at is None:
+        return "invalid"
+    if card.card_type == "stored" and card.balance_cents <= 0:
+        return "exhausted"
+    return "active"
+
+
 def active_cards(
     db: Session, user: User | None, *, store_id: int | None = None,
     now: datetime | None = None,
@@ -37,17 +52,7 @@ def active_cards(
     )
     if store_id is not None:
         query = query.where(MembershipCard.store_id == store_id)
-    result = []
-    for card in db.scalars(query):
-        if _utc(card.started_at) > current:
-            continue
-        if card.expires_at is not None and _utc(card.expires_at) <= current:
-            continue
-        if card.card_type == "annual" and card.expires_at is not None:
-            result.append(card)
-        elif card.card_type == "stored" and card.balance_cents > 0:
-            result.append(card)
-    return result
+    return [card for card in db.scalars(query) if card_state(card, current) == "active"]
 
 
 def has_membership(
