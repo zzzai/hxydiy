@@ -21,7 +21,7 @@ test('底部导航使用 basename 内部路径，避免重复拼接 technician �
 
 test('技师状态使用现场可理解文案', () => {
   assert.equal(technicianStatusLabel('available'), '空闲');
-  assert.equal(technicianStatusLabel('waiting_service'), '待确认');
+  assert.equal(technicianStatusLabel('waiting_service'), '待开始');
   assert.equal(technicianStatusLabel('in_service'), '服务中');
   assert.equal(technicianStatusLabel('post_service_present'), '已完成');
 });
@@ -41,6 +41,37 @@ test('服务状态只显示允许的主操作', () => {
   assert.deepEqual(technicianActions('in_service'), ['finish']);
   assert.deepEqual(technicianActions('post_service_present'), ['profile']);
   assert.deepEqual(technicianActions('released'), []);
+});
+
+test('同一服务动作重复点击只提交一次请求', async () => {
+  const runner = (technicianMobile as any).createTechnicianActionRunner(() => 'stable-key');
+  let resolveRequest!: (value: string) => void;
+  let requests = 0;
+  const request = () => {
+    requests += 1;
+    return new Promise<string>((resolve) => { resolveRequest = resolve; });
+  };
+
+  const first = runner.run('confirm', 12, request);
+  const second = runner.run('confirm', 12, request);
+  assert.equal(requests, 1);
+  resolveRequest('ok');
+  assert.deepEqual(await Promise.all([first, second]), ['ok', 'ok']);
+});
+
+test('服务动作失败后重试复用原幂等键', async () => {
+  let generated = 0;
+  const runner = (technicianMobile as any).createTechnicianActionRunner(() => `key-${++generated}`);
+  const keys: string[] = [];
+  const request = async (_occupancyId: number, key: string) => {
+    keys.push(key);
+    if (keys.length === 1) throw new Error('network lost');
+    return 'ok';
+  };
+
+  await assert.rejects(() => runner.run('finish', 21, request), /network lost/);
+  assert.equal(await runner.run('finish', 21, request), 'ok');
+  assert.deepEqual(keys, ['key-1', 'key-1']);
 });
 
 test('服务位状态使用一眼可区分的颜色语义', () => {

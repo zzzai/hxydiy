@@ -10,7 +10,7 @@ export function technicianEmploymentStatusLabel(status: string | undefined | nul
 }
 
 export function technicianStatusLabel(status: string): string {
-  return ({ available: '空闲', waiting_service: '待确认', in_service: '服务中', post_service_present: '已完成', conflict: '待核对' } as Record<string, string>)[status] || '处理中';
+  return ({ available: '空闲', waiting_service: '待开始', in_service: '服务中', post_service_present: '已完成', conflict: '待核对' } as Record<string, string>)[status] || '处理中';
 }
 
 export function technicianProfileStatusLabel(status: string): string {
@@ -101,6 +101,42 @@ export function createTechnicianIdempotencyKey(action: string, occupancyId: numb
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `tech-${action}-${occupancyId}-${suffix}`;
+}
+
+export function createTechnicianActionRunner(
+  keyFactory: (action: string, occupancyId: number) => string = createTechnicianIdempotencyKey,
+) {
+  const actions = new Map<string, { key: string; pending?: Promise<unknown> }>();
+  const scope = (action: string, occupancyId: number) => `${action}:${occupancyId}`;
+
+  return {
+    isRunning(action: string, occupancyId: number): boolean {
+      return Boolean(actions.get(scope(action, occupancyId))?.pending);
+    },
+    run<T>(
+      action: string,
+      occupancyId: number,
+      request: (occupancyId: number, idempotencyKey: string) => Promise<T>,
+    ): Promise<T> {
+      const actionScope = scope(action, occupancyId);
+      const current = actions.get(actionScope);
+      if (current?.pending) return current.pending as Promise<T>;
+
+      const key = current?.key || keyFactory(action, occupancyId);
+      const pending = request(occupancyId, key).then(
+        (result) => {
+          actions.delete(actionScope);
+          return result;
+        },
+        (error) => {
+          actions.set(actionScope, { key });
+          throw error;
+        },
+      );
+      actions.set(actionScope, { key, pending });
+      return pending;
+    },
+  };
 }
 
 export type TechnicianBoardGroup = {

@@ -3,7 +3,7 @@ import { Alert, App, Button, Drawer, Empty, List, Spin, Tag, Typography } from '
 import { CheckCircleOutlined, EyeOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { confirmTechnicianService, finishTechnicianService, getTechnicianMe, getTechnicianTasks } from '../api';
 import {
-  createTechnicianIdempotencyKey,
+  createTechnicianActionRunner,
   technicianBoardGroups,
   technicianOrderItemLabel,
   technicianPositionTone,
@@ -62,6 +62,7 @@ export default function TechnicianTodayPage() {
   const [error, setError] = useState('');
   const activeLoads = useRef(0);
   const latestLoadRequest = useRef(0);
+  const actionRunner = useRef(createTechnicianActionRunner()).current;
 
   const load = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (background && activeLoads.current > 0) return;
@@ -105,12 +106,13 @@ export default function TechnicianTodayPage() {
   const act = async (order: any, action: 'confirm' | 'finish') => {
     const occupancyId = typeof order.occupancy_id === 'number' ? order.occupancy_id : null;
     if (!occupancyId) return;
+    if (actionRunner.isRunning(action, occupancyId)) return;
     setActing(occupancyId);
     try {
-      const key = createTechnicianIdempotencyKey(action, occupancyId);
-      if (action === 'confirm') await confirmTechnicianService(occupancyId, key);
-      else await finishTechnicianService(occupancyId, key);
-      message.success(action === 'confirm' ? '已确认服务' : '服务已结束');
+      await actionRunner.run(action, occupancyId, (id, key) => action === 'confirm'
+        ? confirmTechnicianService(id, key)
+        : finishTechnicianService(id, key));
+      message.success(action === 'confirm' ? '服务已开始' : '服务已结束，请填写服务记录');
       if (action === 'finish' && order.customer?.id && order.selection_session_id) {
         setProfileOrder({ ...order, status: 'completed', completed_by_me: true });
       }
@@ -188,10 +190,11 @@ export default function TechnicianTodayPage() {
         <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
         {selectedActions.length > 0 && selectedOrder.customer?.id && <TechnicianServiceReferenceDrawer inline occupancyId={selectedOccupancyId} open onClose={()=>{}} />}
         <div className="technician-task-card-foot">
-          {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>确认服务</Button>}
+          {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>开始服务</Button>}
           {selectedActions.includes('finish') && <Button type="primary" block size="large" icon={<CheckCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'finish')}>服务结束</Button>}
           {selectedOccupancyId === null && <Typography.Text type="secondary">当前服务单接口未提供服务位占用凭证，仅支持查看。</Typography.Text>}
           {selectedOrder.completed_by_me && selectedOrder.customer?.id && selectedOrder.selection_session_id && <Button block size="large" onClick={() => { setProfileOrder(selectedOrder); setSelectedOrder(undefined); }}>填写服务参考</Button>}
+          {selectedOrder.status === 'completed' && <Typography.Text type="secondary">服务记录完成后，服务位由前台按离店流程释放。</Typography.Text>}
         </div>
         </>}
       </div>}
