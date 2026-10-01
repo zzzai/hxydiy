@@ -1,6 +1,7 @@
 import hashlib
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -42,6 +43,45 @@ class H5AuthApiTests(unittest.TestCase):
         response = self.client.post("/api/v1/auth/h5/send-code", json={"phone": phone})
         self.assertEqual(response.status_code, 200)
         return response.json()
+
+    def test_legacy_login_without_wechat_secret_rejects_non_development_environments(self):
+        for environment in ("production", "staging", "unknown", ""):
+            code = f"unsafe-{environment}"
+            with self.subTest(environment=environment), patch.object(auth_api.settings, "environment", environment), patch.object(auth_api.settings, "wx_appsecret", ""):
+                response = self.client.post("/api/v1/auth/login", json={"code": code})
+                self.assertEqual(response.status_code, 503)
+                self.assertNotIn("token", response.json())
+                with self.SessionLocal() as db:
+                    self.assertIsNone(db.scalar(select(User).where(User.openid == f"dev_{code}")))
+
+    def test_legacy_login_dev_identity_requires_explicit_local_or_test_environment(self):
+        for environment in ("local", "test"):
+            code = f"safe-{environment}"
+            with self.subTest(environment=environment), patch.object(auth_api.settings, "environment", environment), patch.object(auth_api.settings, "wx_appsecret", ""):
+                response = self.client.post("/api/v1/auth/login", json={"code": code})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["user"]["openid"], f"dev_{code}")
+                self.assertTrue(response.json()["token"])
+
+    def test_legacy_login_rejects_invalid_wechat_code_without_token(self):
+        with patch.object(auth_api.settings, "environment", "production"), patch.object(auth_api.settings, "wx_appsecret", "configured-for-test"), patch.object(auth_api, "code2session", side_effect=ValueError("invalid code")):
+            response = self.client.post("/api/v1/auth/login", json={"code": "invalid-code"})
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("token", response.json())
+
+    def test_legacy_login_rejects_missing_or_empty_verified_identity(self):
+        for identity in ({}, {"openid": ""}, {"openid": None}):
+            with self.subTest(identity=identity), patch.object(auth_api.settings, "environment", "production"), patch.object(auth_api.settings, "wx_appsecret", "configured-for-test"), patch.object(auth_api, "code2session", return_value=identity):
+                response = self.client.post("/api/v1/auth/login", json={"code": "invalid-identity"})
+                self.assertEqual(response.status_code, 400)
+                self.assertNotIn("token", response.json())
+
+    def test_legacy_login_uses_verified_wechat_identity_in_production(self):
+        with patch.object(auth_api.settings, "environment", "production"), patch.object(auth_api.settings, "wx_appsecret", "configured-for-test"), patch.object(auth_api, "code2session", return_value={"openid": "safe01-verified-wechat"}):
+            response = self.client.post("/api/v1/auth/login", json={"code": "verified-code"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["user"]["openid"], "safe01-verified-wechat")
+        self.assertTrue(response.json()["token"])
 
     def test_h5_coupon_claim_requires_phone_login(self):
         response = self.client.post("/api/v1/coupons/claim", json={"template_id": 1})

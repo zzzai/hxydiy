@@ -350,10 +350,16 @@ def grant_new_user_coupons(db: Session, user_id: int) -> None:
 async def login(body: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
     """wx.login 登录：code 换 openid，首次登录自动注册用户并发放新人券。"""
     if not settings.wx_appsecret:
-        # 本地/测试环境未配置 AppSecret 时，允许用 code 直接作为 openid 前缀调试
+        if settings.environment not in {"local", "test"}:
+            raise HTTPException(status_code=503, detail="微信登录暂不可用")
         openid = f"dev_{body.code[:24]}" if body.code else "dev_anonymous"
     else:
-        openid = (await code2session(body.code))["openid"]
+        try:
+            openid = (await code2session(body.code))["openid"]
+        except (KeyError, ValueError):
+            raise HTTPException(status_code=400, detail="微信登录校验失败") from None
+        if not isinstance(openid, str) or not openid:
+            raise HTTPException(status_code=400, detail="微信登录校验失败")
 
     user = db.scalar(select(User).where(User.openid == openid))
     if user is None:
