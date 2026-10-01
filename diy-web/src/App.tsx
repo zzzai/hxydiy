@@ -56,6 +56,7 @@ import SelectionSummarySheet from './components/SelectionSummarySheet';
 import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL_MS, readCustomerAuth, shouldOfferRecordBinding, writeCustomerAuth, type CustomerAuth } from './customerAuth';
 import { anonymousBrowserEntryHint, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
 import { customerServiceProgress, shouldPollCustomerServiceStatus } from './customerServiceStatus';
+import { startSharedDraftPolling } from './sharedDraftPolling';
 import { shareProjectLink } from './projectShare';
 import { configureWeChatProjectShare } from './wechatShare';
 import ProjectDetailPage from './components/ProjectDetailPage';
@@ -299,6 +300,8 @@ export default function App() {
   const [collaborationToken, setCollaborationToken] = useState('');
   const [collaborationMode, setCollaborationMode] = useState<'shared_draft' | 'browse_only' | ''>('');
   const [cartVersion, setCartVersion] = useState(0);
+  const cartVersionRef = useRef(cartVersion);
+  cartVersionRef.current = cartVersion;
   const [visitFeedbackToken, setVisitFeedbackToken] = useState('');
   const [directPositionLabel, setDirectPositionLabel] = useState('');
   const [feedbackToken, setFeedbackToken] = useState('');
@@ -1190,47 +1193,60 @@ export default function App() {
   useEffect(() => {
     if (boot !== 'ready' || !session || !collaborationToken) return undefined;
     let active = true;
-    const refreshSharedDraft = async () => {
-      if (menuSyncStateRef.current.saving || menuSyncStateRef.current.submitting) return;
-      try {
-        const latest = await getSelectionSession(session.id, accessToken, collaborationToken);
-        if (!active) return;
-        if (latest.status !== 'draft') {
-          setSession(latest);
-          if (!accessToken) {
-            setCollaborationMode('browse_only');
-            startFreshSelectionDraft();
-            flash('本服务位清单已提交；您仍可继续浏览和评价建议');
-          } else {
-            setBoot('submitted');
+    const poller = startSharedDraftPolling({
+      canPoll: () => active && document.visibilityState === 'visible' && navigator.onLine,
+      isTerminal: (error) => error instanceof ApiError && [401, 403, 410].includes(error.status),
+      onTerminal: () => { if (active) setBoot('expired'); },
+      poll: async (signal) => {
+        if (menuSyncStateRef.current.saving || menuSyncStateRef.current.submitting) return;
+        const requestController = new AbortController();
+        const abort = () => requestController.abort();
+        signal.addEventListener('abort', abort, { once: true });
+        const timeout = window.setTimeout(abort, 10000);
+        try {
+          const latest = await getSelectionSession(session.id, accessToken, collaborationToken, requestController.signal);
+          if (!active || signal.aborted || requestController.signal.aborted || menuSyncStateRef.current.saving || menuSyncStateRef.current.submitting) return;
+          if (latest.status !== 'draft') {
+            setSession(latest);
+            if (!accessToken) {
+              setCollaborationMode('browse_only');
+              startFreshSelectionDraft();
+              flash('本服务位清单已提交；您仍可继续浏览和评价建议');
+            } else {
+              setBoot('submitted');
+            }
+            return;
           }
-          return;
+          const nextVersion = latest.cart_version ?? 0;
+          if (nextVersion > cartVersionRef.current) {
+            cartVersionRef.current = nextVersion;
+            setSession(latest);
+            setCartVersion(nextVersion);
+            hydrateSelection(latest);
+            flash('同行人更新了选单，已同步');
+          }
+        } finally {
+          window.clearTimeout(timeout);
+          signal.removeEventListener('abort', abort);
         }
-        const nextVersion = latest.cart_version ?? 0;
-        if (nextVersion > cartVersion) {
-          setSession(latest);
-          setCartVersion(nextVersion);
-          hydrateSelection(latest);
-          flash('同行人更新了选单，已同步');
-        }
-      } catch {
-        // Shared polling is best-effort; writes still use version checks.
-      }
-    };
-    void refreshSharedDraft();
-    const timer = window.setInterval(() => void refreshSharedDraft(), 3000);
-    const refreshVisible = () => { if (document.visibilityState === 'visible') void refreshSharedDraft(); };
-    document.addEventListener('visibilitychange', refreshVisible);
-    window.addEventListener('focus', refreshVisible);
-    window.addEventListener('online', refreshVisible);
+      },
+    });
+    const onVisibilityChange = () => document.visibilityState === 'visible' ? poller.resume() : poller.pause();
+    const onOnline = () => poller.resume();
+    const onOffline = () => poller.pause();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onOnline);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
     return () => {
       active = false;
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', refreshVisible);
-      window.removeEventListener('focus', refreshVisible);
-      window.removeEventListener('online', refreshVisible);
+      poller.stop();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onOnline);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
     };
-  }, [boot, session?.id, accessToken, collaborationToken, cartVersion]);
+  }, [boot, session?.id, accessToken, collaborationToken]);
 
   useEffect(() => {
     const canWatchPositionChanges = position?.type === 'sofa'
