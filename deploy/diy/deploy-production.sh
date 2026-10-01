@@ -34,6 +34,8 @@ if ! flock -n 9; then
   exit 75
 fi
 
+bash "$workspace_root/deploy/diy/check-capacity.sh" "$release_root" "${DIY_MIN_FREE_KB:-3145728}"
+
 current="$release_root/current"
 backups_dir="$release_root/backups"
 stable_deploy_dir="$release_root/deploy/diy"
