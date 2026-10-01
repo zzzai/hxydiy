@@ -329,9 +329,10 @@ export function createVisitFeedbackEntry(input: {
   }>('/visit-feedback/entry', { method: 'POST', body: JSON.stringify(input) });
 }
 
-export function getSelectionSession(sessionId: string, token: string, collaborationToken?: string) {
+export function getSelectionSession(sessionId: string, token: string, collaborationToken?: string, signal?: AbortSignal) {
   return request<SelectionSession>(`/selection-sessions/${sessionId}`, {
     headers: selectionHeaders({ selectionToken: token, collaborationToken }),
+    signal,
   });
 }
 
