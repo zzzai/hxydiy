@@ -1146,8 +1146,8 @@ export default function App() {
 
   useEffect(() => {
     if (boot !== 'ready' || !session || session.status !== 'draft' || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || !hydrated.current) return undefined;
+    menuSyncStateRef.current.saving = true;
     const timer = window.setTimeout(async () => {
-      menuSyncStateRef.current.saving = true;
       setSaving(true);
       try {
         const saved = await saveSelectionSession(session.id, accessToken, selectionItems, deviceLabel(), collaborationToken ? {
@@ -1312,7 +1312,7 @@ export default function App() {
   useEffect(() => {
     menuSyncStateRef.current = {
       storeId: query.storeId,
-      saving,
+      saving: saving || menuSyncStateRef.current.saving,
       submitting,
       activeOverlay,
       selectedProjectIds,
