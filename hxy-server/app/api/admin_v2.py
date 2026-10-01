@@ -6,6 +6,7 @@
 from datetime import UTC, datetime, timedelta, timezone
 from copy import deepcopy
 import hashlib
+import hmac
 import json
 import re
 import unicodedata
@@ -19,7 +20,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.models.membership import MembershipCard
 from app.domain.membership_entitlements import card_state, has_membership, legacy_membership_active
-from app.schemas.member_cards import MembershipExplanation
+from app.schemas.member_cards import MembershipExplanation, MemberCardFactUpdate
+from app.core.config import settings
 
 from app.api.admin import _current_staff, hash_password, normalize_staff_role
 from app.db.session import get_db
@@ -3894,6 +3896,92 @@ def get_customer_profile_current(
 # ──────────────────────────────────────────────────────
 # 6. 用户列表（带标签/分层筛选 + 打标/移除标签）
 # ──────────────────────────────────────────────────────
+
+def _member_card_facts(card: MembershipCard) -> dict:
+    def utc(value):
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+    return {"card_id": card.id, "store_id": card.store_id, "user_id": card.user_id,
+            "card_type": card.card_type, "balance_cents": card.balance_cents, "status": card.status,
+            "started_at": utc(card.started_at).isoformat(),
+            "expires_at": utc(card.expires_at).isoformat() if card.expires_at else None,
+            "recorded_at": utc(card.observed_at).isoformat()}
+
+
+def _member_card_digest(value: dict) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+@router.post("/membership-cards/{card_id}/facts")
+def update_member_card_facts(
+    card_id: int, body: MemberCardFactUpdate, store_id: int | None = Query(None),
+    authorization: str | None = Header(None), db: Session = Depends(get_db),
+) -> dict:
+    """Preview or register checked source facts without creating wallet transactions."""
+    staff = _current_staff(authorization, db)
+    if _is_headquarters_admin(staff):
+        if store_id is None:
+            raise HTTPException(status_code=422, detail="请选择权益门店")
+    else:
+        _require_admin(staff)
+        store_id = _scoped_store_id(staff, store_id)
+    card = db.scalar(select(MembershipCard).where(
+        MembershipCard.id == card_id, MembershipCard.store_id == store_id,
+    ).with_for_update().execution_options(populate_existing=True))
+    if card is None:
+        raise HTTPException(status_code=404, detail="来源卡不存在")
+
+    observation = body.observed_at.astimezone(UTC)
+    payload = {"balance_cents": body.balance_cents, "status": body.status,
+               "observed_at": observation.isoformat(), "evidence": body.evidence, "reason": body.reason}
+    request_hash = _member_card_digest(payload)
+    if body.apply:
+        previous = db.scalar(select(AuditLog).where(
+            AuditLog.action == "update_member_card_facts", AuditLog.entity_type == "membership_card",
+            AuditLog.entity_id == str(card.id), AuditLog.store_id == store_id,
+            AuditLog.detail["checked_by_staff_id"].as_integer() == staff.id,
+            AuditLog.detail["idempotency_key"].as_string() == body.idempotency_key,
+        ))
+        if previous:
+            if previous.detail["request_hash"] != request_hash:
+                raise HTTPException(status_code=409, detail={"code": "IDEMPOTENCY_CONFLICT", "message": "同一请求编号不能登记不同事实"})
+            return previous.detail["result"]
+
+    before = _member_card_facts(card)
+    version = _member_card_digest(before)
+    if body.apply and body.expected_version != version:
+        raise HTTPException(status_code=409, detail={"code": "MEMBER_CARD_VERSION_CONFLICT", "message": "来源卡已更新，请重新核对并预览"})
+    if observation <= datetime.fromisoformat(before["recorded_at"]) or observation > datetime.now(UTC):
+        raise HTTPException(status_code=409, detail={"code": "STALE_CARD_OBSERVATION", "message": "核对时间必须晚于已记录事实且不能在未来"})
+    if body.balance_cents is not None and card.card_type != "stored":
+        raise HTTPException(status_code=422, detail="仅储值卡可登记本金余额")
+    if body.status == "active" and card.expires_at and datetime.fromisoformat(before["expires_at"]) <= datetime.now(UTC):
+        raise HTTPException(status_code=409, detail={"code": "EXPIRED_CARD_RESTORE_FORBIDDEN", "message": "已到期来源卡不能通过事实更新恢复"})
+    after = {**before, "recorded_at": observation.isoformat()}
+    if body.balance_cents is not None:
+        after["balance_cents"] = body.balance_cents
+    if body.status is not None:
+        after["status"] = body.status
+    preview_token = hmac.new(settings.jwt_secret.encode(),
+                             f"member-card-facts:{staff.id}:{version}:{request_hash}".encode(), hashlib.sha256).hexdigest()
+    if not body.apply:
+        return {"applied": False, "before": before, "after": after, "version": version,
+                "preview_token": preview_token, "balance_realtime": False}
+    if not hmac.compare_digest(body.preview_token, preview_token):
+        raise HTTPException(status_code=409, detail={"code": "CARD_PREVIEW_MISMATCH", "message": "提交内容与预览不一致，请重新预览"})
+    card.balance_cents = after["balance_cents"]
+    card.status = after["status"]
+    card.observed_at = observation
+    result = {"applied": True, "before": before, "after": after,
+              "version": _member_card_digest(after), "balance_realtime": False}
+    _audit(db, staff, "update_member_card_facts", "membership_card", str(card.id), {
+        **payload, "checked_by_staff_id": staff.id, "registered_at": datetime.now(UTC).isoformat(),
+        "idempotency_key": body.idempotency_key, "request_hash": request_hash,
+        "before": before, "after": after, "result": result,
+    }, store_id=store_id)
+    db.commit()
+    return result
+
 
 @router.get("/users/{user_id}/membership-entitlements", response_model=MembershipExplanation)
 def get_membership_entitlements(
