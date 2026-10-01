@@ -10,8 +10,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import OptionChoicePrice, PriceBook, Project, ProjectOptionChoice
+from app.models import OptionChoicePrice, PriceBook, Project, ProjectOptionChoice, User
 from app.domain.catalog_options import choice_contract_errors
+from app.domain.membership_entitlements import active_cards, legacy_membership_active
 
 
 PriceBasis = Literal["store", "member", "tuesday_68", "annual_gift"]
@@ -31,6 +32,30 @@ class PriceContext:
     member_expire_at: datetime | None = None
     member_type: str | None = None
     store_id: int | None = None
+
+
+def membership_price_context(
+    db: Session, user: User | None, *, store_id: int, confirmed_at: datetime,
+) -> PriceContext:
+    """Resolve the union of valid store rights at the pricing instant."""
+    _aware(confirmed_at)
+    cards = active_cards(db, user, store_id=store_id, now=confirmed_at)
+    legacy_active = bool(user and legacy_membership_active(user, confirmed_at))
+    annual_expiries = [card.expires_at for card in cards if card.card_type == "annual"]
+    if legacy_active and user.member_type == "annual":
+        annual_expiries.append(user.member_expire_at)
+    expiry = max(
+        (value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+         for value in annual_expiries), default=None,
+    )
+    return PriceContext(
+        is_member=bool(legacy_active or cards),
+        member_type="annual" if expiry else None,
+        member_expire_at=expiry,
+        confirmed_at=confirmed_at,
+        store_timezone="Asia/Shanghai",
+        store_id=store_id,
+    )
 
 
 @dataclass(frozen=True)

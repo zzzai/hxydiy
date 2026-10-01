@@ -14,7 +14,7 @@ from app.db.session import get_db
 from app.domain.automatic_coupon import select_automatic_coupon
 from app.domain.feedback_validation import validate_feedback_tags
 from app.domain.occupancy import refresh_hold
-from app.domain.membership_pricing import PriceContext
+from app.domain.membership_pricing import membership_price_context
 from app.domain.membership_entitlements import has_membership
 from app.domain.selection_pricing import calculate_selection_pricing
 from app.domain.selection_options import (
@@ -153,16 +153,10 @@ def refresh_session_pricing(
         if confirmed_at.tzinfo is None:
             raise ValueError("confirmed_at must be timezone-aware")
         confirmed_at = confirmed_at.astimezone(timezone.utc)
-        user = db.get(User, session.customer_id) if session.customer_id else None
-        member_expire_at = user.member_expire_at if user else None
-        if member_expire_at is not None and member_expire_at.tzinfo is None:
-            member_expire_at = member_expire_at.replace(tzinfo=timezone.utc)
-        price_context = PriceContext(
-            is_member=bool(user and user.is_member and session.membership_verified_at),
-            member_type=user.member_type if user else None,
-            member_expire_at=member_expire_at,
+        user = db.get(User, session.customer_id) if session.customer_id and session.membership_verified_at else None
+        price_context = membership_price_context(
+            db, user,
             confirmed_at=confirmed_at,
-            store_timezone="Asia/Shanghai",
             store_id=session.store_id,
         )
     pricing = calculate_selection_pricing(
