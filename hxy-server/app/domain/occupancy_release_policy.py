@@ -81,6 +81,28 @@ def service_deadline(occupancy: PositionOccupancy) -> datetime | None:
     return None
 
 
+def _backfill_service_end_at(occupancy: PositionOccupancy, now: datetime) -> str | None:
+    """Backfill the missing service end time before an automatic release.
+
+    技师漏点「服务结束」时，超时回收会把占用置为 released 但留下空的
+    `actual_service_end_at`：该单不会出现在技师服务历史（查询条件为结束时间非空）、
+    服务时长无法计算、顾客画像快记入口随状态流失。这里只补 DIY 自身记录，
+    不触碰智慧宝负责的物理资源释放。
+
+    Returns the source label written into the audit detail, or None when skipped.
+    """
+    if occupancy.status not in {"in_service", "post_service_present"}:
+        return None
+    if occupancy.actual_start_at is None or occupancy.actual_service_end_at is not None:
+        return None
+    expected_end = aware(occupancy.expected_end_at)
+    if expected_end is not None and expected_end <= now:
+        occupancy.actual_service_end_at = expected_end
+        return "auto_release_expected_end"
+    occupancy.actual_service_end_at = now
+    return "auto_release_released_at"
+
+
 def _candidate(
     occupancy: PositionOccupancy,
     room: Room,
@@ -126,6 +148,12 @@ def _candidate(
     )
 
 
+# 自动释放只覆盖沙发，这是刻意划定的服务边界，不是漏配：房间床位在 DIY 侧恒带
+# 智慧宝履约单（fulfillment_order_id 非空即跳过），其物理资源由智慧宝释放，DIY
+# 不越界；沙发存在无履约单的快速位，才需要 DIY 超时兜底。该范围由
+# tests/test_occupancy_release_policy.py::
+# test_only_unconfirmed_sofas_without_service_activity_are_candidates 锁定，
+# 调整前必须同步更新契约与文档。
 def list_release_candidates(
     db: Session,
     now: datetime,
@@ -261,6 +289,7 @@ def _release_candidates(
             else "服务位等待超时自动释放"
         )
         before_status = occupancy.status
+        end_time_source = _backfill_service_end_at(occupancy, now)
         release_occupancy(occupancy, reason, now=now)
         if session.status in {"draft", "submitted"}:
             session.status = "expired"
@@ -277,6 +306,7 @@ def _release_candidates(
                 "reason_code": current.reason_code,
                 "due_at": current.due_at.isoformat(),
                 "overdue_seconds": current.overdue_seconds,
+                "actual_service_end_at_source": end_time_source,
             },
         )
         released_ids.append(occupancy.id)
