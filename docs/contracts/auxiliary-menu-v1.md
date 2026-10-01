@@ -1,5 +1,7 @@
 # Auxiliary service menu v1
 
+Historical baseline for the 2026-09-24 release. The confirmed 2026-10-01 successor is [MENU-20261001](menu-20261001.md); its production application must be verified separately. Do not run the v1 reconciliation tool to restore old prices after applying the successor.
+
 Store 1 exposes exactly six standalone `辅` projects in this order. Amounts are cents; no group price is inferred for new projects.
 
 | Code | Name | Store | Member | Description |

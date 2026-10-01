@@ -4122,6 +4122,15 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IncludedService */
+        IncludedService: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity: number;
+        };
         /** KioskSessionIn */
         KioskSessionIn: {
             /**
@@ -5024,6 +5033,7 @@ export interface components {
             price_label: string;
             /** Prices */
             prices?: components["schemas"]["PriceOut"][];
+            service_spec?: components["schemas"]["ServiceSpec"] | null;
             /**
              * Summary
              * @default
@@ -5649,6 +5659,24 @@ export interface components {
              * @default
              */
             service_note: string;
+        };
+        /** ServiceSpec */
+        ServiceSpec: {
+            /** Flow Steps */
+            flow_steps: string[];
+            /** Included Services */
+            included_services?: components["schemas"]["IncludedService"][];
+            /**
+             * Sale Unit
+             * @enum {string}
+             */
+            sale_unit: "service" | "package";
+            /** Service Duration Min */
+            service_duration_min?: number | null;
+            /** Services Per Unit */
+            services_per_unit: number;
+            /** Version */
+            version: string;
         };
         /** SettleIn */
         SettleIn: {

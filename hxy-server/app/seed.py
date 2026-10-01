@@ -1,6 +1,7 @@
-"""种子数据：从业务定稿（2026-08-01）导入开发环境测试数据。
+"""Historical development fixtures, not the current production menu.
 
-仅 local/test 环境使用；生产数据必须通过管理后台配置发布。
+Only local/test environments use these historical contract fixtures.
+The current confirmed menu is installed by scripts.apply_confirmed_menu.
 """
 
 from sqlalchemy import select

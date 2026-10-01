@@ -43,6 +43,23 @@ class PriceOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class IncludedService(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: str = Field(min_length=1, max_length=32)
+    name: str = Field(min_length=1, max_length=64)
+    quantity: int = Field(ge=1, le=100)
+
+
+class ServiceSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    version: str
+    flow_steps: list[str]
+    sale_unit: Literal["service", "package"]
+    services_per_unit: int = Field(ge=1, le=100)
+    service_duration_min: int | None = Field(default=None, ge=1)
+    included_services: list[IncludedService] = Field(default_factory=list)
+
+
 class ProjectOut(BaseModel):
     id: int
     code: str
@@ -61,6 +78,7 @@ class ProjectOut(BaseModel):
     catalog_version: int | None = None
     catalog_version_id: int | None = None
     option_groups: list = Field(default_factory=list)
+    service_spec: ServiceSpec | None = None
 
     model_config = {"from_attributes": True}
 

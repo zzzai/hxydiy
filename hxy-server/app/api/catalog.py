@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.domain.catalog_options import CatalogDomainError, verify_published_catalog_hash
 from app.models import Addon, OptionChoicePrice, PageContent, PriceBook, Product, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, Store
 from app.schemas.catalog import ProductDetailModule, ProjectListResponse, ProjectOut, StoreOut
+from app.domain.confirmed_menu import project_service_spec, visible_modules
 
 router = APIRouter(tags=["catalog"])
 
@@ -261,10 +262,11 @@ def _project_to_out(db: Session, p: Project) -> ProjectOut:
     return ProjectOut(
         id=p.id, code=p.code, category=p.category, category_mark=p.category_mark,
         name=p.name, duration_min=p.duration_min, summary=p.summary,
-        image_url=p.image_url, tags=p.tags, detail_modules=p.detail_modules,
+        image_url=p.image_url, tags=p.tags, detail_modules=visible_modules(p.detail_modules),
         diy_options=p.diy_options, display_order=p.display_order, price_label=p.price_label,
         prices=_current_project_prices(db, p.id),
         catalog_version=catalog_version, catalog_version_id=catalog_version_id, option_groups=option_groups,
+        service_spec=project_service_spec(p) or None,
     )
 
 

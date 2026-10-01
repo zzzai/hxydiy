@@ -17,6 +17,7 @@ from app.domain.occupancy import refresh_hold
 from app.domain.membership_pricing import membership_price_context
 from app.domain.membership_entitlements import has_membership
 from app.domain.selection_pricing import calculate_selection_pricing
+from app.domain.confirmed_menu import project_service_spec
 from app.domain.selection_options import (
     CatalogSelectionError,
     merge_linked_service_units,
@@ -306,6 +307,8 @@ def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) ->
             # 收费属性由目录与项目类型决定，不能相信顾客端传入的 chargeable。
             "chargeable": item.item_type != "preference",
         }
+        if project and project_service_spec(project):
+            normalized_item["service_spec"] = project_service_spec(project)
         if item.catalog_version_id is None:
             current_catalog = (
                 db.get(ProjectCatalogVersion, project.current_published_version_id)
