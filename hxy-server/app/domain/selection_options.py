@@ -125,7 +125,8 @@ def _linked_project_item(
     choice_snapshot: dict,
 ) -> dict:
     body_part = choice_snapshot.get("body_part")
-    return {
+    from app.domain.confirmed_menu import project_service_spec
+    item = {
         "project_id": project.id,
         "item_kind": "catalog_linked_project",
         "name": project.name,
@@ -141,6 +142,9 @@ def _linked_project_item(
         "qualifies_for_foot_bath_bundle": choice_snapshot["qualifies_for_foot_bath_bundle"],
         "catalog_reference_only": project.category == "local-strength",
     }
+    if project_service_spec(project):
+        item["service_spec"] = project_service_spec(project)
+    return item
 
 
 def _dedicated_item(choice_snapshot: dict) -> dict:

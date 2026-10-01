@@ -36,6 +36,7 @@ from app.models import (
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.membership_pricing import price_book_snapshot
+from app.domain.confirmed_menu import project_service_spec, contract_modules, visible_modules
 from app.domain.occupancy import audit_occupancy, release_occupancy
 from app.services.customer_profile_projection import rebuild_customer_profile_current
 from app.models.operations import Room, Technician
@@ -2037,7 +2038,7 @@ def list_projects_admin(
             "category": p.category, "category_mark": p.category_mark,
             "name": p.name, "duration_min": p.duration_min,
             "summary": p.summary, "image_url": p.image_url,
-            "tags": p.tags, "detail_modules": p.detail_modules,
+            "tags": p.tags, "detail_modules": visible_modules(p.detail_modules),
             "diy_options": p.diy_options, "display_order": p.display_order,
             "independently_visible": p.independently_visible,
             "price_label": p.price_label,
@@ -2209,6 +2210,8 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db),
     staff = _current_staff(authorization, db)
     _require_catalog_master_admin(staff)
     data = body.model_dump(exclude={"prices"})
+    if visible_modules(data["detail_modules"]) != data["detail_modules"]:
+        raise HTTPException(status_code=422, detail="服务套餐合同由受控菜单工具维护")
     project = Project(**data)
     db.add(project)
     db.flush()
@@ -2227,6 +2230,12 @@ def _update_project_strict(project_id: int, body: ProjectPatch, db: Session, sta
         current_publication_status=project.publication_status,
     )
     data = body.model_dump(exclude_unset=True, exclude={"prices"})
+    if "detail_modules" in data:
+        if visible_modules(data["detail_modules"]) != data["detail_modules"]:
+            raise HTTPException(status_code=422, detail="服务套餐合同由受控菜单工具维护")
+        spec = project_service_spec(project)
+        if spec:
+            data["detail_modules"] = contract_modules(data["detail_modules"], spec)
     if "code" in data and data["code"] != project.code and referrers:
         raise HTTPException(status_code=409, detail="已发布目录引用的项目编码不可直接修改")
     if data.get("publication_status") in {"inactive", "archived"} and referrers:

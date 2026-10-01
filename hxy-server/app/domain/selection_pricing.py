@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Addon, Project
+from app.domain.confirmed_menu import project_service_spec
 from app.domain.membership_pricing import (
     PriceContext,
     confirmed_price_for_line,
@@ -315,6 +316,9 @@ def calculate_selection_pricing(
             "addon_member_total_cents": addon_member * quantity,
         }
         if project is not None:
+            spec = item.get("service_spec") or project_service_spec(project)
+            if spec:
+                pricing_line["service_spec"] = spec
             source_type = (
                 project_price_snapshot.source_type_by_price_key.get(line_basis, line_basis)
                 if project_price_snapshot is not None

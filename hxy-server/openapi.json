@@ -1856,6 +1856,36 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "IncludedService": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "quantity"
+        ],
+        "title": "IncludedService",
+        "type": "object"
+      },
       "KioskSessionIn": {
         "properties": {
           "device_label": {
@@ -4239,6 +4269,16 @@
             "title": "Prices",
             "type": "array"
           },
+          "service_spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServiceSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "summary": {
             "default": "",
             "title": "Summary",
@@ -6150,6 +6190,63 @@
           }
         },
         "title": "ServiceReferenceV5TechnicianObserved",
+        "type": "object"
+      },
+      "ServiceSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "flow_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Flow Steps",
+            "type": "array"
+          },
+          "included_services": {
+            "items": {
+              "$ref": "#/components/schemas/IncludedService"
+            },
+            "title": "Included Services",
+            "type": "array"
+          },
+          "sale_unit": {
+            "enum": [
+              "service",
+              "package"
+            ],
+            "title": "Sale Unit",
+            "type": "string"
+          },
+          "service_duration_min": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Duration Min"
+          },
+          "services_per_unit": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Services Per Unit",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "flow_steps",
+          "sale_unit",
+          "services_per_unit"
+        ],
+        "title": "ServiceSpec",
         "type": "object"
       },
       "SettleIn": {
