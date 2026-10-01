@@ -54,9 +54,36 @@ python -m scripts.import_member_cards /private/member-cards.json --phones-file /
 
 提交前失败依赖事务回滚；提交后若需恢复，先停相关写入并沿已验证数据库备份恢复流程评估，不能自动删顾客或覆盖后续业务。报告中的新增卡ID供定向核对与受审计权益撤销；本脚本不提供删除用户或自动回滚生产入口。
 
-## 尚待选择的人工余额更新方式
+## 受控人工事实更新工具（MEMBER-02）
 
-1. 定期重新导出，受控核对差异后由独立的审计更新命令登记来源卡余额与记录时间；目前脚本对差异只拒绝，尚不提供该更新命令。
-2. 后台逐卡登记来源余额，必须包含核对人员、依据、更新时间和审计；当前只读“权益说明”，不提供此写入口。
+在服务器已核验版本的 `hxy-server/` 目录执行，不要求本机环境。准备仓库外、限操作人可读的单卡JSON输入；卡ID需通过授权来源记录核对，不能按姓名推断。工具使用店长或总部正常登录得到的员工Bearer Token，放在进程环境变量 `HXY_STAFF_TOKEN`，不用GitHub Token，也不调用AI。总部输入必须指定 `store_id`；普通员工与技师无此权限。
+
+```json
+{
+  "card_id": 123,
+  "store_id": 1,
+  "balance_cents": 0,
+  "observed_at": "2026-10-01T10:00:00+08:00",
+  "evidence": "已核对来源系统台账编号，仅记录非个人信息依据",
+  "reason": "核实本金已耗尽",
+  "idempotency_key": "verified-card-update-unique-id"
+}
+```
+
+示例编号和时间不能直接用于生产。停卡/恢复用 `status=disabled|active`，不需要余额时省略 `balance_cents`。年度卡不接受余额更新，恢复不能延长期限；金额必须来自真实本金，不能从消费总额推算。核对时间必须晚于已有事实。
+
+```bash
+python -m scripts.update_member_card_facts /private/card-update.json --base-url https://verified-api-host --report /private/card-preview.json
+python -m scripts.update_member_card_facts /private/card-update.json --base-url https://verified-api-host --report /private/card-applied.json --apply --preview-file /private/card-preview.json
+```
+
+默认仅预览。人工核对预览前后事实后，使用完全相同输入及员工身份提交。输入变更须重新预览；并发更新会拒绝旧版本。报告必须使用新文件名，不能覆盖输入/预览；POSIX报告权限为0600，Windows须由操作人限制目录访问。报告含余额事实，只保存在私有运维目录，不提交Git或聊天。接口审计自动记录实际核对人及前后事实，不开放管理页面金额展示。
+
+网络中断或提交后报告保存失败时，不推断成功或失败，不换请求键；核对接口审计，或按同输入/同身份/同预览/同请求键、使用新报告路径重试，幂等返回原结果。权限拒绝、旧版本、依据缺失等错误停止本次写入；工具不自动重跑、改时间、重取版本或覆盖差异。
+
+## 尚待选择的更新频率与负责人
+
+1. 定期重新导出并人工核对，通过上述独立工具登记单卡事实；原导入脚本继续拒绝变化快照，不承担更新。
+2. 后台页面仍只读“权益说明”，暂不增加逐卡金额编辑界面。
 
 两者都不创建DIY扣款、充值或赠送，并非实时同步。更新频率和负责人尚未确定，不自动选择。外部联调恢复前，不能把这些快照作为“当前外部余额准确”的承诺。冻结19人实际导入已于2026-09-29完成：19用户/19卡、本店有效19、失败0、重复零新增；其后独立三人批准批次经真实卡记录及在用确认，另做备份恢复演练后复用生产核心保存3用户/3储值卡、本店有效3、重复零新增。三人封装限定固定批准清单SHA，不修改原CLI19人数或冻结输入，不成为任意导入入口；证据见 `../WORK-STATUS.md`。

@@ -882,6 +882,26 @@ export interface paths {
         patch: operations["update_feedback_follow_up_by_type_api_v1_admin_v2_feedback__feedback_type___feedback_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/v2/membership-cards/{card_id}/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update Member Card Facts
+         * @description Preview or register checked source facts without creating wallet transactions.
+         */
+        post: operations["update_member_card_facts_api_v1_admin_v2_membership_cards__card_id__facts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/page-content": {
         parameters: {
             query?: never;
@@ -4192,6 +4212,33 @@ export interface components {
              * @enum {string}
              */
             state: "active" | "disabled" | "scheduled" | "expired" | "invalid" | "exhausted";
+        };
+        /** MemberCardFactUpdate */
+        MemberCardFactUpdate: {
+            /**
+             * Apply
+             * @default false
+             */
+            apply: boolean;
+            /** Balance Cents */
+            balance_cents?: number | null;
+            /** Evidence */
+            evidence: string;
+            /** Expected Version */
+            expected_version?: string | null;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Preview Token */
+            preview_token?: string | null;
+            /** Reason */
+            reason: string;
+            /** Status */
+            status?: ("active" | "disabled") | null;
         };
         /** MembershipCancellationIn */
         MembershipCancellationIn: {
@@ -8135,6 +8182,47 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FeedbackFollowUpIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_member_card_facts_api_v1_admin_v2_membership_cards__card_id__facts_post: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                card_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberCardFactUpdate"];
             };
         };
         responses: {
