@@ -636,7 +636,7 @@ h1, h2, h3, p { margin-top: 0; }
 .selection-sheet-total span small { display: block; margin-top: 2px; color: var(--muted); font-size: 8px; font-weight: 400; }
 .selection-sheet-total span .selection-sheet-member-hint { color: #176856; }
 .selection-sheet-total > div > strong { color: #c98d3b; font-size: 22px; line-height: 1; }
-.selection-sheet-total > p { margin: 5px 0 0; color: var(--price-reference); font-size: 8px; text-align: right; }
+.selection-sheet-total > p { margin: 7px 0 0; color: #52675e; font-size: 13px; line-height: 1.4; text-align: center; }
 
 .dialog-backdrop,
 .sheet-backdrop {
@@ -920,7 +920,7 @@ h1, h2, h3, p { margin-top: 0; }
 .success-order > footer span { color: var(--muted); font-size: 10px; }
 .success-member-hint { display: block; margin-top: 3px; color: var(--green-700); font-size: 9px; }
 .success-order > footer strong { color: var(--gold); font-size: 21px; }
-.success-note { margin-top: 14px; color: var(--soft); font-size: 9px; text-align: center; }
+.success-note { margin-top: 14px; color: #52675e; font-size: 13px; line-height: 1.4; text-align: center; }
 
 @media (min-width: 720px) {
   .entry-panel { max-width: 620px; }
@@ -1319,8 +1319,8 @@ h1, h2, h3, p { margin-top: 0; }
 .mini-detail-nav > strong { font-size: 16px; text-align: center; }
 .mini-detail-nav > span { overflow: hidden; color: #1f8f75; font-size: 10px; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .mini-detail-scroll { min-height: 0; flex: 1; overflow-y: auto; padding-bottom: 118px; }
-.mini-detail-hero { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: contain; background: #f8fbf9; }
-.mini-detail-hero.natural-ratio { height: auto; aspect-ratio: auto; object-fit: contain; }
+.mini-detail-hero { display: block; width: 100%; height: clamp(220px, 70vw, 290px); object-fit: contain; background: #f8fbf9; }
+.mini-detail-hero.natural-ratio { height: auto; max-height: 290px; object-fit: contain; }
 .mini-detail-card, .mini-config-card { margin: 10px 14px 0; border: 0; border-radius: 14px; background: #fff; }
 .mini-detail-summary-card { position: relative; z-index: 2; margin-top: -24px; padding: 18px; border-radius: 16px; box-shadow: 0 -6px 18px rgba(18, 61, 50, 0.06); }
 .mini-detail-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

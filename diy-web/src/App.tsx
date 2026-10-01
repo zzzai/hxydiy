@@ -87,6 +87,7 @@ import {
   changeSelectionQuantity,
   emptySelectionDraft,
   removeSelectionEntry,
+  selectedPreferenceLabels,
   type SelectionDraft,
   type SelectionTarget,
 } from './selectionSummary';
@@ -1803,9 +1804,13 @@ export default function App() {
             const serviceIndex = session.items.slice(0, index + 1).filter((candidate) => candidate.item_type === 'service').length - 1;
             const line = item.item_type === 'service' && Array.isArray(session.pricing_snapshot?.lines) ? (session.pricing_snapshot.lines as Array<Record<string, unknown>>)[serviceIndex] : null;
             const duration = serviceDurationMinutes(item);
+            const itemProject = projects.find((project) => project.id === Number(item.project_id));
+            const preferenceLabels = itemProject
+              ? selectedPreferenceLabels(itemProject, item.diy_preferences || [], item.option_choice_ids || [])
+              : item.diy_preferences || [];
             return (
             <div className="success-line" key={`${item.project_id}-${index}`}>
-              <div><strong>{item.name || (item.project_id === 'tea' ? '到店茶饮' : '服务项目')}</strong><small>{item.diy_preferences?.join(' · ') || '按门店标准服务'}</small>{item.item_type === 'service' && <small className="success-line-meta">{line && Number.isFinite(Number(line.unit_payable_price_cents)) ? `单价 ${formatMoney(Number(line.unit_payable_price_cents))}` : ''}{duration > 0 ? `${line && Number.isFinite(Number(line.unit_payable_price_cents)) ? ' · ' : ''}服务约 ${duration} 分钟` : ''}</small>}</div>
+              <div><strong>{item.name || (item.project_id === 'tea' ? '到店茶饮' : '服务项目')}</strong><small>{preferenceLabels.join(' · ') || '按门店标准服务'}</small>{item.item_type === 'service' && <small className="success-line-meta">{line && Number.isFinite(Number(line.unit_payable_price_cents)) ? `单价 ${formatMoney(Number(line.unit_payable_price_cents))}` : ''}{duration > 0 ? `${line && Number.isFinite(Number(line.unit_payable_price_cents)) ? ' · ' : ''}服务约 ${duration} 分钟` : ''}</small>}</div>
               {item.item_type === 'preference' ? <span>赠饮</span> : <Check size={16} />}
             </div>
             );
@@ -1890,7 +1895,7 @@ export default function App() {
         </>}
         {featured.map((project, index) => (
           <button key={project.id} type="button" className={`miniapp-promo ${index === 0 ? 'primary' : ''}`} onClick={() => openProjectDetail(project)}>
-            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}<i>起</i></em></span>
+            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{project.code === 'hxy-spa-90' ? displayProjectName(project) : pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}{project.code !== 'hxy-spa-90' && <i>起</i>}</em></span>
             <img src={projectImage(project)} alt="" loading="lazy" decoding="async" />
           </button>
         ))}

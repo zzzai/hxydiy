@@ -104,6 +104,14 @@ export function countSelectionDraft(draft: SelectionDraft): number {
   return draft.selectedProjectIds.length + addonCount + draft.localParts.length;
 }
 
+export function selectedPreferenceLabels(project: Project, preferences: string[], choiceIds: number[] = []): string[] {
+  const selected = new Set(choiceIds);
+  const catalogLabels = (project.option_groups || []).flatMap((group) => group.choices)
+    .filter((choice) => choice.choice_type === 'preference' && selected.has(choice.id))
+    .map((choice) => choice.name);
+  return [...new Set([...preferences, ...catalogLabels])];
+}
+
 function orderedCounts<T extends string | number>(values: T[]): Array<[T, number]> {
   const counts = new Map<T, number>();
   for (const value of values) counts.set(value, (counts.get(value) || 0) + 1);
@@ -146,7 +154,7 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
       key: `project-${project.id}`,
       kind: 'project',
       title: project.name,
-      detail: draft.projectPreferences[project.id]?.join(' · ') || '按门店标准服务',
+      detail: selectedPreferenceLabels(project, draft.projectPreferences[project.id] || [], draft.projectCatalogSelections?.[project.id]?.optionChoiceIds).join(' · ') || '按门店标准服务',
       quantity,
       priceCents: effectivePrice(project, isMember) * quantity,
       originalPriceCents: isMember && priceOf(project, 'store') > priceOf(project, 'member')
