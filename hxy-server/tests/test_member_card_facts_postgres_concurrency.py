@@ -55,7 +55,7 @@ def test_postgres_serializes_card_fact_updates(same_request):
         user = User(openid=f"card-pg-{suffix}", balance_cents=500, is_member=False)
         db.add_all([store, user])
         db.flush()
-        staff = [Staff(username=f"card-pg-{suffix}-{index}", name="Test manager", role="manager",
+        staff = [Staff(username=f"card-pg-{suffix[:16]}-{index}", name="Test manager", role="manager",
                        store_id=store.id, status="active", password_hash="unused-in-isolated-token-test")
                  for index in range(2)]
         card = MembershipCard(user_id=user.id, store_id=store.id, source="test", source_card_key=suffix,
