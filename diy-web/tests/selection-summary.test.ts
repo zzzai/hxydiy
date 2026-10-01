@@ -126,6 +126,22 @@ test('清单只按主项目、挂载加项和局部调理生成可操作条目',
   assert.equal(summary.groups[1].title, '肩颈调理');
 });
 
+test('结构化泡脚方在选购清单中显示，且不把加购项当成偏好', () => {
+  const herbChoice = { id: 31, name: '木方草本', choice_type: 'preference' };
+  const extraChoice = { id: 32, name: '局部推拿', choice_type: 'linked_project' };
+  const catalogProject = {
+    ...footBath,
+    option_groups: [{ choices: [herbChoice, extraChoice] }],
+  } as Project;
+  const selected = draft({
+    projectPreferences: { 1: ['适中'] },
+    projectCatalogSelections: { 1: { projectId: 1, catalogVersionId: 15, optionChoiceIds: [31, 32] } },
+  });
+  const summary = buildSelectionSummary({ projects: [catalogProject], addons: [], draft: selected, isMember: false });
+  assert.equal(summary.groups[0].detail, '适中 · 木方草本');
+  assert.deepEqual(selectionSummaryModule.selectedPreferenceLabels(catalogProject, ['适中'], [31, 32]), ['适中', '木方草本']);
+});
+
 test('会员已选清单保留门店价对比值，匿名清单逐项保留会员价参考', () => {
   const memberSummary = buildSelectionSummary({ projects: [footBath, local], addons: [addon], draft: draft(), isMember: true });
   assert.equal(memberSummary.groups[0].originalPriceCents, 3990);
