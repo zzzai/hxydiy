@@ -1,0 +1,12 @@
+[Unit]
+Description=HXY DIY health capacity and backup freshness check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/bin/python3 /root/hxy-diy-20260811/operations/production_ops.py check
+TimeoutStartSec=1min
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,10 @@
+[Unit]
+Description=HXY DIY deterministic monitoring without model calls
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=hxy-diy-monitor.service
+
+[Install]
+WantedBy=timers.target
