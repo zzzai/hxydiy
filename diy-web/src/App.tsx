@@ -259,11 +259,12 @@ function ProjectPrice({ project, auth }: {
   );
 }
 
-function StatusScreen({ type, title, message, onRetry }: {
+function StatusScreen({ type, title, message, onRetry, onViewReports }: {
   type: 'occupied' | 'expired' | 'error';
   title: string;
   message: string;
   onRetry?: () => void;
+  onViewReports?: () => void;
 }) {
   return (
     <main className="status-screen">
@@ -274,6 +275,7 @@ function StatusScreen({ type, title, message, onRetry }: {
       <h1>{title}</h1>
       <p>{message}</p>
       {onRetry && <button className="primary-action" type="button" onClick={onRetry}><RefreshCw size={18} />重新检查</button>}
+      {onViewReports && <button className="primary-action" style={{ marginTop: 12 }} type="button" onClick={onViewReports}>我的检测报告</button>}
       {type === 'occupied' && <small className="status-help">若您就在此位置，请联系前台确认并释放上一次记录。</small>}
     </main>
   );
@@ -1781,13 +1783,13 @@ export default function App() {
   }
   if (boot === 'expired') {
     const copy = expiredSelectionCopy();
-    return <StatusScreen type="expired" title={copy.title} message={copy.message} onRetry={retry} />;
+    return <><StatusScreen type="expired" title={copy.title} message={copy.message} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'kiosk-unbound') {
     return <StatusScreen type="error" title={KIOSK_UNBOUND_COPY.title} message={KIOSK_UNBOUND_COPY.message} />;
   }
   if (boot === 'error') {
-    return <StatusScreen type="error" title="暂时没有连接上" message={bootMessage} onRetry={retry} />;
+    return <><StatusScreen type="error" title="暂时没有连接上" message={bootMessage} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'submitted' && session) {
     return (
