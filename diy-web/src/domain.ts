@@ -562,7 +562,7 @@ export function customerProjectTagGroups(project: CustomerProjectTagInput): Cust
   };
 }
 
-/** 列表最多显示 3 个标签，优先突出服务特色，再补充组合或选购方式。 */
+/** Keep menu badges concise; duration and package units already have dedicated labels. */
 export function customerProjectDisplayTagGroups(project: CustomerProjectTagInput): CustomerProjectTagGroups {
   const groups = customerProjectTagGroups(project);
   // 足部精修的完整服务内容已经放在卡片简介中，列表只保留顾客做决定所需的两个标签，避免重复堆叠。
@@ -573,9 +573,9 @@ export function customerProjectDisplayTagGroups(project: CustomerProjectTagInput
       purchase: ['单次服务'],
     };
   }
-  let remaining = 3;
+  let remaining = 2;
   const take = (values: string[], max: number) => {
-    const result = values.slice(0, Math.min(max, remaining));
+    const result = values.filter(value => !/\d.*(?:分钟|次\/套)/.test(value)).slice(0, Math.min(max, remaining));
     remaining -= result.length;
     return result;
   };
