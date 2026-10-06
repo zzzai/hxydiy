@@ -2,6 +2,11 @@ import importlib.util
 import json
 from pathlib import Path
 import sqlite3
+import http.client
+import os
+import socket
+import threading
+import time
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -75,3 +80,43 @@ def test_missing_or_reused_privileged_credential_disables_reader(reports, token)
     with TestClient(app, client=("172.18.0.55", 40000)) as client:
         assert client.get("/api/tcm/readonly/reports", headers={"Authorization": "Bearer " + token,
                           "X-TCM-Verified-Phone": "13800138000"}).status_code == 503
+
+
+def test_real_uvicorn_socket_loopback_source_preserves_network_and_credential_checks(reports):
+    import uvicorn
+    _, app, _ = reports
+    bind = os.environ.get("TCM_SOCKET_TEST_BIND", "127.0.0.1")
+    sock = socket.socket()
+    sock.bind((bind, 0))
+    port = sock.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(app, host=bind, port=port, proxy_headers=False,
+                                          access_log=False, log_level="critical"))
+    thread = threading.Thread(target=lambda: server.run(sockets=[sock]), daemon=True)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 5
+        while not server.started and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert server.started, "Isolated socket server failed to start"
+        for token, expected in (("wrong-fixture", 401), ("admin-fixture", 401),
+                                ("webhook-fixture", 401), ("read-fixture", 200)):
+            # Host-to-Docker-bridge traffic can be masqueraded outside the CIDR.
+            # Bind the probe's existing allowed loopback source, not a spoofed header.
+            connection = http.client.HTTPConnection(bind, port, timeout=3, source_address=("127.0.0.1", 0))
+            try:
+                connection.request("GET", "/api/tcm/readonly/reports", headers={
+                    "Authorization": "Bearer " + token, "X-TCM-Verified-Phone": "13800138000",
+                    "X-Forwarded-For": "8.8.8.8"})
+                response = connection.getresponse()
+                assert response.status == expected
+                if expected == 200:
+                    assert json.loads(response.read())["items"][0]["report_id"] == "R1"
+                else:
+                    response.read()
+            finally:
+                connection.close()
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+        sock.close()
+    assert not thread.is_alive()
