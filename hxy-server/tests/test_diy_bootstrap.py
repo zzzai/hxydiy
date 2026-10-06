@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base
-from app.models import PageContent, Project, Room, Store
+from app.models import PageContent, PriceBook, Project, Room, Store
 from scripts.bootstrap_diy_store import bootstrap_diy_store
 from scripts.setup_preview import setup_preview
 
@@ -25,7 +25,14 @@ class DiyBootstrapTests(unittest.TestCase):
                 "rooms": db.scalar(select(func.count()).select_from(Room)),
                 "content": db.scalar(select(func.count()).select_from(PageContent)),
             }
+            project = db.scalar(select(Project).where(Project.code == "hxy-qiqing-30"))
+            price = db.scalar(select(PriceBook).where(PriceBook.project_id == project.id, PriceBook.price_type == "store"))
+            project.name = "Previously maintained menu"
+            price.amount_cents = 2990
+            db.commit()
             bootstrap_diy_store(db)
+            self.assertEqual(db.get(Project, project.id).name, "Previously maintained menu")
+            self.assertEqual(db.get(PriceBook, price.id).amount_cents, 2990)
             second_counts = {
                 "stores": db.scalar(select(func.count()).select_from(Store)),
                 "projects": db.scalar(select(func.count()).select_from(Project)),

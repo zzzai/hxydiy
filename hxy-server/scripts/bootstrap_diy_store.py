@@ -1,11 +1,10 @@
-"""Initialize the standalone DIY menu database without demo customers or orders."""
+"""Initialize store/position fixtures without replacing an existing menu."""
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import PageContent, Room, Store
 from app.seed import seed
-from scripts.sync_final_menu import sync_final_menu
 
 
 ROOM_SPECS = [
@@ -49,8 +48,7 @@ def bootstrap_diy_store(db: Session) -> None:
     if store is None:
         raise RuntimeError("DIY 门店初始化失败")
 
-    # 已存在的门店也要同步确认后的菜单；价格只追加新版本，不删除历史。
-    sync_final_menu(db, store.id, apply=True)
+    # Existing menus are maintained by the authenticated confirmed-menu tool.
 
     for order, (code, name, room_type, label, selectable, x, y, width, height) in enumerate(ROOM_SPECS, 1):
         room = db.scalar(select(Room).where(Room.code == code))
