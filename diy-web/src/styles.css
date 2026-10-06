@@ -1263,24 +1263,53 @@ h1, h2, h3, p { margin-top: 0; }
 .miniapp-catalog-layout .project-badges { gap: 5px; }
 .miniapp-catalog-layout .project-badges span { max-width: 100%; padding: 2px 6px; border-radius: 4px; color: #176856; background: #edf7f2; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
 .miniapp-catalog-layout .project-badges span + span::before { content: none; }
-.my-reports { padding: 20px 16px; color: #173d33; }
-.my-reports-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.my-reports h2 { margin: 0; font-size: 20px; }
-.my-reports h3 { font-size: 17px; }
-.my-reports p { font-size: 14px; line-height: 1.65; }
-.my-reports-note { color: #687a72; }
-.my-reports button { min-height: 44px; padding: 10px 12px; border: 1px solid #dbe8e2; border-radius: 8px; color: #176856; background: #fff; }
-.my-reports-consent { margin: 16px 0; padding: 16px; border-radius: 12px; background: #edf7f2; }
-.my-reports-consent label { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; line-height: 1.6; }
-.my-reports-consent input { flex: none; margin-top: 4px; }
-.my-reports-consent .primary { margin-top: 16px; color: white; background: #176856; }
+.profile-page.profile-report-view { background: #fff; color: #233c36; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+.profile-page.profile-report-view > header { min-height: 64px; border-color: #dce8e2; }
+.profile-page.profile-report-view > header strong { color: #123f35; font-size: 20px; line-height: 1.4; }
+.profile-page.profile-report-view > header button { color: #123f35; }
+.my-reports { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px 28px; color: #233c36; background: #fff; font-size: 14px; line-height: 1.65; }
+.my-reports h3 { margin: 0; color: #123f35; font-size: 18px; line-height: 1.5; }
+.my-reports p { margin: 10px 0; font-size: 14px; line-height: 1.75; }
+.my-reports .my-reports-note { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 22px; color: #687d76; font-size: 12px; }
+.my-reports-note svg { flex: none; margin-top: 2px; }
+.my-reports button { min-height: 44px; padding: 10px 14px; border: 1px solid #dce8e2; border-radius: 8px; color: #123f35; background: #fff; font: inherit; transition: background-color 180ms, border-color 180ms, transform 180ms; }
+.my-reports button:focus-visible { outline: 2px solid #123f35; outline-offset: 3px; }
+.my-reports button:active:not(:disabled) { transform: translateY(1px); background: #f3f8f6; }
 .my-reports button:disabled { opacity: .5; }
-.my-reports-list { display: grid; gap: 10px; margin: 16px 0; }
-.my-reports-list > button { display: grid; gap: 6px; text-align: left; }
-.my-reports-list span { color: #687a72; font-size: 13px; }
-.my-reports-detail dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #edf2ef; overflow-wrap: anywhere; }
-.my-reports-detail dd { margin: 0; }
-.my-reports-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.my-reports-consent { padding: 20px 18px; border: 1px solid #dce8e2; border-radius: 14px; background: #f3f8f6; }
+.my-reports-consent-title { display: flex; align-items: center; gap: 10px; color: #123f35; }
+.my-reports-consent label { display: flex; align-items: flex-start; gap: 9px; margin-top: 18px; font-size: 14px; line-height: 1.65; }
+.my-reports-consent input { flex: none; width: 17px; height: 17px; margin: 3px 0 0; accent-color: #123f35; }
+.my-reports-consent .primary { width: 100%; margin-top: 20px; color: #fff; background: #123f35; }
+.my-reports-consent .primary:active:not(:disabled) { background: #123f35; }
+.my-reports-loading { color: #687d76; }
+.my-reports-error { padding: 28px 18px; border: 1px solid #dce8e2; border-radius: 12px; text-align: center; }
+.my-reports-error > svg { margin-bottom: 10px; color: #687d76; }
+.my-reports-error p { color: #687d76; }
+.my-reports-list { display: grid; gap: 10px; }
+.my-reports-list .my-reports-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 18px; gap: 14px; align-items: center; padding: 18px 14px; text-align: left; }
+.my-reports-row > span { display: grid; gap: 4px; }
+.my-reports-row strong { font-size: 15px; font-weight: 600; }
+.my-reports-row time { color: #687d76; font-size: 13px; }
+.my-reports-empty { padding: 36px 8px 24px; text-align: center; }
+.my-reports-empty-icon { display: inline-flex; width: 72px; height: 72px; align-items: center; justify-content: center; margin-bottom: 18px; border-radius: 50%; color: #123f35; background: #f3f8f6; }
+.my-reports-empty p { color: #687d76; font-size: 13px; }
+.my-reports-title { margin: 0 0 16px; color: #123f35; font-size: 18px; line-height: 1.5; overflow-wrap: anywhere; }
+.my-reports-meta { display: grid; gap: 4px; padding: 16px 18px; border-radius: 10px; background: #f3f8f6; }
+.my-reports-meta > span { color: #687d76; font-size: 12px; }
+.my-reports-meta strong { color: #123f35; font-size: 16px; font-weight: 600; }
+.my-reports-detail h4 { margin: 24px 0 6px; color: #123f35; font-size: 15px; font-weight: 600; }
+.my-reports-detail dl { margin: 0; }
+.my-reports-detail dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid #dce8e2; overflow-wrap: anywhere; }
+.my-reports-detail dd { margin: 0; color: #123f35; font-size: 18px; font-variant-numeric: tabular-nums; }
+.my-reports .my-reports-link { padding: 8px 0; border: 0; border-radius: 0; background: transparent; text-decoration: underline; text-underline-offset: 4px; }
+.my-reports-actions { margin-top: 28px; }
+.my-reports-actions p { margin: 0; color: #687d76; font-size: 13px; }
+.my-reports-permission { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid #dce8e2; }
+.my-reports-permission strong { font-size: 13px; font-weight: 500; }
+.my-reports-permission p { margin: 3px 0 0; color: #687d76; font-size: 12px; }
+.my-reports-permission button { flex: none; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .my-reports button { transition: none; } .my-reports button:active:not(:disabled) { transform: none; } }
 .customer-tag-groups { display: grid; gap: 9px; margin-top: 12px; }
 .customer-tag-group { display: grid; gap: 5px; }
 .customer-tag-group > strong { color: #687871; font-size: 10px; font-weight: 700; }

@@ -51,7 +51,7 @@ fs.mkdirSync(out, { recursive: true });
           await page.screenshot({ path: path.join(out, `${state}-consent.png`) });
           await page.getByRole('checkbox').check();
           await page.getByRole('button', { name: '同意并查看', exact: true }).click();
-          await page.getByRole('button', { name: /检测报告.*查看结果/ }).click();
+          await page.locator('.my-reports-row').click();
           await page.getByText('合成测试结果', { exact: true }).waitFor();
           assert(!requests.some(request => /send-code|\/login(?:\?|$)/.test(request.url)));
           await page.screenshot({ path: path.join(out, `${state}-report.png`) });
