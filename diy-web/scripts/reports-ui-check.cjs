@@ -13,7 +13,7 @@ fs.mkdirSync(out, { recursive: true });
   const results = [];
   try {
     for (const width of [375, 390]) {
-      for (const account of ['full', 'empty', 'unavailable']) {
+      for (const account of process.env.REPORT_UI_ACCOUNT ? [process.env.REPORT_UI_ACCOUNT] : ['full', 'empty', 'unavailable']) {
         const context = await browser.newContext({ viewport: { width, height: width === 375 ? 812 : 844 }, reducedMotion: width === 390 ? 'reduce' : 'no-preference' });
         const auth = fixture.accounts[account];
         await context.addInitScript(value => localStorage.setItem('hxy_diy_customer_auth', JSON.stringify(value)), auth);
@@ -96,6 +96,7 @@ fs.mkdirSync(out, { recursive: true });
           await page.getByRole('alert').waitFor();
           await checkLayout('failure');
           assert.equal(await page.getByRole('button', { name: '撤回授权', exact: true }).count(), 1);
+          await goMy();
         }
         await page.getByRole('button', { name: /退出登录/ }).click();
         assert.equal(await page.locator('.my-reports').count(), 0);
@@ -104,7 +105,7 @@ fs.mkdirSync(out, { recursive: true });
         assert(!requests.some(request => /send-code|\/login(?:\?|$)/.test(request.url)));
         assert(!requests.some(request => request.method !== 'GET' && /entry-sessions|occupancies|selection-sessions|orders/.test(request.url)));
         assert.deepEqual(errors, []);
-        results.push({ width, account, backToMy: account !== 'unavailable', existingLoginPreserved: true, noSelectionMutation: true, logoutClears: true, overflow: false, reducedMotion: width === 390 });
+        results.push({ width, account, backToMy: true, existingLoginPreserved: true, noSelectionMutation: true, logoutClears: true, overflow: false, reducedMotion: width === 390 });
         await context.close();
       }
     }
