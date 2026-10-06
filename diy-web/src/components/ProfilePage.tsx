@@ -34,6 +34,8 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   const [loadError, setLoadError] = useState('');
   const [cancelling, setCancelling] = useState(false);
 
+  useEffect(() => { if (open && initialReportsOpen) setReportsOpen(true); }, [open, initialReportsOpen]);
+
   const loadData = useCallback((token: string, isMember: boolean) => {
     setLoading(true);
     setLoadError('');
@@ -85,16 +87,16 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   if (!open) return null;
 
   return (
-    <div className="profile-page" role="dialog" aria-modal="true" aria-label="个人中心">
+    <div className={`profile-page ${reportsOpen ? 'profile-report-view' : ''}`} role="dialog" aria-modal="true" aria-label="个人中心">
       <header>
-        <button type="button" aria-label="返回" onClick={onClose}><ArrowLeft size={22} /></button>
-        <strong>我的</strong>
+        <button type="button" aria-label={reportsOpen ? '返回我的' : '返回'} onClick={reportsOpen ? () => setReportsOpen(false) : onClose}><ArrowLeft size={22} /></button>
+        <strong>{reportsOpen ? '我的检测报告' : '我的'}</strong>
         {auth ? <button className="profile-logout" type="button" onClick={() => { clearCustomerAuth(); onAuthChange(null); }}><LogOut size={15} />退出登录</button> : <span />}
       </header>
 
       {!auth
         ? <>{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={() => setReportsOpen(true)}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} /></>
-        : reportsOpen ? <MyReports key={auth.token} token={auth.token} onBack={() => setReportsOpen(false)} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
+        : reportsOpen ? <MyReports key={auth.token} token={auth.token} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
           <main className="profile-body">
             <ProfileCard user={auth.user} savingCents={membershipSavingCents(sessions)} completedCount={sessions.filter((item) => item.service_completed_at).length} onShowCode={() => setMemberCodeOpen(true)} />
             <button className="profile-pending-task" type="button" onClick={() => setReportsOpen(true)}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>单独授权后查看本人结果</small></span><ChevronRight size={18} /></button>
