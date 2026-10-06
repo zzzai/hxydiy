@@ -1259,6 +1259,10 @@ h1, h2, h3, p { margin-top: 0; }
 .project-badges-summary span { color: #65766f; }
 .project-badges-purchase span { color: #9a7220; }
 .project-badges span.diy { color: #9a7220; background: transparent; }
+.miniapp-catalog-layout .project-badge-groups { gap: 5px; }
+.miniapp-catalog-layout .project-badges { gap: 5px; }
+.miniapp-catalog-layout .project-badges span { max-width: 100%; padding: 2px 6px; border-radius: 4px; color: #176856; background: #edf7f2; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.miniapp-catalog-layout .project-badges span + span::before { content: none; }
 .customer-tag-groups { display: grid; gap: 9px; margin-top: 12px; }
 .customer-tag-group { display: grid; gap: 5px; }
 .customer-tag-group > strong { color: #687871; font-size: 10px; font-weight: 700; }
