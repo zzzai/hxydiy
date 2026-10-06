@@ -8,4 +8,5 @@ from tools.integrations.tcm.test_readonly_reports import (
     test_read_credentials_minimal_list_owner_detail_and_probe_exclusion,
     test_public_ip_spoofed_forward_header_and_invalid_query_rejected,
     test_missing_or_reused_privileged_credential_disables_reader,
+    test_real_uvicorn_socket_loopback_source_preserves_network_and_credential_checks,
 )
