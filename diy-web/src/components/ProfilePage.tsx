@@ -13,14 +13,15 @@ import MyReports from './MyReports';
 
 type TabKey = 'records' | 'coupons';
 
-export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
+export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false }: {
   open: boolean;
   auth: CustomerAuth | null;
   onClose: () => void;
   onAuthChange: (auth: CustomerAuth | null) => void;
+  initialReportsOpen?: boolean;
 }) {
   const [tab, setTab] = useState<TabKey>('records');
-  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(initialReportsOpen);
   const [recordState, setRecordState] = useState<RecordFilter>('all');
   const [selectedRecord, setSelectedRecord] = useState<SelectionSession | null>(null);
   const [feedbackRecord, setFeedbackRecord] = useState<SelectionSession | null>(null);
@@ -56,9 +57,9 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
   }, []);
 
   useEffect(() => {
-    if (!open || !auth) return;
+    if (!open || !auth || reportsOpen) return;
     loadData(auth.token, auth.user.is_member);
-  }, [open, auth, loadData]);
+  }, [open, auth, reportsOpen, loadData]);
 
   useEffect(() => { if (auth?.user.is_member && tab === 'coupons') setTab('records'); }, [auth?.user.is_member, tab]);
 
