@@ -1,5 +1,15 @@
 # 顾客端工作流
 
+## 2026-10-06 CUSTOMER-MENU-02（本地验证通过，待后端 #193 与 CI）
+
+- 消费可空 `service_spec`：目录/详情读取真实服务步骤、次数单位及已含服务；旧 `null` 继续原有路径。舒压/安神 SPA 与荷小推的已含泡脚读取 API，不生成赠送收费行、不自动抵扣。
+- 同时选择已含泡脚项目与独立泡脚时，提交前显示服务端报价，顾客明确保留付费或移除；仅操作未提交草稿。确认绑定当前选项与报价，选项或金额变化会重新确认；移除多项仅关闭一次弹层。
+- 功夫调理按 API 显示 ¥980/套、10次/套、每次60分钟，无虚构会员价，保留 detail-only，不开放购买或核销。无价格配置显示“价格待确认”，不冒充免费；已提交描述读取冻结的服务规格。
+- 本地 `npm run build` 成功；`node --experimental-strip-types --test tests/service-spec.test.ts tests/selection-summary.test.ts` 为 19 passed；`git diff --check` 通过。不重复全项目测试。
+- 隔离合成 SQLite 门店使用后端 #193 `f34aee926acfc4d47b112e584df31c7eca36c301` 的真实 HTTP API，无路由 mock、无生产写入。375×812 / 390×844 均验证分类、加号、详情返回、套盒只读、无价回退、另购移除/保留与提交成功；API 应付 15890 分、成功页 ¥158.9、已含1次泡脚快照均一致，浏览器 pageerror 为零。
+- 本地截图/机器回执：`output/playwright/customer-menu-02/{375,390}-{menu,package,extra-confirm,submitted}.png` 与 `result.json`。验收驱动保存在系统临时目录 `hxy-menu-02`，未覆盖 FIELD-SIM-01。
+- 后端 #193 当前仍未合并，最新 HEAD `54625d847512872d5e01dee5b98b2583ec98e876` 的检查由后端窗口处理；上述 HTTP 验证基线不是该最新 HEAD。顾客分支已同步主干 `be98ad4`，不修改 backend/OpenAPI/contracts 或已上线视觉。生产发布与真机/门店验收未执行，由总窗口接续。
+
 ## 2026-10-01 顾客页五项 AI 审查处置（本地验证通过，待发布）
 
 - 逐项结论与未决 SPA 赠泡规则见 `../reviews/customer-ai-review-20261001.md`；未改价格、后端或赠送规则。

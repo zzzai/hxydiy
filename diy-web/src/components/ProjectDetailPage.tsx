@@ -20,6 +20,7 @@ import FootBathBundleProgress from './project-options/FootBathBundleProgress';
 import ProjectDetailVisualSections from './ProjectDetailVisualSections';
 import DetailIntroduction from './DetailIntroduction';
 import DetailPrice from './DetailPrice';
+import { hasProjectPrice, serviceFacts } from '../serviceSpec';
 import { projectDetailVisuals, usesNaturalDetailHero } from '../projectDetailVisuals';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
@@ -270,8 +271,9 @@ export default function ProjectDetailPage({
 
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
-          <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={project.code === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
-          <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} />
+          <DetailIntroduction name={displayName} summary={project.service_spec ? project.service_spec.flow_steps.join(' · ') : customerProjectSummaryText(project)} highlights={project.code === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.service_spec ? project.service_spec.sale_unit === 'package' ? null : project.service_spec.service_duration_min : project.duration_min} facts={project.service_spec ? [] : [...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
+          {serviceFacts(project.service_spec) && <p className="detail-intro-facts">{serviceFacts(project.service_spec)}</p>}
+          <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} packagePrice={project.service_spec?.sale_unit === 'package'} available={hasProjectPrice(project)} showMember={hasProjectPrice(project, 'member')} />
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
 
@@ -382,7 +384,7 @@ export default function ProjectDetailPage({
       </main>
 
       {(!detailOnly || (project && isFixedProject(project) && project.category === 'small')) && <footer className="mini-detail-footer">
-        <div className="mini-detail-total"><span>{configuredPrices.currentLabel}{isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>}</span><strong>{formatMoney(configuredPrices.currentCents)}</strong></div>
+        <div className="mini-detail-total"><span>{project.service_spec?.sale_unit === 'package' ? '套盒价' : configuredPrices.currentLabel}{project.service_spec?.sale_unit !== 'package' && hasProjectPrice(project, 'member') && (isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>)}</span><strong>{hasProjectPrice(project) ? <>{formatMoney(configuredPrices.currentCents)}{project.service_spec?.sale_unit === 'package' ? '/套' : ''}</> : '价格待确认'}</strong></div>
         <div className="mini-detail-actions">
           <button className="primary" type="button" disabled={readOnly || catalogErrors.length > 0} onClick={() => onConfirm({ project, preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, ...(catalogPublished && project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds, linkedProjectIds: [...new Set([...catalogChoices.filter((choice) => draftChoiceIds.includes(choice.id) && choice.linked_project_id !== null).map((choice) => choice.linked_project_id as number), ...draftRelaxProjectIds])] } : {}) })}>{projectDetailActionLabel(selected, readOnly, catalogErrors.length > 0)}<ChevronRight size={17} /></button>
         </div>
