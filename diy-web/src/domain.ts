@@ -1,4 +1,5 @@
 import type { CatalogOptionGroup, ProjectCatalogSelection } from './catalogOptions.ts';
+import type { ServiceSpec } from './serviceSpec.ts';
 
 export type Price = {
   price_type: 'store' | 'group' | 'member' | string;
@@ -6,6 +7,7 @@ export type Price = {
 };
 
 export type Project = {
+  service_spec?: ServiceSpec | null;
   id: number;
   code: string;
   category: string;
@@ -41,6 +43,7 @@ export type Addon = {
 };
 
 export type SelectionItem = {
+  service_spec?: ServiceSpec | null;
   project_id: number | string;
   catalog_version_id?: number;
   option_choice_ids?: number[];
@@ -227,7 +230,8 @@ export const CATALOG_SECTIONS = [
   { id: 'kit', mark: '养', label: '功夫套盒', categories: ['kit'] },
 ] as const;
 
-export function displayProjectName(project: Pick<Project, 'code' | 'name'>): string {
+export function displayProjectName(project: Pick<Project, 'code' | 'name' | 'service_spec'>): string {
+  if (project.service_spec) return project.name;
   if (project.code === 'hxy-spa-60') return '60分钟精油SPA';
   if (project.code === 'hxy-spa-90') return '90分钟精油SPA';
   return project.name;
@@ -397,7 +401,7 @@ export function supportsFootBathBundle(project: Pick<Project, 'code'>): boolean 
   return project.code === 'hxy-qiqing-30';
 }
 
-export function isDetailOnlyProject(project: Pick<Project, 'category' | 'code'>): boolean {
+export function isDetailOnlyProject(project: Pick<Project, 'category' | 'code' | 'service_spec'>): boolean {
   return project.category === 'kit' || DETAIL_ONLY_CODES.has(project.code);
 }
 

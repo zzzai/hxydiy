@@ -7,6 +7,7 @@ import {
   type Project,
 } from './domain.ts';
 import type { CatalogOptionChoice, CatalogOptionGroup, ProjectCatalogSelection } from './catalogOptions.ts';
+import { hasProjectPrice, serviceFacts } from './serviceSpec.ts';
 
 export type SelectionDraft = {
   selectedProjectIds: number[];
@@ -72,6 +73,7 @@ export type SelectionSummaryChild = {
 };
 
 export type SelectionSummaryGroup = {
+  quantityUnit?: string;
   key: string;
   kind: 'project' | 'local' | 'tea';
   title: string;
@@ -80,7 +82,7 @@ export type SelectionSummaryGroup = {
   priceCents: number;
   originalPriceCents: number | null;
   memberPriceCents: number | null;
-  priceLabel?: '赠饮';
+  priceLabel?: '赠饮' | '价格待确认';
   target: Exclude<SelectionTarget, { kind: 'addon' }>;
   children: SelectionSummaryChild[];
 };
@@ -154,7 +156,9 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
       key: `project-${project.id}`,
       kind: 'project',
       title: project.name,
-      detail: selectedPreferenceLabels(project, draft.projectPreferences[project.id] || [], draft.projectCatalogSelections?.[project.id]?.optionChoiceIds).join(' · ') || '按门店标准服务',
+      detail: [selectedPreferenceLabels(project, draft.projectPreferences[project.id] || [], draft.projectCatalogSelections?.[project.id]?.optionChoiceIds).join(' · '), serviceFacts(project.service_spec)].filter(Boolean).join(' · ') || '按门店标准服务',
+      quantityUnit: project.service_spec?.sale_unit === 'package' ? '套' : undefined,
+      priceLabel: hasProjectPrice(project) ? undefined : '价格待确认',
       quantity,
       priceCents: effectivePrice(project, isMember) * quantity,
       originalPriceCents: isMember && priceOf(project, 'store') > priceOf(project, 'member')

@@ -48,10 +48,11 @@ function Price({ cents, label, originalPriceCents, memberPriceCents }: {
   );
 }
 
-function ItemActions({ target, title, quantity, adjustable, readOnly, onModify, onRemove, onQuantityChange }: {
+function ItemActions({ target, title, quantity, quantityUnit, adjustable, readOnly, onModify, onRemove, onQuantityChange }: {
   target: SelectionTarget;
   title: string;
   quantity: number;
+  quantityUnit?: string;
   adjustable: boolean;
   readOnly: boolean;
   onModify: (target: SelectionTarget) => void;
@@ -65,7 +66,7 @@ function ItemActions({ target, title, quantity, adjustable, readOnly, onModify, 
       {adjustable && (target.kind === 'project' || target.kind === 'local') ? (
         <div className="selection-sheet-stepper" role="group" aria-label={`${title}数量`}>
           <button type="button" aria-label={`减少${title}`} onClick={() => onQuantityChange(target, -1)}><Minus size={14} /></button>
-          <span aria-live="polite">{quantity}</span>
+          <span aria-live="polite">{quantity}{quantityUnit}</span>
           <button type="button" aria-label={`增加${title}`} onClick={() => onQuantityChange(target, 1)}><Plus size={14} /></button>
         </div>
       ) : (
@@ -114,7 +115,7 @@ function GroupLine({ group, readOnly, onModify, onRemove, onQuantityChange }: {
         </div>
         <div className="selection-sheet-item-side">
           <Price cents={group.priceCents} label={group.priceLabel} originalPriceCents={group.originalPriceCents} memberPriceCents={group.memberPriceCents} />
-          <ItemActions target={group.target} title={group.title} quantity={group.quantity} adjustable={group.kind !== 'tea'} readOnly={readOnly} onModify={onModify} onRemove={onRemove} onQuantityChange={onQuantityChange} />
+          <ItemActions target={group.target} title={group.title} quantity={group.quantity} quantityUnit={group.quantityUnit} adjustable={group.kind !== 'tea'} readOnly={readOnly} onModify={onModify} onRemove={onRemove} onQuantityChange={onQuantityChange} />
         </div>
       </div>
       {group.children.map((item) => (

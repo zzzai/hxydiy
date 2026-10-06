@@ -52,6 +52,7 @@ import MembershipDetailPage, { type MembershipKind } from './components/Membersh
 import ProfilePage from './components/ProfilePage';
 import RecordLoginDialog from './components/RecordLoginDialog';
 import SavingHintDialog from './components/SavingHintDialog';
+import { additionalIncludedServices, hasProjectPrice, serviceFacts } from './serviceSpec';
 import SelectionSummarySheet from './components/SelectionSummarySheet';
 import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL_MS, readCustomerAuth, shouldOfferRecordBinding, writeCustomerAuth, type CustomerAuth } from './customerAuth';
 import { anonymousBrowserEntryHint, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
@@ -247,13 +248,15 @@ function ProjectPrice({ project, auth }: {
   auth: { is_member: boolean } | null;
 }) {
   const price = projectListPricePresentation(project, auth);
+  if (!hasProjectPrice(project)) return <div className="project-meta">价格待确认</div>;
+  if (project.service_spec?.sale_unit === 'package') return <div className="project-meta"><strong>{formatMoney(price.primaryCents)}/套</strong></div>;
   return (
     <div className="project-meta">
       <div className={auth?.is_member ? 'member-active' : ''}>
         <strong>{price.primaryPrefix && <small>{price.primaryPrefix}</small>}{formatMoney(price.primaryCents)}</strong>
-        {price.secondaryStrikethrough
+        {hasProjectPrice(project, 'member') && (price.secondaryStrikethrough
           ? <del>{formatMoney(price.secondaryCents)}</del>
-          : <span className="member-price"><small>{price.secondaryPrefix}</small>{formatMoney(price.secondaryCents)}</span>}
+          : <span className="member-price"><small>{price.secondaryPrefix}</small>{formatMoney(price.secondaryCents)}</span>)}
       </div>
     </div>
   );
@@ -330,6 +333,10 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [savingHint, setSavingHint] = useState<SavingHint | null>(null);
   const [savingHintOpen, setSavingHintOpen] = useState(false);
+  const [additionalServiceConfirmation, setAdditionalServiceConfirmation] = useState<Array<{ project: Project; totalCents: number | null }> | null>(null);
+  const additionalServiceAcknowledgement = useRef('');
+  const additionalServiceDisplayedSignature = useRef('');
+  const [draftQuote, setDraftQuote] = useState<{ signature: string; authToken: string; pricing: Record<string, unknown> } | null>(null);
   const [selectionSummaryOpen, setSelectionSummaryOpen] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [toast, setToast] = useState('');
@@ -392,7 +399,8 @@ export default function App() {
     previousSelectionSignature.current = selectionSignature;
   }, [selectionSignature]);
   const preview = useMemo(() => calculatePreviewPricing({ projects, selectedProjectIds, projectAddonIds, addons, localParts }), [projects, selectedProjectIds, projectAddonIds, addons, localParts]);
-  const appliedPriceType = customerAuth?.user.is_member ? 'member' : 'store';
+  const liveQuote = draftQuote?.signature === selectionSignature && draftQuote.authToken === (customerAuth?.token || '') ? draftQuote.pricing : null;
+  const appliedPriceType = liveQuote?.applied_price_type === 'member' ? 'member' : liveQuote ? 'store' : customerAuth?.user.is_member ? 'member' : 'store';
   const isMember = appliedPriceType === 'member';
   const selectionDraft = useMemo<SelectionDraft>(() => ({
     selectedProjectIds,
@@ -424,7 +432,7 @@ export default function App() {
   const serverPayableTotal = appliedPriceType === 'member'
     ? snapshotMemberTotalCents
     : snapshotStoreTotalCents;
-  const payableTotal = displayPayableTotal({
+  const payableTotal = !readOnly && boot !== 'submitted' && typeof liveQuote?.payable_total_cents === 'number' ? liveQuote.payable_total_cents : displayPayableTotal({
     readOnly,
     viewingSubmitted: boot === 'submitted',
     serverTotalCents: Number.isFinite(serverPayableTotal) ? serverPayableTotal : null,
@@ -434,15 +442,28 @@ export default function App() {
   });
   const memberTotalCents = readOnly || boot === 'submitted'
     ? snapshotMemberTotalCents
-    : preview.memberTotalCents;
+    : typeof liveQuote?.member_total_cents === 'number' ? liveQuote.member_total_cents : preview.memberTotalCents;
   const storeTotalCents = readOnly || boot === 'submitted'
     ? snapshotStoreTotalCents
-    : preview.storeTotalCents;
+    : typeof liveQuote?.store_total_cents === 'number' ? liveQuote.store_total_cents : preview.storeTotalCents;
   const alignedMemberTotalCents = savingHint?.kind === 'member' && Number.isFinite(savingHint.estimated_saving_cents)
     ? Math.max(0, payableTotal - Number(savingHint.estimated_saving_cents))
     : memberTotalCents;
-  const priceDisplay = selectionPriceDisplay(isMember, payableTotal, alignedMemberTotalCents, storeTotalCents);
+  const onlyPackages = selectionItems.length > 0 && selectionItems.every(item => projects.find(project => project.id === item.project_id)?.service_spec?.sale_unit === 'package');
+  const priceDisplay = onlyPackages ? { ...selectionPriceDisplay(false, payableTotal, alignedMemberTotalCents, storeTotalCents), primaryLabel: '套盒价', memberHint: null, originalHint: null, savingCents: 0, realizedSavingCents: 0 } : selectionPriceDisplay(isMember, payableTotal, alignedMemberTotalCents, storeTotalCents);
+  useEffect(() => {
+    if (!session || !(accessToken || collaborationToken) || readOnly || boot === 'submitted' || selectionItems.length === 0) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void quoteSelectionSession(session.id, accessToken, selectionItems, deviceLabel(), collaborationToken ? { collaborationToken, expectedVersion: cartVersion, authToken: customerAuth?.token } : undefined)
+        .then(quote => { if (active) setDraftQuote({ signature: selectionSignature, authToken: customerAuth?.token || '', pricing: quote.pricing }); })
+        .catch(() => { if (active) setDraftQuote(null); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [session?.id, accessToken, collaborationToken, selectionSignature, customerAuth?.token, readOnly, boot]);
   const serviceDurationMinutes = (item: SelectionSession['items'][number]): number => {
+    if (item.service_spec?.sale_unit === 'package') return 0;
+    if (item.service_spec) return (item.service_spec.service_duration_min || 0) * Math.max(1, item.quantity || 1);
     const projectDuration = projects.find((project) => String(project.id) === String(item.project_id))?.duration_min || 0;
     const addonDuration = (item.addon_ids || []).reduce((total, addonId) => total + (addons.find((addon) => addon.id === addonId)?.duration_min || 0), 0);
     return (projectDuration + addonDuration) * Math.max(1, item.quantity || 1);
@@ -1502,7 +1523,7 @@ export default function App() {
     flash(`${project.name}配置已保存`);
   };
 
-  const removeProject = (project: Project) => {
+  const removeProject = (project: Project, closeOverlay = true) => {
     if (readOnly) return;
     setSelectedProjectIds((ids) => ids.filter((id) => id !== project.id));
     setProjectPreferences((current) => {
@@ -1520,7 +1541,7 @@ export default function App() {
       delete next[project.id];
       return next;
     });
-    dismissTopOverlay();
+    if (closeOverlay) dismissTopOverlay();
     flash(`${project.name}已移出`);
   };
 
@@ -1632,6 +1653,20 @@ export default function App() {
         expectedVersion: cartVersion,
         authToken: customerAuth?.token,
       } : undefined);
+      const extra = additionalIncludedServices(selectionItems, projects);
+      const lines = Array.isArray(quote.pricing.lines) ? quote.pricing.lines as Array<Record<string, unknown>> : [];
+      const additionalServiceSignature = JSON.stringify({ items: submissionItems, priceType: quote.pricing.applied_price_type, total: quote.pricing.payable_total_cents, lines: lines.filter(line => extra.some(project => String(project.id) === String(line.project_id))) });
+      if (extra.length && additionalServiceAcknowledgement.current !== additionalServiceSignature) {
+        additionalServiceDisplayedSignature.current = additionalServiceSignature;
+        setAdditionalServiceConfirmation(extra.map(project => {
+          const prices = lines.filter(line => String(line.project_id) === String(project.id));
+          return { project, totalCents: prices.length && prices.every(line => typeof line.payable_line_total_cents === 'number') ? prices.reduce((total, line) => total + Number(line.payable_line_total_cents), 0) : null };
+        }));
+        setSavingHintOpen(true);
+        openOverlay('saving-hint');
+        return;
+      }
+      setAdditionalServiceConfirmation(null);
       if (quote.saving_hint?.kind === 'member') {
         setSavingHint(quote.saving_hint);
         setSavingHintOpen(true);
@@ -1810,7 +1845,7 @@ export default function App() {
               : item.diy_preferences || [];
             return (
             <div className="success-line" key={`${item.project_id}-${index}`}>
-              <div><strong>{item.name || (item.project_id === 'tea' ? '到店茶饮' : '服务项目')}</strong><small>{preferenceLabels.join(' · ') || '按门店标准服务'}</small>{item.item_type === 'service' && <small className="success-line-meta">{line && Number.isFinite(Number(line.unit_payable_price_cents)) ? `单价 ${formatMoney(Number(line.unit_payable_price_cents))}` : ''}{duration > 0 ? `${line && Number.isFinite(Number(line.unit_payable_price_cents)) ? ' · ' : ''}服务约 ${duration} 分钟` : ''}</small>}</div>
+              <div><strong>{item.name || (item.project_id === 'tea' ? '到店茶饮' : '服务项目')}</strong><small>{[preferenceLabels.join(' · '), serviceFacts(item.service_spec)].filter(Boolean).join(' · ') || '按门店标准服务'}</small>{item.item_type === 'service' && <small className="success-line-meta">{line && typeof line.unit_payable_price_cents === 'number' ? `${item.service_spec?.sale_unit === 'package' ? '每套' : '单价'} ${formatMoney(line.unit_payable_price_cents)}` : ''}{item.service_spec?.sale_unit === 'package' ? ` · ${item.quantity}套` : duration > 0 ? ` · 服务约 ${duration} 分钟` : ''}</small>}</div>
               {item.item_type === 'preference' ? <span>赠饮</span> : <Check size={16} />}
             </div>
             );
@@ -1895,7 +1930,7 @@ export default function App() {
         </>}
         {featured.map((project, index) => (
           <button key={project.id} type="button" className={`miniapp-promo ${index === 0 ? 'primary' : ''}`} onClick={() => openProjectDetail(project)}>
-            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{project.code === 'hxy-spa-90' ? displayProjectName(project) : pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}{project.code !== 'hxy-spa-90' && <i>起</i>}</em></span>
+            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{project.service_spec || project.code === 'hxy-spa-90' ? displayProjectName(project) : pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{hasProjectPrice(project) ? <>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}{project.service_spec?.sale_unit === 'package' ? '/套' : !project.service_spec && project.code !== 'hxy-spa-90' && <i>起</i>}</> : '价格待确认'}</em></span>
             <img src={projectImage(project)} alt="" loading="lazy" decoding="async" />
           </button>
         ))}
@@ -1941,8 +1976,9 @@ export default function App() {
                       <motion.article whileTap={{ scale: 0.985 }} className={`project-card mini-project-row ${selected ? 'selected' : ''}`} key={project.id} onClick={() => openProjectDetail(project)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectDetail(project); } }} role="button" tabIndex={0}>
                         <div className="project-photo"><img src={projectImage(project)} alt="" loading="lazy" decoding="async" />{project.code === 'hxy-xiaoqi-90' && <span className="signature-badge">招牌</span>}</div>
                         <div className="project-copy">
-                          <div className="project-title-row"><h3>{displayName}</h3>{project.duration_min && <span>{project.duration_min}分钟</span>}</div>
-                          <p>{customerProjectSummaryText(project)}</p>
+                          <div className="project-title-row"><h3>{displayName}</h3>{project.service_spec?.sale_unit === 'package' ? <span>{project.service_spec.services_per_unit}次/套</span> : (project.service_spec ? project.service_spec.service_duration_min : project.duration_min) ? <span>{project.service_spec ? project.service_spec.service_duration_min : project.duration_min}分钟</span> : null}</div>
+                          <p>{project.service_spec ? project.service_spec.flow_steps.join(' · ') : customerProjectSummaryText(project)}</p>
+                          {serviceFacts(project.service_spec) && <div className="preference-line">{serviceFacts(project.service_spec)}</div>}
                           {(highlights.length > 0 || summaryTags.length > 0 || purchaseTags.length > 0) && <div className="project-badge-groups" aria-label="项目标签">
                             {highlights.length > 0 && <div className="project-badges project-badges-highlight" aria-label="项目特色">{highlights.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                             {summaryTags.length > 0 && <div className="project-badges project-badges-summary" aria-label="项目简介">{summaryTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
@@ -2048,7 +2084,7 @@ export default function App() {
       />
       <SavingHintDialog
         hint={savingHint}
-        open={savingHintOpen}
+        open={savingHintOpen && !additionalServiceConfirmation}
         onLogin={() => {
           pageTracking.loginPromptView({ prompt_type: 'record', trigger: 'saving_hint' });
           setSavingHintOpen(false);
@@ -2060,6 +2096,15 @@ export default function App() {
           void submitRevision();
         }}
       />
+      {savingHintOpen && additionalServiceConfirmation && <div className="saving-hint-overlay" onClick={dismissTopOverlay}>
+        <section className="saving-hint-dialog" role="dialog" aria-modal="true" aria-labelledby="additional-service-title" onClick={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape') dismissTopOverlay(); }}>
+          <h2 id="additional-service-title">已包含泡脚，还要另加一份吗？</h2>
+          <p className="saving-hint-copy">当前项目已含1次现煮草本泡。另选泡脚需额外付费，已含服务不抵扣。</p>
+          {additionalServiceConfirmation.map(({ project, totalCents }) => <p key={project.id}>{project.name} · 另购 {totalCents === null ? '以门店报价为准' : formatMoney(totalCents)}</p>)}
+          <button type="button" autoFocus className="saving-hint-primary" onClick={() => { additionalServiceAcknowledgement.current = additionalServiceDisplayedSignature.current; setAdditionalServiceConfirmation(null); dismissTopOverlay(); void submit(); }}>保留额外泡脚并付费</button>
+          <button type="button" className="saving-hint-skip" onClick={() => { additionalServiceConfirmation.forEach(({ project }) => removeProject(project, false)); setAdditionalServiceConfirmation(null); dismissTopOverlay(); }}>移除另购泡脚</button>
+        </section>
+      </div>}
       <RecordLoginDialog
         open={recordLoginOpen}
         selectionSessionId={session?.id || ''}
