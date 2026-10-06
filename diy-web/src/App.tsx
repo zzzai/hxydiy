@@ -275,7 +275,7 @@ function StatusScreen({ type, title, message, onRetry, onViewReports }: {
       <h1>{title}</h1>
       <p>{message}</p>
       {onRetry && <button className="primary-action" type="button" onClick={onRetry}><RefreshCw size={18} />重新检查</button>}
-      {onViewReports && <button className="primary-action" type="button" onClick={onViewReports}>我的检测报告</button>}
+      {onViewReports && <button className="primary-action" style={{ marginTop: 12 }} type="button" onClick={onViewReports}>我的检测报告</button>}
       {type === 'occupied' && <small className="status-help">若您就在此位置，请联系前台确认并释放上一次记录。</small>}
     </main>
   );
