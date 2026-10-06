@@ -114,7 +114,7 @@ import {
   customerProjectSummaryTags,
   customerProjectPurchaseTags,
   customerProjectDisplayTagGroups,
-  customerProjectSummaryText,
+  customerProjectListDescription,
   displayProjectName,
   featuredProjects,
   formatMoney,
@@ -1944,7 +1944,7 @@ export default function App() {
                         <div className="project-photo"><img src={projectImage(project)} alt="" loading="lazy" decoding="async" />{project.code === 'hxy-xiaoqi-90' && <span className="signature-badge">招牌</span>}</div>
                         <div className="project-copy">
                           <div className="project-title-row"><h3>{displayName}</h3>{project.duration_min && <span>{project.duration_min}分钟</span>}</div>
-                          <p>{customerProjectSummaryText(project)}</p>
+                          <p>{customerProjectListDescription(project)}</p>
                           {(highlights.length > 0 || summaryTags.length > 0 || purchaseTags.length > 0) && <div className="project-badge-groups" aria-label="项目标签">
                             {highlights.length > 0 && <div className="project-badges project-badges-highlight" aria-label="项目特色">{highlights.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                             {summaryTags.length > 0 && <div className="project-badges project-badges-summary" aria-label="项目简介">{summaryTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}

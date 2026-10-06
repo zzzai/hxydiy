@@ -569,16 +569,34 @@ export function customerProjectDisplayTagGroups(project: CustomerProjectTagInput
       purchase: ['单次服务'],
     };
   }
-  let remaining = 2;
-  const take = (values: string[], max: number) => {
-    const result = values.filter(value => !/\d.*(?:分钟|次\/套)/.test(value)).slice(0, Math.min(max, remaining));
-    remaining -= result.length;
-    return result;
-  };
-  const highlights = take(groups.highlights, 2);
-  const summary = take(groups.summary, 1);
-  const purchase = take(groups.purchase, 1);
+  const highlights = groups.highlights;
+  const description = customerProjectListDescription(project);
+  const summary = groups.summary.filter(value => !/\d.*(?:分钟|次\/套)/.test(value)
+    && !description.includes(value) && !['到店服务', '单次服务', '体质检测+泡脚'].includes(value)).slice(0, 1);
+  const purchase = groups.purchase.filter(value => value !== '单次服务').slice(0, 2);
   return { highlights, summary, purchase };
+}
+
+/** List copy helps comparison; the detail page retains the complete service flow. */
+export function customerProjectListDescription(project: CustomerProjectTagInput): string {
+  const byCode: Record<string, string> = {
+    'hxy-qiqing-30': '体质检测，搭配现煮草本泡脚',
+    'hxy-xiangxiang-60': '泡脚配肩颈按摩，兼顾脚部清洁',
+    'hxy-xiaoqi-90': '从肩背到双脚，搭配草本热敷',
+    'hxy-nvshen-60': '去角质、敷足膜，再滋润双脚',
+    'hxy-tuina-70': '全身推拿，搭配草本热敷',
+    'hxy-spa-60': '精油身体护理，搭配头部按摩',
+    'hxy-spa-90': '精油身体护理，搭配头部按摩',
+    'hxy-taoke-60': '活络油护理，搭配工具与热敷',
+    'hxy-head-30': '头面耳按摩，搭配经络梳',
+    'hxy-foot-refine-1': '草本泡脚后，修整脚底',
+    'hxy-oil-back-30': '用精油按摩背部',
+    'hxy-caier-30': '清洁耳部，搭配耳部按摩',
+    'hxy-jubu-30': '选择想多照顾的身体部位',
+    'hxy-cupping-scraping-1': '拔罐或刮痧，任选一种',
+  };
+  if (byCode[project.code]) return byCode[project.code];
+  return String(project.summary || '').trim().replace(/\+/g, '、');
 }
 
 export function customerProjectHighlights(project: CustomerProjectTagInput): string[] {
