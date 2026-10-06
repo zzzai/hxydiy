@@ -188,6 +188,27 @@ export class ApiError extends Error {
   }
 }
 
+export type TcmReportConsent = { consented: boolean; version: string; notice: string };
+export type TcmReportSummary = { report_id: string; reported_at: string | null; title: '检测报告' };
+export type TcmReportDetail = TcmReportSummary & { physiques: Array<{ name: string; score: number | null }>; heart_rate: number | null; blood_oxygen: number | null; moisture: number | null };
+export type TcmReportList = { items: TcmReportSummary[]; limit: number; offset: number; has_more: boolean };
+
+export function getTcmReportConsent(token: string, signal?: AbortSignal) {
+  return request<TcmReportConsent>('/me/tcm-report-consent', { headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store' });
+}
+
+export function updateTcmReportConsent(token: string, version: string | null, signal?: AbortSignal) {
+  return request<TcmReportConsent>('/me/tcm-report-consent', { method: version === null ? 'DELETE' : 'POST', headers: { Authorization: `Bearer ${token}` }, ...(version === null ? {} : { body: JSON.stringify({ accepted: true, version }) }), signal, cache: 'no-store' });
+}
+
+export function getTcmReports(token: string, offset = 0, signal?: AbortSignal) {
+  return request<TcmReportList>(`/me/tcm-reports?limit=20&offset=${offset}`, { headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store' });
+}
+
+export function getTcmReport(token: string, reportId: string, signal?: AbortSignal) {
+  return request<TcmReportDetail>(`/me/tcm-reports/${encodeURIComponent(reportId)}`, { headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store' });
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     ...options,

@@ -9,6 +9,7 @@ import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
 import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipSavingCents, membershipState, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
 import MembershipBanner from './MembershipBanner';
 import FeedbackDialog from './FeedbackDialog';
+import MyReports from './MyReports';
 
 type TabKey = 'records' | 'coupons';
 
@@ -19,6 +20,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
   onAuthChange: (auth: CustomerAuth | null) => void;
 }) {
   const [tab, setTab] = useState<TabKey>('records');
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [recordState, setRecordState] = useState<RecordFilter>('all');
   const [selectedRecord, setSelectedRecord] = useState<SelectionSession | null>(null);
   const [feedbackRecord, setFeedbackRecord] = useState<SelectionSession | null>(null);
@@ -90,10 +92,11 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange }: {
       </header>
 
       {!auth
-        ? <ProfileLogin onAuthChange={onAuthChange} />
-        : (
+        ? <>{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={() => setReportsOpen(true)}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} /></>
+        : reportsOpen ? <MyReports key={auth.token} token={auth.token} onBack={() => setReportsOpen(false)} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
           <main className="profile-body">
             <ProfileCard user={auth.user} savingCents={membershipSavingCents(sessions)} completedCount={sessions.filter((item) => item.service_completed_at).length} onShowCode={() => setMemberCodeOpen(true)} />
+            <button className="profile-pending-task" type="button" onClick={() => setReportsOpen(true)}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>单独授权后查看本人结果</small></span><ChevronRight size={18} /></button>
             {sessions.some((item) => item.can_evaluate && !item.evaluated) && <button className="profile-pending-task" type="button" onClick={() => { setTab('records'); setRecordState('pending-feedback'); }}><span><MessageSquareText size={19} /><strong>待评价 {sessions.filter((item) => item.can_evaluate && !item.evaluated).length}</strong><small>完成评价，帮助我们改进服务</small></span><ChevronRight size={18} /></button>}
             {!auth.user.is_member && <MembershipBanner />}
             <nav className="profile-tabs" aria-label="个人中心板块">
