@@ -2417,6 +2417,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/tcm-report-consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consent Status */
+        get: operations["consent_status_api_v1_me_tcm_report_consent_get"];
+        put?: never;
+        /** Grant */
+        post: operations["grant_api_v1_me_tcm_report_consent_post"];
+        /** Revoke */
+        delete: operations["revoke_api_v1_me_tcm_report_consent_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/tcm-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reports */
+        get: operations["reports_api_v1_me_tcm_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/tcm-reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report */
+        get: operations["report_api_v1_me_tcm_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/occupancies/{occupancy_id}/move": {
         parameters: {
             query?: never;
@@ -4736,6 +4789,13 @@ export interface components {
              */
             title: string;
         };
+        /** PhysiqueScore */
+        PhysiqueScore: {
+            /** Name */
+            name: string;
+            /** Score */
+            score?: number | null;
+        };
         /** PriceOut */
         PriceOut: {
             /** Amount Cents */
@@ -5124,6 +5184,79 @@ export interface components {
             refund_reference: string;
             /** Responsibility */
             responsibility: string;
+        };
+        /** ReportConsentIn */
+        ReportConsentIn: {
+            /**
+             * Accepted
+             * @constant
+             */
+            accepted: true;
+            /**
+             * Version
+             * @constant
+             */
+            version: "tcm-report-access-v1";
+        };
+        /** ReportConsentOut */
+        ReportConsentOut: {
+            /** Consented */
+            consented: boolean;
+            /**
+             * Notice
+             * @default 我单独同意使用已验证手机号查询并向本人展示检测报告，包括体质得分、心率、血氧与湿气等健康信息。我可随时撤回；不向店员开放，不用于推送或新增诊断。
+             */
+            notice: string;
+            /**
+             * Version
+             * @default tcm-report-access-v1
+             */
+            version: string;
+        };
+        /** ReportDetail */
+        ReportDetail: {
+            /** Blood Oxygen */
+            blood_oxygen?: number | null;
+            /** Heart Rate */
+            heart_rate?: number | null;
+            /** Moisture */
+            moisture?: number | null;
+            /** Physiques */
+            physiques?: components["schemas"]["PhysiqueScore"][];
+            /** Report Id */
+            report_id: string;
+            /** Reported At */
+            reported_at?: string | null;
+            /**
+             * Title
+             * @default 检测报告
+             * @constant
+             */
+            title: "检测报告";
+        };
+        /** ReportList */
+        ReportList: {
+            /** Has More */
+            has_more: boolean;
+            /** Items */
+            items: components["schemas"]["ReportSummary"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /** ReportSummary */
+        ReportSummary: {
+            /** Report Id */
+            report_id: string;
+            /** Reported At */
+            reported_at?: string | null;
+            /**
+             * Title
+             * @default 检测报告
+             * @constant
+             */
+            title: "检测报告";
         };
         /** RetainOccupancyIn */
         RetainOccupancyIn: {
@@ -11925,6 +12058,170 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    consent_status_api_v1_me_tcm_report_consent_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportConsentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_api_v1_me_tcm_report_consent_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportConsentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportConsentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_api_v1_me_tcm_report_consent_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportConsentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reports_api_v1_me_tcm_reports_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_api_v1_me_tcm_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetail"];
                 };
             };
             /** @description Validation Error */

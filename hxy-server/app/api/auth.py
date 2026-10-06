@@ -96,7 +96,7 @@ def rebind_trusted_device(body: TrustedDeviceRebindRequest, response: Response, 
     response.set_cookie(TRUSTED_DEVICE_COOKIE, token, max_age=31536000, httponly=True, secure=settings.environment == "production", samesite="lax", path="/")
     return {
         "trusted": True,
-        "access_token": create_access_token(str(user.id), user.openid, login_version),
+        "access_token": create_access_token(str(user.id), user.openid, login_version, verified_phone=user.phone),
     }
 
 
@@ -309,7 +309,7 @@ def h5_login(
                 refresh_session_pricing(db, session)
     db.commit()
     db.refresh(user)
-    return LoginResponse(token=create_access_token(str(user.id), openid, login_version), user=UserOut.model_validate(user).model_copy(update=membership_snapshot(db, user)))
+    return LoginResponse(token=create_access_token(str(user.id), openid, login_version, verified_phone=phone), user=UserOut.model_validate(user).model_copy(update=membership_snapshot(db, user)))
 
 
 @router.get("/h5/me", response_model=UserOut)

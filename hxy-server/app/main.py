@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api import admin, admin_catalog, admin_v2, auth, catalog, coupons, health, integrations, occupancies, operations, orders, payments, selections, share, technician, technician_admin, tracking, media, visit_feedback, wechat_official
 from app.core.config import settings
+from app.api import tcm_reports
 from app.core.staff_access import bind_staff_request_scope, reset_staff_request_scope
 from app.openapi import install_admin_catalog_openapi
 from app.release_static import mount_release_static_files
@@ -59,6 +60,7 @@ async def bind_request_scope(request, call_next):
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(tcm_reports.router, prefix="/api/v1")
 app.include_router(integrations.router, prefix="/api/v1")
 app.include_router(catalog.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
