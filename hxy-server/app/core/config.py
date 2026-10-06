@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # 第三方会员系统向 DIY 推送手机号会员状态。留空时接口禁用，避免误接收数据。
     third_party_membership_sync_key: str = ""
 
+    # Dedicated internal report reader; empty credential keeps access disabled.
+    tcm_reports_read_token: str = ""
+    tcm_reports_base_url: str = "http://172.18.0.1:18090"
+
     occupancy_scheduler_enabled: bool = False
     occupancy_scheduler_observe_only: bool = True
     occupancy_scheduler_interval_seconds: int = 60

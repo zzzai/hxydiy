@@ -3575,6 +3575,31 @@
         "title": "PageContentIn",
         "type": "object"
       },
+      "PhysiqueScore": {
+        "properties": {
+          "name": {
+            "maxLength": 64,
+            "title": "Name",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PhysiqueScore",
+        "type": "object"
+      },
       "PriceOut": {
         "properties": {
           "amount_cents": {
@@ -4611,6 +4636,191 @@
           "responsibility"
         ],
         "title": "RefundNoteIn",
+        "type": "object"
+      },
+      "ReportConsentIn": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "const": true,
+            "title": "Accepted",
+            "type": "boolean"
+          },
+          "version": {
+            "const": "tcm-report-access-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted",
+          "version"
+        ],
+        "title": "ReportConsentIn",
+        "type": "object"
+      },
+      "ReportConsentOut": {
+        "properties": {
+          "consented": {
+            "title": "Consented",
+            "type": "boolean"
+          },
+          "notice": {
+            "default": "我单独同意使用已验证手机号查询并向本人展示检测报告，包括体质得分、心率、血氧与湿气等健康信息。我可随时撤回；不向店员开放，不用于推送或新增诊断。",
+            "title": "Notice",
+            "type": "string"
+          },
+          "version": {
+            "default": "tcm-report-access-v1",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "consented"
+        ],
+        "title": "ReportConsentOut",
+        "type": "object"
+      },
+      "ReportDetail": {
+        "properties": {
+          "blood_oxygen": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blood Oxygen"
+          },
+          "heart_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heart Rate"
+          },
+          "moisture": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moisture"
+          },
+          "physiques": {
+            "items": {
+              "$ref": "#/components/schemas/PhysiqueScore"
+            },
+            "maxItems": 9,
+            "title": "Physiques",
+            "type": "array"
+          },
+          "report_id": {
+            "pattern": "^[\\w-]{1,128}$",
+            "title": "Report Id",
+            "type": "string"
+          },
+          "reported_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported At"
+          },
+          "title": {
+            "const": "检测报告",
+            "default": "检测报告",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "ReportDetail",
+        "type": "object"
+      },
+      "ReportList": {
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReportSummary"
+            },
+            "maxItems": 20,
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "has_more"
+        ],
+        "title": "ReportList",
+        "type": "object"
+      },
+      "ReportSummary": {
+        "properties": {
+          "report_id": {
+            "pattern": "^[\\w-]{1,128}$",
+            "title": "Report Id",
+            "type": "string"
+          },
+          "reported_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported At"
+          },
+          "title": {
+            "const": "检测报告",
+            "default": "检测报告",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "ReportSummary",
         "type": "object"
       },
       "RetainOccupancyIn": {
@@ -18017,6 +18227,291 @@
         "summary": "Sync Membership",
         "tags": [
           "integrations"
+        ]
+      }
+    },
+    "/api/v1/me/tcm-report-consent": {
+      "delete": {
+        "operationId": "revoke_api_v1_me_tcm_report_consent_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke",
+        "tags": [
+          "personal-health-reports"
+        ]
+      },
+      "get": {
+        "operationId": "consent_status_api_v1_me_tcm_report_consent_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Consent Status",
+        "tags": [
+          "personal-health-reports"
+        ]
+      },
+      "post": {
+        "operationId": "grant_api_v1_me_tcm_report_consent_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportConsentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportConsentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Grant",
+        "tags": [
+          "personal-health-reports"
+        ]
+      }
+    },
+    "/api/v1/me/tcm-reports": {
+      "get": {
+        "operationId": "reports_api_v1_me_tcm_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 100000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reports",
+        "tags": [
+          "personal-health-reports"
+        ]
+      }
+    },
+    "/api/v1/me/tcm-reports/{report_id}": {
+      "get": {
+        "operationId": "report_api_v1_me_tcm_reports__report_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[\\w-]{1,128}$",
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report",
+        "tags": [
+          "personal-health-reports"
         ]
       }
     },
