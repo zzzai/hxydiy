@@ -1251,7 +1251,7 @@ h1, h2, h3, p { margin-top: 0; }
 .miniapp-catalog-layout .project-title-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; align-items: start; }
 .miniapp-catalog-layout .project-title-row h3 { display: -webkit-box; overflow: hidden; min-width: 0; font-size: 16px; line-height: 1.3; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .miniapp-catalog-layout .project-title-row span { flex: none; padding: 2px 0 0; color: #9ba7a1; background: transparent; font-size: 10px; font-weight: 400; }
-.miniapp-catalog-layout .project-copy > p { display: -webkit-box; overflow: hidden; min-height: 16px; margin: 0; color: #687a72; font-size: 11px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.miniapp-catalog-layout .project-copy > p { margin: 1px 0 3px; color: #687a72; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .project-badge-groups { display: flex; min-width: 0; flex-wrap: wrap; gap: 2px 7px; }
 .project-badges { display: flex; min-height: 14px; flex-wrap: wrap; gap: 0 5px; }
 .project-badges span { padding: 0; border-radius: 0; color: #176856; background: transparent; font-size: 10px; font-weight: 600; line-height: 1.4; }
@@ -1259,9 +1259,11 @@ h1, h2, h3, p { margin-top: 0; }
 .project-badges-summary span { color: #65766f; }
 .project-badges-purchase span { color: #9a7220; }
 .project-badges span.diy { color: #9a7220; background: transparent; }
-.miniapp-catalog-layout .project-badge-groups { gap: 5px; }
+.miniapp-catalog-layout .project-badge-groups { flex-direction: column; align-items: flex-start; gap: 6px; }
 .miniapp-catalog-layout .project-badges { gap: 5px; }
-.miniapp-catalog-layout .project-badges span { max-width: 100%; padding: 2px 6px; border-radius: 4px; color: #176856; background: #edf7f2; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.miniapp-catalog-layout .project-badges span { max-width: 100%; padding: 2px 6px; border-radius: 4px; color: #176856; background: #edf7f2; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.miniapp-catalog-layout .project-badges-summary span { padding: 0; color: #65766f; background: transparent; font-weight: 400; }
+.miniapp-catalog-layout .project-badges-purchase span { padding: 0; color: #9a7220; background: transparent; font-weight: 400; }
 .miniapp-catalog-layout .project-badges span + span::before { content: none; }
 .profile-page.profile-report-view { background: #fff; color: #233c36; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
 .profile-page.profile-report-view > header { min-height: 64px; border-color: #dce8e2; }
