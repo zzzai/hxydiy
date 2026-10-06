@@ -1294,6 +1294,7 @@ h1, h2, h3, p { margin-top: 0; }
 .my-reports-empty { padding: 36px 8px 24px; text-align: center; }
 .my-reports-empty-icon { display: inline-flex; width: 72px; height: 72px; align-items: center; justify-content: center; margin-bottom: 18px; border-radius: 50%; color: #123f35; background: #f3f8f6; }
 .my-reports-empty p { color: #687d76; font-size: 13px; }
+.my-reports-empty .my-reports-empty-hint { margin-top: 12px; font-size: 12px; }
 .my-reports-title { margin: 0 0 16px; color: #123f35; font-size: 18px; line-height: 1.5; overflow-wrap: anywhere; }
 .my-reports-meta { display: grid; gap: 4px; padding: 16px 18px; border-radius: 10px; background: #f3f8f6; }
 .my-reports-meta > span { color: #687d76; font-size: 12px; }

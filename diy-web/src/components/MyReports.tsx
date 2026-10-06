@@ -58,7 +58,7 @@ export default function MyReports({ token, onVerify }: { token: string; onVerify
       })}>同意并查看</button>
     </div>}
     {consent?.consented && !error && !detail && list && <div className="my-reports-list">
-      {!list.items.length && <div className="my-reports-empty"><span className="my-reports-empty-icon"><FileHeart size={32} strokeWidth={1.5} aria-hidden="true" /></span><h3>还没有检测报告</h3><p>报告按检测时使用的手机号关联。<br />若当时使用其他号码，请验证该号码后查看。</p></div>}
+      {!list.items.length && <div className="my-reports-empty"><span className="my-reports-empty-icon"><FileHeart size={32} strokeWidth={1.5} aria-hidden="true" /></span><h3>还没有检测报告</h3><p>还没做过检测？到店后可联系前台，安排体质检测。</p><p className="my-reports-empty-hint">已做过检测？请确认登录的是检测时使用的手机号。</p></div>}
       {reportsByDate(list.items).map(report => <button className="my-reports-row" type="button" key={report.report_id} disabled={busy} onClick={() => void run(async signal => { const result = await getTcmReport(token, report.report_id, signal); if (!signal.aborted) setDetail(result); })}><FileHeart size={22} strokeWidth={1.5} aria-hidden="true" /><span><strong>{report.title}</strong><time>{report.reported_at ? formatDateTime(report.reported_at) : '检测时间未提供'}</time></span><ChevronRight size={18} aria-hidden="true" /></button>)}
       {list.has_more && <button type="button" disabled={busy} onClick={() => void run(async signal => { const next = await getTcmReports(token, list.offset + list.limit, signal); if (!signal.aborted) setList({ ...next, items: [...new Map([...list.items, ...next.items].map(item => [item.report_id, item])).values()] }); })}>加载更多</button>}
     </div>}
