@@ -1,0 +1,11 @@
+[Unit]
+Description=HXY DIY daily verified backup schedule
+
+[Timer]
+OnCalendar=*-*-* 02:10:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=300
+Unit=hxy-diy-backup.service
+
+[Install]
+WantedBy=timers.target

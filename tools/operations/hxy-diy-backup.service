@@ -1,0 +1,12 @@
+[Unit]
+Description=HXY DIY daily database backup and isolated restore rehearsal
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/bin/python3 /root/hxy-diy-20260811/operations/production_ops.py backup
+TimeoutStartSec=15min
+StandardOutput=journal
+StandardError=journal
