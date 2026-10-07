@@ -1,5 +1,13 @@
-export const TECHNICIAN_MOBILE_ROUTES = ['/technician/today', '/technician/member-verify', '/technician/history', '/technician/me'] as const;
-export const TECHNICIAN_MOBILE_TAB_PATHS = ['/today', '/member-verify', '/history', '/me'] as const;
+export const TECHNICIAN_MOBILE_ROUTES = ['/technician/today', '/technician/history', '/technician/me'] as const;
+export const TECHNICIAN_MOBILE_TAB_PATHS = ['/today', '/history', '/me'] as const;
+
+export function technicianMobileHome(role?: string): '/member-verify' | '/today' {
+  return role === 'manager' ? '/member-verify' : '/today';
+}
+
+export function technicianMobileTabs(role?: string): readonly string[] {
+  return role === 'manager' ? [] : TECHNICIAN_MOBILE_TAB_PATHS;
+}
 
 export function technicianAccountStatusLabel(status: string | undefined | null): string {
   return ({ active: '已启用', disabled: '已停用', resigned: '已离职', pending: '待激活' } as Record<string, string>)[status || ''] || '未知';
