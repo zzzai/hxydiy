@@ -1,5 +1,15 @@
 # 顾客端工作流
 
+## 2026-10-07 CUSTOMER-MY-STABILITY-03（本地复现及修复验证完成，待门禁合并）
+
+- 基线 `787ff9e912dc08790cbab25b57c8fbecca0e5efb`，独立分支 `codex/customer-my-stability-03`；仅 ProfilePage、顾客浏览器验证脚本和本工作流。既有生成文件保留未提交，不改后端/API合同/数据库/会员资格/价格/菜单/报告授权。
+- 根因真实页面复现：App 每 5 秒及 focus/visibility 更新身份对象，ProfilePage effect 依赖整个 auth 对象而非查询身份字段，重复触发历史加载。375会员/390普通顾客各观察 11 秒（两个真实周期）及一次前台事件，orders 与 mine 各5次，重复 loading 3次；卡片未重挂载。动态码30秒计时仅在其弹窗打开时运行；MyReports仅入口/手动/前台查询，没有周期轮询，不是本次根因。
+- effect 改依赖 token/member 身份字段；会员快照刷新与价格规则原样保留。用两个本地呈现开关暂隐藏动态会员码入口/弹窗及到店记录、历史订单和依赖历史的待评价计数/累计节省/首次完成汇总，同时停止隐藏UI专用的 orders/mine 请求，不用空历史冒充实际零服务。代码及生产数据可恢复，动态码后端与权益规则未删除。会员类型/有效期、非会员办卡与我的券、报告入口保留；菜单评价与建议、当前服务/已提交清单仍走既有 App 路径，不修改其状态或请求。
+- 没有可靠测试标记可据此判定哪笔生产记录为假，本批不访问/删除/改写生产历史。合成历史为空仅用于观测请求，不是生产历史核查结论。
+- `profile-stability-check.cjs` before/after 两阶段同脚本真实UI＋隔离本地API；身份/历史/券为合成响应。375/390修复后观察相同真实周期及前台事件：重复 loading0、卡片重挂载0、orders/mine0、动态码请求0；普通顾客券请求1。报告进入/返回、退出清空登录、菜单价文案和评价入口正常，无溢出/页面错误。证据 `diy-web/output/playwright/customer-my-stability-03/{before,after}-result.json` 和同目录375/390前后截图。
+- `npm run build` 成功；profile/customer-auth/tcm-reports 19项及 selection-summary/submitted-selection-restore 20项通过（共39）；`git diff --check`通过。浏览器验证不代替真实微信/营业现场，本窗口不发布生产，由总控统一发布。
+- 定向审查补充：保留的券查询增加请求序号、当前token/member/open/report视图门禁与最新身份回调引用，退出/换号/切换会员或离开页面后丢弃旧响应，避免旧401清掉新登录、旧券覆盖新账号。仅新增 `late` 定向浏览器模式，旧401→新登录、旧成功→新登录、旧401→会员切换三种迟到分支均通过；证据同目录 `late-result.json`，最终构建通过，其他验证未重复。未改券API或会员身份刷新。
+
 ## 2026-10-07 TCM-ORIGINAL-REPORT-02（顾客真实 API 联调完成，待门禁合并）
 
 - 独立分支 `codex/customer-original-report-02`，基线 `d24557e`；后台冻结 PR #209 / `97db9278930de570a54bcab0af358dd9a83fdbe2`。仅修改顾客报告 API 类型、MyReports、报告专用样式、验证脚本及本工作流；保护既有生成文件，不改菜单、价格、品牌或后端合同。
