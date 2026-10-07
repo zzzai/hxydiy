@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.db.session import Base, get_db
-from app.models import CustomerVerificationCode, User
+from app.models import CustomerProfileConsent, CustomerVerificationCode, User
 from app.core.security import create_access_token
 from app.api.admin import create_staff_token
 
@@ -62,7 +62,49 @@ def customer_header(identifier, version=2):
 
 def grant(client, headers):
     return client.post("/api/v1/me/tcm-report-consent", headers=headers,
-                       json={"accepted": True, "version": "tcm-report-access-v1"})
+                       json={"accepted": True, "version": "tcm-report-access-v2-original"})
+
+
+def test_old_consent_never_silently_upgrades_to_external_report_scope(context):
+    client, sessions, identifier, calls = context
+    from app.domain.customer_phone_proof import phone_digest
+    with sessions.begin() as db:
+        db.add(CustomerProfileConsent(customer_id=identifier,consent_type="tcm_report_access",purpose="old fixture",
+            data_categories_json=["health_detection_report"],scope_json={"phone_sha256":phone_digest("13800138000"),"audience":"self"},
+            consent_method="explicit_customer_action",consent_text_version="tcm-report-access-v1",granted_at=datetime.now(UTC),status="active"))
+    headers=customer_header(identifier)
+    status=client.get("/api/v1/me/tcm-report-consent",headers=headers)
+    assert status.json()["consented"] is False
+    assert status.json()["version"] == "tcm-report-access-v2-original"
+    assert client.get("/api/v1/me/tcm-reports/R1",headers=headers).status_code == 403
+    assert calls == []
+    assert client.post("/api/v1/me/tcm-report-consent",headers=headers,json={"accepted":True,"version":"tcm-report-access-v1"}).status_code == 422
+    assert grant(client,headers).status_code == 200
+    detail=client.get("/api/v1/me/tcm-reports/R1",headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["original_report_url"] is None
+
+
+def test_owned_original_link_requires_new_consent_and_rejects_url_override(context, monkeypatch):
+    client, _, identifier, calls = context
+    from app.api import tcm_reports
+    previous = tcm_reports.read_report_source
+    link = "https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1"
+    def source(phone, **kwargs):
+        return {**previous(phone, **kwargs), "original_report_url": link}
+    monkeypatch.setattr(tcm_reports, "read_report_source", source)
+    headers=customer_header(identifier)
+    endpoint="/api/v1/me/tcm-reports/R1"
+    assert client.get(endpoint,headers=headers).status_code == 403
+    assert calls == []
+    assert grant(client,headers).status_code == 200
+    result=client.get(endpoint,headers=headers)
+    assert result.status_code == 200 and result.json()["original_report_url"] == link
+    assert "13800138000" not in result.text and "Bearer" not in result.text
+    assert client.get(endpoint,headers=headers,params={"url":link}).status_code == 422
+    assert client.get(endpoint).status_code == 401
+    assert client.get(endpoint,headers={"Authorization":"Bearer "+create_staff_token(identifier,"manager")}).status_code == 401
+    assert client.get("/api/v1/me/tcm-reports/R2",headers=headers).status_code == 404
 
 
 def test_existing_otp_login_reused_separate_consent_withdrawal_and_minimal_fields(context):
@@ -124,8 +166,8 @@ def test_explicit_consent_cannot_be_replaced_by_extra_identity_fields(context):
     client, _, identifier, calls = context
     headers = customer_header(identifier)
     endpoint = "/api/v1/me/tcm-report-consent"
-    assert client.post(endpoint, headers=headers, json={"accepted": False, "version": "tcm-report-access-v1"}).status_code == 422
-    assert client.post(endpoint, headers=headers, json={"accepted": True, "version": "tcm-report-access-v1", "phone": "13900139000"}).status_code == 422
+    assert client.post(endpoint, headers=headers, json={"accepted": False, "version": "tcm-report-access-v2-original"}).status_code == 422
+    assert client.post(endpoint, headers=headers, json={"accepted": True, "version": "tcm-report-access-v2-original", "phone": "13900139000"}).status_code == 422
     assert client.get(endpoint + "?phone=13900139000", headers=headers).status_code == 422
     assert client.get("/api/v1/me/tcm-reports", headers=headers).status_code == 403
     assert calls == []

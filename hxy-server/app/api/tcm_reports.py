@@ -38,6 +38,7 @@ def consent(db, user):
         CustomerProfileConsent.status == "active",
         CustomerProfileConsent.revoked_at.is_(None),
         CustomerProfileConsent.scope_json["phone_sha256"].as_string() == phone_digest(user.phone),
+        CustomerProfileConsent.scope_json["external_original_report"].as_boolean().is_(True),
         (CustomerProfileConsent.expires_at.is_(None) | (CustomerProfileConsent.expires_at > datetime.now(timezone.utc))),
     ).order_by(CustomerProfileConsent.id.desc()))
 
@@ -64,8 +65,8 @@ def grant(request: Request, body: ReportConsentIn, user: User = Depends(owner), 
     db.scalar(select(User).where(User.id == user.id).with_for_update())
     if consent(db, user) is None:
         db.add(CustomerProfileConsent(customer_id=user.id, consent_type=CONSENT_TYPE,
-            purpose="向已验证手机号持有人展示本人检测报告", data_categories_json=["health_detection_report"],
-            scope_json={"phone_sha256": phone_digest(user.phone), "audience": "self"},
+            purpose="向本人展示健康检测报告及经校验的检测方原站完整报告入口", data_categories_json=["health_detection_report", "external_original_report"],
+            scope_json={"phone_sha256": phone_digest(user.phone), "audience": "self", "external_original_report": True},
             consent_method="explicit_customer_action", consent_text_version=body.version,
             granted_at=datetime.now(timezone.utc), status="active"))
         db.add(AuditLog(actor_type="customer", actor_id=str(user.id), action="tcm_report_consent_granted",

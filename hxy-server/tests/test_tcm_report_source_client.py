@@ -24,6 +24,14 @@ def test_verified_phone_never_in_url_and_whitelist_drops_vendor_links(enabled, m
     result = source.read_report_source("13800138000", report_id="R1")
     assert result["report_id"] == "R1"
     assert "face_url" not in result
+    assert result["original_report_url"] is None
+
+
+def test_original_link_validated_again_by_diy_and_missing_keeps_summary(enabled, monkeypatch):
+    link="https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1"
+    for supplied, expected in [(link,link),(link.replace('reportId=R1','reportId=R2'),None),(link.replace('yk.qianmaitcm.com','evil.invalid'),None),(None,None)]:
+        transport(monkeypatch,lambda request:httpx.Response(200,json={"report_id":"R1","original_report_url":supplied}))
+        assert source.read_report_source("13800138000",report_id="R1")["original_report_url"] == expected
 
 
 @pytest.mark.parametrize("status", [301, 302, 401, 403, 500, 503])
