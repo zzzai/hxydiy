@@ -375,6 +375,12 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
     ).with_for_update())
     if not room or room.operational_status != "active" or not room.is_service_position or room.is_space_container:
         raise HTTPException(status_code=404, detail="服务位不存在或暂不可用")
+    if verified_qr:
+        # A binding can change while the entry waits for the room lock.
+        db.refresh(verified_qr)
+        verified_qr = _verify_position_qr_token(
+            db, body.entry_token, body.store_id, body.position_code, body.source,
+        )
     anonymous_customer_id, browser_token, returning_browser = _browser_customer(db, request)
     existing = _active_occupancy_for_room(db, room.id)
     browser_occupancy = None
