@@ -1298,6 +1298,9 @@ h1, h2, h3, p { margin-top: 0; }
 .my-reports-empty p { color: #687d76; font-size: 13px; }
 .my-reports-empty .my-reports-empty-hint { margin-top: 12px; font-size: 12px; }
 .my-reports-title { margin: 0 0 16px; color: #123f35; font-size: 18px; line-height: 1.5; overflow-wrap: anywhere; }
+.my-reports-original { display: inline-flex; min-height: 44px; align-items: center; padding: 10px 16px; border-radius: 8px; color: #fff; background: #123f35; font-weight: 600; text-decoration: none; }
+.my-reports-original:focus-visible { outline: 2px solid #123f35; outline-offset: 3px; }
+.my-reports-original-unavailable { color: #687d76; }
 .my-reports-meta { display: grid; gap: 4px; padding: 16px 18px; border-radius: 10px; background: #f3f8f6; }
 .my-reports-meta > span { color: #687d76; font-size: 12px; }
 .my-reports-meta strong { color: #123f35; font-size: 16px; font-weight: 600; }
