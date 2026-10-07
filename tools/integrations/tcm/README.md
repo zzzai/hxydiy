@@ -1,5 +1,30 @@
 # Offline TCM readonly increment
 
+## TCM-ORIGINAL-REPORT-02 incremental upgrade
+
+This upgrade replaces **only** the reviewed `readonly_reports.py`. The already installed baseline module SHA-256 is `124b77bc47a9617bd62aba189174d8d0e43372c0bda2504edc9d139505eede4b`. Coordinator must verify that exact old digest before replacement; unexpected drift requires review, not overwrite. Obtain the new digest from the committed Git blob/artifact, not a Windows newline-transformed copy.
+
+- Preserve `/opt/tcm-ingest/main.py`, its existing router mount, `/etc/tcm-ingest.env`, the existing independent read token, webhook/admin credentials, systemd bind/no-access-log/no-proxy-headers options, public proxy denials and database. No new migration, key generation, report rewrite or normalization/import.
+- Back up the old module and verify its digest; record an independently consistent SQLite backup/restore check under the coordinator's existing backup procedure. Stage/compile the new single module with the service venv; check the pre-existing `report_print_url` column without reading report contents. Keep existing file ownership/permissions.
+- Install compatible source first and restart only the TCM unit under coordinator control. Synthetic socket auth/bounds/ownership/link checks and public404 must pass; no real report URLs or bodies in logs/evidence. New source adds a nullable field; old DIY's schema ignores it. Do not mount a second router.
+- Then deploy reviewed new DIY and customer frontend together using the normal workflow. New DIY tolerates an old source missing the URL field (null, simple summary remains), but requires new explicit consent `tcm-report-access-v2-original`; existing v1 consent is not silently promoted. Current valid login is reused. Source validates the stored URL against owned report_no and DIY validates it again; no vendor network fetch, arbitrary URL or forwarded personal credentials.
+- Rollback: coordinate DIY/frontend to their prior authorization behavior, restore **only** the backed-up source module and restart TCM, verify prior health/auth/proxy. Keep independent token and main mount unchanged; do not restore/delete health data or relabel consent versions. Existing explicit v2 and v1 records remain factual, not rewritten during rollback.
+- Follow the host-loopback probe caveat below. Installation remains the coordinator's action; this code writer does not restart/install production.
+
+The reviewed `upgrade_reader.py` implements the one-time replacement above. Default is read-only preflight; `--install` alone authorizes the narrowly scoped backup/replace/restart. Run with the actual TCM venv, reviewed source artifact and full SHA-256 values:
+
+```bash
+/opt/tcm-ingest/.venv/bin/python /private/staging/upgrade_reader.py \
+  --source /private/staging/readonly_reports.py \
+  --old-sha 124b77bc47a9617bd62aba189174d8d0e43372c0bda2504edc9d139505eede4b \
+  --new-sha <reviewed-artifact-sha256>
+# Repeat the exact reviewed invocation with --install only when ready.
+```
+
+It checks both hashes, file scope/mode and existing schema, compiles without installing, then creates a private original-module + consistent SQLite backup and a restored integrity-check copy. Only the reader is atomically replaced, keeping uid/gid and 0640. Only `tcm-webhook.service` restarts; health uses an explicitly bound loopback source. Failure restores the reader, never report DB/main/env/credentials; `failed_restored` or `rollback_failed` is nonzero and must stop subsequent DIY deployment. Backups are retained. Optional `--check-sample` reads only the previously approved sample ID from private stdin, checks its stored source URL and prints existence/mapping booleans, never its ID/link/content. Do not put a real report ID in the repository, command arguments, CI fixtures or output. No real sample is enumerated automatically.
+
+Unit filesystem/SQLite upgrade/rollback checks are included in static CI via `tests/test_tcm_reader_upgrade_contract.py`; they substitute only systemd/health boundaries, not backup, replacement or integrity behavior. This writer executes them only against owned temporary fixtures.
+
 This directory is an offline increment, not a production deployment. Do not copy the private source snapshot, runtime `.env`, databases or vendor reports into Git.
 
 ## Operator installation boundary

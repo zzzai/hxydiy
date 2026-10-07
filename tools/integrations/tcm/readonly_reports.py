@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import secrets
 import sqlite3
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path as ApiPath, Query, Request
 
@@ -36,6 +36,25 @@ def summary(row):
     return {"report_id": row["report_no"], "reported_at": reported_at(row["report_time"]), "title": "检测报告"}
 
 
+def original_link(value, report_id):
+    """Validate stored evidence before rebuilding one fixed vendor route."""
+    if not isinstance(value, str) or not value or len(value) > 4096 or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", report_id):
+        return None
+    if any(ord(character) <= 32 or ord(character) == 127 or character == "\\" for character in value):
+        return None
+    try:
+        parsed = urlsplit(value)
+        route, separator, query = parsed.fragment.partition("?")
+        if (parsed.scheme != "https" or parsed.netloc != "yk.qianmaitcm.com" or
+                parsed.path != "/print_smart_healthcare/" or parsed.query or
+                route != "/discriminateRingReport" or not separator or
+                parse_qsl(query, keep_blank_values=True, strict_parsing=True) != [("reportId", report_id)]):
+            return None
+    except ValueError:
+        return None
+    return "https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?" + urlencode({"reportId": report_id})
+
+
 def detail(row):
     try:
         data = json.loads(row["structured_data"] or "{}")
@@ -55,7 +74,8 @@ def detail(row):
             physiques.append({"name": item["phy_name"][:64], "score": number(item.get("phy_point"))})
     moisture = re.match(r"^\s*(\d+)", str(row["moisture_index"] or ""))
     return {**summary(row), "physiques": physiques, "heart_rate": number(row["heart_rate"]),
-            "blood_oxygen": number(row["blood_oxygen"]), "moisture": int(moisture[1]) if moisture else None}
+            "blood_oxygen": number(row["blood_oxygen"]), "moisture": int(moisture[1]) if moisture else None,
+            "original_report_url": original_link(row["report_print_url"], row["report_no"])}
 
 
 def build_router(db_path, read_token, privileged_tokens):
@@ -104,6 +124,7 @@ def build_router(db_path, read_token, privileged_tokens):
                phone: str = Header(alias="X-TCM-Verified-Phone", pattern=r"^1[3-9]\d{9}$", min_length=11, max_length=11)):
         validate_query(request, set())
         rows = query("SELECT report_no,report_time,heart_rate,blood_oxygen,moisture_index,"
+                     "CASE WHEN length(report_print_url)<=4096 THEN report_print_url ELSE NULL END AS report_print_url,"
                      "CASE WHEN length(structured_data)<=524288 THEN structured_data ELSE NULL END AS structured_data "
                      "FROM tcm_reports WHERE phone=? AND report_no=? AND report_no NOT LIKE 'PROBE-%'", (phone, report_id))
         if not rows:

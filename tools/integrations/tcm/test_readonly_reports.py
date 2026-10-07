@@ -21,12 +21,12 @@ def reports(tmp_path):
     spec.loader.exec_module(module)
     path = tmp_path / "reports.db"
     with sqlite3.connect(path) as db:
-        db.execute("CREATE TABLE tcm_reports(report_no TEXT PRIMARY KEY,phone TEXT,report_time TEXT,structured_data TEXT,heart_rate TEXT,blood_oxygen TEXT,moisture_index TEXT)")
+        db.execute("CREATE TABLE tcm_reports(report_no TEXT PRIMARY KEY,phone TEXT,report_time TEXT,structured_data TEXT,heart_rate TEXT,blood_oxygen TEXT,moisture_index TEXT,report_print_url TEXT)")
         db.execute("CREATE INDEX ix_phone_time ON tcm_reports(phone,report_time)")
         for identifier, phone in (("R1", "13800138000"), ("R2", "13900139000"), ("PROBE-1", "13800138000")):
             payload = {"data": {"report_no": identifier, "phy_figure_infos": [{"phy_name": "平和质", "phy_point": 42}],
                        "face_image_url": "http://private.example/face", "report_print_url": "https://private.example/report"}}
-            db.execute("INSERT INTO tcm_reports VALUES(?,?,?,?,?,?,?)", (identifier, phone, "2026-10-06 03:00:00", json.dumps(payload), "77.0", "92.0", "3 湿气一般"))
+            db.execute("INSERT INTO tcm_reports VALUES(?,?,?,?,?,?,?,?)", (identifier, phone, "2026-10-06 03:00:00", json.dumps(payload), "77.0", "92.0", "3 湿气一般", None))
     app = FastAPI()
     app.include_router(module.build_router(path, "read-fixture", ("admin-fixture", "webhook-fixture")))
     with TestClient(app, client=("172.18.0.55", 40000)) as client:
@@ -67,6 +67,38 @@ def test_public_ip_spoofed_forward_header_and_invalid_query_rejected(reports):
     with TestClient(app, client=("8.8.8.8", 40000)) as public:
         assert public.get(endpoint, params={"phone": "13800138000"},
                           headers={**headers, "X-Forwarded-For": "172.18.0.55"}).status_code == 403
+
+
+@pytest.mark.parametrize("link", [None, "", "https://evil.invalid/", "https://yk.qianmaitcm.com.evil.invalid/print_smart_healthcare/#/discriminateRingReport?reportId=R1",
+    "https://u@yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1",
+    "https://yk.qianmaitcm.com:443/print_smart_healthcare/#/discriminateRingReport?reportId=R1",
+    "http://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1",
+    "https://yk.qianmaitcm.com/other/#/discriminateRingReport?reportId=R1",
+    "https://yk.qianmaitcm.com/print_smart_healthcare/?redirect=x#/discriminateRingReport?reportId=R1",
+    "https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R2",
+    "https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1&reportId=R1",
+    "https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1&url=evil",
+    "https://yk.qianmaitcm.com/print_smart_healthcare/#/other?reportId=R1",
+    "\nhttps://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1",
+    "https://yk.qianmaitcm.com\\evil/print_smart_healthcare/#/discriminateRingReport?reportId=R1"])
+def test_original_link_missing_or_unsafe_is_not_fabricated(reports, link):
+    client, _, path = reports
+    with sqlite3.connect(path) as db:
+        db.execute("UPDATE tcm_reports SET report_print_url=? WHERE report_no='R1'", (link,))
+    response = client.get("/api/tcm/readonly/reports/R1", headers={"Authorization":"Bearer read-fixture", "X-TCM-Verified-Phone":"13800138000"})
+    assert response.status_code == 200
+    assert response.json()["original_report_url"] is None
+
+
+def test_original_link_uses_only_owned_stored_url_and_canonical_encoding(reports):
+    client, _, path = reports
+    link = "https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1"
+    with sqlite3.connect(path) as db:
+        db.execute("UPDATE tcm_reports SET report_print_url=? WHERE report_no='R1'", (link.replace('=R1', '=%52%31'),))
+    headers={"Authorization":"Bearer read-fixture", "X-TCM-Verified-Phone":"13800138000"}
+    assert client.get("/api/tcm/readonly/reports/R1", headers=headers).json()["original_report_url"] == link
+    assert client.get("/api/tcm/readonly/reports/R1", headers={**headers,"X-TCM-Verified-Phone":"13900139000"}).status_code == 404
+    assert client.get("/api/tcm/readonly/reports/R1", params={"url":link}, headers=headers).status_code == 422
 
 
 @pytest.mark.parametrize("token", ["", "admin-fixture", "webhook-fixture"])
