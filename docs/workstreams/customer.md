@@ -1,5 +1,13 @@
 # 顾客端工作流
 
+## 2026-10-07 TCM-ORIGINAL-REPORT-02（顾客真实 API 联调完成，待门禁合并）
+
+- 独立分支 `codex/customer-original-report-02`，基线 `d24557e`；后台冻结 PR #209 / `97db9278930de570a54bcab0af358dd9a83fdbe2`。仅修改顾客报告 API 类型、MyReports、报告专用样式、验证脚本及本工作流；保护既有生成文件，不改菜单、价格、品牌或后端合同。
+- 详情只用本人 API 返回的 nullable `original_report_url`，显式普通新窗口链接，`noopener noreferrer`、no-referrer；无 iframe、自动打开、预加载或客户端猜造。无链接保留原始简版结果及明确提示。新范围按服务端 notice/version 单独勾选，旧授权不自动升级，有效登录不重复 OTP。
+- 列表增加手动刷新和可见前台 focus/visibility 去重查询，无周期轮询。非授权刷新失败保留旧列表；401/403 清空报告和授权状态，明确重新登录或重新同意。详情失败重试回列表；撤回、换号和退出可取消在途查询，迟到响应不恢复健康数据。
+- 最终 `npm run build` 成功；既有相关 19 项测试已通过，本轮未重复。真实冻结 FastAPI/SQLite 身份、授权与响应 schema 联调，只有外部来源为合成数据，375/390 × 两位独立用户及空态共 6 组通过：授权升级、正确本人链接、用户点击才请求原站且无 Referer/opener、刷新与失败保留、前台事件去重、缺链接 fallback、401/403、撤回/换号/退出的延迟响应丢弃，无健康数据本地存储/埋点、无 OTP/选单写入。
+- 证据 `diy-web/output/playwright/tcm-original-report-02/result.json` 与同目录 375/390 截图。原站请求在浏览器拦截成合成 HTML，未读取真实健康报告；未证明真实原站/微信现场显示，来源归属与 URL 防御合同由后台专项验证负责。本窗口不安装来源模块、不发布生产，统一上线由总控执行。
+
 ## 2026-10-06 TCM-MY-REPORTS-01（顾客本地完成，待依赖与 CI）
 
 - 基于主干 `87f0ad4a4ce027f150e0d302bcb0fcf004e51d31` 的独立 `codex/customer-my-reports`，不包含 MENU-02。只修改 diy-web 与本工作流，不写后端/OpenAPI/生产配置。

@@ -190,7 +190,7 @@ export class ApiError extends Error {
 
 export type TcmReportConsent = { consented: boolean; version: string; notice: string };
 export type TcmReportSummary = { report_id: string; reported_at: string | null; title: '检测报告' };
-export type TcmReportDetail = TcmReportSummary & { physiques: Array<{ name: string; score: number | null }>; heart_rate: number | null; blood_oxygen: number | null; moisture: number | null };
+export type TcmReportDetail = TcmReportSummary & { original_report_url: string | null; physiques: Array<{ name: string; score: number | null }>; heart_rate: number | null; blood_oxygen: number | null; moisture: number | null };
 export type TcmReportList = { items: TcmReportSummary[]; limit: number; offset: number; has_more: boolean };
 
 export function getTcmReportConsent(token: string, signal?: AbortSignal) {
