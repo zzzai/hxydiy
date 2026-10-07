@@ -14,6 +14,63 @@ fs.mkdirSync(out, { recursive: true });
   const browser = await chromium.launch({ channel: 'chrome' });
   const results = [];
   try {
+    if (mode === 'late') {
+      for (const scenario of ['old-401-new-login', 'old-success-new-login', 'old-401-member-change']) {
+        const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+        let activeAuth = fixture.accounts.full;
+        let releaseOld, receivedOld;
+        const received = new Promise(resolve => { receivedOld = resolve; });
+        const release = new Promise(resolve => { releaseOld = resolve; });
+        let couponCalls = 0;
+        const coupon = name => ({ id: 1, name, coupon_type: 'amount', amount_cents: 1000, percent_off: 0, min_spend_cents: 0, status: 'unused', claimed_at: null, expire_at: null });
+        await context.route('**/api/v1/auth/h5/me', route => route.fulfill({ json: activeAuth.user }));
+        await context.route('**/api/v1/auth/h5/login', route => route.fulfill({ json: activeAuth }));
+        await context.route('**/api/v1/coupons', async route => {
+          couponCalls++;
+          if (couponCalls === 1) {
+            receivedOld(); await release;
+            await route.fulfill(scenario.includes('success')
+              ? { json: { items: [coupon('Old synthetic account coupon')] } }
+              : { status: 401, json: { detail: { code: 'SESSION_REPLACED', message: 'Synthetic old session replaced' } } });
+          } else await route.fulfill({ json: { items: [coupon('New synthetic account coupon')] } });
+        });
+        await context.addInitScript(value => localStorage.setItem('hxy_diy_customer_auth', JSON.stringify(value)), activeAuth);
+        const page = await context.newPage();
+        const errors = [];
+        page.on('pageerror', error => errors.push(error.message));
+        await page.goto(fixture.url);
+        await page.locator('.miniapp-profile-entry').click();
+        await received;
+        if (scenario.includes('member-change')) {
+          activeAuth = { ...activeAuth, user: { ...activeAuth.user, is_member: true, member_type: 'annual', member_expire_at: '2027-10-07T00:00:00Z' } };
+          await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+          await page.getByText('年度权益卡会员', { exact: false }).waitFor();
+        } else {
+          await page.getByRole('button', { name: '退出登录', exact: true }).click();
+          await page.locator('.profile-login').waitFor();
+          activeAuth = fixture.accounts.other;
+          await page.getByPlaceholder('请输入手机号', { exact: true }).fill(activeAuth.user.phone);
+          await page.getByPlaceholder('6 位验证码', { exact: true }).fill('123456');
+          await page.locator('.profile-login-submit').click();
+          await page.getByText('New synthetic account coupon', { exact: true }).waitFor();
+        }
+        releaseOld();
+        await page.waitForTimeout(400);
+        assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('hxy_diy_customer_auth')).token), activeAuth.token);
+        assert.equal(await page.locator('.profile-login').count(), 0);
+        assert.equal(await page.getByText('Old synthetic account coupon', { exact: true }).count(), 0);
+        assert.equal(await page.locator('.profile-error').count(), 0);
+        if (!scenario.includes('member-change')) assert(await page.getByText('New synthetic account coupon', { exact: true }).isVisible());
+        else assert.equal(await page.getByRole('button', { name: '我的券', exact: false }).count(), 0);
+        assert.equal(couponCalls, scenario.includes('member-change') ? 1 : 2);
+        assert.deepEqual(errors, []);
+        results.push({ scenario, couponCalls, oldResponseDiscarded: true, currentLoginPreserved: true });
+        await context.close();
+      }
+      fs.writeFileSync(path.join(out, 'late-result.json'), JSON.stringify({ mode, synthetic: true, results }, null, 2));
+      console.log(JSON.stringify(results));
+      return;
+    }
     for (const width of [375, 390]) {
       const member = width === 375;
       const auth = { ...fixture.accounts.full, user: { ...fixture.accounts.full.user, is_member: member, member_type: member ? 'annual' : null, member_expire_at: member ? '2027-10-07T00:00:00Z' : null } };

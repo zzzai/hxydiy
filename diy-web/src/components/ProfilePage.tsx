@@ -1,5 +1,5 @@
 import { ArrowLeft, BadgeCheck, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Ticket, UserRound, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { ApiError, cancelOrder, enrollTrustedDevice, getMyCoupons, getMyOrders, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
@@ -37,10 +37,16 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const loadRequest = useRef(0);
+  const loadContext = useRef({ open, auth, reportsOpen, onAuthChange });
+  loadContext.current = { open, auth, reportsOpen, onAuthChange };
 
   useEffect(() => { if (open && initialReportsOpen) setReportsOpen(true); }, [open, initialReportsOpen]);
 
   const loadData = useCallback((token: string, isMember: boolean) => {
+    const requestId = ++loadRequest.current;
+    const isCurrent = () => requestId === loadRequest.current && loadContext.current.open && !loadContext.current.reportsOpen
+      && loadContext.current.auth?.token === token && loadContext.current.auth.user.is_member === isMember;
     setLoading(true);
     setLoadError('');
     Promise.all([
@@ -49,22 +55,25 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
       // 会员不展示券入口，也不应请求会员无权限的券接口；否则任一 403 会让整个个人中心误报加载失败。
       isMember ? Promise.resolve([] as MyCoupon[]) : getMyCoupons(token),
     ]).then(([orderItems, sessionItems, couponItems]) => {
+      if (!isCurrent()) return;
       setOrders(orderItems);
       setSessions(sessionItems);
       setCoupons(couponItems);
     }).catch((reason) => {
+      if (!isCurrent()) return;
       if (['reauthenticate', 'session-replaced'].includes(authFailureAction(reason))) {
         clearCustomerAuth();
-        onAuthChange(null);
+        loadContext.current.onAuthChange(null);
         return;
       }
       setLoadError(reason instanceof Error ? reason.message : '加载失败，请稍后重试');
-    }).finally(() => setLoading(false));
+    }).finally(() => { if (isCurrent()) setLoading(false); });
   }, []);
 
   useEffect(() => {
-    if (!open || !auth || reportsOpen || (!SHOW_PROFILE_HISTORY && auth.user.is_member)) return;
+    if (!open || !auth || reportsOpen || (!SHOW_PROFILE_HISTORY && auth.user.is_member)) { setLoading(false); return; }
     loadData(auth.token, auth.user.is_member);
+    return () => { loadRequest.current += 1; };
   }, [open, auth?.token, auth?.user.is_member, reportsOpen, loadData]);
 
   useEffect(() => { if (auth?.user.is_member && tab === 'coupons') setTab('records'); }, [auth?.user.is_member, tab]);

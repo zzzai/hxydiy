@@ -8,6 +8,7 @@
 - 没有可靠测试标记可据此判定哪笔生产记录为假，本批不访问/删除/改写生产历史。合成历史为空仅用于观测请求，不是生产历史核查结论。
 - `profile-stability-check.cjs` before/after 两阶段同脚本真实UI＋隔离本地API；身份/历史/券为合成响应。375/390修复后观察相同真实周期及前台事件：重复 loading0、卡片重挂载0、orders/mine0、动态码请求0；普通顾客券请求1。报告进入/返回、退出清空登录、菜单价文案和评价入口正常，无溢出/页面错误。证据 `diy-web/output/playwright/customer-my-stability-03/{before,after}-result.json` 和同目录375/390前后截图。
 - `npm run build` 成功；profile/customer-auth/tcm-reports 19项及 selection-summary/submitted-selection-restore 20项通过（共39）；`git diff --check`通过。浏览器验证不代替真实微信/营业现场，本窗口不发布生产，由总控统一发布。
+- 定向审查补充：保留的券查询增加请求序号、当前token/member/open/report视图门禁与最新身份回调引用，退出/换号/切换会员或离开页面后丢弃旧响应，避免旧401清掉新登录、旧券覆盖新账号。仅新增 `late` 定向浏览器模式，旧401→新登录、旧成功→新登录、旧401→会员切换三种迟到分支均通过；证据同目录 `late-result.json`，最终构建通过，其他验证未重复。未改券API或会员身份刷新。
 
 ## 2026-10-07 TCM-ORIGINAL-REPORT-02（顾客真实 API 联调完成，待门禁合并）
 
