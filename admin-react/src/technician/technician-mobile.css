@@ -106,12 +106,5 @@
 .technician-reference-state, .technician-reference-card { display: grid; gap: 16px; }
 @media (min-width: 768px) { .technician-mobile-app { width: 430px; min-height: 100vh; margin: 0 auto; box-shadow: 0 0 0 1px #dce8e2, 0 10px 50px rgba(21,65,55,.08); } .technician-mobile-tabbar { right: calc(50% - 215px); left: calc(50% - 215px); } }
 
-.technician-member-verify { display: grid; gap: 14px; padding-bottom: 24px; }
-.technician-member-verify > h2, .technician-member-verify > p { margin: 0; }
-.technician-member-verify .ant-card-body { display: grid; gap: 14px; }
-.technician-member-verify .ant-select { width: 100%; }
-.technician-member-camera { position: relative; overflow: hidden; border-radius: 18px; background: #102e28; min-height: 280px; display: grid; place-items: center; }
-.technician-member-camera video { width: 100%; min-height: 280px; object-fit: cover; }
-.technician-member-camera .ant-spin { position: absolute; inset: auto 0 18px; }
-.technician-member-result { text-align: center; }
-.technician-member-result .anticon { color: #176c58; font-size: 42px; }
+.technician-member-paused { display: grid; gap: 16px; padding: 20px 0; }
+.technician-member-paused h1 { margin: 0; color: #0d2f29; font-size: 22px; }

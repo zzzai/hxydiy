@@ -3,19 +3,19 @@ import test from 'node:test';
 import * as technicianMobile from '../src/technician/technicianMobile.ts';
 import { TECHNICIAN_MOBILE_ROUTES, technicianAccountStatusLabel, technicianEmploymentStatusLabel, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
 
-test('移动技师端暴露会员核验独立路由', () => {
-  assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/member-verify', '/technician/history', '/technician/me']);
+test('移动技师端不再暴露会员码核验路由', () => {
+  assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/history', '/technician/me']);
 });
 
-test('会员核验使用独立入口，不扩大技师服务动作', () => {
+test('隐藏会员码入口不扩大技师服务动作', () => {
   assert.deepEqual(technicianActions('membership_verify'), []);
-  assert.equal(TECHNICIAN_MOBILE_ROUTES.includes('/technician/member-verify'), true);
+  assert.equal((TECHNICIAN_MOBILE_ROUTES as readonly string[]).includes('/technician/member-verify'), false);
 });
 
 test('底部导航使用 basename 内部路径，避免重复拼接 technician 前缀', () => {
   assert.deepEqual(
     (technicianMobile as { TECHNICIAN_MOBILE_TAB_PATHS?: readonly string[] }).TECHNICIAN_MOBILE_TAB_PATHS,
-    ['/today', '/member-verify', '/history', '/me'],
+    ['/today', '/history', '/me'],
   );
 });
 
@@ -41,6 +41,13 @@ test('服务状态只显示允许的主操作', () => {
   assert.deepEqual(technicianActions('in_service'), ['finish']);
   assert.deepEqual(technicianActions('post_service_present'), ['profile']);
   assert.deepEqual(technicianActions('released'), []);
+});
+
+test('店长保留移动端登录但只进入暂停页，不能导航到技师功能', () => {
+  assert.equal(technicianMobile.technicianMobileHome('manager'), '/member-verify');
+  assert.deepEqual(technicianMobile.technicianMobileTabs('manager'), []);
+  assert.equal(technicianMobile.technicianMobileHome('technician'), '/today');
+  assert.deepEqual(technicianMobile.technicianMobileTabs('technician'), ['/today', '/history', '/me']);
 });
 
 test('同一服务动作重复点击只提交一次请求', async () => {

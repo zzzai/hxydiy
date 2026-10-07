@@ -25,7 +25,7 @@ export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff
       }
       const response = await login(values.username || '', values.password);
       if (!['technician', 'manager'].includes(response.data.staff?.role)) {
-        message.error('该账号没有移动端会员核验权限');
+        message.error('该账号没有移动端权限');
         return;
       }
       localStorage.setItem('hxy_admin_token', response.data.token);
@@ -40,7 +40,7 @@ export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff
 
   return <main className="technician-login-page">
     <section className="technician-login-card">
-      <div className="technician-login-brand"><span>荷</span><div><Typography.Title level={2}>门店移动工作台</Typography.Title><Typography.Text>技师服务与会员核验</Typography.Text></div></div>
+      <div className="technician-login-brand"><span>荷</span><div><Typography.Title level={2}>门店移动工作台</Typography.Title><Typography.Text>技师服务与服务记录</Typography.Text></div></div>
       <Form layout="vertical" size="large" onFinish={submit} preserve>
         {mode === 'login' ? <>
           <Form.Item name="username" label="账号" rules={[{ required: true, message: '请输入账号' }]}><Input prefix={<UserOutlined />} placeholder="请输入技师或店长账号" autoComplete="username" /></Form.Item>
