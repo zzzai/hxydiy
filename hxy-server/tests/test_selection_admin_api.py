@@ -184,14 +184,14 @@ class SelectionAdminApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
-        self.assertEqual(body["pricing_snapshot"]["payable_total_cents"], 6800)
-        self.assertEqual(body["pricing_snapshot"]["lines"][0]["price_basis"], "tuesday_68")
+        self.assertEqual(body["pricing_snapshot"]["payable_total_cents"], 8000)
+        self.assertEqual(body["pricing_snapshot"]["lines"][0]["price_basis"], "member")
         with self.SessionLocal() as db:
             session = db.get(SelectionSession, session_id)
             revision = db.get(SelectionRevision, revision_id)
             line = db.query(ServiceLine).filter_by(selection_session_id=session_id).one()
-            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 6800)
-            self.assertEqual(revision.snapshot["pricing"]["payable_total_cents"], 6800)
+            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 8000)
+            self.assertEqual(revision.snapshot["pricing"]["payable_total_cents"], 8000)
             self.assertEqual(revision.snapshot["items"], session.items)
             self.assertEqual(revision.snapshot["source_marker"], "preserve-me")
             self.assertEqual(line.snapshot, session.items[0])

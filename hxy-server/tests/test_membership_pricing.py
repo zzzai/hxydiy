@@ -64,7 +64,7 @@ class ConfirmedPriceTests(unittest.TestCase):
         self.assertEqual(price.amount_cents, 2990)
         self.assertEqual(price.basis, "member")
 
-    def test_tuesday_member_uses_lower_of_member_and_store_68_percent(self):
+    def test_tuesday_member_uses_member_price_without_automatic_discount(self):
         price = confirmed_price_for_line(
             prices={"store": 3990, "member": 2990},
             is_member=True,
@@ -74,8 +74,8 @@ class ConfirmedPriceTests(unittest.TestCase):
             member_type="annual",
         )
 
-        self.assertEqual(price.amount_cents, 2713)
-        self.assertEqual(price.basis, "tuesday_68")
+        self.assertEqual(price.amount_cents, 2990)
+        self.assertEqual(price.basis, "member")
 
     def test_tuesday_keeps_member_price_when_it_is_lower_or_equal(self):
         lower = confirmed_price_for_line(
@@ -100,7 +100,7 @@ class ConfirmedPriceTests(unittest.TestCase):
         self.assertEqual(equal.amount_cents, 2720)
         self.assertEqual(equal.basis, "member")
 
-    def test_tuesday_is_determined_by_store_timezone_not_system_timezone(self):
+    def test_tuesday_timezone_does_not_enable_automatic_discount(self):
         price = confirmed_price_for_line(
             prices={"store": 3990, "member": 2990},
             is_member=True,
@@ -110,19 +110,19 @@ class ConfirmedPriceTests(unittest.TestCase):
             member_type="annual",
         )
 
-        self.assertEqual(price.amount_cents, 2713)
-        self.assertEqual(price.basis, "tuesday_68")
+        self.assertEqual(price.amount_cents, 2990)
+        self.assertEqual(price.basis, "member")
 
-    def test_tuesday_discount_is_annual_only_and_expiry_is_strict(self):
+    def test_tuesday_uses_member_price_and_expiry_is_strict(self):
         confirmed_at = datetime(2026, 8, 18, 2, 0, tzinfo=timezone.utc)
         cases = [
-            ("annual-active", "annual", datetime(2027, 8, 18, tzinfo=timezone.utc), 6800, "tuesday_68"),
+            ("annual-active", "annual", datetime(2027, 8, 18, tzinfo=timezone.utc), 8000, "member"),
             ("stored-active", "stored", datetime(2027, 8, 18, tzinfo=timezone.utc), 8000, "member"),
             ("monthly-active", "monthly", datetime(2027, 8, 18, tzinfo=timezone.utc), 8000, "member"),
             ("unknown-active", None, datetime(2027, 8, 18, tzinfo=timezone.utc), 8000, "member"),
             ("annual-expired-before", "annual", datetime(2026, 8, 18, 1, 59, tzinfo=timezone.utc), 10000, "store"),
             ("annual-expires-at-confirmation", "annual", confirmed_at, 10000, "store"),
-            ("annual-expires-after-confirmation", "annual", datetime(2026, 8, 18, 2, 1, tzinfo=timezone.utc), 6800, "tuesday_68"),
+            ("annual-expires-after-confirmation", "annual", datetime(2026, 8, 18, 2, 1, tzinfo=timezone.utc), 8000, "member"),
         ]
 
         for label, member_type, member_expire_at, expected_amount, expected_basis in cases:
@@ -283,8 +283,8 @@ class OptionChargeTests(unittest.TestCase):
                 ),
             )
 
-        self.assertEqual(charge.amount_cents, 4692)
-        self.assertEqual(charge.basis, "tuesday_68")
+        self.assertEqual(charge.amount_cents, 4900)
+        self.assertEqual(charge.basis, "member")
         self.assertEqual(charge.price_source, "linked_project")
         self.assertEqual(charge.source_ref["price_book_project_id"], charge.choice_snapshot["linked_project_id"])
         self.assertTrue(charge.choice_snapshot["annual_gift_eligible"])
@@ -461,7 +461,7 @@ class OptionChargeTests(unittest.TestCase):
             member_type="annual",
         )
 
-        self.assertEqual(active.basis, "tuesday_68")
+        self.assertEqual(active.basis, "member")
         self.assertEqual(expired.basis, "store")
 
     def test_legacy_annual_member_without_expiry_is_not_priced_as_active(self):
