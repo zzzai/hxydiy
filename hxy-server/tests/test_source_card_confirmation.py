@@ -50,7 +50,7 @@ def make_selection(api, cards, *, verified=True):
 
 @pytest.mark.parametrize("cards,verified,expected,basis", [
     ([{}], True, 2990, "member"),
-    ([{"card_type": "annual", "expires_at": NOW + timedelta(days=1)}], True, 2713, "tuesday_68"),
+    ([{"card_type": "annual", "expires_at": NOW + timedelta(days=1)}], True, 2990, "member"),
     ([{"expires_at": NOW}], True, 3990, "store"),
     ([{"balance_cents": 0}], True, 3990, "store"),
     ([{"status": "disabled"}], True, 3990, "store"),
@@ -58,7 +58,7 @@ def make_selection(api, cards, *, verified=True):
     ([{"store_id": 99999}], True, 3990, "store"),
     ([{}], False, 3990, "store"),
     ([{"card_type": "annual", "expires_at": NOW}, {}], True, 2990, "member"),
-    ([{"balance_cents": 0}, {"card_type": "annual", "expires_at": NOW + timedelta(days=1)}], True, 2713, "tuesday_68"),
+    ([{"balance_cents": 0}, {"card_type": "annual", "expires_at": NOW + timedelta(days=1)}], True, 2990, "member"),
 ])
 def test_confirmation_resolves_current_store_rights_at_confirmation(api, cards, verified, expected, basis):
     key = make_selection(api, cards, verified=verified)
@@ -97,7 +97,33 @@ def test_card_exhausted_after_scan_is_rechecked_before_confirmation(api):
         assert db.get(SelectionSession, key).pricing_snapshot["payable_total_cents"] == 3990
 
 
-@pytest.mark.parametrize("card,unit", [({}, 2990), ({"card_type": "annual", "expires_at": NOW + timedelta(days=1)}, 2713)])
+def test_previously_frozen_tuesday_discount_is_not_repriced_on_retry(api):
+    from copy import deepcopy
+
+    key = make_selection(api, [{"card_type": "annual", "expires_at": NOW + timedelta(days=1)}])
+    headers = {"Authorization": f"Bearer {create_staff_token(api.staff_id, 'admin')}"}
+    with patch("app.api.admin_v2.datetime", FrozenDateTime):
+        assert api.client.post(f"/api/v1/admin/v2/selection-sessions/{key}/confirm", headers=headers).status_code == 200
+    with api.SessionLocal() as db:
+        session = db.get(SelectionSession, key)
+        legacy = deepcopy(session.pricing_snapshot)
+        legacy['payable_total_cents'] = 2713
+        legacy['lines'][0]['price_basis'] = 'tuesday_68'
+        legacy['lines'][0]['unit_payable_price_cents'] = 2713
+        legacy['lines'][0]['payable_line_total_cents'] = 2713
+        session.pricing_snapshot = legacy
+        revision = db.query(SelectionRevision).filter_by(selection_session_id=key).one()
+        old_revision = deepcopy(revision.snapshot)
+        old_revision['pricing'] = legacy
+        revision.snapshot = old_revision
+        db.commit()
+    assert api.client.post(f"/api/v1/admin/v2/selection-sessions/{key}/confirm", headers=headers).status_code == 200
+    with api.SessionLocal() as db:
+        assert db.get(SelectionSession, key).pricing_snapshot == legacy
+        assert db.query(SelectionRevision).filter_by(selection_session_id=key).one().snapshot == old_revision
+
+
+@pytest.mark.parametrize("card,unit", [({}, 2990), ({"card_type": "annual", "expires_at": NOW + timedelta(days=1)}, 2990)])
 def test_approved_addition_uses_source_rights_and_preserves_prior_revision(api, card, unit):
     key = make_selection(api, [card])
     headers = {"Authorization": f"Bearer {create_staff_token(api.staff_id, 'admin')}"}

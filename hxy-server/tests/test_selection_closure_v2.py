@@ -1000,10 +1000,10 @@ class SelectionClosureV2Tests(unittest.TestCase):
             revision = db.get(SelectionRevision, revision_id)
             change = db.get(SelectionChangeRequest, change_id)
             lines = db.query(ServiceLine).filter_by(selection_session_id=session_id).all()
-            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 13600)
+            self.assertEqual(session.pricing_snapshot["payable_total_cents"], 16000)
             self.assertEqual(
                 [line["price_basis"] for line in session.pricing_snapshot["lines"]],
-                ["tuesday_68", "tuesday_68"],
+                ["member", "member"],
             )
             self.assertEqual(revision.snapshot["pricing"], session.pricing_snapshot)
             self.assertEqual(revision.snapshot["items"], session.items)

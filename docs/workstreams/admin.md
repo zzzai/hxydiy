@@ -1,5 +1,10 @@
 # 管理后台与员工工作台工作流
 
+## 2026-10-08 MEMBER-BENEFITS-20261008
+
+- 独立会员计划工具 `scripts/reconcile_member_plans_20261008.py` 仅修改annual/stored的name/price_cents/benefits，不运行#218全菜单工具，不停monthly、不写个人卡。
+- 新确认不再自动6.8折；保留本店核验/多卡/有效期及历史冻结。买赠人工确认，未确定配对/补差/叠加不猜。顾客窗口负责前端，本窗口唯一维护共享合同。生产由总控执行，操作见 `../operations/member-benefits-20261008.md`。
+
 ## 2026-10-08 QR-PRINTED-BINDING-20261008
 
 - 总控已发布#219主干 `3b5629a36c68` 并完成8条原短码换绑；current/MANIFEST/health通过，原图8/8跳转和签名通过，Rooms及历史保护不变。新增占用647由用户单独确认为测试后保留历史收尾；勿重复应用或扩大历史清理。实体扫码待核对，详见下述生产记录。

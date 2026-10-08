@@ -151,7 +151,7 @@ def confirmed_price_for_line(
     store = _price_value(prices, ("store",))
     if store is None:
         raise ValueError("store price is required")
-    local_confirmed_at = _aware(confirmed_at).astimezone(_store_zone(store_timezone))
+    _aware(confirmed_at).astimezone(_store_zone(store_timezone))
     if not _membership_is_active(is_member, member_expire_at, confirmed_at, member_type):
         return ConfirmedPrice(amount_cents=store, basis="store")
 
@@ -159,10 +159,7 @@ def confirmed_price_for_line(
     if member is None:
         raise ValueError("member price is required")
 
-    if member_type == "annual" and local_confirmed_at.weekday() == 1:
-        tuesday_amount = round(store * 0.68)
-        if tuesday_amount < member:
-            return ConfirmedPrice(amount_cents=tuesday_amount, basis="tuesday_68")
+    # Tuesday buy-one-get-one requires store confirmation; never infer a discount.
     return ConfirmedPrice(amount_cents=member, basis="member")
 
 
