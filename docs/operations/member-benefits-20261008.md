@@ -1,6 +1,17 @@
 # 会员权益独立交付
 
-状态：开发验证，生产由总控唯一执行。不能合并或运行#218全菜单工具。
+状态：已合并、生产发布和两条计划配置核验通过；真实微信/门店人工买赠未验收。不能合并或运行#218全菜单工具。
+
+## 2026-10-08 生产事实（Asia/Shanghai）
+
+- 顾客#221 HEAD `b0d7c665dd82d0496034c823162c14a4940aacfc`，后台#222 HEAD `44212bd0e5b4636dfb8455da5172e4ca119b761b`；最终主干 `730da016cec3c7935ede3593c370a1f68eb9ac0c`，CI `37715825818`、正式部署 `37716156991` 成功。current `/root/hxy-diy-20260811/releases/github-730da016cec3-37716156991`，MANIFEST与健康通过；运行定价SHA `bd65ff310ec220ae10b4a22daf07eb0ea6078ebedd4e958ba0ee4fbb224b2314`，工具SHA `614e1395dd200f129435812ae15c888976948c2b4215bc49daf0e50cc7f00618`。
+- 生产旧annual金额9900、stored金额50000本来正确；实际差异是名称与权益，旧annual周二6.8折/赠89元说明、stored仅退款说明均已替换。原monthly计划行保持不变，但顾客端不再推广。
+- 应用前官方备份 `/root/hxy-diy-20260811/backups/daily/daily-20261008T021625Z-25d3bea90921410ab6be19e1.dump`，649239字节，SHA `cc78c6f7ab769c56fb6bd79d85927140326474e994d3c8b91d43072045987c47`，真实隔离恢复通过；复制真实dump至容器 `/tmp/member-plans-preapply-20261008.dump` 并再次核验SHA。
+- 新只读预览hash `f7ce09e59b4e3ebc5419da37e209d60434a81dabd275e5ba2c1edf2b260a1cf8`，仅annual/stored两项；显式apply后再预览changed=0。22张卡及余额、2条赠送记录、16项目、66价格、原月卡、充值、订单、612选单与85修订的前后保护摘要全部一致。记录只保留计数/哈希，不输出顾客隐私；没有真实赠送/消费/选单验证写入。
+- 公网首页加载 `index-B9tj80LU.js`，公网与安装资源SHA `7d9d590bb0ebb58f8e3fc35acd50e3b0065d72eaa5e1be7496b3ea0ce560b0a8` 一致，含新版两种卡和完整权益文案。正式容器使用合成数据直接调用实际定价函数，年度/储值周二都取普通会员价，不自动6.8折、不自动买赠、无数据库写入；已冻结旧basis兼容由110测试/34子测试及真实HTTP历史重试合同验证。
+- 顾客窗口19相关测试及构建、375/390入口→两类详情→返回、完整文案/无溢出/旧推广清除、登录/报告/隐藏功能保护通过；服务器断网隔离110测试34子测试通过，未接生产库。顾客UI证据在 `C:/Users/gaoji/.codex/worktrees/customer-review-five/customer/diy-web/output/playwright/customer-membership-plans-03/`，总控发布/配置/公网证据在总控隔离区 `output/member-benefits-20261008/{deployment,plan-application,public-verification}.json`。UI证据为隔离会话，不冒充真机现场。
+
+范围保持会员only，不包含#218的14项菜单改价；二维码与报告、动态会员码/历史临时隐藏保持。旧seed不是当前计划事实来源，不运行它覆盖配置。买赠配对/补差/续卡/叠加仍未确定，人工赠送须门店确认，不以新宣传文案虚构旧顾客已有赠品。生产已核验项不为记录重复检查或部署。
 
 ## 范围和依据
 
