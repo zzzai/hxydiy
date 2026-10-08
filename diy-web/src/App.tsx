@@ -50,6 +50,7 @@ import CouponLoginDialog from './components/CouponLoginDialog';
 import FeedbackDialog from './components/FeedbackDialog';
 import MembershipDetailPage, { type MembershipKind } from './components/MembershipDetailPage';
 import ProfilePage from './components/ProfilePage';
+import { MEMBERSHIP_PLANS } from './profile';
 import RecordLoginDialog from './components/RecordLoginDialog';
 import SavingHintDialog from './components/SavingHintDialog';
 import SelectionSummarySheet from './components/SelectionSummarySheet';
@@ -1887,12 +1888,12 @@ export default function App() {
         </button>
         {shouldShowMembershipPromos(isMember) && <>
         <button type="button" className="miniapp-promo membership-promo annual" onClick={() => openMembership('annual')}>
-          <span className="promo-copy"><small>年度权益 · 全年会员价</small><strong>99元会员年度权益卡</strong><em>到店办理<i>开通后生效</i></em></span>
-          <span className="membership-promo-badge">99</span>
+          <span className="promo-copy"><small>一年有效 · 享会员价</small><strong>{MEMBERSHIP_PLANS.annual.price}元{MEMBERSHIP_PLANS.annual.name}</strong><em>联系前台办理<i>门店确认</i></em></span>
+          <span className="membership-promo-badge">{MEMBERSHIP_PLANS.annual.price}</span>
         </button>
-        <button type="button" className="miniapp-promo membership-promo monthly" onClick={() => openMembership('monthly')}>
-          <span className="promo-copy"><small>不限次泡脚</small><strong>泡脚月卡 30 天</strong><em>到店办理<i>仅限本人</i></em></span>
-          <span className="membership-promo-badge">499</span>
+        <button type="button" className="miniapp-promo membership-promo monthly" onClick={() => openMembership('stored')}>
+          <span className="promo-copy"><small>储值权益 · 享会员价</small><strong>{MEMBERSHIP_PLANS.stored.price}元{MEMBERSHIP_PLANS.stored.name}</strong><em>联系前台办理<i>余额用完失效</i></em></span>
+          <span className="membership-promo-badge">{MEMBERSHIP_PLANS.stored.price}</span>
         </button>
         </>}
         {featured.map((project, index) => (

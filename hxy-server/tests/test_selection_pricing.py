@@ -275,9 +275,9 @@ class SelectionPricingTests(unittest.TestCase):
         self.assertEqual(line["resolved_charge"]["amount_cents"], 2400)
         self.assertEqual(line["resolved_charge"]["source_ref"]["option_choice_id"], self.dedicated_id)
 
-    def test_dedicated_choice_tuesday_price_is_only_for_active_annual_member(self):
+    def test_dedicated_choice_tuesday_price_matches_member_price(self):
         contexts = [
-            ("annual", 2040, "tuesday_68"),
+            ("annual", 2400, "member"),
             ("stored", 2400, "member"),
         ]
         for member_type, expected_amount, expected_basis in contexts:
@@ -356,7 +356,7 @@ class SelectionPricingTests(unittest.TestCase):
         self.assertEqual(pricing["lines"], [])
         self.assertEqual(pricing["payable_total_cents"], 0)
 
-    def test_tuesday_confirmation_uses_68_percent_store_price_for_active_annual_member(self):
+    def test_tuesday_confirmation_uses_member_price_for_active_annual_member(self):
         with self.SessionLocal() as db:
             project = Project(
                 store_id=1,
@@ -387,10 +387,10 @@ class SelectionPricingTests(unittest.TestCase):
                 ),
             )
 
-        self.assertEqual(pricing["lines"][0]["price_basis"], "tuesday_68")
-        self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], 6800)
-        self.assertEqual(pricing["lines"][0]["payable_line_total_cents"], 6800)
-        self.assertEqual(pricing["payable_total_cents"], 6800)
+        self.assertEqual(pricing["lines"][0]["price_basis"], "member")
+        self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], 8000)
+        self.assertEqual(pricing["lines"][0]["payable_line_total_cents"], 8000)
+        self.assertEqual(pricing["payable_total_cents"], 8000)
 
     def test_tuesday_foot_bath_promotion_waives_confirmed_base_but_not_addon(self):
         with self.SessionLocal() as db:
@@ -438,11 +438,11 @@ class SelectionPricingTests(unittest.TestCase):
                 ),
             )
 
-        # 泡脚+addon 周二确认价 4073；两个局部各 4692；只免泡脚基础周二确认价 2713。
-        self.assertEqual(pricing["lines"][0]["price_basis"], "tuesday_68")
-        self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], 4073)
-        self.assertEqual(pricing["promotion_adjustment_cents"], -2713)
-        self.assertEqual(pricing["payable_total_cents"], 10744)
+        # The existing bundle waives only the member-priced foot bath, not add-ons.
+        self.assertEqual(pricing["lines"][0]["price_basis"], "member")
+        self.assertEqual(pricing["lines"][0]["unit_payable_price_cents"], 4990)
+        self.assertEqual(pricing["promotion_adjustment_cents"], -2990)
+        self.assertEqual(pricing["payable_total_cents"], 11800)
 
     def test_foot_bath_promotion_waives_full_store_price_for_non_member(self):
         with self.SessionLocal() as db:
