@@ -96,9 +96,9 @@ test('到店记录优先显示服务端当前预计或冻结金额，不把会�
   assert.equal(selectionDisplayAmount({ store_total_cents: 3990, member_total_cents: 2990 }), 3990);
 });
 
-test('年度权益卡准确说明周二低价规则与一次赠送规则', () => {
-  assert.equal(ANNUAL_MEMBERSHIP_BENEFITS.tuesday, '每周二，会员价与门店价 6.8 折取较低价');
-  assert.equal(ANNUAL_MEMBERSHIP_BENEFITS.gift, '办理会员年度权益卡时，可获赠 1 项门店价 99 元以下项目；仅赠送一次，不与其他优惠叠加');
+test('会员权益准确说明周二门店价主项买赠与开卡赠送规则', () => {
+  assert.equal(ANNUAL_MEMBERSHIP_BENEFITS.tuesday, '每周二按门店价消费任意主项，买一赠一');
+  assert.equal(ANNUAL_MEMBERSHIP_BENEFITS.gift, '开卡赠门店价不高于99元的项目1次');
 });
 
 test('优惠券状态映射', () => {

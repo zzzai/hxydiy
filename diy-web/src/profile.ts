@@ -1,10 +1,17 @@
 /** 个人中心展示工具：脱敏、状态文案、时间格式化。 */
 
 export const ANNUAL_MEMBERSHIP_BENEFITS = {
-  standard: '全年消费享会员价',
-  tuesday: '每周二，会员价与门店价 6.8 折取较低价',
-  gift: '办理会员年度权益卡时，可获赠 1 项门店价 99 元以下项目；仅赠送一次，不与其他优惠叠加',
+  standard: '有效权益期间享会员价',
+  tuesday: '每周二按门店价消费任意主项，买一赠一',
+  gift: '开卡赠门店价不高于99元的项目1次',
 } as const;
+
+export const MEMBERSHIP_PLANS = {
+  annual: { name: '年度会员权益卡', price: '99', unit: '元/年', validity: '一年有效', summary: '一年有效，享会员价' },
+  stored: { name: '储值权益卡', price: '500', unit: '元', validity: '余额用完，会员权益失效', summary: '储值享会员价，余额用完权益失效' },
+} as const;
+export const STORED_MEMBERSHIP_TEA = '储值开卡另赠价值29.9元养生茶1盒';
+export const MEMBERSHIP_STORE_CONFIRMATION = '买赠与赠品由门店确认，请到店联系前台办理。';
 
 export function maskedPhone(phone: string): string {
   if (phone.length !== 11) return phone;
