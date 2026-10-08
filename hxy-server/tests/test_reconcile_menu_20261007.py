@@ -1,17 +1,32 @@
 import pytest
+import os
+import uuid
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.engine import make_url
 
 from app.db.session import Base
 from app.models import MemberPlan, Order, PriceBook, Project, Store, User
 from app.seed import seed
 from scripts.reconcile_menu_20261007 import reconcile_menu
+from scripts.reconcile_member_plans_20261008 import reconcile_member_plans
 
 
 @pytest.fixture
 def db():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    url = os.getenv("HXY_MENU_TEST_POSTGRES_URL")
+    control = None
+    if url:
+        if make_url(url).database != "menu_20261007_test":
+            raise ValueError("isolated_menu_database_required")
+        schema = "menu_test_" + uuid.uuid4().hex
+        control = create_engine(url, isolation_level="AUTOCOMMIT")
+        with control.connect() as connection:
+            connection.execute(text(f"CREATE SCHEMA {schema}"))
+        engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
+    else:
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as db:
         seed(db)
@@ -20,8 +35,14 @@ def db():
         db.add(MemberPlan(code="stored", name="Old stored", price_cents=50000,
                           benefits=["Old"], status="published"))
         db.commit()
+        reconcile_member_plans(db, apply=True, expected_hash=reconcile_member_plans(db)["preview_hash"])
+        db.commit()
         yield db
     engine.dispose()
+    if control:
+        with control.connect() as connection:
+            connection.execute(text(f"DROP SCHEMA {schema} CASCADE"))
+        control.dispose()
 
 
 def rows(db, table):
@@ -180,3 +201,44 @@ def test_cli_apply_without_backup_or_hash_refuses_before_db(monkeypatch):
     with pytest.raises(SystemExit) as error:
         main()
     assert error.value.code == 2
+
+
+def test_menu_refuses_membership_drift_without_rewriting_plans(db):
+    annual = db.scalar(select(MemberPlan).where(MemberPlan.code == "annual"))
+    annual.benefits = ["Changed independently"]
+    db.commit()
+    before = {name: rows(db, name) for name in ["projects", "price_book", "member_plans"]}
+    preview = reconcile_menu(db)
+    assert preview["changed_plans"] == 1
+    with pytest.raises(ValueError, match="membership_plan_drift"):
+        reconcile_menu(db, apply=True, expected_hash=preview["preview_hash"])
+    db.rollback()
+    assert {name: rows(db, name) for name in before} == before
+
+
+def test_cli_apply_requires_actual_backup_sha(monkeypatch, tmp_path, capsys):
+    from scripts.reconcile_menu_20261007 import main
+    backup = tmp_path / "backup.dump"
+    backup.write_bytes(b"synthetic-backup")
+    monkeypatch.setattr("sys.argv", ["reconcile_menu_20261007", "--apply", "--expected-hash", "x",
+                                   "--backup-reference", str(backup), "--backup-sha256", "0" * 64])
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+    assert "backup SHA256 mismatch" in capsys.readouterr().err
+
+
+def test_correctly_hashed_proof_file_is_not_a_database_dump(monkeypatch, tmp_path, capsys):
+    import hashlib
+    from scripts import reconcile_menu_20261007 as tool
+
+    proof = tmp_path / "proof.txt"
+    proof.write_bytes(b"backup verified")
+    digest = hashlib.sha256(proof.read_bytes()).hexdigest()
+    monkeypatch.setattr("sys.argv", ["reconcile_menu_20261007", "--apply", "--expected-hash", "x",
+                                   "--backup-reference", str(proof), "--backup-sha256", digest])
+    monkeypatch.setattr(tool, "SessionLocal", lambda: pytest.fail("proof file accepted as actual dump"))
+    with pytest.raises(SystemExit) as error:
+        tool.main()
+    assert error.value.code == 2
+    assert "PostgreSQL custom-format dump" in capsys.readouterr().err

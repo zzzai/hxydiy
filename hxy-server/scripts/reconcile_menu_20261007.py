@@ -11,6 +11,7 @@ from sqlalchemy import or_, select, text
 from app.db.session import SessionLocal
 from app.domain.catalog_options import acquire_catalog_mutation_lock, verify_published_catalog_hash
 from app.models import AuditLog, MemberPlan, PriceBook, Project, ProjectCatalogVersion
+from scripts.reconcile_member_plans_20261008 import PLAN_COPY
 
 VERSION = "menu-20261007"
 # Stable codes are historical identifiers, not promises about duration.
@@ -45,23 +46,6 @@ MENU = [
     ("hxy-cupping-scraping-1", "拔罐/刮痧", None, 5900, 2900,
      "拔罐护理或刮痧护理（任选其一）"),
 ]
-
-PLAN_COPY = {
-    "annual": ("年度会员权益卡", 9900, [
-        "一年有效，消费享会员价",
-        "每周二按门店价消费任意主项，买一赠一",
-        "开卡赠门店价不高于99元项目1次",
-        "赠送及周二组合由门店确认，不自动抵扣",
-    ]),
-    "stored": ("储值权益卡", 50000, [
-        "余额耗尽失效，有效期间消费享会员价",
-        "每周二按门店价消费任意主项，买一赠一",
-        "开卡赠门店价不高于99元项目1次",
-        "另赠价值29.9元养生茶1盒",
-        "赠送及周二组合由门店确认，不自动抵扣",
-    ]),
-}
-
 
 def reconcile_menu(db, *, apply=False, expected_hash=None):
     if apply:
@@ -119,12 +103,14 @@ def reconcile_menu(db, *, apply=False, expected_hash=None):
     report = {"version": VERSION, "changed_projects": len(project_changes), "prices_added": len(price_changes),
               "changed_plans": len(plan_changes), "project_changes": project_changes,
               "price_changes": price_changes, "plan_changes": plan_changes, "preserved_group_prices": preserved_groups,
-              "unresolved": ["legacy_tuesday_68_algorithm_not_changed", "main_item_pairing_topup_renewal_stacking_manual", "monthly_plan_preserved"]}
+              "unresolved": ["main_item_pairing_topup_renewal_stacking_manual", "monthly_plan_preserved"]}
     preview_hash = hashlib.sha256(json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     report["preview_hash"] = preview_hash
     if apply:
         if expected_hash != preview_hash:
             raise ValueError("preview_hash_mismatch")
+        if plan_changes:
+            raise ValueError("membership_plan_drift")
         for change in project_changes:
             for key, delta in change["fields"].items():
                 setattr(projects[change["code"]], key, delta["after"])
@@ -133,10 +119,7 @@ def reconcile_menu(db, *, apply=False, expected_hash=None):
                 db.get(PriceBook, before["id"]).effective_to = now
             db.add(PriceBook(project_id=change["project_id"], price_type=change["price_type"],
                              amount_cents=change["after"], version=VERSION, publisher="confirmed-menu-20261007", published_at=now))
-        for change in plan_changes:
-            for key, delta in change["fields"].items():
-                setattr(plans[change["code"]], key, delta["after"])
-        if project_changes or price_changes or plan_changes:
+        if project_changes or price_changes:
             db.add(AuditLog(actor_type="system", actor_id="MENU-20261001", store_id=1,
                             action="confirmed_menu_reconciled", entity_type="menu", entity_id=VERSION, detail=report))
         db.flush()
@@ -148,11 +131,21 @@ def main():
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-hash")
     parser.add_argument("--backup-reference", type=Path)
+    parser.add_argument("--backup-sha256")
     args = parser.parse_args()
     if args.apply and (not args.expected_hash or not args.backup_reference
                        or not args.backup_reference.is_file() or args.backup_reference.is_symlink()
                        or args.backup_reference.stat().st_size == 0):
-        parser.error("--apply requires exact preview hash and verified nonempty backup reference")
+        parser.error("--apply requires exact preview hash and a nonempty actual backup")
+    if args.apply:
+        with args.backup_reference.open("rb") as stream:
+            header = stream.read(5)
+            stream.seek(0)
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if not args.backup_sha256 or digest != args.backup_sha256:
+            parser.error("backup SHA256 mismatch")
+        if header != b"PGDMP":
+            parser.error("apply requires an actual PostgreSQL custom-format dump")
     with SessionLocal() as db:
         try:
             if db.bind.dialect.name == "postgresql":
