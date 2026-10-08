@@ -55,6 +55,8 @@ test('选项说明移除到店确认等内部词并保留真实时长或体验�
   assert.equal(customerOptionDescription('15分钟 · 到店确认', 15), '约15分钟');
   assert.equal(customerOptionDescription('到店确认部位', 30), '约30分钟');
   assert.equal(customerOptionDescription('', 30), '约30分钟');
+  assert.equal(customerOptionDescription('30分钟', null), '按次服务');
+  assert.equal(customerOptionDescription('', undefined), '按次服务');
   assert.equal(customerOptionDescription('舒缓花香', 90), '舒缓花香');
 });
 

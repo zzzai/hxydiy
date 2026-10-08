@@ -250,6 +250,8 @@ export default function ProjectDetailPage({
   };
   const catalogErrors = catalogPublished ? validateCatalogSelection(catalogGroups, draftChoiceIds) : [];
   const basePrices = detailBasePriceComparison(project, isMember);
+  const memberOnly = !project.prices.some((item) => item.price_type === 'store') && project.prices.some((item) => item.price_type === 'member');
+  const packageUnit = project.price_label?.includes('套') ? project.price_label : undefined;
   const configuredPrices = detailPriceComparison(preview, isMember);
   const detailVisualSections = projectDetailVisuals(project.code);
   const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
@@ -271,7 +273,7 @@ export default function ProjectDetailPage({
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
           <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={project.code === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
-          <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} />
+          <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} memberOnly={memberOnly} unit={packageUnit} />
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
 
@@ -310,7 +312,7 @@ export default function ProjectDetailPage({
                 const active = draftLocalParts.includes(part);
                 return (
                   <div className={active ? 'active' : ''} key={part}>
-                    <button type="button" aria-pressed={active} disabled={readOnly} onClick={() => toggleLocalPart(part)}><span><strong>{part}调理</strong><small>约 {localProject.duration_min || 30} 分钟</small></span><em>+{formatMoney(effectivePrice(localProject, isMember))}</em></button>
+                    <button type="button" aria-pressed={active} disabled={readOnly} onClick={() => toggleLocalPart(part)}><span><strong>{part}调理</strong><small>{localProject.duration_min ? `约 ${localProject.duration_min} 分钟` : '按次服务'}</small></span><em>+{formatMoney(effectivePrice(localProject, isMember))}</em></button>
                   </div>
                 );
               })}
@@ -326,7 +328,7 @@ export default function ProjectDetailPage({
               {attachableAddons.map((item) => {
                 const active = draftAddOnIds.includes(item.id);
                 const addonGuidance = priceGuidanceForPrices(item.prices.store, item.prices.member, { is_member: isMember });
-                return <button key={item.id} type="button" disabled={readOnly} className={active ? 'active' : ''} onClick={() => toggleAddOn(item.id)}><span><strong>{item.name}</strong><small>{item.summary || `${item.duration_min || 15}分钟 · 可加选`}</small></span><span className="addon-price">{item.chargeable ? <><em>+{formatMoney(addonGuidance.primaryCents)}</em>{addonGuidance.memberHintCents !== null && addonGuidance.memberHintCents < addonGuidance.primaryCents && <small>{addonGuidance.hintText.replace('登录享', '登录后享')}</small>}</> : <em>免费</em>}</span></button>;
+                return <button key={item.id} type="button" disabled={readOnly} className={active ? 'active' : ''} onClick={() => toggleAddOn(item.id)}><span><strong>{item.name}</strong><small>{item.summary || (item.duration_min ? `${item.duration_min}分钟 · 可加选` : '可加选')}</small></span><span className="addon-price">{item.chargeable ? <><em>+{formatMoney(addonGuidance.primaryCents)}</em>{addonGuidance.memberHintCents !== null && addonGuidance.memberHintCents < addonGuidance.primaryCents && <small>{addonGuidance.hintText.replace('登录享', '登录后享')}</small>}</> : <em>免费</em>}</span></button>;
               })}
             </div>
           </section>
@@ -382,7 +384,7 @@ export default function ProjectDetailPage({
       </main>
 
       {(!detailOnly || (project && isFixedProject(project) && project.category === 'small')) && <footer className="mini-detail-footer">
-        <div className="mini-detail-total"><span>{configuredPrices.currentLabel}{isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>}</span><strong>{formatMoney(configuredPrices.currentCents)}</strong></div>
+        <div className="mini-detail-total"><span>{memberOnly ? '会员价' : configuredPrices.currentLabel}{packageUnit && ` · ${packageUnit}`}{!memberOnly && (isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>)}</span><strong>{formatMoney(configuredPrices.currentCents)}</strong></div>
         <div className="mini-detail-actions">
           <button className="primary" type="button" disabled={readOnly || catalogErrors.length > 0} onClick={() => onConfirm({ project, preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, ...(catalogPublished && project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds, linkedProjectIds: [...new Set([...catalogChoices.filter((choice) => draftChoiceIds.includes(choice.id) && choice.linked_project_id !== null).map((choice) => choice.linked_project_id as number), ...draftRelaxProjectIds])] } : {}) })}>{projectDetailActionLabel(selected, readOnly, catalogErrors.length > 0)}<ChevronRight size={17} /></button>
         </div>

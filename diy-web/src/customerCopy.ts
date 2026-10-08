@@ -66,15 +66,15 @@ function normalizedParts(parts: string[]): string[] {
 
 export function customerOptionDescription(
   description: string | null | undefined,
-  durationMin: number,
+  durationMin: number | null | undefined,
 ): string {
   const cleaned = (description || '')
     .replace(/到店确认部位|到店确认/g, '')
     .replace(/^[\s·｜|,，、;；:：-]+|[\s·｜|,，、;；:：-]+$/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
-  if (!cleaned) return `约${durationMin}分钟`;
-  if (/^\d+分钟$/.test(cleaned)) return `约${cleaned}`;
+  if (!cleaned) return durationMin && durationMin > 0 ? `约${durationMin}分钟` : '按次服务';
+  if (/^\d+分钟$/.test(cleaned)) return durationMin && durationMin > 0 ? `约${durationMin}分钟` : '按次服务';
   return cleaned;
 }
 

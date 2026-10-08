@@ -128,20 +128,27 @@ test('顾客端新选单不再提交茶饮偏好', () => {
   assert.deepEqual(items, []);
 });
 
-test('两个 SPA 使用可区分的顾客名称', () => {
-  assert.equal(displayProjectName(project({ id: 60, code: 'hxy-spa-60', category: 'care', name: '精油SPA' })), '60分钟精油SPA');
-  assert.equal(displayProjectName(project({ id: 90, code: 'hxy-spa-90', category: 'care', name: '精油SPA' })), '90分钟精油SPA');
+test('SPA 使用服务端配置的顾客名称', () => {
+  assert.equal(displayProjectName(project({ id: 60, code: 'hxy-spa-60', category: 'care', name: '舒压SPA' })), '舒压SPA');
+  assert.equal(displayProjectName(project({ id: 90, code: 'hxy-spa-90', category: 'care', name: '安神SPA' })), '安神SPA');
 });
 
 test('项目摘要为空时仍生成顾客可读文案，足部精修明确为脚底', () => {
   const foot = project({ id: 14, code: 'hxy-foot-refine-1', category: 'small', name: '足部精修', summary: '', duration_min: null });
-  assert.equal(customerProjectSummaryText(foot), '现煮草本泡脚+脚底精修');
+  assert.equal(customerProjectSummaryText(foot), '现煮草本泡脚+足部精细护理');
   assert.doesNotMatch(customerProjectSummaryText(foot), /脚趾精修/);
   assert.equal(customerProjectSummaryText(project({ id: 60, code: 'hxy-spa-60', category: 'care', name: '精油SPA', summary: '自定义摘要' })), '自定义摘要');
 });
 
 test('局部推拿使用最新菜单中的顾客名称', () => {
   assert.equal(displayProjectName(project({ id: 11, code: 'hxy-jubu-30', category: 'local-strength', name: '局部推拿' })), '局部推拿');
+});
+
+test('服务端未列时长的项目不从稳定编码推导分钟数', () => {
+  for (const code of ['hxy-qiqing-30', 'hxy-nvshen-60', 'hxy-caier-30', 'hxy-jubu-30', 'hxy-foot-refine-1', 'hxy-cupping-scraping-1']) {
+    const item = project({ id: 999, code, category: 'small', name: 'Configured', duration_min: null });
+    assert.doesNotMatch(customerProjectSummaryTags(item).join(' '), /\d+分钟/);
+  }
 });
 
 test('足部精修使用专属荷小悦主图资源', () => {

@@ -24,7 +24,7 @@ export default function LocalStrengthGroup({ choice, parts, onToggle = () => und
         {choices.map((item) => {
           const part = partOf(item);
           const active = parts.includes(part);
-          const durationMin = projects.find((project) => project.id === item.linked_project_id)?.duration_min || 30;
+          const durationMin = projects.find((project) => project.id === item.linked_project_id)?.duration_min;
           const storeCents = catalogChoicePriceCents(item, projects, false);
           const memberCents = catalogChoicePriceCents(item, projects, true);
           const guidance = priceGuidanceForPrices(storeCents, memberCents, { is_member: isMember });
