@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ReturnEntryBanner } from './components/CustomerReturnTools';
+import { isReturnEntry, stableStoreEntry } from './returnEntry';
 
 import {
   ApiError,
@@ -130,7 +132,7 @@ import {
   type Addon,
 } from './domain';
 
-type BootState = 'loading' | 'pick-position' | 'direct-feedback' | 'ready' | 'occupied' | 'expired' | 'kiosk-unbound' | 'submitted' | 'error';
+type BootState = 'loading' | 'return-visit' | 'pick-position' | 'direct-feedback' | 'ready' | 'occupied' | 'expired' | 'kiosk-unbound' | 'submitted' | 'error';
 
 type EntryRecord = {
   storeId: number;
@@ -150,14 +152,16 @@ const pageTracking = createDiyPageTracking(trackDiyEvent);
 
 function getQueryConfig() {
   const query = new URLSearchParams(window.location.search);
+  const returnVisit = isReturnEntry(query);
   return {
     storeId: Number(query.get('store') || 1),
-    positionCode: query.get('seat') || '',
-    source: query.get('source') || '',
-    qrToken: query.get('qr') || '',
-    sessionId: query.get('session') || '',
-    accessToken: query.get('token') || '',
-    projectCode: query.get('project') || '',
+    returnVisit,
+    positionCode: returnVisit ? '' : query.get('seat') || '',
+    source: returnVisit ? '' : query.get('source') || '',
+    qrToken: returnVisit ? '' : query.get('qr') || '',
+    sessionId: returnVisit ? '' : query.get('session') || '',
+    accessToken: returnVisit ? '' : query.get('token') || '',
+    projectCode: returnVisit ? '' : query.get('project') || '',
   };
 }
 
@@ -328,7 +332,7 @@ export default function App() {
   const [detailProject, setDetailProject] = useState<Project | null>(null);
   const [localDetailOpen, setLocalDetailOpen] = useState(false);
   const [seatMapOpen, setSeatMapOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(() => shouldRestoreProfileOverlay(window.history.state));
+  const [profileOpen, setProfileOpen] = useState(() => query.returnVisit || shouldRestoreProfileOverlay(window.history.state));
   const [membershipKind, setMembershipKind] = useState<MembershipKind | null>(null);
   const [moving, setMoving] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -882,6 +886,11 @@ export default function App() {
 
   const initialize = async () => {
     setBoot('loading');
+    if (query.returnVisit) {
+      window.history.replaceState(window.history.state, '', stableStoreEntry(window.location.origin, query.storeId));
+      setBoot('return-visit');
+      return;
+    }
     try {
       const [catalog, addonCatalog, publicMap, coupons, content] = await Promise.all([
         getProjects(query.storeId),
@@ -1090,7 +1099,7 @@ export default function App() {
   }, [customerAuth?.token]);
 
   useEffect(() => {
-    if (boot === 'loading' || entryTracked.current) return;
+    if (query.returnVisit || boot === 'loading' || entryTracked.current) return;
     entryTracked.current = true;
     pageTracking.entryView({ entry_state: boot });
     void flushDiyTracking();
@@ -1753,6 +1762,16 @@ export default function App() {
   if (boot === 'loading') {
     return <main className="loading-screen"><span className="loading-mark">荷</span><div className="loading-line" /><p>{bootMessage}</p></main>;
   }
+  if (boot === 'return-visit') {
+    const menuUrl = new URL(stableStoreEntry(window.location.origin, query.storeId));
+    menuUrl.searchParams.set('view', 'menu');
+    return <main className="return-visit-page">
+      <span className="loading-mark">荷</span><h1>欢迎回来，荷小悦</h1><p>查看本人报告，不用再找沙发码。</p>
+      <button className="return-primary" type="button" onClick={openProfile}>打开我的</button>
+      <a className="return-menu-link" href={menuUrl.href}>到店选项目</a><small>到店请扫描服务位二维码，或核对服务位置后选项目。</small>
+      <ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} />
+    </main>;
+  }
   if (boot === 'direct-feedback') {
     return <main className="success-screen">
       <div className="success-top"><span className="eyebrow">荷小悦 · 到店体验</span><h1>{directPositionLabel || '当前服务位'}</h1><p>无需选项目或订单，也可以直接告诉我们您的到店感受。</p></div>
@@ -1782,17 +1801,17 @@ export default function App() {
     return <InitialPositionPicker positions={positions} onSelect={selectInitialPosition} onBlocked={setBootMessage} busy={false} message={bootMessage === '正在连接门店服务' ? '' : bootMessage} />;
   }
   if (boot === 'occupied') {
-    return <StatusScreen type="occupied" title="这个位置已经有人" message={bootMessage || '请核对您所在的沙发，或联系前台协助处理。'} onRetry={retry} />;
+    return <><StatusScreen type="occupied" title="这个位置已经有人" message={bootMessage || '请核对您所在的沙发，或联系前台协助处理。'} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'expired') {
     const copy = expiredSelectionCopy();
-    return <><StatusScreen type="expired" title={copy.title} message={copy.message} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
+    return <><StatusScreen type="expired" title={copy.title} message={copy.message} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'kiosk-unbound') {
     return <StatusScreen type="error" title={KIOSK_UNBOUND_COPY.title} message={KIOSK_UNBOUND_COPY.message} />;
   }
   if (boot === 'error') {
-    return <><StatusScreen type="error" title="暂时没有连接上" message={bootMessage} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
+    return <><StatusScreen type="error" title="暂时没有连接上" message={bootMessage} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'submitted' && session) {
     return (
@@ -1906,6 +1925,7 @@ export default function App() {
         ))}
       </section>
 
+      <ReturnEntryBanner storeId={query.storeId} />
       <div className="catalog-layout miniapp-catalog-layout">
         <nav className="category-nav" aria-label="项目分类">
           {CATALOG_SECTIONS.map((section) => (
@@ -2102,6 +2122,7 @@ export default function App() {
       />
       <ProfilePage
         open={profileOpen}
+        storeId={query.storeId}
         auth={customerAuth}
         onClose={dismissTopOverlay}
         onAuthChange={(auth) => {

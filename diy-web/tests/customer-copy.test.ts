@@ -185,7 +185,7 @@ test('项目详情提供无敏感参数的分享入口', () => {
   assert.match(detail, /aria-label="分享项目"/);
   assert.match(app, /shareProjectLink/);
   assert.match(app, /onShare=\{shareProject\}/);
-  assert.match(app, /projectCode: query\.get\('project'\) \|\| ''/);
+  assert.match(app, /projectCode: returnVisit \? '' : query\.get\('project'\) \|\| ''/);
   assert.match(app, /catalog\.find\(\(project\) => project\.code === query\.projectCode\)/);
 });
 
