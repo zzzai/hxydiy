@@ -248,13 +248,15 @@ function ProjectPrice({ project, auth }: {
   auth: { is_member: boolean } | null;
 }) {
   const price = projectListPricePresentation(project, auth);
+  const memberOnly = !project.prices.some((item) => item.price_type === 'store') && project.prices.some((item) => item.price_type === 'member');
+  const unit = project.price_label?.includes('套') ? '/套' : '';
   return (
     <div className="project-meta">
       <div className={auth?.is_member ? 'member-active' : ''}>
-        <strong>{price.primaryPrefix && <small>{price.primaryPrefix}</small>}{formatMoney(price.primaryCents)}</strong>
-        {price.secondaryStrikethrough
+        <strong>{(memberOnly || price.primaryPrefix) && <small>{memberOnly ? '会员' : price.primaryPrefix}</small>}{formatMoney(memberOnly ? project.prices.find((item) => item.price_type === 'member')!.amount_cents : price.primaryCents)}{unit}</strong>
+        {!memberOnly && (price.secondaryStrikethrough
           ? <del>{formatMoney(price.secondaryCents)}</del>
-          : <span className="member-price"><small>{price.secondaryPrefix}</small>{formatMoney(price.secondaryCents)}</span>}
+          : <span className="member-price"><small>{price.secondaryPrefix}</small>{formatMoney(price.secondaryCents)}{unit}</span>)}
       </div>
     </div>
   );
@@ -1944,7 +1946,7 @@ export default function App() {
                       <motion.article whileTap={{ scale: 0.985 }} className={`project-card mini-project-row ${selected ? 'selected' : ''}`} key={project.id} onClick={() => openProjectDetail(project)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectDetail(project); } }} role="button" tabIndex={0}>
                         <div className="project-photo"><img src={projectImage(project)} alt="" loading="lazy" decoding="async" />{project.code === 'hxy-xiaoqi-90' && <span className="signature-badge">招牌</span>}</div>
                         <div className="project-copy">
-                          <div className="project-title-row"><h3>{displayName}</h3>{project.duration_min && <span>{project.duration_min}分钟</span>}</div>
+                          <div className="project-title-row"><h3>{displayName}</h3>{project.price_label?.includes('套') ? <span>{project.price_label}</span> : project.duration_min ? <span>{project.duration_min}分钟</span> : null}</div>
                           <p>{customerProjectListDescription(project)}</p>
                           {(highlights.length > 0 || summaryTags.length > 0 || purchaseTags.length > 0) && <div className="project-badge-groups" aria-label="项目标签">
                             {highlights.length > 0 && <div className="project-badges project-badges-highlight" aria-label="项目特色">{highlights.map((tag) => <span key={tag}>{tag}</span>)}</div>}
@@ -1964,7 +1966,7 @@ export default function App() {
                 {section.id === 'small' && localProject && <article className={`project-card mini-project-row preference-project-row ${localParts.length ? 'selected' : ''}`} onClick={openLocalDetail} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openLocalDetail(); } }} role="button" tabIndex={0}>
                   <div className="project-photo"><img src={projectImage(localProject)} alt="" loading="lazy" decoding="async" /></div>
                   <div className="project-copy">
-                    <div className="project-title-row"><h3>{displayProjectName(localProject)}</h3><span>{localProject.duration_min || 30}分钟/项</span></div>
+                    <div className="project-title-row"><h3>{displayProjectName(localProject)}</h3><span>{localProject.duration_min ? `${localProject.duration_min}分钟/项` : localProject.price_label || '次'}</span></div>
                     <p>肩颈、腰臀、腿部、腹部、足部，按需灵活选择。</p>
                     {customerProjectPurchaseTags(localProject).length > 0 && <div className="project-badges project-badges-purchase" aria-label="选购规则">{customerProjectPurchaseTags(localProject).map((tag) => <span key={tag}>{tag}</span>)}</div>}
                     <ProjectPrice project={localProject} auth={customerAuth?.user || null} />

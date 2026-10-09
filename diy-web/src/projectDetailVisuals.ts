@@ -17,7 +17,7 @@ const SIGNATURE_FOOTBATH_VISUALS: ProjectDetailVisualSection[] = [
   {
     image: assetPath('projects/hxy-xiaoqi-90-detail-signature.webp'),
     title: '招牌步骤，更完整地照顾身体',
-    body: '走竹罐、腰背或腹部重点放松二选一，再配合草本热敷，把细节照顾得更周到。',
+    body: '草本泡脚、全身按摩（含足部）、刮脚与搓盐共75分钟，再配合15分钟草本热敷和养生茶饮。',
     alt: '荷小悦人物正在整理竹罐、草本热敷包和木质按摩工具',
   },
   {
@@ -32,7 +32,7 @@ const SPA_60_VISUALS: ProjectDetailVisualSection[] = [
   {
     image: assetPath('projects/hxy-spa-60-detail-1.webp'),
     title: '护理准备，精油与热巾先就位',
-    body: '把精油、热毛巾、经络梳与护理床妥帖备好，先从干净、安静的空间进入舒缓状态。',
+    body: '把精油、热毛巾与护理床妥帖备好，先从干净、安静的空间进入舒缓状态。',
     alt: '荷小悦以手绘国风插画呈现精油、热毛巾、经络梳与护理床的服务准备',
   },
   {
@@ -40,12 +40,6 @@ const SPA_60_VISUALS: ProjectDetailVisualSection[] = [
     title: '45 分钟精油护理，隔巾轻柔舒缓',
     body: '以完整护理服和毛毯做好遮盖，配合精油与轻柔手法，专注照顾身体的疲惫与紧绷。',
     alt: '荷小悦以手绘国风插画呈现隔巾精油身体舒缓护理',
-  },
-  {
-    image: assetPath('projects/hxy-spa-60-detail-3.webp'),
-    title: '15 分钟头部放松，慢慢收束',
-    body: '用木质经络梳配合热毛巾，让身体护理之后的放松感自然延续。',
-    alt: '荷小悦以手绘国风插画使用木质经络梳为顾客进行头部放松',
   },
   {
     image: assetPath('projects/hxy-spa-60-detail-4.webp'),

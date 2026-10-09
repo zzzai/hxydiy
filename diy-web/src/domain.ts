@@ -228,8 +228,6 @@ export const CATALOG_SECTIONS = [
 ] as const;
 
 export function displayProjectName(project: Pick<Project, 'code' | 'name'>): string {
-  if (project.code === 'hxy-spa-60') return '60分钟精油SPA';
-  if (project.code === 'hxy-spa-90') return '90分钟精油SPA';
   return project.name;
 }
 
@@ -461,9 +459,9 @@ const CUSTOMER_PROJECT_HIGHLIGHTS: Record<string, string[]> = {
   'hxy-xiangxiang-60': ['现煮草本', '泡脚按摩'],
   'hxy-xiaoqi-90': ['现煮草本', '全身按摩'],
   'hxy-nvshen-60': ['现煮草本', '足部养护', '足膜润足'],
-  'hxy-tuina-70': ['全身推拿', '草本热敷'],
-  'hxy-spa-60': ['精油护理', '头部按摩', '经络梳'],
-  'hxy-spa-90': ['精油护理', '头部按摩', '经络梳'],
+  'hxy-tuina-70': ['全身推拿', '艾灸'],
+  'hxy-spa-60': ['精油护理', '草本热敷'],
+  'hxy-spa-90': ['精油护理', '砭石球温通'],
   'hxy-taoke-60': ['活络油护理', '工具调理', '草本热敷'],
   'hxy-caier-30': ['耳部清洁', '耳部按摩'],
   'hxy-baguan-1': ['竹罐护理', '草本膏贴'],
@@ -478,11 +476,11 @@ const CUSTOMER_PROJECT_SUMMARY_TAGS: Record<string, string[]> = {
   'hxy-qiqing-30': ['体质检测+泡脚'],
   'hxy-xiangxiang-60': ['60分钟组合'],
   'hxy-xiaoqi-90': ['90分钟组合'],
-  'hxy-tuina-70': ['70分钟组合'],
+  'hxy-tuina-70': [],
   'hxy-spa-60': ['45+15分钟分段服务'],
-  'hxy-spa-90': ['75+15分钟分段服务'],
+  'hxy-spa-90': [],
   'hxy-taoke-60': ['10次/套'],
-  'hxy-caier-30': ['30分钟'],
+  'hxy-caier-30': [],
   'hxy-head-30': ['30分钟'],
   'hxy-jubu-30': ['任选一个部位'],
   'hxy-foot-refine-1': ['泡脚+足部修整'],
@@ -579,14 +577,18 @@ export function customerProjectDisplayTagGroups(project: CustomerProjectTagInput
 
 /** List copy helps comparison; the detail page retains the complete service flow. */
 export function customerProjectListDescription(project: CustomerProjectTagInput): string {
+  const configured = String(project.summary || '').trim();
+  if (configured) return configured.split(/[+＋]/).slice(0, 2).join('、')
+    .replace(/[（(][^）)]*\d+分钟[^）)]*[）)]/g, '')
+    .replace(/\d+分钟/g, '');
   const byCode: Record<string, string> = {
     'hxy-qiqing-30': '体质检测，搭配现煮草本泡脚',
-    'hxy-xiangxiang-60': '泡脚配肩颈按摩，兼顾脚部清洁',
+    'hxy-xiangxiang-60': '泡脚配手臂足底按摩，兼顾脚部清洁',
     'hxy-xiaoqi-90': '从肩背到双脚，搭配草本热敷',
     'hxy-nvshen-60': '去角质、敷足膜，再滋润双脚',
-    'hxy-tuina-70': '全身推拿，搭配草本热敷',
-    'hxy-spa-60': '精油身体护理，搭配头部按摩',
-    'hxy-spa-90': '精油身体护理，搭配头部按摩',
+    'hxy-tuina-70': '全身推拿，搭配艾灸',
+    'hxy-spa-60': '精油SPA，搭配草本热敷',
+    'hxy-spa-90': '精油SPA，搭配砭石球温通',
     'hxy-taoke-60': '活络油护理，搭配工具与热敷',
     'hxy-head-30': '头面耳按摩，搭配经络梳',
     'hxy-foot-refine-1': '草本泡脚后，修整脚底',
@@ -604,6 +606,9 @@ export function customerProjectHighlights(project: CustomerProjectTagInput): str
 }
 
 export function customerProjectSummaryTags(project: CustomerProjectTagInput): string[] {
+  if (project.code === 'hxy-taoke-60') return ['10次/套'];
+  if (project.duration_min && project.duration_min > 0) return [`${project.duration_min}分钟服务`];
+  if (['hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-tuina-70', 'hxy-spa-60', 'hxy-spa-90', 'hxy-caier-30', 'hxy-head-30'].includes(project.code)) return [];
   return [...(CUSTOMER_PROJECT_SUMMARY_TAGS[project.code] || fallbackProjectSummaryTags(project))];
 }
 
@@ -613,18 +618,20 @@ export function customerProjectSummaryText(project: CustomerProjectTagInput): st
   if (configured) return configured;
   const name = String(project.name || '').trim();
   const byCode: Record<string, string> = {
-    'hxy-qiqing-30': '体质检测+现煮草本泡脚+养生茶饮',
-    'hxy-xiangxiang-60': '养生茶饮+现煮草本泡脚+肩颈按摩+刮脚搓盐',
-    'hxy-xiaoqi-90': '招牌草本泡脚按摩+草本热敷',
-    'hxy-nvshen-60': '养生茶饮+现煮草本泡脚+足部养护',
-    'hxy-tuina-70': '全身推拿按摩+草本热敷+养生茶饮',
-    'hxy-spa-60': '清脚+高端精油SPA+头部按摩+养生茶饮',
-    'hxy-spa-90': '清脚+高端精油SPA+头部按摩+养生茶饮',
-    'hxy-taoke-60': '痛症调理：活络油+工具+热敷，10次/套',
+    'hxy-qiqing-30': 'AI体质检测+现煮草本泡脚+养生茶饮',
+    'hxy-xiangxiang-60': '现煮草本泡脚+手臂及足底按摩+刮脚+搓盐（共50分钟）+草本热敷10分钟+养生茶饮',
+    'hxy-xiaoqi-90': '现煮草本泡脚+全身按摩（含足部）+刮脚+搓盐（共75分钟）+草本热敷15分钟+养生茶饮',
+    'hxy-nvshen-60': '现煮草本泡脚+去角质刮脚+足部精油按摩+足膜+润足+养生茶饮',
+    'hxy-tuina-70': '全身推拿60分钟+艾灸20分钟+养生茶饮+养生零食',
+    'hxy-spa-60': '现煮草本泡脚+精油SPA45分钟+草本热敷15分钟+养生茶饮+养生零食',
+    'hxy-spa-90': '现煮草本泡脚+精油SPA70分钟+砭石球背部温通10分钟+草本热敷10分钟+养生茶饮+养生零食',
+    'hxy-taoke-60': '活络油调理20分钟+工具手法20分钟+热敷20分钟（10次/套）',
     'hxy-caier-30': '耳部清洁+耳部按摩',
-    'hxy-head-30': '头部轻养按摩+经络梳+眼罩/眼贴',
+    'hxy-head-30': '头面耳按摩30分钟+经络梳+眼罩/眼贴',
     'hxy-jubu-30': '肩颈、腰臀、腿部、腹部、足部任选其一',
-    'hxy-foot-refine-1': '现煮草本泡脚+脚底精修',
+    'hxy-foot-refine-1': '现煮草本泡脚+足部精细护理',
+    'hxy-oil-back-30': '背部精油按摩30分钟',
+    'hxy-cupping-scraping-1': '拔罐护理或刮痧护理任选其一',
     'hxy-baguan-1': '拔竹罐+草本功效膏贴',
     'hxy-guasha-1': '刮痧+草本功效膏贴',
   };

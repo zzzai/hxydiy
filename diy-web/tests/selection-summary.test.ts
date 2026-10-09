@@ -72,6 +72,13 @@ function project(partial: Partial<Project> & Pick<Project, 'id' | 'code' | 'cate
 }
 
 const footBath = project({ id: 1, code: 'hxy-qiqing-30', category: 'bath', name: '草本泡脚' });
+
+test('套项目清单保留服务端计价单位和会员金额', () => {
+  const item = project({ id: 99, code: 'hxy-taoke-60', category: 'kit', name: '功夫调理', price_label: '10次/套', prices: [{ price_type: 'member', amount_cents: 98000 }] });
+  const summary = buildSelectionSummary({ projects: [item], addons: [], draft: { ...emptySelectionDraft(), selectedProjectIds: [99] }, isMember: true });
+  assert.equal(summary.groups[0].priceCents, 98000);
+  assert.equal(summary.groups[0].detail, '10次/套');
+});
 const local = project({
   id: 2,
   code: 'hxy-jubu-30',

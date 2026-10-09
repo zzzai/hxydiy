@@ -1,7 +1,7 @@
 import { ArrowLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, displayProjectName, effectivePrice, formatMoney, priceOf, projectImage, type Project } from '../domain';
+import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, customerProjectSummaryText, displayProjectName, effectivePrice, formatMoney, priceOf, projectImage, type Project } from '../domain';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
 import DetailIntroduction from './DetailIntroduction';
@@ -50,7 +50,7 @@ export default function LocalDetailPage({ open, project, selectedParts, position
         <img className="mini-detail-hero" src={projectImage(project)} alt="局部推拿服务" />
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="local-detail-title">{focusedPart}调理</h1></div>
-          <DetailIntroduction name={`${focusedPart}调理`} summary={activeProfile.description} highlights={[activeProfile.focus]} facts={[`${project.duration_min || 30}分钟/项`]} />
+          <DetailIntroduction name={`${focusedPart}调理`} summary={customerProjectSummaryText(project)} highlights={[activeProfile.focus]} facts={project.duration_min ? [`${project.duration_min}分钟/项`] : [project.price_label || '按次服务']} />
           <DetailPrice current={effectivePrice(project, isMember)} comparison={priceOf(project, isMember ? 'store' : 'member')} isMember={isMember} unit="每个部位" />
         </section>
 

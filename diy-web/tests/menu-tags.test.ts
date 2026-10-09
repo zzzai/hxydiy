@@ -28,6 +28,7 @@ test('list descriptions simplify comparison while details retain complete servic
 
 test('menu filtering does not change the full detail tag mapping', () => {
   const project = { code: 'hxy-xiangxiang-60', name: '', summary: '', category: 'bath', duration_min: 60 };
-  assert.deepEqual(customerProjectSummaryTags(project), ['60分钟组合']);
+  assert.deepEqual(customerProjectSummaryTags(project), ['60分钟服务']);
+  assert.deepEqual(customerProjectSummaryTags({ ...project, duration_min: null }), []);
   assert.deepEqual(customerProjectDisplayTagGroups(project).highlights, ['现煮草本', '泡脚按摩']);
 });

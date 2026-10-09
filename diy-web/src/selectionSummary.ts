@@ -138,7 +138,7 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
         key: `addon-${projectId}-${addon.id}`,
         kind: 'addon' as const,
         title: addon.name,
-        detail: addon.summary || `${addon.duration_min || 15}分钟 · 加选项目`,
+        detail: addon.summary || (addon.duration_min ? `${addon.duration_min}分钟 · 加选项目` : '加选项目'),
         quantity,
         priceCents: addon.chargeable ? addonPriceOf(addon, isMember) * quantity : 0,
         originalPriceCents: addon.chargeable && isMember && addon.prices.store > addon.prices.member
@@ -154,7 +154,7 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
       key: `project-${project.id}`,
       kind: 'project',
       title: project.name,
-      detail: selectedPreferenceLabels(project, draft.projectPreferences[project.id] || [], draft.projectCatalogSelections?.[project.id]?.optionChoiceIds).join(' · ') || '按门店标准服务',
+      detail: [project.price_label?.includes('套') ? project.price_label : '', ...selectedPreferenceLabels(project, draft.projectPreferences[project.id] || [], draft.projectCatalogSelections?.[project.id]?.optionChoiceIds)].filter(Boolean).join(' · ') || '按门店标准服务',
       quantity,
       priceCents: effectivePrice(project, isMember) * quantity,
       originalPriceCents: isMember && priceOf(project, 'store') > priceOf(project, 'member')
@@ -174,7 +174,7 @@ export function buildSelectionSummary({ projects, addons, draft, isMember }: {
       key: `local-${part}`,
       kind: 'local',
       title: `${part}调理`,
-      detail: localProject ? `${localProject.duration_min || 30}分钟 · 局部调理` : '局部调理',
+      detail: localProject?.duration_min ? `${localProject.duration_min}分钟 · 局部调理` : '按次 · 局部调理',
       quantity,
       priceCents: localProject ? effectivePrice(localProject, isMember) * quantity : 0,
       originalPriceCents: localProject && isMember && priceOf(localProject, 'store') > priceOf(localProject, 'member')
