@@ -1,5 +1,7 @@
 # Auxiliary service menu v1
 
+2026-10-07 image-confirmed names, service flow, units and explicit prices supersede conflicting descriptions below; see [menu-20261007.md](menu-20261007.md). The combined single-choice contract and legacy IDs remain unchanged. Unspecified 采耳/局部推拿 duration is no longer inferred as 30 minutes. No group price or commission is erased because the new image omits it.
+
 Store 1 exposes exactly six standalone `辅` projects in this order. Amounts are cents; no group price is inferred for new projects.
 
 | Code | Name | Store | Member | Description |
