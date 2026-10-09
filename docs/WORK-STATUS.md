@@ -1,3 +1,12 @@
+# 2026-10-09 本人报告直达原站及入口间距上线
+
+- `TCM-DIRECT-REPORT-04`，顾客 #226 HEAD `6d310d54d7c728f118fb9ef59945a3c7fffb3d22`；审查后按精确HEAD及必需检查合并为 `10e461fc37bee2f44ec10c1c3bcb954ea98efd75`。合并请求网络断连后只读确认已成功，未重复写入；主干CI `37924602736`、正式部署 `37924995502`（资格检查及 Backup, rehearse, deploy and verify）成功。
+- hxy current `github-10e461fc37be-37924995502`、MANIFEST及health通过；公网 `/assets/index-B9G16chz.js` SHA `a1b4ea316d81be0b0484a60edeab70d226a33cbbeac0740941eae879c3119c72`，`/assets/index-CNOfDw1g.css` SHA `25a30b1ef2ec01ac2e9916d2922cfc9aa476ed6c6de4ed8eb85ccbeaccd39732` 与安装文件一致。新链接错误提示及16px间距规则存在于公网制品。匿名本人报告/授权接口401；TCM原站 `/api/tcm/readonly/reports` 公网404。探针最初误把DIY的SPA兜底路径当接口，校正为契约内部接口后通过，不改业务或忽略真正的权限失败。
+- 保留报告列表、本人详情校验和独立健康授权；点击校验原站固定HTTPS地址及匹配reportId后同页打开，不再显示DIY中间预览，不预加载原站或传递Referer/JWT/手机号。缺地址、断网、上游失败和401/403有明确提示；撤回及卸载取消迟到请求。报告入口与会员卡之间16px留白，会员可见条件和权益不改。
+- 顾客构建、247测试通过/1跳过；375/390×两位合成顾客4组验收直达对应原站、无预览/重复OTP/Referer、缺链接/断网/上游失败、401/403、撤回后迟到响应及间距通过。浏览器使用隔离真实身份/授权API，外部来源、原站HTML和会员可见响应为合成；总控复核diff/报告/截图，不重复执行有效测试。
+- 用户澄清尾号3721未检测，空列表正常，取消历史报告缺失排查；没有补录、导入、重绑、生产授权修改或真实健康数据读取。菜单、会员、QR、动态码及历史隐藏边界保持。原真机反馈证明新检测推送后本人列表可见，不等于本批微信直达原站现场验收；本批现场未验收。
+- 私有证据：顾客 `diy-web/output/playwright/tcm-direct-report-04/result.json` 与手机截图；总控 `output/tcm-direct-report-20261009/{deployment,production-verification}.json`。本条仅记录已发布事实，文档合并后不重复部署。
+
 # 2026-10-09 最新图片菜单及顾客展示上线
 
 - #218/#224合并并发布主干 `1c19abc5023fa3ebcb42605f399826177a5d84e0`，CI `37869937051`、正式部署 `37870329343` 成功，hxy current/MANIFEST、容器精确工具SHA和health通过，无新增数据库迁移。
