@@ -16,7 +16,9 @@ test('所有已上线项目均提供统一长详情视觉模块', () => {
   assert.match(herbalFootbath[0]?.alt || '', /荷小悦 IP/);
   assert.equal(projectDetailVisuals('hxy-xiangxiang-60').length, 3);
   const spa60Sections = projectDetailVisuals('hxy-spa-60');
-  assert.equal(spa60Sections.length, 4);
+  assert.equal(spa60Sections.length, 3);
+  assert.ok(spa60Sections.every((section) => !section.image.endsWith('detail-3.webp')));
+  assert.doesNotMatch(spa60Sections.map((section) => section.title + section.body).join(''), /15 分钟头部放松/);
   assert.match(spa60Sections.map((section) => section.title).join(''), /45 分钟精油护理/);
   assert.ok(spa60Sections.every((section) => section.image.includes('hxy-spa-60-detail-')));
   assert.equal(projectDetailVisuals('hxy-spa-90').length, 3);

@@ -578,7 +578,9 @@ export function customerProjectDisplayTagGroups(project: CustomerProjectTagInput
 /** List copy helps comparison; the detail page retains the complete service flow. */
 export function customerProjectListDescription(project: CustomerProjectTagInput): string {
   const configured = String(project.summary || '').trim();
-  if (configured) return configured.split(/[+＋]/).slice(0, 2).join('、');
+  if (configured) return configured.split(/[+＋]/).slice(0, 2).join('、')
+    .replace(/[（(][^）)]*\d+分钟[^）)]*[）)]/g, '')
+    .replace(/\d+分钟/g, '');
   const byCode: Record<string, string> = {
     'hxy-qiqing-30': '体质检测，搭配现煮草本泡脚',
     'hxy-xiangxiang-60': '泡脚配手臂足底按摩，兼顾脚部清洁',
