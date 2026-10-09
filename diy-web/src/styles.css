@@ -1709,6 +1709,7 @@ h1, h2, h3, p { margin-top: 0; }
 .profile-pending-task svg { grid-row: 1 / 3; }
 .profile-pending-task strong { font-size: 14px; }
 .profile-pending-task small { color: #708079; font-size: 11px; }
+.profile-pending-task + .membership-banner { margin-top: 16px; }
 .profile-card-benefit { flex-basis: 100%; margin: 0; padding-top: 10px; border-top: 1px solid rgba(31, 143, 117, .12); color: #68766f; font-size: 11px; line-height: 1.5; }
 .profile-card.is-member .profile-card-benefit { border-color: rgba(198, 155, 60, .24); color: #80652b; }
 
