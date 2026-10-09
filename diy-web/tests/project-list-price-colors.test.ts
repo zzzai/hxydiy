@@ -14,13 +14,13 @@ test('项目列表使用克制的绿色普通价和金色会员价区分身份',
   assert.match(styles, /\.miniapp-catalog-layout \.project-meta del\s*\{[^}]*color:\s*var\(--price-reference\)/s);
 });
 
-test('项目列表统一插画框但完整保留不同源图比例', () => {
+test('项目列表统一插画框并等比铺满不同源图', () => {
   const styles = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 
   assert.match(styles, /\.miniapp-catalog-layout \.mini-project-row\s*\{[^}]*min-height:\s*120px/s);
   assert.match(styles, /\.miniapp-catalog-layout \.project-photo\s*\{[^}]*width:\s*78px[^}]*height:\s*86px[^}]*flex:\s*0 0 78px/s);
-  assert.match(styles, /\.miniapp-catalog-layout \.project-photo img\s*\{[^}]*object-fit:\s*contain/s);
-  assert.match(styles, /\.miniapp-catalog-layout \.project-photo img\s*\{[^}]*padding:\s*3px/s);
+  assert.match(styles, /\.miniapp-catalog-layout \.project-photo img\s*\{[^}]*object-fit:\s*cover/s);
+  assert.match(styles, /\.miniapp-catalog-layout \.project-photo img\s*\{[^}]*padding:\s*0/s);
 });
 
 test('长项目名最多显示两行且顶部推荐卡提供明确的横滑节奏', () => {
