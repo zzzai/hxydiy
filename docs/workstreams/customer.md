@@ -3,7 +3,7 @@
 ## 2026-10-09 CUSTOMER-MAIN-IMAGE-FIT-01（待总控发布）
 
 - 基线 `c3c5a7a46b24262b7522d7198da402632b2faf8c`，分支 `codex/customer-main-image-fit-01`。按已确认预览只将项目列表主图padding从3px改0、object-fit从contain改cover；共用hxy-spa-60.webp设置right center取景，保住人物。不改素材、78×86容器/圆角、详情头图、菜单文案/价格/标签或其他布局；生成文件保留未提交。
-- 构建通过，现有列表样式专项3项通过，git diff --check通过。一次浏览器脚本检查375/390实际组件共28张图：最终计算样式cover/0px，SPA靠右、图片加载成功、无横向溢出；实际组件图集人工核对无明显主体误裁。公网公开目录仅只读快照，在本地H5及合成服务位中渲染，productionWrites=false，未生产下单。
+- 构建通过，现有列表样式专项4项通过，git diff --check通过。一次浏览器脚本检查375/390实际组件共28张图：最终计算样式cover/0px，SPA靠右、图片加载成功、无横向溢出；实际组件图集人工核对无明显主体误裁。公网公开目录仅只读快照，在本地H5及合成服务位中渲染，productionWrites=false，未生产下单。
 - 脚本及截图/报告在本地 `diy-web/output/main-image-fit-check.cjs`、`diy-web/output/playwright/customer-main-image-fit-01/`，含375/390-menu.png、all-images.png和result.json。总控复用此证据审查合并部署；本窗口未发布，微信现场未验收。
 
 ## 2026-10-09 CUSTOMER-RETURN-ENTRY-01（待总控审查发布）
