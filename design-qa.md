@@ -19,6 +19,36 @@
 
 final result: passed
 
+## CUSTOMER-SERVICE-ACCOUNT-SHEET-02-FIDELITY — 2026-10-10
+
+This review supersedes the previous acceptance of the standing mascot pose.
+
+- Source: `C:/Users/gaoji/AppData/Local/Temp/codex-clipboard-598b7498-da49-4d31-9f8e-dc09dde81cb9.png`, 853x1844, normalized to 390x844.
+- Implementation: `diy-web/output/playwright/customer-service-account-sheet-fidelity/390x844-my-sheet.png`; CSS viewport 390x844, density 1.
+- Combined comparison: `diy-web/output/playwright/customer-service-account-sheet-fidelity/reference-vs-implementation.png` (780x844). Both show My with the sheet open; the synthetic non-member identity is intentionally not falsified to match the reference membership.
+- Short-screen evidence: `375x568-my-sheet.png` in the same directory. The QR stays fully visible; secondary content scrolls inside the sheet and the close control remains fixed.
+
+### Findings and comparison history
+
+- P1 fixed: the old standing 3D mascot did not match the peeking 2D child. Two independent transparent generated assets now supply the leaf-hat head, edge-resting hands and mint marks, and the matching basket avatar. Existing brand assets remain untouched.
+- P2 fixed: the former separate copy button did not reproduce the unified pale search strip. The strip now has the reference radius, background and restrained divider.
+- P2 fixed after the first capture: the taller sheet started at y150. Reducing the gaps around identity, steps and secondary text moves the revised sheet to approximately y182; the actual QR ink region is approximately 190px wide at y405, with its original quiet zone preserved.
+- Typography: scoped system sans-serif stack, 26px title, 18px identity, 20px action and 14px secondary hierarchy. CDP `CSS.getPlatformFontsForNode` verifies actual Microsoft YaHei / MicrosoftYaHei glyph rendering, not merely the declared fallback stack; four viewport results record this evidence. No new font dependency or license introduced. Raster-reference antialiasing remains slightly different (P3).
+- Final follow-up: independent transparent mint-dash asset makes the two emphasis strokes explicit beside the peeking child. Revised combined capture inspected after the 26px/20px calibration; original QR remains unchanged. Sheet top is approximately y175, within the typography-driven adjustment from the reference y182; no wrapping or major proportion drift remains.
+- Layout: white rounded sheet, left peeking artwork, 60px circular avatar, compact steps and full-width search strip checked in the combined capture. No viewport overflow.
+- Colors: white content, dark-green hierarchy, pale mint auxiliary surfaces and muted text match the reference direction; no gradients or replacement UI raster.
+- Assets: both PNGs visually inspected; alpha preserved, no full-sheet rasterization. QR SHA256 remains `2316315edb11d0f701f2326697a3123c85ed38b5b037e27d7f1b4e59fad6f299` and offline decoding is unchanged.
+- Content: all account text, instructions, voluntary/login notices and clipboard success/failure wording remain unchanged. WeCom and business flows unchanged.
+
+### Verification
+
+- Four real local component runs: 375/390 x 844/568, home/My entry, QR visibility and long-press semantics, copy success/denial, close/Escape and unchanged WeCom entry; no console errors.
+- `npm test -- --run`: 250 passed, 1 existing skipped. Vite teardown emitted dependency-scan diagnostics but tests exited 0 with no failures.
+- `npm run build`: passed. `git diff --check`: passed.
+- No production write, report access or real WeChat follow action. Field recognition remains a post-release check.
+
+final result: passed
+
 ---
 
 # CUSTOMER-SERVICE-ACCOUNT-SHEET-02 — 2026-10-10

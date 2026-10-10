@@ -39,11 +39,12 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
   if (!panel) return null;
   return <div className={`return-dialog-backdrop ${panel === 'save' ? 'service-account-backdrop' : ''}`} onClick={onClose}>
     <section className={`return-dialog ${panel === 'save' ? 'service-account-sheet' : ''}`} role="dialog" aria-modal="true" aria-label={panel === 'save' ? '服务号入口' : '联系门店'} onClick={event => event.stopPropagation()}>
-      {panel === 'save' && <img className="service-account-mascot" src="/assets/hxy-mascot.webp" alt="" />}
+      {panel === 'save' && <img className="service-account-mascot" src="/assets/service-account-peeking-v2.png" alt="" />}
+      {panel === 'save' && <img className="service-account-mint-marks" src="/assets/service-account-mint-marks-v2.png" alt="" />}
       <header><h2>{panel === 'save' ? '下次来，不用找沙发码' : contact ? '周二会员福利' : '联系门店'}</h2><button ref={closeButton} type="button" aria-label="关闭入口提示" onClick={onClose}><X size={20} /></button></header>
       {panel === 'save' ? <>
         <div className="service-account-body">
-        <div className="service-account-identity"><img src="/assets/hxy-mascot.webp" alt="" /><div><h3>荷小悦草本轻养</h3><p>荷小悦服务号</p></div></div>
+        <div className="service-account-identity"><img src="/assets/service-account-avatar-v2.png" alt="" /><div><h3>荷小悦草本轻养</h3><p>荷小悦服务号</p></div></div>
         <ol className="service-account-steps" aria-label="关注步骤"><li><span>1</span>长按识别<ArrowRight size={20} aria-hidden="true" /></li><li><span>2</span>关注服务号</li></ol>
         <img className="service-account-qr" src="/assets/hxy-service-account-qr.jpg" alt="荷小悦草本轻养服务号二维码，长按识别" />
         <h3 className="service-account-action">长按上方二维码，识别服务号</h3>
