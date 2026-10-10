@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleUserRound,
   Clock3,
+  FileText,
   LocateFixed,
   ListChecks,
   MapPinned,
@@ -194,10 +195,11 @@ function formatCountdown(seconds: number) {
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
 }
 
-function InitialPositionPicker({ positions, onSelect, onBlocked, busy, message }: {
+function InitialPositionPicker({ positions, onSelect, onBlocked, onViewReports, busy, message }: {
   positions: ServicePosition[];
   onSelect: (position: ServicePosition) => void;
   onBlocked: (message: string) => void;
+  onViewReports: () => void;
   busy: boolean;
   message: string;
 }) {
@@ -225,7 +227,7 @@ function InitialPositionPicker({ positions, onSelect, onBlocked, busy, message }
   };
 
   return (
-    <main className="entry-screen">
+    <main className="entry-screen entry-screen-with-reports">
       <div className="entry-brand"><span>荷</span><strong>荷小悦</strong></div>
       <section className="entry-panel">
         <span className="eyebrow">到店服务选单</span>
@@ -243,6 +245,10 @@ function InitialPositionPicker({ positions, onSelect, onBlocked, busy, message }
           <div className="initial-seat-column" aria-label="右侧沙发区">{rightSofas.map(renderSeat)}</div>
         </div>
       </section>
+      <footer className="seat-report-entry">
+        <p>查报告，不用选沙发</p>
+        <button type="button" onClick={onViewReports}><FileText size={22} aria-hidden="true" />查看我的检测报告</button>
+      </footer>
     </main>
   );
 }
@@ -1798,7 +1804,7 @@ export default function App() {
     </main>;
   }
   if (boot === 'pick-position') {
-    return <InitialPositionPicker positions={positions} onSelect={selectInitialPosition} onBlocked={setBootMessage} busy={false} message={bootMessage === '正在连接门店服务' ? '' : bootMessage} />;
+    return <><InitialPositionPicker positions={positions} onSelect={selectInitialPosition} onBlocked={setBootMessage} onViewReports={openProfile} busy={false} message={bootMessage === '正在连接门店服务' ? '' : bootMessage} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'occupied') {
     return <><StatusScreen type="occupied" title="这个位置已经有人" message={bootMessage || '请核对您所在的沙发，或联系前台协助处理。'} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
