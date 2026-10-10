@@ -8,7 +8,7 @@ const fixture = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const reference = process.argv[3];
 assert.equal(fixture.synthetic, true);
 assert.equal(new URL(fixture.apiBase).hostname, '127.0.0.1');
-const out = path.resolve('output/playwright/customer-service-account-sheet-02');
+const out = path.resolve(process.argv[4] || 'output/playwright/customer-service-account-sheet-02');
 fs.mkdirSync(out, { recursive: true });
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome' });

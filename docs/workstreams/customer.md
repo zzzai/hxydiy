@@ -433,3 +433,11 @@
 - 根因：清单数据模型仅在会员身份下保留门店价对比字段；非会员身份的会员价没有传递到弹窗渲染层。
 - 修复：匿名/非会员的主项目、收费加项和局部调理，在会员价低于门店价时显示“会员价 ¥…”参考；会员继续保持会员价主价与门店价划线对比；免费赠饮和无差价项目不虚构会员价。
 - 回归：新增匿名逐项会员价数据测试，顾客端测试 `168 passed / 0 failed / 1 skipped`、生产构建通过；已随 release `manual-fd58312185ae-20260905-2` 发布，未执行数据库迁移。待用匿名入口核验多项目、加项与局部调理的价格对比和移动端不遮挡。
+## 2026-10-10 CUSTOMER-SERVICE-ACCOUNT-SHEET-02-FIDELITY
+
+- Base `b5d71ba0ed47d18c2f412f027c2fe6203118ca55`; branch `codex/customer-service-account-sheet-fidelity`.
+- Restore the user-selected 2D peeking pose and basket avatar with independent transparent assets, refine sheet geometry and unified search strip. Original QR, account copy, WeCom, login/consent, menu/prices/member/seat flows remain unchanged.
+- Built-in image generation uses the supplied design as reference; prompts request only the peeking head/two hands/mint marks and the basket avatar respectively, transparent backgrounds, no UI/text/QR. Saved assets: `diy-web/public/assets/service-account-{peeking,avatar}-v2.png`.
+- Build passed; tests 250 passed/1 existing skipped; four actual local phone/short-screen checks passed. Combined visual QA is recorded in `design-qa.md`; artifacts in `diy-web/output/playwright/customer-service-account-sheet-fidelity/`. No production writes, real health-report reads or automatic follow action.
+- Coordinator owns merge/deploy and shared production records. Generated Vite and tsbuildinfo files are preserved and excluded.
+
