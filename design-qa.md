@@ -1,5 +1,22 @@
 # Design QA — 技师服务后快速交接
 
+## CUSTOMER-SEAT-PAGE-REPORT-ENTRY-01 — 2026-10-10
+
+- Source: `C:/Users/gaoji/.codex/generated_images/01a0c1a4-f8e1-73c0-9c87-42051db50bd5/exec-484603d4-af13-4a12-aecf-af240a6e3aa8.png`, 853x1844, normalized to 390x844.
+- Actual capture: `diy-web/output/playwright/customer-seat-report-entry/390x844-seat.png`, CSS 390x844, density 1. Combined source/implementation opened and reviewed: `reference-vs-implementation.png` (780x844) in the same directory.
+- State: no-seat service-account menu, initial seat picker. Eight synthetic seats exercise the existing alternating layout. The generated source's invented seat order is intentionally not implemented.
+- Focused footer evidence is visible in the combined comparison; `375x568-last-row.png` verifies all seats can scroll clear of the persistent footer.
+- Typography: existing system/brand fonts retained; hint 14px, CTA 18px/700 and standard FileText 22px reproduce the target hierarchy. No new font or asset placeholder.
+- Spacing/layout: white fixed bottom bar, thin divider, 56px pill CTA, 18px side inset, bottom safe area and extra page clearance. Preserve the actual page's existing brand/heading/map layout rather than rebuild to match generated UI.
+- Colors: pure white, existing muted hint, deep green and white CTA label. No promotional gradient.
+- Assets: existing brand and standard sofa/document icons retained; no full UI raster or new artwork needed.
+- Copy: exact selected hint/button; original seat descriptions and labels unchanged. No report identity invented.
+- Findings: no actionable P0/P1/P2 differences in the changed footer. Existing brand typography, top spacing and true seat ordering are approved scope differences. Short screens intentionally scroll with the CTA always visible.
+- Verification: 375/390 x 844/568, anonymous/logged-in eight cases, last row clear, no horizontal overflow/console errors, direct login/report navigation and browser back. No seat, occupancy or selection requests. Actual isolated API enforces anonymous401, revoked-consent403 and other-owner404; unchecked consent cannot proceed.
+- IAB no-seat page separately opened; CTA entered phone verification and browser back returned to the picker. No production writes or real report reads. Artifacts and `result.json` stored in the directory above.
+
+final result: passed
+
 ## 对照对象
 
 - 设计方向：`C:\Users\gaoji\.codex\generated_images\01a06c30-8114-7211-ac49-95477f19d482\exec-1ad9ffcf-1277-406f-9b72-03b19071b75f.png`

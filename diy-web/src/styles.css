@@ -136,6 +136,11 @@ h1, h2, h3, p { margin-top: 0; }
 .status-help { max-width: 350px; margin-top: 18px; color: var(--soft); line-height: 1.6; }
 
 .entry-screen { padding: max(24px, env(safe-area-inset-top)) 18px 40px; }
+.entry-screen-with-reports { padding-bottom: calc(156px + env(safe-area-inset-bottom)); }
+.seat-report-entry { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; padding: 18px 18px max(24px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: #fff; text-align: center; }
+.seat-report-entry p { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.seat-report-entry button { display: flex; width: min(100%, 760px); min-height: 56px; margin: 0 auto; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px; border: 0; border-radius: 999px; color: #fff; background: var(--green-800); font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
+.seat-report-entry button:focus-visible { outline: 3px solid var(--green-700); outline-offset: 3px; }
 .entry-brand { display: flex; max-width: 760px; margin: 0 auto 40px; align-items: center; gap: 10px; color: var(--green-900); }
 .entry-brand span { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; color: #ffffff; background: var(--green-900); font-family: "STKaiti", "KaiTi", serif; }
 .entry-brand strong { font-size: 17px; }
