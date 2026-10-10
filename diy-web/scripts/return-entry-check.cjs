@@ -56,7 +56,7 @@ const stable = 'http://127.0.0.1:4185/?store=1&view=return';
       fs.writeFileSync(qrPath, Buffer.from(png, 'base64'));
       const decoded = execFileSync('python', ['-c', 'import cv2,sys; print(cv2.QRCodeDetector().detectAndDecode(cv2.imread(sys.argv[1]))[0])', qrPath], { encoding: 'utf8' }).trim();
       assert.equal(decoded, contactUrl);
-      await page.getByText('长按二维码，识别添加门店企微', { exact: true }).waitFor();
+      await page.getByText('长按二维码，添加店长企微', { exact: true }).waitFor();
       assert.equal(await page.getByRole('link', { name: '添加门店企微' }).count(), 0);
       assert.equal(await image.evaluate(img => getComputedStyle(img).userSelect), 'auto');
       assert.equal(await image.evaluate(img => img.oncontextmenu), null);
