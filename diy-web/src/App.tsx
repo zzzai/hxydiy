@@ -1766,9 +1766,9 @@ export default function App() {
     const menuUrl = new URL(stableStoreEntry(window.location.origin, query.storeId));
     menuUrl.searchParams.set('view', 'menu');
     return <main className="return-visit-page">
-      <span className="loading-mark">荷</span><h1>欢迎回来，荷小悦</h1><p>查看本人报告，不用再找沙发码。</p>
-      <button className="return-primary" type="button" onClick={openProfile}>打开我的</button>
-      <a className="return-menu-link" href={menuUrl.href}>到店选项目</a><small>到店请扫描服务位二维码，或核对服务位置后选项目。</small>
+      <span className="loading-mark">荷</span><h1>欢迎回来，荷小悦</h1><p>选一项喜欢的服务，给自己放松一会。</p>
+      <a className="return-primary" href={menuUrl.href}>到店选项目</a>
+      <button className="return-menu-link" type="button" onClick={openProfile}>打开我的</button><small>到店请扫描服务位二维码，或核对服务位置后选项目。</small>
       <ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} />
     </main>;
   }
