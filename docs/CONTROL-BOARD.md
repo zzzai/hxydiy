@@ -4,6 +4,12 @@
 
 ## 状态模型
 
+### 项目详情顶部主图全宽适配
+
+| Task ID | 状态 | 唯一执行窗口 | 下一门禁 |
+|---|---|---|---|
+| `CUSTOMER-DETAIL-HERO-FIT-02` | `Deployed` | 本次总控隔离窗口（仅顾客端范围实现/验收/发布） | #236已发布 `93e7ca7f37c2`，CI `38024401686`、部署 `38024590358`成功。所有详情主图全宽/自然高度，250测试/1既有跳过、构建及14项目×375/390/768共42检查通过；MANIFEST、公网资源安装哈希及实际CSS/bundle一致。素材/列表图/长图/价格流程/会员与授权不变，无生产业务数据写入；网络中断只恢复读取原部署，无重复dispatch。微信现场待确认，见 `operations/detail-hero-fit-20261010.md`；无新失败不重复验收或部署。 |
+
 `Candidate → Spec Ready → Contract Frozen → Developing → Integrated → Merged → Deployed → Field Accepted`
 
 - `Candidate`：候选事项，尚未形成可执行增量规格。
