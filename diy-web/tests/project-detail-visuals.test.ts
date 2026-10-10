@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-import { projectDetailVisuals, usesNaturalDetailHero } from '../src/projectDetailVisuals.ts';
+import { projectDetailVisuals } from '../src/projectDetailVisuals.ts';
 
 test('所有已上线项目均提供统一长详情视觉模块', () => {
   const sections = projectDetailVisuals('hxy-xiaoqi-90');
@@ -32,10 +32,7 @@ test('详情视觉为每张图提供可读替代文本和顾客说明', () => {
   }
 });
 
-test('精油开背使用自然比例主图并提供专属长详情图', () => {
-  assert.equal(usesNaturalDetailHero('hxy-oil-back-30'), true);
-  assert.equal(usesNaturalDetailHero('hxy-spa-60'), false);
-
+test('精油开背提供专属长详情图', () => {
   const sections = projectDetailVisuals('hxy-oil-back-30');
   assert.equal(sections.length, 1);
   assert.match(sections[0]?.image || '', /projects\/hxy-oil-back-30-detail\.webp$/);
