@@ -1,5 +1,11 @@
 # 顾客端工作流
 
+## 2026-10-10 CUSTOMER-RETURN-CTA-WECOM-02（待总控发布）
+
+- 基线 `ae16c7adf5184d500ed325f69970efb2a53cf8f8`，分支 `codex/customer-return-cta-wecom-02`。只将欢迎页“到店选项目”提升为深绿主链接、“打开我的”降为次按钮，欢迎文案围绕服务选择；企微弹窗去掉外部跳转按钮，主提示改长按识别，保存后扫一扫为备用。保留真实门店名称/二维码、本人报告入口及自愿添加提示；不改登录授权、菜单价格会员或服务位规则。
+- 二维码保持真实img；显式webkit-touch-callout默认及user-select:auto，不拦截contextmenu、不触发外部联系人行为。构建通过，相关return-entry测试3项通过；375/390×四回访状态8组真实组件验收通过，主次入口、打开我的、选择项目进入既有安全沙发确认页（未自动POST入口/占用/选单）、弹窗关闭、QR精确解码及图片未禁长按。既有菜单访问统计POST属于原流程，不将其误报为占用写入。
+- 报告/截图 `diy-web/output/playwright/customer-return-cta-wecom-02/`，含result.json、375/390-welcome.png、contact.png、position-confirmation.png。真实本地H5/隔离API，合成身份、旧占用记录及OTP；未生产写入或触发外部添加。微信长按菜单及真正识别添加仍需真机确认。原生成文件未提交，总控合并发布。
+
 ## 2026-10-09 CUSTOMER-MAIN-IMAGE-FIT-01（已生产发布）
 
 - 总控发布#230主干 `8f7438ceba911446c82e90842cbe526c88a30595`，CI `37946311535`与正式部署 `37946921274`成功；服务器MANIFEST、公网资源与实际主图规则通过。生产证据及现场边界见 `../operations/main-image-fit-20261009.md`，不再重复部署。

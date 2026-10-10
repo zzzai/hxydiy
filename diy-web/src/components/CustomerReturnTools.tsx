@@ -55,9 +55,9 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
         {contact ? <>
           {contact.qrImage && <img className="store-contact-qr" src={contact.qrImage} alt={`${contact.name}官方企微联系我二维码`} />}
           {!contact.qrImage && contact.addUrl && <StoreContactQr value={contact.addUrl} name={contact.name} />}
-          {contact.addUrl && <a className="return-primary" href={contact.addUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">添加门店企微</a>}
-          <p>可保存二维码，使用微信扫一扫，自愿添加门店。</p>
-          <p>打开入口不代表已添加成功，请按企微页面提示操作。</p>
+          <p className="store-contact-instruction">长按二维码，识别添加门店企微</p>
+          <small>若未出现识别选项，可保存图片后使用微信扫一扫。</small>
+          <p>请按微信提示操作，是否添加成功以微信结果为准。</p>
         </> : <p className="store-contact-unconfigured" role="status">门店线上联系方式尚未配置，到店可联系前台。</p>}
         <small>自愿添加，不影响查看本人报告和正常服务。</small>
       </>}
