@@ -1,3 +1,9 @@
+# 2026-10-10 回访选项目主入口与企微长按提示上线
+
+- `CUSTOMER-RETURN-CTA-WECOM-02`：#232精确HEAD `8e930b8ec49a3d43309e83b1b1992ffa1a21d9ef`已审查并合并主干 `29ba37d969e81c778ceb75a531b7b4e7c8fb6dc5`，CI `38016039893`、正式部署 `38016240339`成功，current为 `github-29ba37d969e8-38016240339`。MANIFEST、公网JS/CSS安装哈希一致；实际bundle确认到店选项目为主链接、打开我的为次入口，企微长按主提示和备用说明更新，CSS允许系统长按菜单。
+- 顾客构建、3专项测试及375/390×四回访状态8组本地真实组件验收通过，QR解码内容不变、弹窗可关闭、选项目进入安全服务位确认流程。总控审查精确diff/报告/截图，未重复开发或本地验收。保留真实门店二维码、本人报告与自愿添加提示，不改菜单价格会员、登录授权、服务位规则或数据库。
+- health200、匿名报告/授权401、TCM私有读取公网404；未创建生产占用/选单、读取真实健康报告或触发企微添加。微信系统长按识别和实际添加仍需真机确认。总控 `output/return-cta-wecom-20261010/{deployment,production-verification}.json`、操作记录 `operations/return-cta-wecom-20261010.md`保存证据，文档合并不再次部署。
+
 # 2026-10-09 顾客项目列表主图铺满上线
 
 - `CUSTOMER-MAIN-IMAGE-FIT-01`：#230精确HEAD `dce5e25e37d98a62af5fff375fbfdd9ec2b0cf04`已审查并合并主干 `8f7438ceba911446c82e90842cbe526c88a30595`；CI `37946311535`、正式部署 `37946921274`成功，current为 `github-8f7438ceba91-37946921274`，MANIFEST及公网JS/CSS哈希一致。
