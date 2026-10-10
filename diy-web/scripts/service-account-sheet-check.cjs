@@ -30,6 +30,14 @@ fs.mkdirSync(out, { recursive: true });
       await page.locator('.service-account-qr').waitFor();
       await page.getByRole('heading', { name: '下次来，不用找沙发码', exact: true }).waitFor();
       await page.locator('.service-account-qr').evaluate(img => img.decode());
+      const fontClient = await context.newCDPSession(page);
+      await fontClient.send('DOM.enable');
+      await fontClient.send('CSS.enable');
+      const fontDocument = await fontClient.send('DOM.getDocument');
+      const fontNode = await fontClient.send('DOM.querySelector', { nodeId: fontDocument.root.nodeId, selector: '.service-account-next' });
+      const platformFonts = await fontClient.send('CSS.getPlatformFontsForNode', { nodeId: fontNode.nodeId });
+      assert(platformFonts.fonts.some(font => /YaHei|PingFang|Noto Sans/.test(font.familyName)));
+      await fontClient.detach();
       assert.equal(await page.locator('.return-link-field').count(), 0);
       assert.equal(await page.getByRole('button', { name: '复制备用链接' }).count(), 0);
       const dimensions = await page.locator('.service-account-qr').evaluate(img => {
@@ -64,7 +72,7 @@ fs.mkdirSync(out, { recursive: true });
       assert.equal(await page.locator('.store-contact-qr').count(), 1);
       assert.equal(await page.locator('.service-account-qr').count(), 0);
       assert.equal(errors.length, 0);
-      checks.push({ width, height, homeAndMy: true, copySuccessAndFailure: true, qr: dimensions, closeAndEscape: true, wecomUnchanged: true, consoleErrors: errors });
+      checks.push({ width, height, homeAndMy: true, copySuccessAndFailure: true, qr: dimensions, closeAndEscape: true, wecomUnchanged: true, platformFonts: platformFonts.fonts, consoleErrors: errors });
       await context.close();
     }
     const qr = path.resolve('public/assets/hxy-service-account-qr.jpg');

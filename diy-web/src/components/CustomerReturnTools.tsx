@@ -40,6 +40,7 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
   return <div className={`return-dialog-backdrop ${panel === 'save' ? 'service-account-backdrop' : ''}`} onClick={onClose}>
     <section className={`return-dialog ${panel === 'save' ? 'service-account-sheet' : ''}`} role="dialog" aria-modal="true" aria-label={panel === 'save' ? '服务号入口' : '联系门店'} onClick={event => event.stopPropagation()}>
       {panel === 'save' && <img className="service-account-mascot" src="/assets/service-account-peeking-v2.png" alt="" />}
+      {panel === 'save' && <img className="service-account-mint-marks" src="/assets/service-account-mint-marks-v2.png" alt="" />}
       <header><h2>{panel === 'save' ? '下次来，不用找沙发码' : contact ? '周二会员福利' : '联系门店'}</h2><button ref={closeButton} type="button" aria-label="关闭入口提示" onClick={onClose}><X size={20} /></button></header>
       {panel === 'save' ? <>
         <div className="service-account-body">
