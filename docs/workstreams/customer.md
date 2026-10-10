@@ -440,4 +440,3 @@
 - Built-in image generation uses the supplied design as reference; prompts request only the peeking head/two hands/mint marks and the basket avatar respectively, transparent backgrounds, no UI/text/QR. Saved assets: `diy-web/public/assets/service-account-{peeking,avatar}-v2.png`.
 - Build passed; tests 250 passed/1 existing skipped; four actual local phone/short-screen checks passed. Combined visual QA is recorded in `design-qa.md`; artifacts in `diy-web/output/playwright/customer-service-account-sheet-fidelity/`. No production writes, real health-report reads or automatic follow action.
 - Coordinator owns merge/deploy and shared production records. Generated Vite and tsbuildinfo files are preserved and excluded.
-
