@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bookmark, CalendarDays, ChevronRight, MessageSquareText, X } from 'lucide-react';
+import { ArrowRight, Bookmark, CalendarDays, ChevronRight, Copy, MessageSquareText, Search, X } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { MEMBERSHIP_STORE_CONFIRMATION } from '../profile';
-import { returnBannerKey, safeStoreContact, stableStoreEntry, STORE_CONTACTS } from '../returnEntry';
+import { returnBannerKey, safeStoreContact, STORE_CONTACTS } from '../returnEntry';
 
 type Panel = 'save' | 'contact' | null;
 
@@ -20,7 +20,6 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const closeButton = useRef<HTMLButtonElement>(null);
   const contact = safeStoreContact(STORE_CONTACTS[storeId]);
-  const url = stableStoreEntry(window.location.origin, storeId);
   useEffect(() => {
     setCopyState('idle');
     if (!panel) return;
@@ -38,20 +37,25 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
     return () => { document.removeEventListener('keydown', escape); previous?.focus(); };
   }, [panel, onClose]);
   if (!panel) return null;
-  return <div className="return-dialog-backdrop" onClick={onClose}>
-    <section className="return-dialog" role="dialog" aria-modal="true" aria-label={panel === 'save' ? '服务号入口' : '联系门店'} onClick={event => event.stopPropagation()}>
-      <header><h2>{panel === 'save' ? '下次从服务号进入' : contact ? '周二会员福利' : '联系门店'}</h2><button ref={closeButton} type="button" aria-label="关闭入口提示" onClick={onClose}><X size={20} /></button></header>
+  return <div className={`return-dialog-backdrop ${panel === 'save' ? 'service-account-backdrop' : ''}`} onClick={onClose}>
+    <section className={`return-dialog ${panel === 'save' ? 'service-account-sheet' : ''}`} role="dialog" aria-modal="true" aria-label={panel === 'save' ? '服务号入口' : '联系门店'} onClick={event => event.stopPropagation()}>
+      {panel === 'save' && <img className="service-account-mascot" src="/assets/hxy-mascot.webp" alt="" />}
+      <header><h2>{panel === 'save' ? '下次来，不用找沙发码' : contact ? '周二会员福利' : '联系门店'}</h2><button ref={closeButton} type="button" aria-label="关闭入口提示" onClick={onClose}><X size={20} /></button></header>
       {panel === 'save' ? <>
-        <h3>荷小悦草本轻养</h3>
-        <p>微信搜索这个服务号，打开底部菜单，就能选项目、查看本人报告。</p>
-        <small>到店选项目时，请扫描服务位二维码或核对服务位置。</small>
-        <label className="return-link-field">也可保存备用链接<input readOnly value={url} onFocus={event => event.currentTarget.select()} aria-label="门店固定入口" /></label>
-        <button className="return-primary" type="button" onClick={async () => {
-          try { await navigator.clipboard.writeText(url); setCopyState('copied'); }
+        <div className="service-account-body">
+        <div className="service-account-identity"><img src="/assets/hxy-mascot.webp" alt="" /><div><h3>荷小悦草本轻养</h3><p>荷小悦服务号</p></div></div>
+        <ol className="service-account-steps" aria-label="关注步骤"><li><span>1</span>长按识别<ArrowRight size={20} aria-hidden="true" /></li><li><span>2</span>关注服务号</li></ol>
+        <img className="service-account-qr" src="/assets/hxy-service-account-qr.jpg" alt="荷小悦草本轻养服务号二维码，长按识别" />
+        <h3 className="service-account-action">长按上方二维码，识别服务号</h3>
+        <p className="service-account-next">下次从服务号底部菜单进入</p>
+        <p className="service-account-features">选项目 · 查看本人报告</p>
+        <div className="service-account-search"><Search size={18} aria-hidden="true" /><span>也可微信搜索：荷小悦草本轻养</span><button type="button" onClick={async () => {
+          try { await navigator.clipboard.writeText('荷小悦草本轻养'); setCopyState('copied'); }
           catch { setCopyState('failed'); }
-        }}>复制备用链接</button>
-        <p role="status" className="return-copy-status">{copyState === 'copied' ? '链接已复制，可粘贴给自己保存。' : copyState === 'failed' ? '无法自动复制，请长按上方链接手动复制。' : '下次打开服务号菜单，不用再找沙发码。'}</p>
-        <small>查看本人报告需登录并单独授权；更换浏览器可能需要重新登录。</small>
+        }}><Copy size={16} aria-hidden="true" />复制名称</button></div>
+        {copyState !== 'idle' && <p role="status" className="service-account-copy-status">{copyState === 'copied' ? '名称已复制，可到微信搜索。' : '无法自动复制，可在微信搜索「荷小悦草本轻养」。'}</p>}
+        <small className="service-account-note">自愿关注，不影响正常服务。<br />报告需本人登录并授权查看。</small>
+        </div>
       </> : <>
         <h3>{contact?.name || '荷小悦门店联系'}</h3>
         {contact ? <>
