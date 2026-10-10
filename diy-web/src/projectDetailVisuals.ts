@@ -94,10 +94,6 @@ const CUPPING_SCRAPING_VISUALS: ProjectDetailVisualSection[] = [
   },
 ];
 
-export function usesNaturalDetailHero(code: string): boolean {
-  return code === 'hxy-oil-back-30';
-}
-
 export function projectDetailVisuals(code: string): ProjectDetailVisualSection[] {
   // 招牌草本沐足与 60 分钟精油 SPA 使用专属流程插画；其他项目沿用统一信息结构和画风。
   if (code === 'hxy-xiaoqi-90') return SIGNATURE_FOOTBATH_VISUALS;
