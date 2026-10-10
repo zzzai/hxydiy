@@ -40,7 +40,7 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
   if (!panel) return null;
   return <div className="return-dialog-backdrop" onClick={onClose}>
     <section className="return-dialog" role="dialog" aria-modal="true" aria-label={panel === 'save' ? '保存门店入口' : '联系门店'} onClick={event => event.stopPropagation()}>
-      <header><h2>{panel === 'save' ? '下次不用找沙发码' : '联系门店'}</h2><button ref={closeButton} type="button" aria-label="关闭入口提示" onClick={onClose}><X size={20} /></button></header>
+      <header><h2>{panel === 'save' ? '下次不用找沙发码' : contact ? '周二会员福利' : '联系门店'}</h2><button ref={closeButton} type="button" aria-label="关闭入口提示" onClick={onClose}><X size={20} /></button></header>
       {panel === 'save' ? <>
         <p>保存门店入口，随时回来查看本人报告。到店选项目时，再扫描服务位二维码。</p>
         <label className="return-link-field">门店固定入口<input readOnly value={url} onFocus={event => event.currentTarget.select()} aria-label="门店固定入口" /></label>
@@ -53,13 +53,13 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
       </> : <>
         <h3>{contact?.name || '荷小悦门店联系'}</h3>
         {contact ? <>
+          <p>会员周二按门店价消费任意主项，买一赠一。</p>
+          <small>添加店长企微，了解门店活动。</small>
           {contact.qrImage && <img className="store-contact-qr" src={contact.qrImage} alt={`${contact.name}官方企微联系我二维码`} />}
           {!contact.qrImage && contact.addUrl && <StoreContactQr value={contact.addUrl} name={contact.name} />}
-          <p className="store-contact-instruction">长按二维码，识别添加门店企微</p>
-          <small>若未出现识别选项，可保存图片后使用微信扫一扫。</small>
-          <p>请按微信提示操作，是否添加成功以微信结果为准。</p>
+          <p className="store-contact-instruction">长按二维码，添加店长企微</p>
         </> : <p className="store-contact-unconfigured" role="status">门店线上联系方式尚未配置，到店可联系前台。</p>}
-        <small>自愿添加，不影响查看本人报告和正常服务。</small>
+        <small>{contact ? '自愿添加，不影响服务与报告查看。' : '自愿添加，不影响查看本人报告和正常服务。'}</small>
       </>}
     </section>
   </div>;

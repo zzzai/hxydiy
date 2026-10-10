@@ -1,5 +1,11 @@
 # 顾客端工作流
 
+## 2026-10-10 CUSTOMER-WECOM-BENEFIT-COPY-03（待总控发布）
+
+- 基线 `cb1e0cd44da88dc9e435e2cd45f9e14d0a143d04`，分支 `codex/customer-wecom-benefit-copy-03`。仅已配置联系弹窗采用用户指定“周二会员福利”、会员周二门店价主项买一赠一短说明、店长企微说明及长按主操作；保留真实店名/二维码/关闭及自愿提示，未配置门店仍“联系门店”与原说明。不改其他业务或新增发券/群/推送/埋点。
+- 用户已真机确认#232长按识别添加可用；本次运营文案不代表买赠或活动发放闭环，也不承诺加好友即获权益。二维码仍原img及payload，不触发外部联系人行为。
+- 构建通过；定向脚本 `diy-web/output/wecom-copy-check.cjs` 在375/390×已配置/未配置门店4组验证指定文案、无溢出、关闭、img可长按/未拦截contextmenu、QR精确解码不变、无请求写入。报告与截图 `diy-web/output/playwright/customer-wecom-benefit-copy-03/`，未生产发券/添加或读取真实健康信息。总控审查合并发布；生成文件未提交。
+
 ## 2026-10-10 CUSTOMER-RETURN-CTA-WECOM-02（已生产发布）
 
 - 总控已发布#232主干 `29ba37d969e81`，CI `38016039893`、正式部署 `38016240339`成功；current/MANIFEST与公网资源哈希、新主次入口和长按提示/CSS已核验。生产记录见 `../operations/return-cta-wecom-20261010.md`。微信识别添加仍待真机，不重复部署或验收。
