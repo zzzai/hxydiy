@@ -2,7 +2,7 @@
 
 日期：2026-10-11（Asia/Shanghai）
 任务：`CUSTOMER-SEAT-PAGE-UI-RELEASE-02`
-状态：`Deployed`；生产IAB由总控验收，微信现场待用户确认。
+状态：`Deployed`；总控生产IAB验收通过，微信实际本人报告现场待用户确认。
 
 ## 结果与边界
 
@@ -31,9 +31,11 @@
 - 本地有效验收不重复执行：`npm test`为250通过/1既有跳过，`npm run build`成功，`git diff --check`通过。
 - 正式产物375/390×844/568共4组检查：无横向溢出/控制台错误，短屏最后一排无遮挡，匿名报告入口不触发选座/占用/选单或身份写入。两组正常菜单分类、加号进入详情、返回通过，真实五分类保留。
 - 新文案、21/17字号、80×84 contain及无旧固定底栏在公网产物中核验；无演示数据标识。健康200、匿名报告/授权401、TCM私有源公网404。
-- 未向生产创建业务选单、占用服务位或读取真实健康报告；状态/资源检查不等同完整生产UI或门店验收。总控仍需实际IAB视觉和匿名报告入口检查，用户仍需微信现场确认。
+- 未向生产创建业务选单、占用服务位或读取真实健康报告；状态/资源检查不等同完整生产UI或门店验收。总控已完成实际IAB视觉、匿名报告入口及返回检查，用户仍需微信实际本人报告现场确认。
 - 本地UI证据：`diy-web/output/playwright/customer-seat-ui-release/result.json`、`output/seat-ui-release/approved-vs-production-build.png`及根 `design-qa.md`。
 - 发布/只读核验报告：发布工作区 `output/seat-ui-release/deployment.json`和`production-verification.json`。
+- 总控生产IAB390×844：无seat服务号入口实际加载 `index-IMuSCH8h.js`，无演示文案；报告卡y120位于座位图y315.1875之前，原IP加载、主标题21px/边距22px，8个既有沙发顺序保留。点击查看我的检测报告进入真实匿名手机号登录，返回我的再返回可回到选座页；console warn/error为空。
+- IAB验收未选择任何座位、发送SMS、登录或读取健康数据。截图由总控保存于 `C:/Users/gaoji/.codex/worktrees/token-budget/hxy-diy/output/seat-ui-preview-20261011/production-final.png`和同目录 `production-report-login.png`，没有重复部署或本地测试。
 
 ## 最小可恢复容量处理
 
@@ -59,4 +61,4 @@
 - CI产物下载连接中断后采用有界分段下载并校验ZIP，不向签名存储地址转发GitHub凭据。
 - 部署dispatch已成功后状态读取中断；只恢复同SHA的已有部署等待，强制已存在run才能继续，未重复dispatch或自动重跑。
 - 辅助只读核验脚本修正IP引用检查：IP由bundle引用，不要求直接写在HTML，也不按JS断言检查PNG。产品代码未因此改变。
-- 文档补录分支 `codex/customer-seat-ui-release-record`只记录已核验事实，不触发第二次生产发布。生产IAB及微信现场结果分别补录，不将本地构建或健康状态算作现场通过。
+- 文档补录分支 `codex/customer-seat-ui-release-record`只记录已核验事实，不触发第二次生产发布。生产IAB通过已在后续文档补录，微信实际本人报告现场仍待确认；不将本地构建或健康状态算作现场通过。
