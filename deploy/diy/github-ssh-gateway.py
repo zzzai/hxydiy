@@ -36,6 +36,17 @@ def safe_member(member):
     ) and (member.isfile() or member.isdir())
 
 
+def deploy_and_clean(root, release, workspace, run=subprocess.run):
+    run(['flock', '-n', str(root / '.manual-deploy.lock'), 'bash',
+         str(workspace / 'deploy/diy/deploy-production.sh'), release, str(workspace)], check=True)
+    # Cleanup failure must not roll back a healthy release.
+    cleaner = root / 'deploy/diy/cleanup-published-inputs.py'
+    if cleaner.is_file():
+        result = run(['python3', str(cleaner), release], check=False)
+        if result.returncode:
+            print('Deployment succeeded; duplicate inputs retained because cleanup was skipped.', file=sys.stderr)
+
+
 def main():
     action, release = command_args(os.environ.get('SSH_ORIGINAL_COMMAND', ''))
     if action == 'check':
@@ -67,8 +78,7 @@ def main():
                 raise ValueError('Unsafe release archive')
             package.extractall(workspace, members=members)
         subprocess.run(['cp', '-an', str(ROOT / 'current/diy-web/dist/assets') + '/.', str(workspace / 'diy-web/dist/assets') + '/'], check=True)
-        subprocess.run(['flock', '-n', str(ROOT / '.manual-deploy.lock'), 'bash',
-                        str(workspace / 'deploy/diy/deploy-production.sh'), release, str(workspace)], check=True)
+        deploy_and_clean(ROOT, release, workspace)
 
 
 if __name__ == '__main__':
