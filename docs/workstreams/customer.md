@@ -6,7 +6,7 @@
 - 保留真实后台座位编号和排序、QR、菜单分类、价格、选单逻辑与权限；本人报告复用既有登录、独立授权及原站链接策略。没有复制预览模拟接口、演示手机号/验证码、模拟座位、localUiPreview或本地报告例外；原预览和生成脏文件保留。
 - 顾客250测试通过/1既有跳过、构建及diff检查通过；正式产物以只读公开目录快照和本地请求桩验证375/390×844/568。报告匿名登录入口不触发选座/占用/选单，最后一排无遮挡，无横向溢出或控制台错误；两组正常菜单分类、加号打开详情和返回通过。产物不含演示标识，报告/身份/API/价格/服务位业务源码与基线一致。
 - 本地证据 `diy-web/output/playwright/customer-seat-ui-release/result.json` 和 `output/seat-ui-release/`；根 `design-qa.md`记录批准图与实际UI对照。#246精确HEAD `8e64f1a82d3b45dfc91db5e221407a5e54a93e1e`已合并 `942e1080fb6a5d4dc6ca2ea014585b32c5ae6e2c`，CI `38104127310`、正式部署 `38105290034`成功；current为 `github-942e1080fb6a-38105290034`，MANIFEST及公网安装JS/CSS/IP哈希一致。
-- 经本地完整备份与SHA校验，仅移除6份旧重复上传包及对应校验文件，保留已安装release、current、数据库/备份和原3GB门禁；未通过MANIFEST的旧包未动。读取网络中断只恢复原部署等待，不重复dispatch。生产IAB由总控继续验收，微信现场待用户确认；未创建生产占用/选单或读取真实健康报告。见 `../operations/seat-entry-ui-release-20261011.md`，文档补录不再次部署。
+- 经本地完整备份与SHA校验，仅移除6份旧重复上传包及对应校验文件，保留已安装release、current、数据库/备份和原3GB门禁；未通过MANIFEST的旧包未动。读取网络中断只恢复原部署等待，不重复dispatch。总控生产IAB390×844视觉、匿名报告登录和回退已通过；微信实际本人报告现场仍待用户确认；未创建生产占用/选单或读取真实健康报告。见 `../operations/seat-entry-ui-release-20261011.md`，文档补录不再次部署。
 
 ## 2026-10-10 CUSTOMER-SEAT-PAGE-REPORT-ENTRY-01（已生产发布）
 
