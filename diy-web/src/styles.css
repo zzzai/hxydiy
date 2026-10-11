@@ -149,9 +149,7 @@ h1, h2, h3, p { margin-top: 0; }
 .service-hub-entry small { display: block; margin-top: 7px; color: var(--muted); font-size: 14px; line-height: 1.5; }
 .service-hub-entry:focus-visible { outline: 3px solid var(--green-700); outline-offset: 3px; }
 .service-hub-back { display: flex; max-width: 520px; margin: 0 auto; padding: 14px 22px 0; gap: 5px; align-items: center; color: var(--green-800); font-size: 14px; text-decoration: none; }
-.public-menu-home, .public-menu-select { display: flex; min-height: 44px; align-items: center; gap: 4px; color: var(--green-800); font-size: 14px; text-decoration: none; }
-.public-menu-title { color: var(--green-900); font-size: 17px; font-weight: 600; }
-.public-menu-select { padding: 0 10px; border-radius: 8px; background: #f0f8f5; }
+a.miniapp-store { text-decoration: none; }
 .seat-report-card { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; margin: 0 0 30px; padding: 18px 14px; align-items: center; gap: 10px; border-radius: 16px; background: #f0f8f5; }
 .seat-report-icon { display: grid; place-items: center; color: var(--green-800); }
 .seat-report-card h2 { margin: 0 0 6px; color: var(--green-900); font-size: 17px; font-weight: 600; line-height: 1.4; }

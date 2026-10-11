@@ -1922,16 +1922,16 @@ export default function App() {
     <div className="customer-app" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
       {!online && <div className="offline-banner"><WifiOff size={15} />网络已断开，恢复后将继续同步</div>}
       <header className="miniapp-context-bar">
-        {publicBrowsing ? <><a className="public-menu-home" href={serviceAccountEntry(window.location.origin, query.storeId)}><ArrowLeft size={18} />首页</a><strong className="public-menu-title">荷小悦菜单</strong><a className="public-menu-select" href={serviceAccountEntry(window.location.origin, query.storeId, 'seats')}>到店选项目</a></> : <div className="miniapp-store" onClick={openSeatMap} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSeatMap(); } }} role="button" tabIndex={0}>
+        {publicBrowsing ? <a className="miniapp-store" href={serviceAccountEntry(window.location.origin, query.storeId)} aria-label="返回首页"><MapPinned size={16} /><span>荷小悦草本泡脚</span></a> : <div className="miniapp-store" onClick={openSeatMap} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSeatMap(); } }} role="button" tabIndex={0}>
           <MapPinned size={16} />
           <span>荷小悦草本泡脚</span>
           <em>{position?.customer_label || '服务位待核对'}</em>
           <small>切换</small>
         </div>}
-        {!publicBrowsing && <button className="miniapp-profile-entry" type="button" onClick={openProfile}>
+        <button className="miniapp-profile-entry" type="button" onClick={openProfile}>
           <CircleUserRound size={18} />
-          <span>{customerAuth ? '我的' : '登录'}</span>
-        </button>}
+          <span>{publicBrowsing || customerAuth ? '我的' : '登录'}</span>
+        </button>
       </header>
 
       {boot === 'ready' && hasSubmittedCustomerSession && collaborationMode !== 'browse_only' && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
