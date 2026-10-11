@@ -1,7 +1,9 @@
 # 顾客端工作流
 
-## 2026-10-11 CUSTOMER-SERVICE-ACCOUNT-HUB-01（待合并发布）
+## 2026-10-11 CUSTOMER-SERVICE-ACCOUNT-HUB-01（已生产发布）
 
+- 业务#249完整HEAD `a4a985e8d9d264a506491af3b0a05d5555f88bed`合并 `7536c3a0e89f188f467cb192708a042c90c7a3ff`；CI `38108018553`、正式部署 `38118780088`成功，current为 `github-7536c3a0e89f-38118780088`。installed完整MANIFEST、公网JS/CSS和原IP哈希、原链接/健康及匿名报告权限核验通过；原服务号链接无需更换。
+- 总控生产匿名IAB390×844双入口/原IP、报告登录及返回首页、公共菜单分类价格和详情、明确到店选座及无seat刷新通过，无console warn/error/横向溢出；未选座、发送SMS、写占用/选单或读取实际报告。微信本人报告现场仍待确认。最小可恢复清理一份明确授权npm缓存和两份旧重复上传包/校验文件，未改原3GB门禁、已安装release或数据库/备份；网络读取错误未重发，详见 `../operations/service-account-hub-release-20261011.md`。本地有效证据不重复，生产文档补录不再部署。
 - 基线 `8a9ebea1c3cf7105c778811a080b82246d6dc3d8`，分支 `codex/customer-service-account-hub-01`；原无seat `view=menu`链接改为报告/菜单双入口。保留白/浅绿/深绿、22px边距、21/17/14px层级和原80×84 contain IP，未引入组件库或新素材。
 - 独立public-menu读取真实目录，不复用browse_only、不读服务位map/旧记录、不建立占用/选单或协作轮询；详情可临时浏览偏好，CTA仅进入明确座位核对，不自动添加/提交。报告复用原登录/本人授权路径，返回首页。显式QR、绑定设备、项目分享及原点单流程保留，不改后端/价格/会员/报告合同。
 - 路由新增2项先失败再通过；顾客全套252通过、1既有跳过，构建与diff检查通过。一次正式构建手机脚本验证375/390×844/568：三种source入口、旧记录未恢复、无座位刷新、匿名报告返回、5分类、加号详情返回、明确选座后恢复原加入服务。仅本地请求桩与只读公开目录，未生产业务写入或读取真实报告。证据`diy-web/output/playwright/customer-service-account-hub/result.json`；PR/CI不等同生产/微信现场验收。
