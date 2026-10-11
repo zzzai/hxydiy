@@ -74,6 +74,7 @@ type Props = {
   positionLabel: string;
   isMember: boolean;
   readOnly?: boolean;
+  onStartSelection?: () => void;
   onClose: () => void;
   onConfirm: (payload: ConfirmPayload) => void;
   onCouponInfo: () => void;
@@ -101,6 +102,7 @@ export default function ProjectDetailPage({
   positionLabel,
   isMember,
   readOnly = false,
+  onStartSelection,
   onClose,
   onConfirm,
   onCouponInfo,
@@ -277,7 +279,7 @@ export default function ProjectDetailPage({
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
 
-        {!detailOnly && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong><small>请确认位置无误</small></section>}
+        {!detailOnly && !onStartSelection && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong><small>请确认位置无误</small></section>}
 
         {usesFrontendHerbalFormula && <FallbackHerbalFormulaGroup
           selectedName={choices.find((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.value === choice))}
@@ -383,10 +385,10 @@ export default function ProjectDetailPage({
 
       </main>
 
-      {(!detailOnly || (project && isFixedProject(project) && project.category === 'small')) && <footer className="mini-detail-footer">
+      {(onStartSelection || !detailOnly || (project && isFixedProject(project) && project.category === 'small')) && <footer className="mini-detail-footer">
         <div className="mini-detail-total"><span>{memberOnly ? '会员价' : configuredPrices.currentLabel}{packageUnit && ` · ${packageUnit}`}{!memberOnly && (isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>)}</span><strong>{formatMoney(configuredPrices.currentCents)}</strong></div>
         <div className="mini-detail-actions">
-          <button className="primary" type="button" disabled={readOnly || catalogErrors.length > 0} onClick={() => onConfirm({ project, preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, ...(catalogPublished && project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds, linkedProjectIds: [...new Set([...catalogChoices.filter((choice) => draftChoiceIds.includes(choice.id) && choice.linked_project_id !== null).map((choice) => choice.linked_project_id as number), ...draftRelaxProjectIds])] } : {}) })}>{projectDetailActionLabel(selected, readOnly, catalogErrors.length > 0)}<ChevronRight size={17} /></button>
+          <button className="primary" type="button" disabled={!onStartSelection && (readOnly || catalogErrors.length > 0)} onClick={() => onStartSelection ? onStartSelection() : onConfirm({ project, preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, ...(catalogPublished && project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds, linkedProjectIds: [...new Set([...catalogChoices.filter((choice) => draftChoiceIds.includes(choice.id) && choice.linked_project_id !== null).map((choice) => choice.linked_project_id as number), ...draftRelaxProjectIds])] } : {}) })}>{onStartSelection ? '到店选项目' : projectDetailActionLabel(selected, readOnly, catalogErrors.length > 0)}<ChevronRight size={17} /></button>
         </div>
       </footer>}
     </motion.div>

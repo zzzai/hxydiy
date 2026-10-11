@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowLeft,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -20,7 +21,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ReturnEntryBanner } from './components/CustomerReturnTools';
-import { isReturnEntry, stableStoreEntry } from './returnEntry';
+import { isReturnEntry, isServiceAccountEntry, serviceAccountEntry, stableStoreEntry } from './returnEntry';
 
 import {
   ApiError,
@@ -133,7 +134,7 @@ import {
   type Addon,
 } from './domain';
 
-type BootState = 'loading' | 'return-visit' | 'pick-position' | 'direct-feedback' | 'ready' | 'occupied' | 'expired' | 'kiosk-unbound' | 'submitted' | 'error';
+type BootState = 'loading' | 'service-hub' | 'public-menu' | 'return-visit' | 'pick-position' | 'direct-feedback' | 'ready' | 'occupied' | 'expired' | 'kiosk-unbound' | 'submitted' | 'error';
 
 type EntryRecord = {
   storeId: number;
@@ -154,14 +155,17 @@ const pageTracking = createDiyPageTracking(trackDiyEvent);
 function getQueryConfig() {
   const query = new URLSearchParams(window.location.search);
   const returnVisit = isReturnEntry(query);
+  const serviceHub = isServiceAccountEntry(query);
   return {
     storeId: Number(query.get('store') || 1),
     returnVisit,
+    serviceHub,
+    publicPage: serviceHub ? query.get('page') : null,
     positionCode: returnVisit ? '' : query.get('seat') || '',
-    source: returnVisit ? '' : query.get('source') || '',
+    source: returnVisit || serviceHub ? '' : query.get('source') || '',
     qrToken: returnVisit ? '' : query.get('qr') || '',
     sessionId: returnVisit ? '' : query.get('session') || '',
-    accessToken: returnVisit ? '' : query.get('token') || '',
+    accessToken: returnVisit || serviceHub ? '' : query.get('token') || '',
     projectCode: returnVisit ? '' : query.get('project') || '',
   };
 }
@@ -341,7 +345,7 @@ export default function App() {
   const [detailProject, setDetailProject] = useState<Project | null>(null);
   const [localDetailOpen, setLocalDetailOpen] = useState(false);
   const [seatMapOpen, setSeatMapOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(() => query.returnVisit || shouldRestoreProfileOverlay(window.history.state));
+  const [profileOpen, setProfileOpen] = useState(() => query.returnVisit || (!query.serviceHub && shouldRestoreProfileOverlay(window.history.state)));
   const [membershipKind, setMembershipKind] = useState<MembershipKind | null>(null);
   const [moving, setMoving] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -428,6 +432,7 @@ export default function App() {
   }), [projects, addons, selectionDraft, isMember]);
   const selectionPromotion = useMemo(() => activePromotion(preview, isMember), [preview, isMember]);
   const readOnly = collaborationMode === 'browse_only' || !canEditSelection(session?.status, occupancy?.status);
+  const publicBrowsing = boot === 'public-menu';
   const hasSubmittedCustomerSession = session?.status === 'submitted' || session?.status === 'confirmed';
   const serviceProgress = customerServiceProgress(serviceStatus?.occupancy_status ?? occupancy?.status);
   const serviceFeedbackActionLabel = serviceFeedbackAction(Boolean(serviceStatus?.can_evaluate), Boolean(serviceStatus?.evaluated));
@@ -900,20 +905,31 @@ export default function App() {
       setBoot('return-visit');
       return;
     }
+    if (query.serviceHub) {
+      window.history.replaceState(createOverlayGuardState(null), '', serviceAccountEntry(window.location.origin, query.storeId, query.publicPage === 'projects' || query.publicPage === 'seats' ? query.publicPage : undefined));
+      if (query.publicPage !== 'projects' && query.publicPage !== 'seats') {
+        setBoot('service-hub');
+        return;
+      }
+    }
     try {
       const [catalog, addonCatalog, publicMap, coupons, content] = await Promise.all([
         getProjects(query.storeId),
         getAddons(query.storeId).catch(() => []),
-        getServicePositionMap(query.storeId),
+        query.serviceHub && query.publicPage === 'projects' ? Promise.resolve(null) : getServicePositionMap(query.storeId),
         getCouponTemplates(customerAuth?.token).catch(() => []),
         getPageContent(query.storeId).catch(() => null),
       ]);
       setProjects(catalog);
       setAddons(addonCatalog);
       menuFingerprintRef.current = menuFingerprint(catalog, addonCatalog);
-      setPositions(publicMap.positions);
+      setPositions(publicMap?.positions || []);
       setCouponTemplates(coupons);
       setPageContent(content);
+      if (query.serviceHub && query.publicPage === 'projects') {
+        setBoot('public-menu');
+        return;
+      }
       const sharedProject = query.projectCode ? catalog.find((project) => project.code === query.projectCode) : undefined;
       if (sharedProject) openProjectDetail(sharedProject);
       if (query.sessionId && query.accessToken) {
@@ -1480,6 +1496,7 @@ export default function App() {
     url.searchParams.set('store', String(query.storeId));
     url.searchParams.set('seat', next.code);
     url.searchParams.set('source', 'store_qr');
+    url.searchParams.delete('page');
     window.history.replaceState(window.history.state, '', url);
     setBootMessage('');
     await enterPosition(next.code);
@@ -1781,6 +1798,16 @@ export default function App() {
       <ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} />
     </main>;
   }
+  if (boot === 'service-hub') {
+    return <main className="entry-screen seat-entry-page service-hub-page">
+      <header className="seat-entry-brand"><div><h1>荷小悦</h1><p>到店服务</p></div><img src="/assets/seat-entry-ip.png" alt="" /></header>
+      <section className="service-hub-entries" aria-label="服务入口">
+        <button className="service-hub-entry" type="button" onClick={openProfile}><FileText size={26} aria-hidden="true" /><span><strong>查看检测报告</strong><small>登录后查看本人报告</small></span><ChevronRight size={20} aria-hidden="true" /></button>
+        <a className="service-hub-entry" href={serviceAccountEntry(window.location.origin, query.storeId, 'projects')}><ListChecks size={26} aria-hidden="true" /><span><strong>进入菜单</strong><small>查看项目、价格和服务内容</small></span><ChevronRight size={20} aria-hidden="true" /></a>
+      </section>
+      <ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onReportsBack={dismissTopOverlay} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} />
+    </main>;
+  }
   if (boot === 'direct-feedback') {
     return <main className="success-screen">
       <div className="success-top"><span className="eyebrow">荷小悦 · 到店体验</span><h1>{directPositionLabel || '当前服务位'}</h1><p>无需选项目或订单，也可以直接告诉我们您的到店感受。</p></div>
@@ -1807,7 +1834,7 @@ export default function App() {
     </main>;
   }
   if (boot === 'pick-position') {
-    return <><InitialPositionPicker positions={positions} onSelect={selectInitialPosition} onBlocked={setBootMessage} onViewReports={openProfile} busy={false} message={bootMessage === '正在连接门店服务' ? '' : bootMessage} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
+    return <>{query.serviceHub && <a className="service-hub-back" href={serviceAccountEntry(window.location.origin, query.storeId, 'projects')}><ArrowLeft size={18} />返回菜单</a>}<InitialPositionPicker positions={positions} onSelect={selectInitialPosition} onBlocked={setBootMessage} onViewReports={openProfile} busy={false} message={bootMessage === '正在连接门店服务' ? '' : bootMessage} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'occupied') {
     return <><StatusScreen type="occupied" title="这个位置已经有人" message={bootMessage || '请核对您所在的沙发，或联系前台协助处理。'} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
@@ -1895,27 +1922,27 @@ export default function App() {
     <div className="customer-app" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
       {!online && <div className="offline-banner"><WifiOff size={15} />网络已断开，恢复后将继续同步</div>}
       <header className="miniapp-context-bar">
-        <div className="miniapp-store" onClick={openSeatMap} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSeatMap(); } }} role="button" tabIndex={0}>
+        {publicBrowsing ? <><a className="public-menu-home" href={serviceAccountEntry(window.location.origin, query.storeId)}><ArrowLeft size={18} />首页</a><strong className="public-menu-title">荷小悦菜单</strong><a className="public-menu-select" href={serviceAccountEntry(window.location.origin, query.storeId, 'seats')}>到店选项目</a></> : <div className="miniapp-store" onClick={openSeatMap} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSeatMap(); } }} role="button" tabIndex={0}>
           <MapPinned size={16} />
           <span>荷小悦草本泡脚</span>
           <em>{position?.customer_label || '服务位待核对'}</em>
           <small>切换</small>
-        </div>
-        <button className="miniapp-profile-entry" type="button" onClick={openProfile}>
+        </div>}
+        {!publicBrowsing && <button className="miniapp-profile-entry" type="button" onClick={openProfile}>
           <CircleUserRound size={18} />
           <span>{customerAuth ? '我的' : '登录'}</span>
-        </button>
+        </button>}
       </header>
 
       {boot === 'ready' && hasSubmittedCustomerSession && collaborationMode !== 'browse_only' && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
       {boot === 'ready' && collaborationMode === 'browse_only' && <div className="shared-cart-banner read-only" role="status">本服务位清单已提交；可继续浏览项目或提交评价与建议</div>}
 
       <section className="miniapp-promo-strip" aria-label="门店推荐">
-        <button type="button" className="miniapp-promo visit-feedback-entry" onClick={openVisitFeedback}>
+        {!publicBrowsing && <button type="button" className="miniapp-promo visit-feedback-entry" onClick={openVisitFeedback}>
           <span className="visit-feedback-icon"><MessageSquareText size={22} /></span>
           <span className="promo-copy"><small>随时都能说</small><strong>评价与建议</strong><em>告诉我们这次到店感受</em></span>
           <ChevronRight className="visit-feedback-arrow" size={18} />
-        </button>
+        </button>}
         {shouldShowMembershipPromos(isMember) && <>
         <button type="button" className="miniapp-promo membership-promo annual" onClick={() => openMembership('annual')}>
           <span className="promo-copy"><small>一年有效 · 享会员价</small><strong>{MEMBERSHIP_PLANS.annual.price}元{MEMBERSHIP_PLANS.annual.name}</strong><em>联系前台办理<i>门店确认</i></em></span>
@@ -2050,7 +2077,7 @@ export default function App() {
 
       <SeatMapDialog open={seatMapOpen} current={position} positions={positions} moving={moving} source={session?.source || occupancy?.source || query.source} onClose={dismissTopOverlay} onSelect={handleMove} onBlocked={flash} />
       <AnimatePresence initial={false} mode="wait">
-      {localDetailOpen && <LocalDetailPage open project={localProject || null} selectedParts={localParts} positionLabel={position?.customer_label || '服务位待核对'} isMember={isMember} readOnly={readOnly} onClose={dismissTopOverlay} onConfirm={saveLocalParts} />}
+      {localDetailOpen && <LocalDetailPage open project={localProject || null} selectedParts={localParts} positionLabel={publicBrowsing ? '' : position?.customer_label || '服务位待核对'} isMember={isMember} readOnly={publicBrowsing ? false : readOnly} onStartSelection={publicBrowsing ? () => window.location.assign(serviceAccountEntry(window.location.origin, query.storeId, 'seats')) : undefined} onClose={dismissTopOverlay} onConfirm={saveLocalParts} />}
       {detailProject && <ProjectDetailPage
         project={detailProject}
         projects={projects}
@@ -2061,9 +2088,10 @@ export default function App() {
         localParts={localParts}
         catalogSelection={detailProject ? projectCatalogSelections?.[detailProject.id] : undefined}
         coupon={featuredCoupon}
-        positionLabel={position?.customer_label || '服务位待核对'}
+        positionLabel={publicBrowsing ? '' : position?.customer_label || '服务位待核对'}
         isMember={isMember}
-        readOnly={readOnly}
+        readOnly={publicBrowsing ? false : readOnly}
+        onStartSelection={publicBrowsing ? () => window.location.assign(serviceAccountEntry(window.location.origin, query.storeId, 'seats')) : undefined}
         onClose={dismissTopOverlay}
         onConfirm={saveProject}
         onCouponInfo={openCouponLogin}

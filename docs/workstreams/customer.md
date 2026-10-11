@@ -1,5 +1,11 @@
 # 顾客端工作流
 
+## 2026-10-11 CUSTOMER-SERVICE-ACCOUNT-HUB-01（待合并发布）
+
+- 基线 `8a9ebea1c3cf7105c778811a080b82246d6dc3d8`，分支 `codex/customer-service-account-hub-01`；原无seat `view=menu`链接改为报告/菜单双入口。保留白/浅绿/深绿、22px边距、21/17/14px层级和原80×84 contain IP，未引入组件库或新素材。
+- 独立public-menu读取真实目录，不复用browse_only、不读服务位map/旧记录、不建立占用/选单或协作轮询；详情可临时浏览偏好，CTA仅进入明确座位核对，不自动添加/提交。报告复用原登录/本人授权路径，返回首页。显式QR、绑定设备、项目分享及原点单流程保留，不改后端/价格/会员/报告合同。
+- 路由新增2项先失败再通过；顾客全套252通过、1既有跳过，构建与diff检查通过。一次正式构建手机脚本验证375/390×844/568：三种source入口、旧记录未恢复、无座位刷新、匿名报告返回、5分类、加号详情返回、明确选座后恢复原加入服务。仅本地请求桩与只读公开目录，未生产业务写入或读取真实报告。证据`diy-web/output/playwright/customer-service-account-hub/result.json`；PR/CI不等同生产/微信现场验收。
+
 ## 2026-10-11 CUSTOMER-SEAT-PAGE-UI-RELEASE-02（已生产发布）
 
 - 基线 `36b3212aaa2b13a69330595d32f9c7b3b46f1f26`，分支 `codex/customer-seat-ui-release-02`。按已确认手机预览，仅调整无座位入口UI：报告卡位于选项目和座位图上方，白底/浅翠绿/深绿、22px边距、21px/600标题、17px/600报告标题、14px说明；原IP完整显示于80×84 contain槽。

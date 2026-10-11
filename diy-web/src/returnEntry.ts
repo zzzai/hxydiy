@@ -16,6 +16,18 @@ export function isReturnEntry(params: URLSearchParams): boolean {
   return params.get('view') === 'return' || (!params.get('seat') && !params.get('qr') && !params.get('session') && !params.get('project') && params.get('view') !== 'menu' && params.get('source') !== 'kiosk');
 }
 
+export function isServiceAccountEntry(params: URLSearchParams): boolean {
+  return params.get('view') === 'menu' && !params.get('seat') && !params.get('qr') && !params.get('session') && !params.get('project') && params.get('source') !== 'kiosk';
+}
+
+export function serviceAccountEntry(origin: string, storeId: number, page?: 'projects' | 'seats'): string {
+  const url = new URL('/', origin);
+  url.searchParams.set('store', String(Number.isSafeInteger(storeId) && storeId > 0 ? storeId : 1));
+  url.searchParams.set('view', 'menu');
+  if (page) url.searchParams.set('page', page);
+  return url.href;
+}
+
 export function returnBannerKey(storeId: number): string {
   return `hxy_diy_return_notice_closed_${storeId}`;
 }

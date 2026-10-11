@@ -18,12 +18,13 @@ type TabKey = 'records' | 'coupons';
 const SHOW_PROFILE_HISTORY = false;
 const SHOW_DYNAMIC_MEMBER_CODE = false;
 
-export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, storeId = 1 }: {
+export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, onReportsBack, storeId = 1 }: {
   open: boolean;
   auth: CustomerAuth | null;
   onClose: () => void;
   onAuthChange: (auth: CustomerAuth | null) => void;
   initialReportsOpen?: boolean;
+  onReportsBack?: () => void;
   storeId?: number;
 }) {
   const [tab, setTab] = useState<TabKey>('records');
@@ -104,7 +105,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   return (
     <div className={`profile-page ${reportsOpen ? 'profile-report-view' : ''}`} role="dialog" aria-modal="true" aria-label="个人中心">
       <header>
-        <button type="button" aria-label={reportsOpen ? '返回我的' : '返回'} onClick={reportsOpen ? () => setReportsOpen(false) : onClose}><ArrowLeft size={22} /></button>
+        <button type="button" aria-label={reportsOpen ? onReportsBack ? '返回首页' : '返回我的' : '返回'} onClick={reportsOpen ? onReportsBack || (() => setReportsOpen(false)) : onClose}><ArrowLeft size={22} /></button>
         <strong>{reportsOpen ? '我的检测报告' : '我的'}</strong>
         {auth ? <button className="profile-logout" type="button" onClick={() => { clearCustomerAuth(); onAuthChange(null); }}><LogOut size={15} />退出登录</button> : <span />}
       </header>
