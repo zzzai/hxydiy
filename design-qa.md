@@ -1,5 +1,18 @@
 # Design QA — 技师服务后快速交接
 
+## CUSTOMER-SEAT-PAGE-UI-RELEASE-02 — 2026-10-11
+
+- Approved source: `C:/Users/gaoji/.codex/worktrees/token-budget/hxy-diy/output/seat-ui-preview-20261011/preview-final.png`. Actual production-build screenshots: `diy-web/output/playwright/customer-seat-ui-release/375x844-entry.png` and `390x844-entry.png`; short-screen last-row captures are in the same folder.
+- Scope: extract only the approved entry UI and original IP asset from the isolated preview. Report card precedes arrival selection; white/pale-green/dark-green, 22px margins, 21px/600 page heading, 17px/600 report heading, 14px explanation and 80x84 contained IP. No new font, IP generation or circular clipping.
+- Intentional approved-source differences: remove the demo notice; keep public backend seat labels/order instead of modifying data to match a drawing. The current public snapshot already displays left 5/2/9/7 and right 3/1/8/6, without source-code remapping.
+- Asset: original cutout byte-identical SHA256 `44f944293898839fc411c0007b5840b98734f5f87a9dc8e13cca5d2927bf33a3`, displayed in full without clipping or visible halos.
+- Actual-size entry and short-screen screenshots reviewed. Consistent content rhythm, clear primary report action, readable labels, full last row, no fixed footer covering content. No actionable P0/P1/P2 issue in scope.
+- Verification: formal frontend build with public read-only catalog snapshots and local request stubs; four 375/390 x 844/568 cases pass. Anonymous report login opens without any entry/occupancy/selection/auth write. Normal category navigation, plus -> detail -> back pass in two tall-screen cases. No production business write, external browser request, horizontal overflow or runtime/console error.
+- Formal API, login/consent, self-report, original-site URL checks, seat policies, prices and menu domain files are unchanged from baseline. Production JS contains no demo phone/code, local-demo route, synthetic report ID/seat codes or demo notice. Existing full frontend suite: 250 passed / 1 existing skip; production build and diff check pass.
+- Local preview-specific ProfilePage/MyReports exceptions and synthetic server are not included. Production/field status must come from later exact-head release verification, not this local QA.
+
+final result: passed (local production-build UI validation)
+
 ## CUSTOMER-SEAT-PAGE-REPORT-ENTRY-01 — 2026-10-10
 
 - Source: `C:/Users/gaoji/.codex/generated_images/01a0c1a4-f8e1-73c0-9c87-42051db50bd5/exec-484603d4-af13-4a12-aecf-af240a6e3aa8.png`, 853x1844, normalized to 390x844.

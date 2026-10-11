@@ -227,12 +227,19 @@ function InitialPositionPicker({ positions, onSelect, onBlocked, onViewReports, 
   };
 
   return (
-    <main className="entry-screen entry-screen-with-reports">
-      <div className="entry-brand"><span>荷</span><strong>荷小悦</strong></div>
+    <main className="entry-screen seat-entry-page">
+      <header className="seat-entry-brand">
+        <div><strong>荷小悦</strong><p>到店服务</p></div>
+        <img src="/assets/seat-entry-ip.png" alt="" />
+      </header>
+      <section className="seat-report-card" aria-label="我的检测报告">
+        <span className="seat-report-icon"><FileText size={26} aria-hidden="true" /></span>
+        <div><h2>我的检测报告</h2><p>不用选座，登录后查看。</p></div>
+        <button type="button" aria-label="查看我的检测报告" onClick={onViewReports}>查看<ChevronRight size={17} aria-hidden="true" /></button>
+      </section>
       <section className="entry-panel">
-        <span className="eyebrow">到店服务选单</span>
-        <h1>选择您所在的沙发</h1>
-        <p>请按现场号码选择，二维码到店后会自动绑定对应位置。</p>
+        <h1>到店选项目</h1>
+        <p>按现场号码选择沙发，继续选项目。</p>
         {message && <div className="entry-position-notice" role="status">{message}</div>}
         <div className="initial-seat-plan" aria-label="沙发服务区平面布局">
           <div className="initial-entrance-lane" aria-label="门口">
@@ -245,10 +252,6 @@ function InitialPositionPicker({ positions, onSelect, onBlocked, onViewReports, 
           <div className="initial-seat-column" aria-label="右侧沙发区">{rightSofas.map(renderSeat)}</div>
         </div>
       </section>
-      <footer className="seat-report-entry">
-        <p>查报告，不用选沙发</p>
-        <button type="button" onClick={onViewReports}><FileText size={22} aria-hidden="true" />查看我的检测报告</button>
-      </footer>
     </main>
   );
 }

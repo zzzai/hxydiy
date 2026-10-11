@@ -136,11 +136,26 @@ h1, h2, h3, p { margin-top: 0; }
 .status-help { max-width: 350px; margin-top: 18px; color: var(--soft); line-height: 1.6; }
 
 .entry-screen { padding: max(24px, env(safe-area-inset-top)) 18px 40px; }
-.entry-screen-with-reports { padding-bottom: calc(156px + env(safe-area-inset-bottom)); }
-.seat-report-entry { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; padding: 18px 18px max(24px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: #fff; text-align: center; }
-.seat-report-entry p { margin: 0 0 12px; color: var(--muted); font-size: 14px; line-height: 1.5; }
-.seat-report-entry button { display: flex; width: min(100%, 760px); min-height: 56px; margin: 0 auto; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px; border: 0; border-radius: 999px; color: #fff; background: var(--green-800); font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
-.seat-report-entry button:focus-visible { outline: 3px solid var(--green-700); outline-offset: 3px; }
+.seat-entry-page { max-width: 520px; margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom)); background: #fff; }
+.seat-entry-brand { display: flex; min-height: 78px; margin-bottom: 12px; align-items: center; justify-content: space-between; }
+.seat-entry-brand strong { color: var(--green-900); font-size: 22px; font-weight: 600; }
+.seat-entry-brand p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.seat-entry-brand img { display: block; width: 80px; height: 84px; object-fit: contain; }
+.seat-report-card { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; margin: 0 0 30px; padding: 18px 14px; align-items: center; gap: 10px; border-radius: 16px; background: #f0f8f5; }
+.seat-report-icon { display: grid; place-items: center; color: var(--green-800); }
+.seat-report-card h2 { margin: 0 0 6px; color: var(--green-900); font-size: 17px; font-weight: 600; line-height: 1.4; }
+.seat-report-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.seat-report-card button { display: flex; min-height: 44px; align-items: center; justify-content: center; gap: 2px; padding: 10px 12px; border: 0; border-radius: 999px; color: #fff; background: var(--green-800); font: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
+.seat-report-card button:focus-visible { outline: 3px solid var(--green-700); outline-offset: 3px; }
+.seat-entry-page .entry-panel h1 { margin: 0 0 10px; font-size: 21px; font-weight: 600; line-height: 1.4; }
+.seat-entry-page .entry-panel > p { margin: 0 0 18px; font-size: 14px; line-height: 1.5; }
+.seat-entry-page .initial-seat-plan { padding: 12px 8px; grid-template-columns: 26px minmax(0, 1fr) 26px minmax(0, 1fr); gap: 9px; border-color: #d9e9e2; border-radius: 14px; background: #f6faf8; }
+.seat-entry-page .initial-seat { min-height: 90px; gap: 6px; border-radius: 12px; box-shadow: none; }
+.seat-entry-page .initial-seat strong { font-size: 16px; font-weight: 600; }
+.seat-entry-page .initial-seat small { font-size: 14px; }
+.seat-entry-page .initial-seat-column { gap: 10px; }
+.seat-entry-page .initial-walkway { min-height: 390px; background: #fff; }
+.seat-entry-page .initial-walkway span { font-size: 12px; font-weight: 400; }
 .entry-brand { display: flex; max-width: 760px; margin: 0 auto 40px; align-items: center; gap: 10px; color: var(--green-900); }
 .entry-brand span { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; color: #ffffff; background: var(--green-900); font-family: "STKaiti", "KaiTi", serif; }
 .entry-brand strong { font-size: 17px; }
