@@ -1954,6 +1954,12 @@ a.miniapp-store { text-decoration: none; }
 .detail-conversion-page .mini-addon-grid strong,
 .detail-conversion-page .mini-local-grid strong,
 .detail-conversion-page .local-part-choice-grid strong { font-size: 13px; }
+.detail-conversion-page .mini-addon-grid > button,
+.detail-conversion-page .mini-local-grid > div > button { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 8px; }
+.detail-conversion-page .mini-addon-grid .addon-price,
+.detail-conversion-page .mini-local-grid .addon-price { align-items: flex-start; text-align: left; }
+.detail-conversion-page .mini-addon-grid em,
+.detail-conversion-page .mini-local-grid em { font-size: 12px; }
 .detail-conversion-page .mini-config-title span,
 .detail-conversion-page .mini-config-heading span,
 .detail-conversion-page .mini-option-grid small,
