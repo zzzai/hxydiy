@@ -63,7 +63,7 @@ import { anonymousBrowserEntryHint, selectionPriceDisplay, serviceFeedbackAction
 import { customerServiceProgress, shouldPollCustomerServiceStatus } from './customerServiceStatus';
 import { startSharedDraftPolling } from './sharedDraftPolling';
 import { shareProjectLink } from './projectShare';
-import { configureWeChatProjectShare } from './wechatShare';
+import { configureWeChatProjectShare, isWeChatBrowser } from './wechatShare';
 import ProjectDetailPage from './components/ProjectDetailPage';
 import LocalDetailPage from './components/LocalDetailPage';
 import {
@@ -1921,7 +1921,7 @@ export default function App() {
   return (
     <div className="customer-app" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
       {!online && <div className="offline-banner"><WifiOff size={15} />网络已断开，恢复后将继续同步</div>}
-      <header className="miniapp-context-bar">
+      <header className={`miniapp-context-bar${publicBrowsing && isWeChatBrowser() ? ' wechat-public-menu-header' : ''}`}>
         {publicBrowsing ? <a className="miniapp-store" href={serviceAccountEntry(window.location.origin, query.storeId)} aria-label="返回首页"><MapPinned size={16} /><span>荷小悦草本泡脚</span></a> : <div className="miniapp-store" onClick={openSeatMap} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSeatMap(); } }} role="button" tabIndex={0}>
           <MapPinned size={16} />
           <span>荷小悦草本泡脚</span>

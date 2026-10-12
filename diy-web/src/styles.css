@@ -1132,6 +1132,8 @@ a.miniapp-store { text-decoration: none; }
   padding: max(6px, env(safe-area-inset-top)) 16px 6px;
   border: 0;
 }
+/* WeChat already reserves the screen inset above its native navigation. */
+.miniapp-context-bar.wechat-public-menu-header { padding-top: 6px; }
 .miniapp-store { width: 100%; gap: 4px; }
 .miniapp-store span { max-width: 142px; font-size: 14px; font-weight: 700; }
 .miniapp-store em {
