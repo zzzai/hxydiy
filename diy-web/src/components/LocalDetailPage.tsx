@@ -1,13 +1,11 @@
 import { ArrowLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, displayProjectName, effectivePrice, formatMoney, priceOf, projectImage, type Project } from '../domain';
+import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, customerProjectSummaryText, displayProjectName, effectivePrice, formatMoney, priceOf, projectImage, type Project } from '../domain';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
 import DetailIntroduction from './DetailIntroduction';
 import DetailPrice from './DetailPrice';
-import ProjectServiceNotes from './ProjectServiceNotes';
-import { projectSelectionReason } from '../projectDetailGuidance';
 
 type Props = {
   open: boolean;
@@ -39,12 +37,10 @@ export default function LocalDetailPage({ open, project, selectedParts, position
     setFocusedPart(part);
     setDraft((current) => current.includes(part) ? current.filter((item) => item !== part) : [...current, part]);
   };
-  const activePart = draft.includes(focusedPart) ? focusedPart : draft[0];
-  const activeProfile = activePart ? LOCAL_DETAIL_PROFILES[activePart as keyof typeof LOCAL_DETAIL_PROFILES] : null;
-  const title = activePart ? `${activePart}调理` : displayProjectName(project);
+  const activeProfile = LOCAL_DETAIL_PROFILES[focusedPart as keyof typeof LOCAL_DETAIL_PROFILES];
 
   return (
-    <motion.div data-motion="detail" {...detailMotion} className="project-detail-page mini-detail-page local-preference-page detail-conversion-page" role="dialog" aria-modal="true" aria-labelledby="local-detail-title">
+    <motion.div data-motion="detail" {...detailMotion} className="project-detail-page mini-detail-page local-preference-page" role="dialog" aria-modal="true" aria-labelledby="local-detail-title">
       <header className="mini-detail-nav">
         <button type="button" aria-label="返回项目列表" onClick={onClose}><ArrowLeft size={22} /></button>
         <strong>{displayProjectName(project)}</strong>
@@ -54,8 +50,8 @@ export default function LocalDetailPage({ open, project, selectedParts, position
       <main className="mini-detail-scroll">
         <img className="mini-detail-hero" src={projectImage(project)} alt="局部推拿服务" />
         <section className="mini-detail-card mini-detail-summary-card">
-          <div className="mini-detail-title-row"><h1 id="local-detail-title">{title}</h1></div>
-          <DetailIntroduction name={title} summary={`${LOCAL_PARTS.join('、')}，按需选择，每个部位单独计价。`} highlights={activeProfile ? [activeProfile.focus] : []} facts={project.duration_min ? [`${project.duration_min}分钟/项`] : [project.price_label || '按次服务']} />
+          <div className="mini-detail-title-row"><h1 id="local-detail-title">{focusedPart}调理</h1></div>
+          <DetailIntroduction name={`${focusedPart}调理`} summary={customerProjectSummaryText(project)} highlights={[activeProfile.focus]} facts={project.duration_min ? [`${project.duration_min}分钟/项`] : [project.price_label || '按次服务']} />
           <DetailPrice current={effectivePrice(project, isMember)} comparison={priceOf(project, isMember ? 'store' : 'member')} isMember={isMember} unit="每个部位" />
         </section>
 
@@ -64,13 +60,9 @@ export default function LocalDetailPage({ open, project, selectedParts, position
         <section className="mini-config-card">
           <div className="mini-config-title"><strong>选择调理部位</strong><span>可多选 · 按部位计价</span></div>
           <div className="local-part-choice-grid horizontal-switcher">
-            {LOCAL_PARTS.map((part) => <button key={part} type="button" disabled={readOnly} aria-pressed={draft.includes(part)} className={draft.includes(part) ? 'active' : ''} onClick={() => toggle(part)}><strong>{part}</strong><small>{LOCAL_DETAIL_PROFILES[part].focus}</small></button>)}
+            {LOCAL_PARTS.map((part) => <button key={part} type="button" disabled={readOnly} className={`${draft.includes(part) ? 'active' : ''} ${focusedPart === part ? 'focused' : ''}`} onClick={() => toggle(part)}><strong>{part}</strong><small>{LOCAL_DETAIL_PROFILES[part].focus}</small></button>)}
           </div>
           <div className={`mini-promotion ${draft.length >= 2 ? 'qualified' : ''}`}><Sparkles size={18} /><div><strong>{draft.length >= 2 ? '已选2个不同部位' : draft.length === 1 ? '再选1个不同部位' : '选2个不同部位'}</strong><small>{draft.length >= 2 ? '搭配草本泡脚时，可免基础泡脚费' : '搭配草本泡脚，可免基础泡脚费'}</small></div><span>{Math.min(new Set(draft).size, 2)}/2</span></div>
-        </section>
-        <section className="detail-decision-guide" aria-label="项目建议与须知">
-          <p className="detail-selection-reason">{projectSelectionReason(project.code)}</p>
-          <ProjectServiceNotes project={project} basePrice={effectivePrice(project, isMember)} />
         </section>
       </main>
 
