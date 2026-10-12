@@ -8,7 +8,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import type { CouponTemplate } from '../api';
-import { customerPreferenceLabel, customerPreferenceNote, preferenceSummary, projectDetailActionLabel, shouldShowCouponPrompt } from '../customerCopy';
+import { customerPreferenceLabel, customerPreferenceNote, projectDetailActionLabel, shouldShowCouponPrompt } from '../customerCopy';
 import { fallbackAttachableAddons, fallbackOptionGroups, withFallbackOptionGroups, type FallbackOptionGroup } from '../projectOptionFallbacks';
 import { linkedProjectIdsForChoices, catalogChoicesByType } from '../selectionSummary';
 import { catalogDraftResetKey, validateCatalogSelection, withRequiredCatalogDefaults } from '../catalogOptions';
@@ -20,6 +20,8 @@ import FootBathBundleProgress from './project-options/FootBathBundleProgress';
 import ProjectDetailVisualSections from './ProjectDetailVisualSections';
 import DetailIntroduction from './DetailIntroduction';
 import DetailPrice from './DetailPrice';
+import ProjectServiceNotes from './ProjectServiceNotes';
+import { projectSelectionReason } from '../projectDetailGuidance';
 import { projectDetailVisuals } from '../projectDetailVisuals';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
@@ -44,6 +46,7 @@ import {
   detailPriceComparison,
   displayProjectName,
   projectImage,
+  assetPath,
   relaxAddOnProjects,
   customerProjectTagGroups,
   customerProjectSummaryText,
@@ -148,7 +151,7 @@ export default function ProjectDetailPage({
   const [draftAddOnIds, setDraftAddOnIds] = useState<number[]>(selectedAddonIds);
   const [draftLocalParts, setDraftLocalParts] = useState<string[]>(localParts);
   const [draftChoiceIds, setDraftChoiceIds] = useState<number[]>(withRequiredCatalogDefaults(catalogGroups, catalogSelection?.optionChoiceIds || []));
-  const [draftRelaxProjectIds, setDraftRelaxProjectIds] = useState<number[]>([]);
+  const [draftRelaxProjectIds, setDraftRelaxProjectIds] = useState<number[]>(initialDirectRelaxProjectIds);
   const draftResetKey = catalogDraftResetKey({
     projectId: project?.id,
     preferences,
@@ -260,9 +263,15 @@ export default function ProjectDetailPage({
   const hasAdditions = !detailOnly && (catalogPublished
     ? isCatalogOptions && (relaxProjects.length > 0 || catalogLocalChoices.length > 0)
     : (isCatalogOptions && attachableAddons.length > 0) || (isFootbathOptions && Boolean(localProject)));
+  const visibleGroups = groups.filter((group) => (!usesFrontendHerbalFormula || customerPreferenceLabel(group.label) !== '泡脚液') && (!isFootBath || customerPreferenceLabel(group.label) !== '手法力度'));
+  const visibleCatalogPreferences = catalogPreferenceGroups.filter((group) => !isFootBath || customerPreferenceLabel(group.name) !== '手法力度');
+  const hasPreferences = usesFrontendHerbalFormula || visibleGroups.length > 0 || (isCatalogOptions && catalogPublished && visibleCatalogPreferences.length > 0);
+  const hasConfiguredAdditions = draftLocalParts.length > 0 || attachableAddons.some((addon) => draftAddOnIds.includes(addon.id)) || draftRelaxProjectIds.length > 0 || [...catalogLocalChoices, ...catalogRelaxChoices].some((choice) => draftChoiceIds.includes(choice.id));
+  const selectionReason = projectSelectionReason(project.code);
+  const isOilBack = project.code === 'hxy-oil-back-30';
 
   return (
-    <motion.div data-motion="detail" {...detailMotion} className={`project-detail-page mini-detail-page ${isMember ? 'member-active' : ''}`} role="dialog" aria-modal="true" aria-labelledby="project-detail-title">
+    <motion.div data-motion="detail" {...detailMotion} className={`project-detail-page mini-detail-page detail-conversion-page ${isMember ? 'member-active' : ''}`} role="dialog" aria-modal="true" aria-labelledby="project-detail-title">
       <header className="mini-detail-nav">
         <button type="button" aria-label="返回项目列表" onClick={onClose}><ArrowLeft size={22} /></button>
         <strong>项目详情</strong>
@@ -270,16 +279,23 @@ export default function ProjectDetailPage({
       </header>
 
       <main className="mini-detail-scroll">
-        <img className="mini-detail-hero" src={projectImage(project)} alt={`${displayName}服务场景`} />
+        <img className={`mini-detail-hero${isOilBack ? ' detail-oil-back-hero' : ''}`} src={isOilBack ? assetPath('projects/hxy-oil-back-30-detail.webp') : projectImage(project)} alt={`${displayName}服务场景`} />
 
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
+          {selectionReason && <p className="detail-selection-reason">{selectionReason}</p>}
           <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={project.code === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
           <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} memberOnly={memberOnly} unit={packageUnit} />
+          <ProjectServiceNotes project={project} basePrice={basePrices.currentCents} />
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
 
         {!detailOnly && !onStartSelection && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong><small>请确认位置无误</small></section>}
+
+        <ProjectDetailVisualSections sections={detailVisualSections} />
+
+        {hasPreferences && <details key={`preferences-${project.id}`} className="detail-choice-disclosure" aria-label="服务偏好" open={catalogErrors.length > 0}>
+          <summary><span><strong>服务偏好</strong><small>{catalogErrors.length > 0 ? '请补全必选项' : '已按默认偏好安排 · 可调整'}</small></span><ChevronRight size={18} /></summary>
 
         {usesFrontendHerbalFormula && <FallbackHerbalFormulaGroup
           selectedName={choices.find((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.value === choice))}
@@ -287,7 +303,7 @@ export default function ProjectDetailPage({
           readOnly={readOnly}
         />}
 
-        {groups.filter((group) => !usesFrontendHerbalFormula || customerPreferenceLabel(group.label) !== '泡脚液').map((group, index) => {
+        {visibleGroups.map((group, index) => {
           const displayLabel = customerPreferenceLabel(group.label);
           return (
             <section className="mini-config-card" key={group.label} aria-labelledby={`mini-config-${project.id}-${index}`}>
@@ -298,14 +314,32 @@ export default function ProjectDetailPage({
                 {group.options.map((option) => {
                   const active = choices.includes(option);
                   const note = displayLabel === '泡脚液' ? (option === '门店推荐' ? '当日现煮' : '当日可选') : '';
-                  return <button key={option} type="button" className={active ? 'active' : ''} aria-pressed={active} onClick={() => choose(group, option)}><strong>{option}</strong>{note && <small>{note}</small>}</button>;
+                  return <button key={option} type="button" disabled={readOnly} className={active ? 'active' : ''} aria-pressed={active} onClick={() => choose(group, option)}><strong>{option}</strong>{note && <small>{note}</small>}</button>;
                 })}
               </div>
             </section>
           );
         })}
 
-        {hasAdditions && !catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
+        {isCatalogOptions && catalogPublished && visibleCatalogPreferences.map((group) => group.code === 'footbath-formula' ? (
+          <HerbalFormulaGroup key={group.id} group={group} selectedChoiceIds={draftChoiceIds} onSelect={(id) => { if (!draftChoiceIds.includes(id)) toggleChoice(id); }} readOnly={readOnly} />
+        ) : (
+          <section className="mini-config-card mini-required-options" key={group.id} aria-label={customerPreferenceLabel(group.name)}>
+            <div className="mini-config-title"><strong>{customerPreferenceLabel(group.name)}</strong><span>{group.required ? '请选择一项 · 不加价' : '按需选择 · 不加价'}</span></div>
+            <div className={`mini-option-grid ${group.selection_mode === 'single' ? (group.choices.length >= 3 ? 'three-col' : 'two-col') : ''}`}>
+              {group.choices.map((choice) => (
+                <button key={choice.id} type="button" className={draftChoiceIds.includes(choice.id) ? 'active' : ''} aria-pressed={draftChoiceIds.includes(choice.id)} disabled={readOnly} onClick={() => toggleChoice(choice.id)}>
+                  <strong>{choice.name}</strong><small>{choice.description || '不加价'}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+        </details>}
+
+        {hasAdditions && <details key={`additions-${project.id}`} className="detail-choice-disclosure" aria-label="可选加购" open={hasConfiguredAdditions}>
+          <summary><span><strong>可选加购</strong><small>{hasConfiguredAdditions ? '已选内容在这里 · 费用计入合计' : '不需要就不加选 · 展开看看'}</small></span><ChevronRight size={18} /></summary>
+
         {isFootbathOptions && !catalogPublished && localProject && (
           <section className="mini-config-card">
             <div className="mini-config-title"><strong>重点多按一会</strong><span>按部位加购 · 可多选</span></div>
@@ -336,24 +370,6 @@ export default function ProjectDetailPage({
           </section>
         )}
 
-        {isCatalogOptions && catalogPublished && catalogPreferenceGroups.length > 0 && !catalogPreferenceGroups.some((group) => group.code === 'footbath-formula') && <div className="mini-detail-section-label"><strong>先选服务偏好</strong><span>{preferenceSummary(catalogPreferenceGroups.map((group) => customerPreferenceLabel(group.name)))}</span></div>}
-
-        {isCatalogOptions && catalogPublished && catalogPreferenceGroups.map((group) => group.code === 'footbath-formula' ? (
-          <HerbalFormulaGroup key={group.id} group={group} selectedChoiceIds={draftChoiceIds} onSelect={(id) => { if (!draftChoiceIds.includes(id)) toggleChoice(id); }} readOnly={readOnly} />
-        ) : (
-          <section className="mini-config-card mini-required-options" key={group.id} aria-label={customerPreferenceLabel(group.name)}>
-            <div className="mini-config-title"><strong>{customerPreferenceLabel(group.name)}</strong><span>{group.required ? '请选择一项 · 不加价' : '按需选择 · 不加价'}</span></div>
-            <div className={`mini-option-grid ${group.selection_mode === 'single' ? (group.choices.length >= 3 ? 'three-col' : 'two-col') : ''}`}>
-              {group.choices.map((choice) => (
-                <button key={choice.id} type="button" className={draftChoiceIds.includes(choice.id) ? 'active' : ''} aria-pressed={draftChoiceIds.includes(choice.id)} disabled={readOnly} onClick={() => toggleChoice(choice.id)}>
-                  <strong>{choice.name}</strong><small>{choice.description || '不加价'}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-        ))}
-
-        {hasAdditions && catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
         {isFootbathOptions && catalogPublished && catalogLocalChoices.length > 0 && (
           <LocalStrengthGroup choice={catalogLocalChoices} parts={draftLocalParts} onToggle={toggleCatalogLocal} projects={projects} isMember={isMember} readOnly={readOnly} />
         )}
@@ -362,12 +378,7 @@ export default function ProjectDetailPage({
         )}
 
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
-
-        <ProjectDetailVisualSections
-          sections={detailVisualSections}
-          eyebrow={project.code === 'hxy-qiqing-30' ? '荷小悦的慢时光' : undefined}
-          title={project.code === 'hxy-qiqing-30' ? '一桶草本，慢慢把自己照顾好' : undefined}
-        />
+        </details>}
 
         {!detailOnly && !isFootBath && !catalogPublished && groups.length === 0 && <div className="mini-standard-card"><Check size={18} />项目按门店标准服务，到店后可向技师说明偏好。</div>}
 
