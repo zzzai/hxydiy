@@ -1,5 +1,7 @@
 # hxy-diy 共享记忆
 
+2026-10-12 CUSTOMER-WECHAT-MENU-INSET-01：微信UA公开菜单顶栏不再重复使用`env(safe-area-inset-top)`，仅保留6px上间距；普通浏览器、QR/绑定菜单及底部安全区保留，不改全局viewport，也不改已还原的详情/价格/报告。#261已生产发布，current`github-4ae5135e020b-38246760294`；精确CI`38246243138`、部署`38246760294`和完整MANIFEST、公网资源/14价格、6组手机安全区模拟及我的返回核验通过，微信真机现场待确认。见`operations/wechat-menu-inset-release-20261012.md`；补录不重发。
+
 2026-10-12 CUSTOMER-DETAIL-RESTORE-01：用户要求将本轮项目详情优化全部还原。恢复到#255之前的`c8460d5152a7b3c6551bda33144817a3166b3605`顾客源码与测试，撤销#255–#258新增的详情文案、配置布局、说明和样式，不夹带进一步优化；服务号双入口/我的、QR、报告、价格/默认选择/计费和服务器清理能力保留。10次套盒无有效期仍为用户确认事实，但本轮新增展示一并还原，不把未用不退写成排除法定权利的承诺。#259已合并并发布，当前为`github-9ff4212a6bcd-38214586508`，CI`38213749899`、部署`38214586508`及current/MANIFEST、公网资源、14项价格和28组实际手机页面已核验；本窗口未部署#258。微信现场待确认，见`operations/customer-detail-restore-release-20261012.md`；文档补录不重发生产。
 
 2026-10-11 CUSTOMER-SERVICE-ACCOUNT-HUB-01：服务号既有`store=1&view=menu`无seat链接改为报告/菜单双入口，兼容service_account或无source；无座位目录为独立public-menu，不复用已提交QR的browse_only，不恢复旧选单/占用或后台写入。只有明确到店选项目→原座位核对→选座才进入原点单；不自动添加。显式QR/绑定设备/项目分享优先级、价格/会员/报告本人及独立授权规则不变。报告返回双入口，原IP及品牌布局保留。导航合同见`contracts/customer-return-entry-v1.md`；本条合并不代表生产/微信现场验收，后附10月9日记录为历史入口语义。
