@@ -53,15 +53,15 @@ test('basic footbath does not imply included massage in either catalog or fallba
   assert.match(renderProject(project({ code: 'hxy-tuina-70', name: '荷小推', category: 'tuina', duration_min: 80 })), /手法力度/);
 });
 
-test('service explanation precedes collapsed preferences and optional additions', () => {
+test('DIY preferences and additions are expanded before the service explanation', () => {
   const markup = renderProject();
   const experience = markup.indexOf('aria-label="项目体验介绍"');
   const preferences = markup.indexOf('aria-label="服务偏好"');
   const additions = markup.indexOf('aria-label="可选加购"');
-  assert.ok(experience >= 0 && preferences > experience && additions > preferences);
-  assert.match(markup, /<details[^>]*aria-label="服务偏好"[^>]*>/);
-  assert.match(markup, /<details[^>]*aria-label="可选加购"[^>]*>/);
-  assert.doesNotMatch(markup, /<details[^>]*aria-label="(?:服务偏好|可选加购)"[^>]*\sopen(?:="")?[^>]*>/);
+  assert.ok(preferences >= 0 && additions > preferences && experience > additions);
+  assert.ok(markup.indexOf('class="detail-selection-reason"') > additions);
+  assert.match(markup, /<details[^>]*aria-label="服务偏好"[^>]*\sopen=""[^>]*>/);
+  assert.match(markup, /<details[^>]*aria-label="可选加购"[^>]*\sopen=""[^>]*>/);
   assert.match(markup, /¥29\.9/);
   assert.match(markup, /会员价 ¥25\.9/);
 });

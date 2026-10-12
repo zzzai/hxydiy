@@ -283,19 +283,15 @@ export default function ProjectDetailPage({
 
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
-          {selectionReason && <p className="detail-selection-reason">{selectionReason}</p>}
           <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={project.code === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
           <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} memberOnly={memberOnly} unit={packageUnit} />
-          <ProjectServiceNotes project={project} basePrice={basePrices.currentCents} />
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
 
         {!detailOnly && !onStartSelection && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong><small>请确认位置无误</small></section>}
 
-        <ProjectDetailVisualSections sections={detailVisualSections} />
-
-        {hasPreferences && <details key={`preferences-${project.id}`} className="detail-choice-disclosure" aria-label="服务偏好" open={catalogErrors.length > 0}>
-          <summary><span><strong>服务偏好</strong><small>{catalogErrors.length > 0 ? '请补全必选项' : '已按默认偏好安排 · 可调整'}</small></span><ChevronRight size={18} /></summary>
+        {hasPreferences && <details key={`preferences-${project.id}`} className="detail-choice-disclosure" aria-label="服务偏好" open>
+          <summary><span><strong>服务偏好</strong><small>{catalogErrors.length > 0 ? '请补全必选项' : '直接调整 · 不加价'}</small></span><ChevronRight size={18} /></summary>
 
         {usesFrontendHerbalFormula && <FallbackHerbalFormulaGroup
           selectedName={choices.find((choice) => FOOTBATH_HERBAL_FORMULAS.some((formula) => formula.value === choice))}
@@ -337,8 +333,8 @@ export default function ProjectDetailPage({
         ))}
         </details>}
 
-        {hasAdditions && <details key={`additions-${project.id}`} className="detail-choice-disclosure" aria-label="可选加购" open={hasConfiguredAdditions}>
-          <summary><span><strong>可选加购</strong><small>{hasConfiguredAdditions ? '已选内容在这里 · 费用计入合计' : '不需要就不加选 · 展开看看'}</small></span><ChevronRight size={18} /></summary>
+        {hasAdditions && <details key={`additions-${project.id}`} className="detail-choice-disclosure" aria-label="可选加购" open>
+          <summary><span><strong>可选加购</strong><small>{hasConfiguredAdditions ? '已选内容在这里 · 费用计入合计' : '按需选择 · 费用计入合计'}</small></span><ChevronRight size={18} /></summary>
 
         {isFootbathOptions && !catalogPublished && localProject && (
           <section className="mini-config-card">
@@ -379,6 +375,12 @@ export default function ProjectDetailPage({
 
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
         </details>}
+
+        <section className="detail-decision-guide" aria-label="项目建议与须知">
+          {selectionReason && <p className="detail-selection-reason">{selectionReason}</p>}
+          <ProjectServiceNotes project={project} basePrice={basePrices.currentCents} />
+        </section>
+        <ProjectDetailVisualSections sections={detailVisualSections} />
 
         {!detailOnly && !isFootBath && !catalogPublished && groups.length === 0 && <div className="mini-standard-card"><Check size={18} />项目按门店标准服务，到店后可向技师说明偏好。</div>}
 
