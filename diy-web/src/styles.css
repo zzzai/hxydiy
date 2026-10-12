@@ -1918,6 +1918,7 @@ a.miniapp-store { text-decoration: none; }
 .detail-conversion-page .mini-detail-scroll { background: #fff; }
 .detail-conversion-page .mini-detail-summary-card { padding: 20px; }
 .detail-conversion-page .detail-selection-reason { margin: 12px 0 16px; color: #245c4e; font-size: 14px; line-height: 1.75; }
+.detail-conversion-page .detail-decision-guide { margin: 22px 20px 0; }
 .detail-conversion-page .detail-intro-copy { font-size: 14px; line-height: 1.75; }
 .detail-conversion-page .detail-intro-facts,
 .detail-conversion-page .mini-detail-tags span { font-size: 12px; line-height: 1.6; }

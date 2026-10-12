@@ -55,10 +55,8 @@ export default function LocalDetailPage({ open, project, selectedParts, position
         <img className="mini-detail-hero" src={projectImage(project)} alt="局部推拿服务" />
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="local-detail-title">{title}</h1></div>
-          <p className="detail-selection-reason">{projectSelectionReason(project.code)}</p>
           <DetailIntroduction name={title} summary={`${LOCAL_PARTS.join('、')}，按需选择，每个部位单独计价。`} highlights={activeProfile ? [activeProfile.focus] : []} facts={project.duration_min ? [`${project.duration_min}分钟/项`] : [project.price_label || '按次服务']} />
           <DetailPrice current={effectivePrice(project, isMember)} comparison={priceOf(project, isMember ? 'store' : 'member')} isMember={isMember} unit="每个部位" />
-          <ProjectServiceNotes project={project} basePrice={effectivePrice(project, isMember)} />
         </section>
 
         {!onStartSelection && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong><small>请确认位置无误</small></section>}
@@ -69,6 +67,10 @@ export default function LocalDetailPage({ open, project, selectedParts, position
             {LOCAL_PARTS.map((part) => <button key={part} type="button" disabled={readOnly} aria-pressed={draft.includes(part)} className={draft.includes(part) ? 'active' : ''} onClick={() => toggle(part)}><strong>{part}</strong><small>{LOCAL_DETAIL_PROFILES[part].focus}</small></button>)}
           </div>
           <div className={`mini-promotion ${draft.length >= 2 ? 'qualified' : ''}`}><Sparkles size={18} /><div><strong>{draft.length >= 2 ? '已选2个不同部位' : draft.length === 1 ? '再选1个不同部位' : '选2个不同部位'}</strong><small>{draft.length >= 2 ? '搭配草本泡脚时，可免基础泡脚费' : '搭配草本泡脚，可免基础泡脚费'}</small></div><span>{Math.min(new Set(draft).size, 2)}/2</span></div>
+        </section>
+        <section className="detail-decision-guide" aria-label="项目建议与须知">
+          <p className="detail-selection-reason">{projectSelectionReason(project.code)}</p>
+          <ProjectServiceNotes project={project} basePrice={effectivePrice(project, isMember)} />
         </section>
       </main>
 
