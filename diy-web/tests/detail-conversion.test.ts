@@ -126,5 +126,6 @@ test('optional services never invent a duration when the published project has n
   const ear = project({ id: 3, code: 'hxy-caier-30', name: '采耳', category: 'small', duration_min: null });
   const markup = renderProject(base, { projects: [base, localProject, ear] });
   assert.doesNotMatch(markup, /约15分钟/);
-  assert.match(markup, /时长向前台确认/);
+  assert.doesNotMatch(markup, /时长.{0,20}前台|前台.{0,20}时长/);
+  assert.doesNotMatch(renderProject(ear), /时长.{0,20}前台|前台.{0,20}时长/);
 });
