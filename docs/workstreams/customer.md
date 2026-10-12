@@ -1,11 +1,12 @@
 # 顾客端工作流
 
-## 2026-10-12 CUSTOMER-DETAIL-RESTORE-01（还原完成，待发布）
+## 2026-10-12 CUSTOMER-DETAIL-RESTORE-01（已生产还原）
 
 - 用户否定本轮详情优化，撤销#255–#258的顾客详情改动。与优化前主干`c8460d5152a7b3c6551bda33144817a3166b3605`比较，`diy-web/src`及`diy-web/tests`无差异；不进一步调整旧文案/布局。
 - #258虽已合并，但未触发生产发布；停止其后台CI等待。已上线#255与#257将由本次精确版本发布覆盖，不直接切换旧release或回退数据库。
 - 服务号入口、我的/本人报告、二维码、菜单/项目价格、默认选择/确认数据、只读/权限、服务器磁盘维护不变；保留历史提交及恢复证据。
-- 本地构建通过，顾客252项通过、1项原有跳过。实际IAB375/390核验14项共28组：原图加载、页脚可见、无横向溢出，本轮新配置折叠结构和新增提示均不存在；未写生产占用/订单或读取报告。证据`output/detail-restore-*.log`及`output/diy-first-ui/restored/local-result.json`；待必需CI及生产验收后补录正式版本。
+- 本地构建通过，顾客252项通过、1项原有跳过。实际IAB375/390核验14项共28组：原图加载、页脚可见、无横向溢出，本轮新配置折叠结构和新增提示均不存在；未写生产占用/订单或读取报告。证据`output/detail-restore-*.log`及`output/diy-first-ui/restored/local-result.json`。
+- #259完整HEAD`60fd00321ec43d7279df1ca608d021ce83b8132b`，合并/发布`9ff4212a6bcd273832257706ad6dca9a8e171ac5`，精确main CI`38213749899`与唯一生产部署`38214586508`成功，当前`github-9ff4212a6bcd-38214586508`。完整MANIFEST、公网JS/CSS安装哈希、三端健康和14项价格通过；生产匿名375/390共28组亦通过，无console warn/error，不写选单/占用或读取报告。本次成功重复输入自动清理，正式版本/历史release/数据库/备份不动。详见`../operations/customer-detail-restore-release-20261012.md`；微信现场待确认，发布补录只改文档。
 
 ## 2026-10-11 CUSTOMER-SERVICE-MENU-MY-01（已生产发布）
 
