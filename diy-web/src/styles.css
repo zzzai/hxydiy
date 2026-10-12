@@ -1915,66 +1915,6 @@ a.miniapp-store { text-decoration: none; }
 .project-detail-visuals figcaption strong { display: block; color: #153f35; font-size: 14px; line-height: 1.4; }
 .project-detail-visuals figcaption p { margin: 5px 0 0; color: #68766f; font-size: 11px; line-height: 1.7; }
 
-.detail-conversion-page .mini-detail-scroll { background: #fff; }
-.detail-conversion-page .mini-detail-summary-card { padding: 20px; }
-.detail-conversion-page .detail-selection-reason { margin: 12px 0 16px; color: #245c4e; font-size: 14px; line-height: 1.75; }
-.detail-conversion-page .detail-decision-guide { margin: 22px 20px 0; }
-.detail-conversion-page .detail-intro-copy { font-size: 14px; line-height: 1.75; }
-.detail-conversion-page .detail-intro-facts,
-.detail-conversion-page .mini-detail-tags span { font-size: 12px; line-height: 1.6; }
-.detail-conversion-page .detail-service-notes { margin-top: 16px; padding: 12px 14px; border-radius: 12px; color: #5d7067; background: #f3f8f5; font-size: 12px; line-height: 1.7; }
-.detail-conversion-page .detail-service-notes p { margin: 0; }
-.detail-conversion-page .detail-service-notes p + p { margin-top: 7px; }
-.detail-conversion-page .detail-session-price { display: grid; gap: 3px; }
-.detail-conversion-page .detail-session-price strong { color: #175545; font-size: 17px; }
-.detail-conversion-page .detail-oil-back-hero { height: min(72vw, 300px); object-fit: cover; object-position: center 28%; }
-.detail-conversion-page .project-detail-visuals { margin: 24px 20px 0; padding: 20px 0 0; }
-.detail-conversion-page .project-detail-visuals > header span { font-size: 12px; }
-.detail-conversion-page .project-detail-visuals > header h2 { font-size: 18px; }
-.detail-conversion-page .detail-experience-copy { gap: 14px; }
-.detail-conversion-page .detail-experience-copy h3 { margin: 0 0 4px; color: #245548; font-size: 14px; line-height: 1.5; }
-.detail-conversion-page .detail-experience-copy p { margin: 0; color: #66736c; font-size: 14px; line-height: 1.75; }
-.detail-conversion-page .detail-illustration-gallery { margin-top: 16px; border-top: 1px solid #edf2ef; }
-.detail-conversion-page .detail-illustration-gallery > summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; color: #3a6658; font-size: 13px; cursor: pointer; list-style: none; }
-.detail-conversion-page .detail-illustration-gallery > summary span { color: #73867c; font-size: 12px; }
-.detail-conversion-page .detail-illustration-gallery[open] > summary svg { transform: rotate(90deg); }
-.detail-conversion-page .detail-illustration-gallery > div { display: grid; gap: 16px; padding-top: 8px; }
-.detail-conversion-page .detail-choice-disclosure { margin: 16px 14px 0; overflow: hidden; border: 1px solid #e1ebe5; border-radius: 14px; background: #fff; }
-.detail-conversion-page .detail-choice-disclosure > summary { display: flex; align-items: center; justify-content: space-between; min-height: 68px; gap: 12px; padding: 14px 16px; color: #245548; cursor: pointer; list-style: none; }
-.detail-conversion-page summary::-webkit-details-marker { display: none; }
-.detail-conversion-page .detail-choice-disclosure > summary strong { display: block; font-size: 15px; line-height: 1.5; }
-.detail-conversion-page .detail-choice-disclosure > summary small { display: block; margin-top: 3px; color: #6c7d73; font-size: 12px; line-height: 1.5; }
-.detail-conversion-page .detail-choice-disclosure[open] > summary { background: #f4f9f6; }
-.detail-conversion-page .detail-choice-disclosure[open] > summary svg { transform: rotate(90deg); }
-.detail-conversion-page .detail-choice-disclosure .mini-config-card { margin: 0; padding: 16px; border-radius: 0; }
-.detail-conversion-page .detail-choice-disclosure .mini-config-card + .mini-config-card { border-top: 1px solid #edf2ef; }
-.detail-conversion-page .mini-config-title strong,
-.detail-conversion-page .mini-config-heading strong,
-.detail-conversion-page .mini-option-grid strong,
-.detail-conversion-page .mini-addon-grid strong,
-.detail-conversion-page .mini-local-grid strong,
-.detail-conversion-page .local-part-choice-grid strong { font-size: 13px; }
-.detail-conversion-page .mini-addon-grid > button,
-.detail-conversion-page .mini-local-grid > div > button { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 8px; }
-.detail-conversion-page .mini-addon-grid .addon-price,
-.detail-conversion-page .mini-local-grid .addon-price { align-items: flex-start; text-align: left; }
-.detail-conversion-page .mini-addon-grid em,
-.detail-conversion-page .mini-local-grid em { font-size: 12px; }
-.detail-conversion-page .mini-config-title span,
-.detail-conversion-page .mini-config-heading span,
-.detail-conversion-page .mini-option-grid small,
-.detail-conversion-page .mini-addon-grid small,
-.detail-conversion-page .mini-local-grid small,
-.detail-conversion-page .local-part-choice-grid small { font-size: 12px; line-height: 1.5; }
-.detail-conversion-page .local-part-choice-grid > button { min-height: 72px; }
-.detail-conversion-page .local-part-choice-grid > button.active { box-shadow: inset 0 0 0 1px #1f8f75; }
-.detail-conversion-page .mini-detail-actions button { font-size: 15px; font-weight: 600; }
-.detail-conversion-page .mini-detail-total > span { display: flex; flex-wrap: wrap; gap: 3px 6px; font-size: 12px; line-height: 1.4; white-space: normal; }
-.detail-conversion-page .mini-detail-total > span del,
-.detail-conversion-page .mini-detail-total > span em { margin-left: 0; font-size: 12px; }
-.detail-conversion-page summary:focus-visible,
-.detail-conversion-page .local-part-choice-grid > button:focus-visible { outline: 2px solid #1f8f75; outline-offset: -3px; }
-
 .feedback-backdrop { position: fixed; z-index: 90; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgba(17, 37, 31, .28); }
 .feedback-dialog { width: min(100%, 520px); max-height: min(720px, 92dvh); overflow: auto; border-radius: 8px 8px 0 0; color: #1d2a25; background: #fff; box-shadow: 0 -12px 40px rgba(18, 61, 50, .16); }
 .feedback-header { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; min-height: 58px; padding: 0 12px; border-bottom: 1px solid #edf2ef; text-align: center; }

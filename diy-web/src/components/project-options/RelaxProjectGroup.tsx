@@ -41,7 +41,7 @@ export default function RelaxProjectGroup({
             }
           };
           return <button key={project.code} type="button" aria-pressed={active} disabled={readOnly} className={active ? 'active' : ''} onClick={toggle}>
-            <span><strong>{displayProjectName(project)}</strong>{project.duration_min ? <small>约{project.duration_min}分钟</small> : null}</span>
+            <span><strong>{displayProjectName(project)}</strong><small>约{project.duration_min || 15}分钟</small></span>
             <span className="addon-price"><em>+{formatMoney(priceCents)}</em>{guidance.memberHintCents !== null && guidance.memberHintCents < guidance.primaryCents && <small>{guidance.hintText.replace('登录享', '登录后享')}</small>}</span>
           </button>;
         })}
