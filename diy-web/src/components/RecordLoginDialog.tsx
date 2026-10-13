@@ -1,18 +1,25 @@
 import { ArrowLeft, ShieldCheck, UserRoundCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ApiError, loginByPhone, sendPhoneCode } from '../api';
 import { isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
 import { customerLoginCopy } from '../customerCopy';
+import { TCM_REPORT_VIEW_NOTICE } from '../tcmReports';
+import ReportViewNotice from './ReportViewNotice';
 
-export default function RecordLoginDialog({ open, selectionSessionId, selectionToken, onClose, onSuccess }: {
+export default function RecordLoginDialog({ open, selectionSessionId, selectionToken, onClose, onSuccess, purpose = 'record', notice = '' }: {
   open: boolean;
   selectionSessionId: string;
   selectionToken: string;
   onClose: () => void;
   onSuccess: (auth: CustomerAuth) => void;
+  purpose?: 'record' | 'report';
+  notice?: string;
 }) {
-  const copy = customerLoginCopy('record');
+  const copy = purpose === 'report' ? { title: '查看我的检测报告', detail: '请使用检测时登记的手机号。验证成功后直接打开最近一次原报告。', action: '登录并查看报告' } : customerLoginCopy('record');
+  const active = useRef(false);
+  const submitting = useRef(false);
+  useEffect(() => { active.current = open; return () => { active.current = false; }; }, [open]);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [seconds, setSeconds] = useState(0);
@@ -51,23 +58,27 @@ export default function RecordLoginDialog({ open, selectionSessionId, selectionT
   };
 
   const confirm = async () => {
+    if (purpose === 'report' && submitting.current) return;
     if (!isValidPhone(phone) || code.length !== 6) return setError('请输入手机号和 6 位验证码');
+    submitting.current = true;
     setBusy(true);
     setError('');
     try {
       const auth = await loginByPhone(phone, code, selectionSessionId, selectionToken);
+      if (purpose === 'report' && !active.current) return;
       writeCustomerAuth(auth);
       onSuccess(auth);
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : '登录失败');
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   };
 
   return (
-    <div className="coupon-login-page" role="dialog" aria-modal="true" aria-labelledby="record-login-title">
-      <header><button type="button" aria-label="返回" onClick={onClose}><ArrowLeft size={22} /></button><strong>查看服务记录</strong><span /></header>
+    <div className={`coupon-login-page${purpose === 'report' ? ' report-entry-login' : ''}`} role="dialog" aria-modal="true" aria-labelledby="record-login-title">
+      <header><button type="button" aria-label="返回" onClick={onClose}><ArrowLeft size={22} /></button><strong>{purpose === 'report' ? '我的检测报告' : '查看服务记录'}</strong><span /></header>
       <main>
         <section className="coupon-login-ticket">
           <UserRoundCheck size={28} />
@@ -78,9 +89,11 @@ export default function RecordLoginDialog({ open, selectionSessionId, selectionT
           <label><span>验证码</span><div><input value={code} inputMode="numeric" maxLength={6} placeholder="6 位验证码" onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} /><button type="button" disabled={busy || seconds > 0} onClick={send}>{seconds > 0 ? `${seconds}s` : '获取验证码'}</button></div></label>
           {debugCode && <p className="coupon-debug-code">本地测试验证码：{debugCode}</p>}
         </section>
+        {purpose === 'report' && notice && <p className="coupon-login-error" role="alert">{notice}</p>}
         {error && <p className="coupon-login-error">{error}</p>}
+        {purpose === 'report' && <ReportViewNotice notice={TCM_REPORT_VIEW_NOTICE} actionLabel={copy.action} />}
       </main>
-      <footer><button type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button><p><ShieldCheck size={12} style={{ verticalAlign: '-2px' }} /> 仅用于识别您的到店服务记录。</p></footer>
+      <footer><button type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button><p><ShieldCheck size={12} style={{ verticalAlign: '-2px' }} /> {purpose === 'report' ? '仅查看与检测手机号对应的本人报告。' : '仅用于识别您的到店服务记录。'}</p></footer>
     </div>
   );
 }

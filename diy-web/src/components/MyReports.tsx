@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, FileHeart, ShieldCheck, CircleAlert } from 'lucide-react';
-import { ApiError, getTcmReport, getTcmReportConsent, getTcmReports, updateTcmReportConsent, type TcmReportConsent, type TcmReportList } from '../api';
+import { ApiError, getTcmReportConsent, getTcmReports, updateTcmReportConsent, type TcmReportConsent, type TcmReportList } from '../api';
 import { formatDateTime } from '../profile';
-import { reportsByDate, verifiedOriginalReportUrl } from '../tcmReports';
+import { openOriginalReport, originalReportUrl, reportsByDate } from '../tcmReports';
 
-export default function MyReports({ token, onVerify }: { token: string; onVerify: () => void }) {
+export default function MyReports({ token, onVerify, showActionLabel = false, onConsentRequired }: { token: string; onVerify: () => void; showActionLabel?: boolean; onConsentRequired?: () => void }) {
   const [consent, setConsent] = useState<TcmReportConsent | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [list, setList] = useState<TcmReportList | null>(null);
@@ -26,6 +26,8 @@ export default function MyReports({ token, onVerify }: { token: string; onVerify
       if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
         setConsent(value => value ? { ...value, consented: false } : value);
         setList(null); setAccepted(false);
+        if (showActionLabel && (reason.status === 401 || reason.code === 'PHONE_VERIFICATION_REQUIRED')) onVerify();
+        else if (reason.code === 'TCM_CONSENT_REQUIRED') onConsentRequired?.();
       }
       setError(reason instanceof TypeError ? new Error('网络连接失败，请检查网络后重试。') : reason instanceof Error ? reason : new Error('暂时无法查看报告，请稍后重试'));
     } }
@@ -37,6 +39,7 @@ export default function MyReports({ token, onVerify }: { token: string; onVerify
     const status = await getTcmReportConsent(token, signal);
     if (signal.aborted) return;
     setConsent(status);
+    if (!status.consented && onConsentRequired) { onConsentRequired(); return; }
     if (!status.consented) { setList(null); setAccepted(false); return; }
     if (status.consented) {
       const reports = await getTcmReports(token, 0, signal);
@@ -99,24 +102,20 @@ export default function MyReports({ token, onVerify }: { token: string; onVerify
       {reportsByDate(list.items).map(report => <button className="my-reports-row" type="button" key={report.report_id} disabled={busy} onClick={() => {
         setOpeningReport(true);
         void run(async signal => {
-          const result = await getTcmReport(token, report.report_id, signal);
+          const url = await originalReportUrl(token, report.report_id, signal);
           if (signal.aborted) return;
-          const url = result.report_id === report.report_id ? verifiedOriginalReportUrl(result.original_report_url, report.report_id) : null;
-          if (!url) throw new Error('完整报告地址暂不可用，请稍后重试或联系门店。');
-          const link = document.createElement('a');
-          link.href = url; link.target = '_self'; link.rel = 'noopener noreferrer'; link.referrerPolicy = 'no-referrer';
-          link.click();
+          openOriginalReport(url);
         });
-      }}><FileHeart size={22} strokeWidth={1.5} aria-hidden="true" /><span><strong>{report.title}</strong><time>{report.reported_at ? formatDateTime(report.reported_at) : '检测时间未提供'}</time></span><ChevronRight size={18} aria-hidden="true" /></button>)}
+      }}><FileHeart size={22} strokeWidth={1.5} aria-hidden="true" /><span><strong>{report.title}</strong><time>{report.reported_at ? formatDateTime(report.reported_at) : '检测时间未提供'}</time></span>{showActionLabel && <small>查看报告</small>}<ChevronRight size={18} aria-hidden="true" /></button>)}
       {list.has_more && <button type="button" disabled={busy} onClick={() => void run(async signal => { const next = await getTcmReports(token, list.offset + list.limit, signal); if (!signal.aborted) setList({ ...next, items: [...new Map([...list.items, ...next.items].map(item => [item.report_id, item])).values()] }); })}>加载更多</button>}
     </div>}
     <div className="my-reports-actions"><p>检测时使用了其他手机号？</p>
       <button className="my-reports-link" type="button" onClick={onVerify}>重新验证其他号码</button>
     </div>
-      {(consent?.consented || verificationRequired || consentRequired) && <div className="my-reports-permission"><div><strong>报告查看授权</strong><p>可随时撤回，撤回后将停止查看。</p></div><button className="my-reports-link" type="button" onClick={() => {
+      {(consent?.consented || verificationRequired || consentRequired) && <div className="my-reports-permission"><div><strong>报告查看授权</strong><p>{showActionLabel ? '撤回后停止DIY查询，已取得的原站链接不会失效。' : '可随时撤回，撤回后将停止查看。'}</p></div><button className="my-reports-link" type="button" onClick={() => {
         setConsent(value => value ? { ...value, consented: false } : value);
         setList(null); setAccepted(false); setOpeningReport(false);
-        void run(async signal => { const status = await updateTcmReportConsent(token, null, signal); if (!signal.aborted) setConsent(status); });
+        void run(async signal => { const status = await updateTcmReportConsent(token, null, signal); if (!signal.aborted) { setConsent(status); if (!status.consented) onConsentRequired?.(); } });
       }}>撤回授权</button></div>}
   </section>;
 }
