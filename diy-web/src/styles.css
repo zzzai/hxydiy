@@ -1608,6 +1608,31 @@ a.miniapp-store { text-decoration: none; }
   .mini-detail-page { left: 0; width: 390px; transform: none; }
 }
 
+.report-entry-page { min-height: 100dvh; background: #fff; color: var(--ink); }
+.report-entry-page > header { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; min-height: 56px; padding: 6px 14px; border-bottom: 1px solid var(--line); text-align: center; }
+.report-entry-page > header button { display: inline-flex; width: 40px; height: 40px; align-items: center; justify-content: center; border: 0; color: var(--green-900); background: transparent; }
+.report-entry-page > main { width: min(440px, 100%); margin: 0 auto; padding: 28px 20px calc(28px + env(safe-area-inset-bottom)); }
+.report-entry-intro { color: var(--green-900); }
+.report-entry-intro h1 { margin: 12px 0 8px; font-size: 24px; line-height: 1.4; }
+.report-entry-intro > p, .report-entry-hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.report-entry-account { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 12px; padding: 12px 14px; border-radius: 10px; background: var(--green-050); font-size: 14px; }
+.report-entry-account button, .report-entry-history, .report-entry-revoke { min-height: 44px; padding: 8px 0; border: 0; color: var(--green-800); background: transparent; font: inherit; font-size: 13px; }
+.report-entry-notice { margin: 18px 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.report-entry-notice p { margin: 10px 0; }
+.report-entry-notice summary { min-height: 32px; color: var(--green-800); cursor: pointer; }
+.report-entry-primary { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; gap: 8px; margin-top: 22px; padding: 12px 16px; border: 0; border-radius: 8px; color: #fff; background: var(--green-800); font: inherit; font-weight: 700; }
+.report-entry-primary:disabled, .report-entry-page button:disabled { opacity: .55; cursor: default; }
+.report-entry-hint { margin-top: 10px; text-align: center; font-size: 12px; }
+.report-entry-history { display: block; margin: 8px auto; font-size: 14px; text-decoration: underline; text-underline-offset: 4px; }
+.report-entry-revoke { display: block; margin: 24px auto 0; color: var(--muted); font-size: 12px; }
+.report-entry-message { margin: 20px 0; color: var(--danger); font-size: 13px; line-height: 1.7; }
+.report-entry-page button:focus-visible, .report-entry-notice summary:focus-visible { outline: 2px solid var(--green-800); outline-offset: 3px; }
+.report-entry-page .my-reports { padding: 0; }
+.report-entry-page .my-reports-list .my-reports-row { grid-template-columns: 22px minmax(0, 1fr) auto 18px; gap: 10px; }
+.report-entry-page .my-reports-row small { font-size: 12px; white-space: nowrap; }
+.report-entry-login > main { flex: 1; min-height: 0; overflow-y: auto; padding-top: 20px; padding-bottom: 16px; }
+.report-entry-login > footer { flex: none; }
+
 .coupon-login-page {
   position: fixed;
   z-index: 130;

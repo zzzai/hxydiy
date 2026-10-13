@@ -13,7 +13,11 @@ export function stableStoreEntry(origin: string, storeId: number): string {
 }
 
 export function isReturnEntry(params: URLSearchParams): boolean {
-  return params.get('view') === 'return' || (!params.get('seat') && !params.get('qr') && !params.get('session') && !params.get('project') && params.get('view') !== 'menu' && params.get('source') !== 'kiosk');
+  return params.get('view') === 'return' || (!params.get('seat') && !params.get('qr') && !params.get('session') && !params.get('project') && !['menu', 'reports'].includes(params.get('view') || '') && params.get('source') !== 'kiosk');
+}
+
+export function isReportEntry(params: URLSearchParams): boolean {
+  return params.get('view') === 'reports';
 }
 
 export function isServiceAccountEntry(params: URLSearchParams): boolean {
