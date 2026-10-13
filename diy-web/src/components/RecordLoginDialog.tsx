@@ -16,7 +16,7 @@ export default function RecordLoginDialog({ open, selectionSessionId, selectionT
   purpose?: 'record' | 'report';
   notice?: string;
 }) {
-  const copy = purpose === 'report' ? { title: '查看我的检测报告', detail: '请使用检测时登记的手机号。验证成功后直接打开最近一次原报告。', action: '登录并查看报告' } : customerLoginCopy('record');
+  const copy = purpose === 'report' ? { title: '我的检测报告', detail: '用检测时的手机号登录，查看最近一次报告。', action: '登录并查看报告' } : customerLoginCopy('record');
   const active = useRef(false);
   const submitting = useRef(false);
   useEffect(() => { active.current = open; return () => { active.current = false; }; }, [open]);
@@ -77,12 +77,12 @@ export default function RecordLoginDialog({ open, selectionSessionId, selectionT
   };
 
   return (
-    <div className={`coupon-login-page${purpose === 'report' ? ' report-entry-login' : ''}`} role="dialog" aria-modal="true" aria-labelledby="record-login-title">
-      <header><button type="button" aria-label="返回" onClick={onClose}><ArrowLeft size={22} /></button><strong>{purpose === 'report' ? '我的检测报告' : '查看服务记录'}</strong><span /></header>
+    <div className={`coupon-login-page${purpose === 'report' ? ' report-entry-login' : ''}`} role="dialog" aria-modal="true" aria-labelledby={purpose === 'report' ? undefined : 'record-login-title'} aria-label={purpose === 'report' ? '查看我的检测报告' : undefined}>
+      <header><button type="button" aria-label="返回" onClick={onClose}><ArrowLeft size={22} /></button><strong>{purpose === 'report' ? '' : '查看服务记录'}</strong><span /></header>
       <main>
         <section className="coupon-login-ticket">
           <UserRoundCheck size={28} />
-          <div><small>荷小悦到店服务</small><h1 id="record-login-title">{copy.title}</h1><p>{copy.detail}</p></div>
+          <div>{purpose !== 'report' && <small>荷小悦到店服务</small>}<h1 id="record-login-title">{copy.title}</h1><p>{copy.detail}</p></div>
         </section>
         <section className="coupon-login-form">
           <label><span>手机号</span><input value={phone} inputMode="tel" placeholder="请输入手机号" onChange={(event) => setPhone(normalizePhone(event.target.value))} /></label>
@@ -91,9 +91,8 @@ export default function RecordLoginDialog({ open, selectionSessionId, selectionT
         </section>
         {purpose === 'report' && notice && <p className="coupon-login-error" role="alert">{notice}</p>}
         {error && <p className="coupon-login-error">{error}</p>}
-        {purpose === 'report' && <ReportViewNotice notice={TCM_REPORT_VIEW_NOTICE} actionLabel={copy.action} />}
       </main>
-      <footer><button type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button><p><ShieldCheck size={12} style={{ verticalAlign: '-2px' }} /> {purpose === 'report' ? '仅查看与检测手机号对应的本人报告。' : '仅用于识别您的到店服务记录。'}</p></footer>
+      <footer><button type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button>{purpose === 'report' ? <ReportViewNotice notice={TCM_REPORT_VIEW_NOTICE} login /> : <p><ShieldCheck size={12} style={{ verticalAlign: '-2px' }} /> 仅用于识别您的到店服务记录。</p>}</footer>
     </div>
   );
 }
