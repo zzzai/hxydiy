@@ -233,7 +233,10 @@ export default function ReportEntryPage() {
           </>}
           {!consent && !checking && <button className="report-entry-history" type="button" onClick={() => window.location.reload()}>重新检查</button>}
         </>}
-      <a className="report-entry-menu" href={menuUrl}>浏览门店项目<ChevronRight size={18} aria-hidden="true" /></a>
+      <a className="report-entry-menu" href={menuUrl} aria-label="查看门店项目">
+        <span className="report-entry-menu-copy"><strong>门店项目</strong><span>无需选座，先看看项目</span></span>
+        <span className="report-entry-menu-action" aria-hidden="true">查看门店项目<ChevronRight size={18} aria-hidden="true" /></span>
+      </a>
     </main>
     <RecordLoginDialog key={loginOpen ? 'login' : 'closed'} open={loginOpen} selectionSessionId="" selectionToken="" purpose="report" notice={message} onClose={back} onSuccess={next => { explicitLogin.current = true; returnedFromReport.current = false; clearView(); setAuth(next); setLoginOpen(false); }} />
   </div>;

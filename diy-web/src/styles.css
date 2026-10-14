@@ -1649,7 +1649,12 @@ a.miniapp-store { text-decoration: none; }
 .report-entry-disclosure li > div { display: grid; gap: 6px; min-width: 0; }
 .report-entry-disclosure time { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
 .report-entry-disclosure button { flex-shrink: 0; min-height: 44px; border: 0; color: var(--green-800); background: transparent; font-size: 14px; }
-.report-entry-menu { display: flex; min-height: 48px; align-items: center; justify-content: center; gap: 8px; margin-top: 28px; padding: 12px; border: 1px solid var(--green-200); border-radius: 8px; color: var(--green-800); text-decoration: none; font-size: 16px; }
+.report-entry-menu { display: flex; min-height: 104px; align-items: center; justify-content: space-between; gap: 12px; margin-top: 28px; padding: 18px 16px; border: 1px solid var(--green-200); border-radius: 8px; color: var(--green-950); background: var(--green-100); text-decoration: none; font-size: 16px; }
+.report-entry-menu-copy { display: grid; min-width: 0; gap: 6px; }
+.report-entry-menu-copy strong { font-size: 18px; font-weight: 600; }
+.report-entry-menu-copy > span { color: var(--green-800); font-size: 14px; line-height: 1.5; }
+.report-entry-menu-action { display: inline-flex; min-height: 48px; flex-shrink: 0; align-items: center; justify-content: center; gap: 6px; padding: 12px; border-radius: 8px; color: #fff; background: var(--green-800); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.report-entry-menu:hover .report-entry-menu-action { background: var(--green-900); }
 .report-entry-disclosure > summary:focus-visible, .report-entry-more > summary:focus-visible, .report-entry-menu:focus-visible { outline: 2px solid var(--green-700); outline-offset: 3px; }
 .report-entry-page button:focus-visible, .report-entry-notice summary:focus-visible { outline: 2px solid var(--green-800); outline-offset: 3px; }
 .report-entry-page .my-reports { padding: 0; }
