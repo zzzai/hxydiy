@@ -4,11 +4,11 @@
 
 ## 状态模型
 
-### 2026-10-14 顾客体验P1（本地候选）
+### 2026-10-14 顾客体验P1（已生产，现场待验）
 
 | Feature ID | 状态 | 唯一执行窗口 | 下一门禁 |
 |---|---|---|---|
-| `CUSTOMER-EXPERIENCE-P1-20261014` | `Integrated` | 顾客端写选购/报告；管理后台+后端写修订；技师端验收；总控写共享契约/集成交付 | 本地19未提交业务文件union9b6be3f0...、BASE `bb3e57e0ad48d562e3927862c87ce8904a70e118`；source/contracts与两项增量审查、最新15文件唯一build/图片check、限定9API和5技师UI、根390裸入口检查通过。顾客端已从统一候选恢复4199合成预览，总控确认本地报告跳转/Back报告中心，19SHA未变；27源/文档恢复补丁保留，原临时路径不可用原因未确认。真实PG并发、微信/provider及现场未验，无提交/PR/合并/生产。四窗口按事件接续，不轮询。 |
+| `CUSTOMER-EXPERIENCE-P1-20261014` | `Deployed` | 顾客端写选购/报告和只读最终等待；管理后台+后端写修订及PG/安装验收；技师端合成验收；总控契约/唯一发布 | #266合并/发布`d9b4e520675c75910704ba93b3632e65b7dbbab2`，CI38545634999、部署38550544089成功；真实隔离PG4双线程/29HTTP/8锁等待及生产10项、MANIFEST452项/运行API/公网精确资产通过。实际current github-d9b4e520675c-38550544089，磁盘86%预警保留。下一门禁仅微信/provider真实登录看报告及Back/门店现场；不重复发布/build/套件或扩权限。详见operations/customer-experience-p1-release-20261014.md，四窗口事件接续，不轮询。 |
 | `FOLLOWUP-ANONYMOUS-SERVICE-ORDER-20261014` | `Spec Ready` | 技师端只读核查完成；总控记录后续建议 | 正式签名扫码实现会建/复用anon主体，首轮直接创建的null身份fixture不证明扫码故障；既有前端user_id门槛会隐藏历史/异常空身份活动选单。建议当前履约按占用/选单、历史/画像仍按身份；仅完成诊断，本轮未实施加固或扩权限。证据及未验范围见`operations/customer-experience-p1-local-acceptance-20261014.md`。 |
 
 ### 无需选座的本人报告入口
