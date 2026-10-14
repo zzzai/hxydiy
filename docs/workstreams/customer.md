@@ -1,5 +1,12 @@
 # 顾客端工作流
 
+## 2026-10-14 CUSTOMER-EXPERIENCE-P1-20261014（本地限定集成通过，未提交发布）
+
+- 顾客窗口完成数量/关联来源、本人受控追加、统一报告入口及返回中心；BFCache与裸回访canonical两项审查问题均修复并复审关闭。最新15文件digest `4b98006c83d9de5a83e490096d2b69d102d05bdb87d2586347e6c1b1edb1ef30`，最终唯一build/图片检查通过；未重复已有效suite。
+- 总控机械组装19业务文件、共享契约/TEAM-MEMORY，字节SHA匹配；绑定合成顾客的技师9API和5代表UI证据Accepted，390真实App裸入口刷新/报告动作/Back通过。精确范围与限制见`../operations/customer-experience-p1-local-acceptance-20261014.md`。
+- 正式签名扫码在实现中建立匿名主体；首轮空身份fixture不证明扫码故障。历史/异常空身份活动选单的技师展示缺口单独记录为后续加固，未改业务或权限；微信/provider/真实PG并发/现场仍待验。
+- 下列旧工作记录是对应日期的历史快照，不据其“候选/未生产”字样判断当前安装；发布状态以`CURRENT-STATE.md`及实时核验为准。本批尚未提交、合并或生产。
+
 ## 2026-10-13 REPORT-LOGIN-DISTILL-20261013（UI小修候选）
 
 - 基于已合并但未生产的`0a8997fa18f7529f95b3ff38d66bc5f1615ddce4`新隔离分支，仅精简ReportViewNotice/RecordLoginDialog及相关CSS：登录只一个“我的检测报告”标题，无到店眉题；仅一次“仅查看本人报告”，全文默认折叠在“报告查看说明”，CTA下自然承接。已登录但v2缺失的共享说明同步精简，不改ReportEntryPage控制器。

@@ -46,7 +46,11 @@ export function openOriginalReport(url: string) {
   link.click();
 }
 
-export async function latestOriginalReport(token: string, signal: AbortSignal): Promise<{ kind: 'ready'; url: string } | { kind: 'empty' | 'choose' }> {
+export function shouldAutoOpenReport(state: { hxy_report_original_opened?: boolean } | null, navigationType?: string): boolean {
+  return !state?.hxy_report_original_opened || navigationType === 'reload';
+}
+
+export async function loadReportIndex(token: string, signal: AbortSignal): Promise<TcmReportSummary[]> {
   const items = new Map<string, TcmReportSummary>();
   let offset = 0;
   while (true) {
@@ -58,8 +62,12 @@ export async function latestOriginalReport(token: string, signal: AbortSignal): 
     if (!page.items.length || page.offset !== offset || !Number.isSafeInteger(page.limit) || page.limit <= 0 || offset + page.limit > 100000) throw new Error('报告列表暂时不完整，请稍后重试。');
     offset += page.limit;
   }
-  if (!items.size) return { kind: 'empty' };
-  const sorted = reportsByDate([...items.values()]);
+  return reportsByDate([...items.values()]);
+}
+
+export async function latestOriginalReport(token: string, signal: AbortSignal): Promise<{ kind: 'ready'; url: string } | { kind: 'empty' | 'choose' }> {
+  const sorted = await loadReportIndex(token, signal);
+  if (!sorted.length) return { kind: 'empty' };
   if (sorted.some(item => !item.reported_at || !Number.isFinite(Date.parse(item.reported_at))) || sorted.length > 1 && Date.parse(sorted[0].reported_at!) === Date.parse(sorted[1].reported_at!)) return { kind: 'choose' };
   return { kind: 'ready', url: await originalReportUrl(token, sorted[0].report_id, signal) };
 }

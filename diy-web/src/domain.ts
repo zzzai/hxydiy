@@ -58,6 +58,8 @@ export type BuildSelectionInput = {
   addons?: Addon[];
   projectPreferences?: Record<number, string[]>;
   projectCatalogSelections?: Record<number, ProjectCatalogSelection>;
+  independentProjectIds?: number[];
+  projectLinkedIds?: Record<number, number[]>;
   localParts: string[];
   tea: string | null;
 };
@@ -677,6 +679,9 @@ export function buildSelectionItems(input: BuildSelectionInput): SelectionItem[]
   const items: SelectionItem[] = [...projectCounts]
     .map(([id, quantity]) => ({ project: projectById.get(id), quantity }))
     .filter((entry): entry is { project: Project; quantity: number } => Boolean(entry.project) && entry.project?.category !== 'local-strength')
+    .filter(({ project }) => !input.independentProjectIds || input.independentProjectIds.includes(project.id) || !Object.entries(input.projectCatalogSelections || {}).some(([parentId, selection]) => (
+      (projectById.get(Number(parentId))?.option_groups || []).some(group => group.choices.some(choice => selection.optionChoiceIds.includes(choice.id) && choice.linked_project_id === project.id))
+    )))
     .map(({ project, quantity }) => {
       const catalogSelection = input.projectCatalogSelections?.[project.id];
       return {

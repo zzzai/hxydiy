@@ -18,17 +18,19 @@ type TabKey = 'records' | 'coupons';
 const SHOW_PROFILE_HISTORY = false;
 const SHOW_DYNAMIC_MEMBER_CODE = false;
 
-export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, onReportsBack, storeId = 1 }: {
+export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, onReportsBack, onOpenReports, storeId = 1 }: {
   open: boolean;
   auth: CustomerAuth | null;
   onClose: () => void;
   onAuthChange: (auth: CustomerAuth | null) => void;
   initialReportsOpen?: boolean;
   onReportsBack?: () => void;
+  onOpenReports?: () => void;
   storeId?: number;
 }) {
   const [tab, setTab] = useState<TabKey>('records');
   const [reportsOpen, setReportsOpen] = useState(initialReportsOpen);
+  const openReports = () => onOpenReports ? onOpenReports() : setReportsOpen(true);
   const [recordState, setRecordState] = useState<RecordFilter>('all');
   const [selectedRecord, setSelectedRecord] = useState<SelectionSession | null>(null);
   const [feedbackRecord, setFeedbackRecord] = useState<SelectionSession | null>(null);
@@ -111,11 +113,11 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
       </header>
 
       {!auth
-        ? <div className="profile-anonymous-body">{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={() => setReportsOpen(true)}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} />{!reportsOpen && <ProfileReturnTools storeId={storeId} />}</div>
+        ? <div className="profile-anonymous-body">{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={openReports}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} />{!reportsOpen && <ProfileReturnTools storeId={storeId} />}</div>
         : reportsOpen ? <MyReports key={auth.token} token={auth.token} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
           <main className="profile-body">
             <ProfileCard user={auth.user} savingCents={membershipSavingCents(sessions)} completedCount={sessions.filter((item) => item.service_completed_at).length} onShowCode={() => setMemberCodeOpen(true)} />
-            <button className="profile-pending-task" type="button" onClick={() => setReportsOpen(true)}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>单独授权后查看本人结果</small></span><ChevronRight size={18} /></button>
+            <button className="profile-pending-task" type="button" onClick={openReports}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>单独授权后查看本人结果</small></span><ChevronRight size={18} /></button>
             {SHOW_PROFILE_HISTORY && sessions.some((item) => item.can_evaluate && !item.evaluated) && <button className="profile-pending-task" type="button" onClick={() => { setTab('records'); setRecordState('pending-feedback'); }}><span><MessageSquareText size={19} /><strong>待评价 {sessions.filter((item) => item.can_evaluate && !item.evaluated).length}</strong><small>完成评价，帮助我们改进服务</small></span><ChevronRight size={18} /></button>}
             <ProfileReturnTools storeId={storeId} />
             {!auth.user.is_member && <MembershipBanner />}
