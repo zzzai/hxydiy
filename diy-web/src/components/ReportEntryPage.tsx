@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, FileHeart, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react';
 import { ApiError, getCurrentCustomer, getTcmReportConsent, updateTcmReportConsent, type TcmReportConsent, type TcmReportSummary } from '../api';
 import { clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL_MS, isCustomerAuthTokenActive, readCustomerAuth, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
 import { maskedPhone, formatDateTime } from '../profile';
@@ -214,15 +214,18 @@ export default function ReportEntryPage() {
       {consent && <><h2>报告查看设置</h2><ReportViewNotice notice={consent.notice} />{consent.consented && <button className="report-entry-revoke" type="button" disabled={busy || checking} onClick={() => void revoke()}>撤回DIY报告查看授权</button>}</>}
     </div></details></header>
     <main>
-        <section className="report-entry-intro"><FileHeart size={32} strokeWidth={1.5} aria-hidden="true" /><h1>我的检测报告</h1></section>
+        <section className="report-entry-intro">
+          <div className="report-entry-brand-copy"><h1 aria-label="我的检测报告">我的<br />检测报告</h1><p className="report-entry-brand-caption">查看最近一次及历史报告</p></div>
+          <img className="report-entry-brand-ip" src="/assets/seat-entry-ip.png" width={144} height={144} alt="" loading="eager" decoding="async" />
+        </section>
         {(checking || busy) && <p role="status">{center || returnedFromReport.current ? '正在加载本人报告…' : '正在打开本人报告…'}</p>}
         {message && <p className="report-entry-message" role="alert">{message}</p>}
         {center && auth && consent?.consented && !checking && !busy ? <section className="report-entry-results" aria-label="检测报告">
-          {latest && <div className="report-entry-latest"><h2>检测报告<span>最近一次</span></h2><time dateTime={latest.reported_at!}>{formatDateTime(latest.reported_at)}</time><button className="report-entry-primary" type="button" onClick={() => void viewReport('latest', latest.report_id)}>查看报告<ChevronRight size={18} aria-hidden="true" /></button></div>}
+          {latest && <div className="report-entry-latest"><span className="report-entry-latest-label">最近一次检测</span><time dateTime={latest.reported_at!}>{formatDateTime(latest.reported_at)}</time><button className="report-entry-primary" type="button" onClick={() => void viewReport('latest', latest.report_id)}>查看报告<ChevronRight size={18} aria-hidden="true" /></button></div>}
           {olderReports.length > 0 && <details className="report-entry-disclosure" open={history} onToggle={event => {
             const expanded = event.currentTarget.open; setHistory(expanded);
             window.history.replaceState({ ...window.history.state, hxy_report_history_open: expanded }, '');
-          }}><summary>历史报告</summary><ul>{olderReports.map(item => <li key={item.report_id}><div><strong>检测报告</strong><time dateTime={item.reported_at || undefined}>{item.reported_at ? formatDateTime(item.reported_at) : '检测时间未提供'}</time></div><button type="button" onClick={() => void viewReport('latest', item.report_id)}>查看报告</button></li>)}</ul></details>}
+          }}><summary>历史报告<ChevronDown size={20} aria-hidden="true" /></summary><ul>{olderReports.map(item => <li key={item.report_id}><div><strong>检测报告</strong><time dateTime={item.reported_at || undefined}>{item.reported_at ? formatDateTime(item.reported_at) : '检测时间未提供'}</time></div><button type="button" onClick={() => void viewReport('latest', item.report_id)}>查看报告</button></li>)}</ul></details>}
           {reports === null && <button className="report-entry-history" type="button" onClick={() => void viewReport('history')}>查看历史报告</button>}
           {reports?.length === 0 && <button className="report-entry-history" type="button" onClick={() => verifyNumber()}>换个手机号</button>}
         </section> : !auth ? <button className="report-entry-primary" type="button" onClick={() => setLoginOpen(true)}>登录并查看报告<ChevronRight size={18} aria-hidden="true" /></button> : <>
@@ -233,9 +236,9 @@ export default function ReportEntryPage() {
           </>}
           {!consent && !checking && <button className="report-entry-history" type="button" onClick={() => window.location.reload()}>重新检查</button>}
         </>}
-      <a className="report-entry-menu" href={menuUrl} aria-label="查看门店项目">
-        <span className="report-entry-menu-copy"><strong>门店项目</strong><span>无需选座，先看看项目</span></span>
-        <span className="report-entry-menu-action" aria-hidden="true">查看门店项目<ChevronRight size={18} aria-hidden="true" /></span>
+      <a className="report-entry-menu" href={menuUrl} aria-label="DIY 定制我的项目">
+        <span className="report-entry-menu-copy"><strong>DIY 定制我的项目</strong><span>按喜好搭配，选适合自己的项目</span></span>
+        <ChevronRight size={20} aria-hidden="true" />
       </a>
     </main>
     <RecordLoginDialog key={loginOpen ? 'login' : 'closed'} open={loginOpen} selectionSessionId="" selectionToken="" purpose="report" notice={message} onClose={back} onSuccess={next => { explicitLogin.current = true; returnedFromReport.current = false; clearView(); setAuth(next); setLoginOpen(false); }} />
