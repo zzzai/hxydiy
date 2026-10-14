@@ -1,3 +1,12 @@
+# 2026-10-14 顾客体验P1上线与一次只读生产终验
+
+- `CUSTOMER-EXPERIENCE-P1-20261014`：业务PR #266，HEAD `58b103f40e87b96c56a36b7e94a9b422c884f53b`，合并/发布SHA `d9b4e520675c75910704ba93b3632e65b7dbbab2`；精确main CI38545634999及唯一Deploy Production38550544089成功。current实际为`github-d9b4e520675c-38550544089`。
+- 同一候选包括数量/关联来源撤销、受控追加/同行只读、累积完整目标修订的净新增单位、报告明确入口/原站返回中心及旧企微return兼容。19源码/测试与8共享文档同一PR；两提交tree相同，未夹带新UI、主图、价格/时长/支付或权限。
+- 复用有效本地审查/build/技师合成证据，精确CI全部五job通过；另补真实隔离PG16.14/READ COMMITTED四个双线程场景、29HTTP和8实际锁等待线程，审批幂等/顺序/乱序/拒绝差量及原快照保护通过。三个fixture准备失败保留、不计业务RED，未重跑旧专项或使用营业资料。
+- 2026-10-14 18:51:51生产一次只读终验10项通过：完整MANIFEST452项、安装/实际运行两API文件Git blob、公网主JS/CSS与可达新报告lazy SHA一致，health ok/production及容器运行；不是仅看HTTP200、CI或工作流外壳success。报告SHA `24b5200ef1bad61a46606104e5763a78bcd1cb9a4139f87994ecc868ee0e7efe`。
+- 新发布备份/校验与强制隔离恢复步骤成功；已授权的本次重复上传2文件/解压工作区自动收尾，installed release/数据库/备份保留，不另清盘。终验free5841888KiB、磁盘86%预警保留；没有新迁移/凭据/权限、真实SMS、报告照片读取或生产业务测试写入。微信/provider及门店真实流程待验；历史空身份技师展示加固未夹带实施。
+- 详见`operations/customer-experience-p1-release-20261014.md`。本次发布由总控唯一执行，端窗口主动回执接续、纯脚本等待，无定时模型轮询；事实补录不重发生产。
+
 # 2026-10-13 企微报告专用入口与登录说明精简上线
 
 - `CUSTOMER-REPORT-ENTRY-DIRECT-01`：业务PR #263（HEAD `7784e2e6d5e27fc89e9cd3fa854b4c16a1dcab81`，合并`0a8997fa18f7529f95b3ff38d66bc5f1615ddce4`）与首屏精简PR #264（HEAD `ad747a68b118a48a24c0b4f7ca05e08270ac4241`）统一发布，合并/发布SHA为`6b139f8f9a5dadbe99beb67af705a75d6c8f7d12`。精确main CI`38420629981`、正式部署`38421212461`及实际发布job`115378815730`成功；current已核实为`github-6b139f8f9a5d-38421212461`。

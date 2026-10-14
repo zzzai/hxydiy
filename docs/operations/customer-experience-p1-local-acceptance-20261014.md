@@ -1,6 +1,6 @@
 # CUSTOMER-EXPERIENCE-P1-20261014 本地限定集成验收
 
-状态：本地 `Integrated`，业务和本文件均未提交、合并或发布。本记录只覆盖所列合成场景，不代替生产或门店现场验收。
+提交前快照：本地 `Integrated`，当时业务和本文件均未提交、合并或发布。本记录只覆盖所列合成场景，不代替生产或门店现场验收；后续#266合并、真实PG补验及生产交付见`customer-experience-p1-release-20261014.md`。
 
 此为提交前验收快照。2026-10-14用户随后明确授权本批提交/PR、必需CI后合并、服务器验证后发布生产；交付执行不增加本记录的测试覆盖，实际提交/合并/生产需另记精确证据。
 
@@ -39,4 +39,4 @@
 - 恢复证据在统一工作区ignored `output/preview-restore-20261014/`：`server.mjs` SHA `442f2befd6b7c6a14231aab72bb1b6d73372b0bfb1e1fee51988a73dc5bf340a`、`report.md` SHA `777af81283e491a16d8ac003ff4789c4fd2a070d5fff12713c1c247e1306e883`、`evidence.json` SHA `84ac929cb17d9b95287d06c1bebd1ad91a68c7f4a60fd8b928bf8c84fbc8b446`；截图`report-login.png`和`report-center.png`保留。总控核验19/19源码SHA和union digest仍匹配。
 - 可用性核验时仅监听`127.0.0.1:4199`，PID37368；Vite无配置/生产proxy，ENV/cache位于ignored输出，未支持API返回404，CSP限制外部连接。复用已安装依赖，无安装、business修改、重复suite/build或真实SMS/报告/选单请求。进程存活属于本次观测，不承诺应用/主机关机后仍在线。
 - 精简报告/审查/浏览器记录：本地ignored `output/project-control/`；技师API JSON：`output/customer-experience-p1-20261014/technician-api-evidence.json`；技师报告在既有技师窗口对应ignored目录。
-- 所有提交/PR/合并/生产均未执行。只有进入后续已授权交付阶段并通过相应门禁后，才可变更这些状态；本记录不是发布批准。
+- 此提交前快照时提交/PR/合并/生产尚未执行；用户随后明确授权并完成#266及生产交付，精确后续证据在独立发布记录中。本快照不充当发布批准或当前安装事实。
