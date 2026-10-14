@@ -21,7 +21,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ReturnEntryBanner } from './components/CustomerReturnTools';
-import { isReturnEntry, isServiceAccountEntry, serviceAccountEntry, stableStoreEntry } from './returnEntry';
+import { isReturnEntry, isServiceAccountEntry, serviceAccountEntry, stableStoreEntry, reportEntryUrl } from './returnEntry';
 
 import {
   ApiError,
@@ -81,7 +81,7 @@ import {
 import { entryMenuNotice, getEntrySource, getPositionSelectionDecision, resolveActivePositionCode, resolveEntryConflict, resolveRequestedPosition, shouldResumeCurrentPosition } from './positionSelection';
 import { detailMotion, fadeInMotion, sheetMotion, toastMotion } from './motionPresets';
 import SeatMapDialog from './components/SeatMapDialog';
-import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision } from './selectionFlow';
+import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision, revisionItems, selectionRequestAccess, submittedSelectionAccess } from './selectionFlow';
 import { isEdgeSwipeBack, shouldReturnToProjectListFromSubmittedScreen } from './swipeBack';
 import { shouldHydrateStoredSelection, shouldRestartStoredEntry } from './submittedSelectionRestore';
 import { createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldRenewVisitFeedbackToken, updateVisitFeedbackDraft, visitFeedbackErrorMessage } from './visitFeedback';
@@ -93,6 +93,9 @@ import {
   emptySelectionDraft,
   removeSelectionEntry,
   selectedPreferenceLabels,
+  saveProjectSelection,
+  hydrateSelectionDraft,
+  selectionProjectIds,
   type SelectionDraft,
   type SelectionTarget,
 } from './selectionSummary';
@@ -110,7 +113,6 @@ import {
   CATALOG_SECTIONS,
   KIOSK_UNBOUND_COPY,
   buildSelectionItems,
-  mergeSubmittedSelectionItems,
   calculatePreviewPricing,
   displayPayableTotal,
   resolveMemberTotalCents,
@@ -335,6 +337,8 @@ export default function App() {
   const [visitFeedbackIntent, setVisitFeedbackIntent] = useState(() => createVisitFeedbackIntent());
   const [positionCode, setPositionCode] = useState(query.positionCode);
   const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
+  const [independentProjectIds, setIndependentProjectIds] = useState<number[]>([]);
+  const [projectLinkedIds, setProjectLinkedIds] = useState<Record<number, number[]>>({});
   const [projectPreferences, setProjectPreferences] = useState<Record<number, string[]>>({});
   const [projectAddonIds, setProjectAddonIds] = useState<Record<number, number[]>>({});
   const [projectCatalogSelections, setProjectCatalogSelections] = useState<SelectionDraft['projectCatalogSelections']>({});
@@ -381,6 +385,8 @@ export default function App() {
     submitting: false,
     activeOverlay,
     selectedProjectIds,
+    independentProjectIds,
+    projectLinkedIds,
     projectPreferences,
     projectAddonIds,
     projectCatalogSelections,
@@ -391,17 +397,17 @@ export default function App() {
     projects,
     selectedProjectIds,
     projectAddonIds,
+    independentProjectIds,
+    projectLinkedIds,
     addons,
     projectPreferences,
     projectCatalogSelections,
     localParts,
     tea: null,
-  }), [projects, selectedProjectIds, projectAddonIds, addons, projectPreferences, projectCatalogSelections, localParts]);
+  }), [projects, selectedProjectIds, projectAddonIds, independentProjectIds, projectLinkedIds, addons, projectPreferences, projectCatalogSelections, localParts]);
   // submitted 会话返回菜单后只保存新增草稿；再次提交时再与服务器原快照合并。
   const submissionItems = useMemo(() => (
-    session?.status === 'submitted'
-      ? mergeSubmittedSelectionItems(session.items || [], selectionItems)
-      : selectionItems
+    session ? revisionItems(session.status, session.items || [], selectionItems) : selectionItems
   ), [session?.status, session?.items, selectionItems]);
   const selectionSignature = useMemo(() => JSON.stringify(selectionItems), [selectionItems]);
   const previousSelectionSignature = useRef(selectionSignature);
@@ -418,12 +424,14 @@ export default function App() {
   const isMember = appliedPriceType === 'member';
   const selectionDraft = useMemo<SelectionDraft>(() => ({
     selectedProjectIds,
+    independentProjectIds,
+    projectLinkedIds,
     projectPreferences,
     projectAddonIds,
     projectCatalogSelections,
     localParts,
     tea: null,
-  }), [selectedProjectIds, projectPreferences, projectAddonIds, projectCatalogSelections, localParts]);
+  }), [selectedProjectIds, independentProjectIds, projectLinkedIds, projectPreferences, projectAddonIds, projectCatalogSelections, localParts]);
   const selectionSummary = useMemo(() => buildSelectionSummary({
     projects,
     addons,
@@ -570,8 +578,10 @@ export default function App() {
 
   const handleSummaryRemove = (target: SelectionTarget) => {
     if (readOnly) return;
-    const next = removeSelectionEntry(selectionDraft, target);
+    const next = removeSelectionEntry(selectionDraft, target, projects);
     setSelectedProjectIds(next.selectedProjectIds);
+    setIndependentProjectIds(next.independentProjectIds ?? next.selectedProjectIds);
+    setProjectLinkedIds(next.projectLinkedIds || {});
     setProjectPreferences(next.projectPreferences);
     setProjectAddonIds(next.projectAddonIds);
     setProjectCatalogSelections(next.projectCatalogSelections || {});
@@ -595,8 +605,10 @@ export default function App() {
     delta: 1 | -1,
   ) => {
     if (readOnly) return;
-    const next = changeSelectionQuantity(selectionDraft, target, delta);
+    const next = changeSelectionQuantity(selectionDraft, target, delta, projects);
     setSelectedProjectIds(next.selectedProjectIds);
+    setIndependentProjectIds(next.independentProjectIds ?? next.selectedProjectIds);
+    setProjectLinkedIds(next.projectLinkedIds || {});
     setProjectPreferences(next.projectPreferences);
     setProjectAddonIds(next.projectAddonIds);
     setProjectCatalogSelections(next.projectCatalogSelections || projectCatalogSelections);
@@ -606,6 +618,8 @@ export default function App() {
   const startFreshSelectionDraft = () => {
     const empty = emptySelectionDraft();
     setSelectedProjectIds(empty.selectedProjectIds);
+    setIndependentProjectIds([]);
+    setProjectLinkedIds({});
     setProjectPreferences(empty.projectPreferences);
     setProjectAddonIds(empty.projectAddonIds);
     setProjectCatalogSelections(empty.projectCatalogSelections || {});
@@ -624,6 +638,8 @@ export default function App() {
     setProfileOpen(true);
     openOverlay('profile');
   };
+
+  const openReports = () => window.location.assign(reportEntryUrl(window.location.origin, query.storeId));
 
   const openMembership = (kind: MembershipKind) => {
     setMembershipKind(kind);
@@ -693,35 +709,14 @@ export default function App() {
   };
 
   const hydrateSelection = (nextSession: SelectionSession) => {
-    const selected: number[] = [];
-    const prefs: Record<number, string[]> = {};
-    const addonSelections: Record<number, number[]> = {};
-    const catalogSelections: NonNullable<SelectionDraft['projectCatalogSelections']> = {};
-    const parts: string[] = [];
-    for (const item of nextSession.items || []) {
-      if (item.project_id === 'tea') {
-        continue;
-      } else if (item.category === 'local-strength' || item.project_id === 'local-strength') {
-        const part = item.diy_preferences?.[0];
-        if (part) {
-          const quantity = Math.max(1, Number(item.quantity) || 1);
-          parts.push(...Array.from({ length: quantity }, () => part));
-        }
-      } else if (typeof item.project_id === 'number') {
-        const quantity = Math.max(1, Number(item.quantity) || 1);
-        selected.push(...Array.from({ length: quantity }, () => item.project_id as number));
-        prefs[item.project_id] = item.diy_preferences || [];
-        if (item.addon_ids?.length) addonSelections[item.project_id] = item.addon_ids;
-        if (item.catalog_version_id !== null && item.catalog_version_id !== undefined) {
-          catalogSelections[item.project_id] = { projectId: item.project_id, catalogVersionId: item.catalog_version_id, optionChoiceIds: item.option_choice_ids || [] };
-        }
-      }
-    }
-    setSelectedProjectIds(selected);
-    setProjectPreferences(prefs);
-    setProjectAddonIds(addonSelections);
-    setProjectCatalogSelections(catalogSelections);
-    setLocalParts(parts);
+    const draft = hydrateSelectionDraft(nextSession.items || []);
+    setSelectedProjectIds(draft.selectedProjectIds);
+    setIndependentProjectIds(draft.independentProjectIds || []);
+    setProjectLinkedIds(draft.projectLinkedIds || {});
+    setProjectPreferences(draft.projectPreferences);
+    setProjectAddonIds(draft.projectAddonIds);
+    setProjectCatalogSelections(draft.projectCatalogSelections || {});
+    setLocalParts(draft.localParts);
   };
 
   const persistCurrent = (
@@ -736,8 +731,8 @@ export default function App() {
       storeId: query.storeId,
       positionCode: nextCode,
       accessToken,
-      collaborationToken: collaborationToken || undefined,
-      collaborationMode: collaborationMode || undefined,
+      collaborationToken: nextSession.status === 'draft' || !accessToken ? collaborationToken || undefined : undefined,
+      collaborationMode: nextSession.status === 'draft' ? collaborationMode || undefined : accessToken ? undefined : 'browse_only',
       cartVersion,
       visitFeedbackToken,
       session: nextSession,
@@ -901,7 +896,7 @@ export default function App() {
   const initialize = async () => {
     setBoot('loading');
     if (query.returnVisit) {
-      window.history.replaceState(window.history.state, '', stableStoreEntry(window.location.origin, query.storeId));
+      window.history.replaceState(window.history.state, '', stableStoreEntry(window.location.origin, query.storeId, null));
       setBoot('return-visit');
       return;
     }
@@ -1356,6 +1351,8 @@ export default function App() {
       submitting,
       activeOverlay,
       selectedProjectIds,
+      independentProjectIds,
+      projectLinkedIds,
       projectPreferences,
       projectAddonIds,
       projectCatalogSelections,
@@ -1402,7 +1399,12 @@ export default function App() {
         setProjects(update.projects);
         setAddons(update.addons);
         if (update.reconciliation.changed) {
-          setSelectedProjectIds(update.reconciliation.draft.selectedProjectIds);
+          const remainingIds = update.reconciliation.draft.selectedProjectIds;
+          const independent = menuSyncStateRef.current.independentProjectIds.filter(id => remainingIds.includes(id));
+          const links = Object.fromEntries(Object.entries(menuSyncStateRef.current.projectLinkedIds).filter(([id]) => remainingIds.includes(Number(id))).map(([id, values]) => [id, values.filter(value => remainingIds.includes(value))]));
+          setIndependentProjectIds(independent);
+          setProjectLinkedIds(links);
+          setSelectedProjectIds(selectionProjectIds(independent, links));
           setProjectPreferences(update.reconciliation.draft.projectPreferences);
           setProjectAddonIds(update.reconciliation.draft.projectAddonIds);
           setProjectCatalogSelections(update.reconciliation.draft.projectCatalogSelections || {});
@@ -1531,35 +1533,21 @@ export default function App() {
       preference_count: preferences.length,
       addon_count: addonIds.length,
     });
-    setSelectedProjectIds((ids) => [...new Set([...ids, project.id, ...(linkedProjectIds || [])])]);
-    setProjectPreferences((current) => ({ ...current, [project.id]: preferences }));
-    setProjectAddonIds((current) => ({ ...current, [project.id]: addonIds }));
-    setLocalParts(nextLocalParts);
-    if (catalogVersionId && optionChoiceIds) {
-      setProjectCatalogSelections((current) => ({ ...current, [project.id]: { projectId: project.id, catalogVersionId, optionChoiceIds: [...new Set(optionChoiceIds)] } }));
-    }
+    const next = saveProjectSelection(selectionDraft, { projectId: project.id, preferences, addonIds, localParts: nextLocalParts, catalogVersionId, optionChoiceIds, linkedProjectIds });
+    setSelectedProjectIds(next.selectedProjectIds);
+    setIndependentProjectIds(next.independentProjectIds || []);
+    setProjectLinkedIds(next.projectLinkedIds || {});
+    setProjectPreferences(next.projectPreferences);
+    setProjectAddonIds(next.projectAddonIds);
+    setLocalParts(next.localParts);
+    setProjectCatalogSelections(next.projectCatalogSelections || {});
     dismissTopOverlay();
     flash(`${project.name}配置已保存`);
   };
 
   const removeProject = (project: Project) => {
     if (readOnly) return;
-    setSelectedProjectIds((ids) => ids.filter((id) => id !== project.id));
-    setProjectPreferences((current) => {
-      const next = { ...current };
-      delete next[project.id];
-      return next;
-    });
-    setProjectAddonIds((current) => {
-      const next = { ...current };
-      delete next[project.id];
-      return next;
-    });
-    setProjectCatalogSelections((current) => {
-      const next = { ...current };
-      delete next[project.id];
-      return next;
-    });
+    handleSummaryRemove({ kind: 'project', projectId: project.id });
     dismissTopOverlay();
     flash(`${project.name}已移出`);
   };
@@ -1597,6 +1585,8 @@ export default function App() {
 
   const submitRevision = async () => {
     if (!session || !(accessToken || collaborationToken)) return;
+    const requestAccess = selectionRequestAccess(session.status, accessToken, collaborationToken, cartVersion, customerAuth?.token);
+    if (!requestAccess) return;
     menuSyncStateRef.current.submitting = true;
     setSubmitting(true);
     try {
@@ -1604,17 +1594,16 @@ export default function App() {
       if (selectionSubmitIntent.current.signature !== submissionSignature) {
         selectionSubmitIntent.current = { signature: submissionSignature, key: crypto.randomUUID() };
       }
-      await submitSelectionRevision(session.id, accessToken, submissionItems, deviceLabel(), collaborationToken ? {
-        collaborationToken,
-        expectedVersion: cartVersion,
-        authToken: customerAuth?.token,
-        idempotencyKey: selectionSubmitIntent.current.key,
-      } : { idempotencyKey: selectionSubmitIntent.current.key });
+      await submitSelectionRevision(session.id, accessToken, submissionItems, deviceLabel(), { ...requestAccess, idempotencyKey: selectionSubmitIntent.current.key });
       selectionSubmitIntent.current = { signature: '', key: '' };
       const submitted = accessToken
         ? await getSelectionSession(session.id, accessToken)
         : { ...session, status: 'submitted' as const };
       setSession(submitted);
+      const afterSubmit = submittedSelectionAccess(accessToken, collaborationToken);
+      setCollaborationToken(afterSubmit.collaborationToken);
+      setCollaborationMode(afterSubmit.collaborationMode);
+      startFreshSelectionDraft();
       if (accessToken) setFeedbackToken(accessToken);
       const preserveInService = shouldPreserveOccupancyAfterRevision(occupancy?.status);
       const clearSharedDevice = shouldClearDeviceSessionAfterSubmit(session.source || query.source);
@@ -1624,7 +1613,7 @@ export default function App() {
           : { ...occupancy, status: 'waiting_service' as const, hold_expires_at: null, version: occupancy.version + 1 };
         setOccupancy(nextOccupancy);
         if (clearSharedDevice) clearRecord(query.storeId, positionCode);
-        else persistCurrent(submitted, nextOccupancy, position);
+        else persistCurrent(submitted, nextOccupancy, position, positionCode, true);
       }
       if (clearSharedDevice) setAccessToken('');
       if (collaborationToken && !accessToken) {
@@ -1646,6 +1635,8 @@ export default function App() {
 
   const submit = async () => {
     if (!session || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || submitting) return;
+    const requestAccess = selectionRequestAccess(session.status, accessToken, collaborationToken, cartVersion, customerAuth?.token);
+    if (!requestAccess) return;
     if (!hasChargeableService) {
       // 仅选择茶饮时允许提交，但先提示顾客补充服务项目。
       const proceed = window.confirm('您还未选择服务项目，本次仅提交免费茶饮。建议先逛逛项目，是否继续提交茶饮？');
@@ -1667,11 +1658,7 @@ export default function App() {
           throw error;
         }
       }
-      const quote = await quoteSelectionSession(session.id, accessToken, submissionItems, deviceLabel(), collaborationToken ? {
-        collaborationToken,
-        expectedVersion: cartVersion,
-        authToken: customerAuth?.token,
-      } : undefined);
+      const quote = await quoteSelectionSession(session.id, accessToken, submissionItems, deviceLabel(), requestAccess);
       if (quote.saving_hint?.kind === 'member') {
         setSavingHint(quote.saving_hint);
         setSavingHintOpen(true);
@@ -1795,17 +1782,17 @@ export default function App() {
       <span className="loading-mark">荷</span><h1>欢迎回来，荷小悦</h1><p>选一项喜欢的服务，给自己放松一会。</p>
       <a className="return-primary" href={menuUrl.href}>到店选项目</a>
       <button className="return-menu-link" type="button" onClick={openProfile}>打开我的</button><small>到店请扫描服务位二维码，或核对服务位置后选项目。</small>
-      <ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} />
+      <ProfilePage onOpenReports={openReports} open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} />
     </main>;
   }
   if (boot === 'service-hub') {
     return <main className="entry-screen seat-entry-page service-hub-page">
       <header className="seat-entry-brand"><div><h1>荷小悦</h1><p>到店服务</p></div><img src="/assets/seat-entry-ip.png" alt="" /></header>
       <section className="service-hub-entries" aria-label="服务入口">
-        <button className="service-hub-entry" type="button" onClick={openProfile}><FileText size={26} aria-hidden="true" /><span><strong>查看检测报告</strong><small>登录后查看本人报告</small></span><ChevronRight size={20} aria-hidden="true" /></button>
+        <button className="service-hub-entry" type="button" onClick={openReports}><FileText size={26} aria-hidden="true" /><span><strong>查看检测报告</strong><small>登录后查看本人报告</small></span><ChevronRight size={20} aria-hidden="true" /></button>
         <a className="service-hub-entry" href={serviceAccountEntry(window.location.origin, query.storeId, 'projects')}><ListChecks size={26} aria-hidden="true" /><span><strong>进入菜单</strong><small>查看项目、价格和服务内容</small></span><ChevronRight size={20} aria-hidden="true" /></a>
       </section>
-      <ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onReportsBack={dismissTopOverlay} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} />
+      <ProfilePage onOpenReports={openReports} open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onReportsBack={dismissTopOverlay} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} />
     </main>;
   }
   if (boot === 'direct-feedback') {
@@ -1834,20 +1821,20 @@ export default function App() {
     </main>;
   }
   if (boot === 'pick-position') {
-    return <>{query.serviceHub && <a className="service-hub-back" href={serviceAccountEntry(window.location.origin, query.storeId, 'projects')}><ArrowLeft size={18} />返回菜单</a>}<InitialPositionPicker positions={positions} onSelect={selectInitialPosition} onBlocked={setBootMessage} onViewReports={openProfile} busy={false} message={bootMessage === '正在连接门店服务' ? '' : bootMessage} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
+    return <>{query.serviceHub && <a className="service-hub-back" href={serviceAccountEntry(window.location.origin, query.storeId, 'projects')}><ArrowLeft size={18} />返回菜单</a>}<InitialPositionPicker positions={positions} onSelect={selectInitialPosition} onBlocked={setBootMessage} onViewReports={openReports} busy={false} message={bootMessage === '正在连接门店服务' ? '' : bootMessage} /><ProfilePage onOpenReports={openReports} open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'occupied') {
-    return <><StatusScreen type="occupied" title="这个位置已经有人" message={bootMessage || '请核对您所在的沙发，或联系前台协助处理。'} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
+    return <><StatusScreen type="occupied" title="这个位置已经有人" message={bootMessage || '请核对您所在的沙发，或联系前台协助处理。'} onRetry={retry} onViewReports={openReports} /><ProfilePage onOpenReports={openReports} open={profileOpen} storeId={query.storeId} auth={customerAuth} onClose={dismissTopOverlay} onAuthChange={auth => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'expired') {
     const copy = expiredSelectionCopy();
-    return <><StatusScreen type="expired" title={copy.title} message={copy.message} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
+    return <><StatusScreen type="expired" title={copy.title} message={copy.message} onRetry={retry} onViewReports={openReports} /><ProfilePage onOpenReports={openReports} open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'kiosk-unbound') {
     return <StatusScreen type="error" title={KIOSK_UNBOUND_COPY.title} message={KIOSK_UNBOUND_COPY.message} />;
   }
   if (boot === 'error') {
-    return <><StatusScreen type="error" title="暂时没有连接上" message={bootMessage} onRetry={retry} onViewReports={openProfile} /><ProfilePage open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
+    return <><StatusScreen type="error" title="暂时没有连接上" message={bootMessage} onRetry={retry} onViewReports={openReports} /><ProfilePage onOpenReports={openReports} open={profileOpen} storeId={query.storeId} auth={customerAuth} initialReportsOpen onClose={dismissTopOverlay} onAuthChange={(auth) => { if (auth) writeCustomerAuth(auth); else clearCustomerAuth(); setCustomerAuth(auth); }} /></>;
   }
   if (boot === 'submitted' && session) {
     return (
@@ -2083,6 +2070,7 @@ export default function App() {
         projects={projects}
         addons={addons}
         selectedProjectIds={selectedProjectIds}
+        linkedProjectIds={detailProject ? projectLinkedIds[detailProject.id] || [] : []}
         selectedAddonIds={detailProject ? projectAddonIds[detailProject.id] || [] : []}
         preferences={detailProject ? projectPreferences[detailProject.id] || [] : []}
         localParts={localParts}
@@ -2157,7 +2145,7 @@ export default function App() {
         onViewRecord={customerAuth ? () => { setFeedbackMode(null); setProfileOpen(true); replaceTopOverlay('profile'); } : undefined}
         onContinueShopping={dismissTopOverlay}
       />
-      <ProfilePage
+      <ProfilePage onOpenReports={openReports}
         open={profileOpen}
         storeId={query.storeId}
         auth={customerAuth}

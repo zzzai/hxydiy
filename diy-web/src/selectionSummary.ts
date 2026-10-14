@@ -5,6 +5,7 @@ import {
   type Addon,
   type PricingPreview,
   type Project,
+  type SelectionItem,
 } from './domain.ts';
 import type { CatalogOptionChoice, CatalogOptionGroup, ProjectCatalogSelection } from './catalogOptions.ts';
 
@@ -15,7 +16,62 @@ export type SelectionDraft = {
   localParts: string[];
   tea: string | null;
   projectCatalogSelections?: Record<number, ProjectCatalogSelection>;
+  independentProjectIds?: number[];
+  projectLinkedIds?: Record<number, number[]>;
 };
+
+// Catalog references share an existing service unit; independent quantities remain intact.
+export function selectionProjectIds(independent: number[], links: Record<number, number[]>): number[] {
+  const result = [...independent];
+  for (const ids of Object.values(links)) for (const id of ids) if (!result.includes(id)) result.push(id);
+  return result;
+}
+
+export function hydrateSelectionDraft(items: Array<SelectionItem & {
+  category?: string; item_kind?: string;
+  catalog_selection?: { linked_snapshots?: Array<{ linked_project_id?: number | null }> };
+}>): SelectionDraft {
+  const draft = emptySelectionDraft();
+  const independent: number[] = [];
+  const links: Record<number, number[]> = {};
+  for (const item of items) {
+    const quantity = Math.max(1, Math.min(20, Number(item.quantity) || 1));
+    if (item.category === 'local-strength' || item.project_id === 'local-strength') {
+      if (item.diy_preferences?.[0]) draft.localParts.push(...Array.from({ length: quantity }, () => item.diy_preferences[0]));
+    } else if (typeof item.project_id === 'number') {
+      if (item.item_kind !== 'catalog_linked_project') independent.push(...Array.from({ length: quantity }, () => item.project_id as number));
+      draft.projectPreferences[item.project_id] = item.diy_preferences || [];
+      draft.projectAddonIds[item.project_id] = item.addon_ids || [];
+      if (item.catalog_version_id) {
+        draft.projectCatalogSelections![item.project_id] = { projectId: item.project_id, catalogVersionId: item.catalog_version_id, optionChoiceIds: item.option_choice_ids || [] };
+        links[item.project_id] = [...new Set((item.catalog_selection?.linked_snapshots || []).map(snapshot => snapshot.linked_project_id).filter((id): id is number => typeof id === 'number'))];
+      }
+    }
+  }
+  return { ...draft, independentProjectIds: independent, projectLinkedIds: links, selectedProjectIds: selectionProjectIds(independent, links) };
+}
+
+export function saveProjectSelection(draft: SelectionDraft, input: {
+  projectId: number; preferences: string[]; addonIds: number[]; localParts: string[];
+  linkedProjectIds?: number[]; catalogVersionId?: number; optionChoiceIds?: number[];
+}): SelectionDraft {
+  const independent = [...(draft.independentProjectIds ?? draft.selectedProjectIds)];
+  if (!independent.includes(input.projectId)) independent.push(input.projectId);
+  const links = { ...draft.projectLinkedIds, [input.projectId]: [...new Set(input.linkedProjectIds || [])].filter(id => id !== input.projectId) };
+  return {
+    ...draft, independentProjectIds: independent, projectLinkedIds: links,
+    selectedProjectIds: selectionProjectIds(independent, links),
+    projectPreferences: { ...draft.projectPreferences, [input.projectId]: input.preferences },
+    projectAddonIds: { ...draft.projectAddonIds, [input.projectId]: input.addonIds },
+    localParts: input.localParts,
+    projectCatalogSelections: {
+      ...draft.projectCatalogSelections,
+      ...(input.catalogVersionId && input.optionChoiceIds ? { [input.projectId]: {
+        projectId: input.projectId, catalogVersionId: input.catalogVersionId, optionChoiceIds: [...new Set(input.optionChoiceIds)],
+      } } : {}),
+    },
+  };
+}
 
 export function emptySelectionDraft(): SelectionDraft {
   return {
@@ -203,7 +259,7 @@ export function activePromotion(preview: PricingPreview, isMember: boolean): Act
     : null;
 }
 
-export function removeSelectionEntry(draft: SelectionDraft, target: SelectionTarget): SelectionDraft {
+export function removeSelectionEntry(draft: SelectionDraft, target: SelectionTarget, projects: Project[] = []): SelectionDraft {
   if (target.kind === 'project') {
     const projectPreferences = { ...draft.projectPreferences };
     const projectAddonIds = { ...draft.projectAddonIds };
@@ -211,9 +267,18 @@ export function removeSelectionEntry(draft: SelectionDraft, target: SelectionTar
     delete projectPreferences[target.projectId];
     delete projectAddonIds[target.projectId];
     delete projectCatalogSelections[target.projectId];
+    for (const [id, selection] of Object.entries(projectCatalogSelections)) {
+      const linkedChoices = (projects.find(project => project.id === Number(id))?.option_groups || []).flatMap(group => group.choices).filter(choice => choice.linked_project_id === target.projectId).map(choice => choice.id);
+      projectCatalogSelections[Number(id)] = { ...selection, optionChoiceIds: selection.optionChoiceIds.filter(choiceId => !linkedChoices.includes(choiceId)) };
+    }
+    const independent = (draft.independentProjectIds ?? draft.selectedProjectIds).filter(id => id !== target.projectId);
+    const links = { ...draft.projectLinkedIds };
+    delete links[target.projectId];
+    for (const source of Object.keys(links)) links[Number(source)] = links[Number(source)].filter(id => id !== target.projectId);
     return {
       ...draft,
-      selectedProjectIds: draft.selectedProjectIds.filter((id) => id !== target.projectId),
+      selectedProjectIds: selectionProjectIds(independent, links),
+      ...(draft.independentProjectIds ? { independentProjectIds: independent, projectLinkedIds: links } : {}),
       projectPreferences,
       projectAddonIds,
       projectCatalogSelections,
@@ -244,16 +309,16 @@ export function changeSelectionQuantity(
   draft: SelectionDraft,
   target: Extract<SelectionTarget, { kind: 'project' | 'local' }>,
   delta: 1 | -1,
+  projects: Project[] = [],
 ): SelectionDraft {
   if (target.kind === 'project') {
     const quantity = draft.selectedProjectIds.filter((id) => id === target.projectId).length;
-    if (delta > 0) {
-      return quantity >= 99
-        ? draft
-        : { ...draft, selectedProjectIds: [...draft.selectedProjectIds, target.projectId] };
-    }
-    if (quantity <= 1) return removeSelectionEntry(draft, target);
-    return { ...draft, selectedProjectIds: removeOne(draft.selectedProjectIds, target.projectId) };
+    if (delta > 0 && quantity >= 20) return draft;
+    if (delta < 0 && quantity <= 1) return removeSelectionEntry(draft, target, projects);
+    const selected = delta > 0 ? [...draft.selectedProjectIds, target.projectId] : removeOne(draft.selectedProjectIds, target.projectId);
+    const independent = (draft.independentProjectIds ?? draft.selectedProjectIds).filter(id => id !== target.projectId);
+    independent.push(...Array.from({ length: quantity + delta }, () => target.projectId));
+    return { ...draft, selectedProjectIds: selected, ...(draft.independentProjectIds ? { independentProjectIds: independent } : {}) };
   }
 
   const quantity = draft.localParts.filter((part) => part === target.part).length;

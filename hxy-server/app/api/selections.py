@@ -3,6 +3,7 @@
 import hashlib
 import secrets
 import uuid
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -411,25 +412,32 @@ def _revision_view(revision: SelectionRevision) -> dict:
 
 
 def _item_identity(item: dict) -> tuple:
+    # Linked and independent origins are provenance, not service configuration.
     return (
         str(item.get("project_id")),
         str(item.get("addon_id")),
         tuple(sorted(str(value) for value in item.get("addon_ids", []))),
         tuple(str(value) for value in item.get("diy_preferences", [])),
         item.get("item_type"),
+        item.get("catalog_version_id"),
+        tuple(sorted(item.get("option_choice_ids", []))),
+        item.get("option_choice_id"),
     )
 
 
 def _added_items(previous_items: list[dict], current_items: list[dict]) -> list[dict]:
-    """保留重复服务行的计数语义，只输出当前版本相对上一版的新增行。"""
-    remaining = [_item_identity(item) for item in previous_items]
+    """Subtract existing units across both repeated and quantity-bearing rows."""
+    remaining = Counter()
+    for item in previous_items:
+        remaining[_item_identity(item)] += max(1, int(item.get("quantity") or 1))
     added = []
     for item in current_items:
         identity = _item_identity(item)
-        if identity in remaining:
-            remaining.remove(identity)
-        else:
-            added.append(item)
+        quantity = max(1, int(item.get("quantity") or 1))
+        consumed = min(remaining[identity], quantity)
+        remaining[identity] -= consumed
+        if quantity > consumed:
+            added.append({**item, "quantity": quantity - consumed})
     return added
 
 
@@ -572,7 +580,9 @@ def submit_selection_revision(
     if session.status == "confirmed" and (not occupancy or occupancy.status != "in_service"):
         raise HTTPException(status_code=409, detail="当前服务状态不能继续加选")
     is_in_service = bool(occupancy and occupancy.status == "in_service")
-    previous_items = (previous.snapshot or {}).get("items", []) if previous else []
+    previous_items = (session.items or []) if is_in_service else (
+        (previous.snapshot or {}).get("items", []) if previous else []
+    )
     revision = SelectionRevision(
         id=str(uuid.uuid4()),
         selection_session_id=session.id,

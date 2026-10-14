@@ -66,6 +66,7 @@ type Props = {
   projects: Project[];
   addons: Addon[];
   selectedProjectIds: number[];
+  linkedProjectIds?: number[];
   selectedAddonIds: number[];
   preferences: string[];
   localParts: string[];
@@ -107,6 +108,7 @@ export default function ProjectDetailPage({
   onConfirm,
   onCouponInfo,
   onShare,
+  linkedProjectIds,
   couponPrompt,
 }: Props) {
   const groups = useMemo(() => {
@@ -130,8 +132,8 @@ export default function ProjectDetailPage({
   const catalogRelaxChoices = useMemo(() => catalogLinkedChoices.filter((choice) => choice.linked_project_id !== null && relaxProjectIds.has(choice.linked_project_id)), [catalogLinkedChoices, relaxProjectIds]);
   const initialDirectRelaxProjectIds = useMemo(() => {
     const catalogLinkedIds = new Set(catalogRelaxChoices.map((choice) => choice.linked_project_id));
-    return selectedProjectIds.filter((id) => relaxProjectIds.has(id) && !catalogLinkedIds.has(id) && projects.find((item) => item.id === id)?.category !== 'local-strength');
-  }, [catalogRelaxChoices, projects, relaxProjectIds, selectedProjectIds]);
+    return (linkedProjectIds ?? selectedProjectIds).filter((id) => relaxProjectIds.has(id) && !catalogLinkedIds.has(id) && projects.find((item) => item.id === id)?.category !== 'local-strength');
+  }, [catalogRelaxChoices, projects, relaxProjectIds, selectedProjectIds, linkedProjectIds]);
   const directRelaxResetKey = [...initialDirectRelaxProjectIds].sort((left, right) => left - right).join(',');
   const catalogPreferenceGroups = useMemo(() => catalogGroups
     .map((group) => ({ ...group, choices: group.choices.filter((choice) => choice.status === 'active' && choice.choice_type === 'preference') }))

@@ -7,7 +7,8 @@ test('the dedicated report intent does not enter arrival or return flows', () =>
   assert.equal(isReturnEntry(new URLSearchParams('view=reports')), false);
   assert.equal(isServiceAccountEntry(new URLSearchParams('view=reports&seat=sofa-01&qr=old')), false);
   assert.equal(isReportEntry(new URLSearchParams('view=reports&seat=sofa-01&qr=old&session=old&project=old&source=kiosk')), true);
-  for (const query of ['view=return', 'view=menu', 'seat=sofa-01&source=store_qr', 'qr=signed']) assert.equal(isReportEntry(new URLSearchParams(query)), false);
+  assert.equal(isReportEntry(new URLSearchParams('view=return')), true);
+  for (const query of ['view=menu', 'seat=sofa-01&source=store_qr', 'qr=signed']) assert.equal(isReportEntry(new URLSearchParams(query)), false);
 });
 
 const api = reports as unknown as {

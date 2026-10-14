@@ -1571,7 +1571,10 @@ def approve_selection_change_request(
     snapshot = revision.snapshot or {}
     lines = []
     confirmed_added_items = []
-    for item in snapshot.get("added_items", []):
+    from app.api.selections import _added_items
+    # Pending or rejected targets are not confirmed units. Rebase while locked.
+    added_items = _added_items(session.items or [], snapshot["items"]) if "items" in snapshot else snapshot.get("added_items", [])
+    for item in added_items:
         service_line_id = str(uuid.uuid4())
         confirmed_item = {
             **item,

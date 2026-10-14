@@ -5,10 +5,10 @@ export const STORE_CONTACTS: Readonly<Record<number, StoreContact>> = {
   1: { name: '紫薇壹号店 · 马文静', addUrl: 'https://work.weixin.qq.com/u/vcd649012bd26ad232?v=5.0.10.79677&bb=fcec4c6148' },
 };
 
-export function stableStoreEntry(origin: string, storeId: number): string {
+export function stableStoreEntry(origin: string, storeId: number, view: 'return' | null = 'return'): string {
   const url = new URL('/', origin);
   url.searchParams.set('store', String(Number.isSafeInteger(storeId) && storeId > 0 ? storeId : 1));
-  url.searchParams.set('view', 'return');
+  if (view) url.searchParams.set('view', view);
   return url.href;
 }
 
@@ -17,7 +17,19 @@ export function isReturnEntry(params: URLSearchParams): boolean {
 }
 
 export function isReportEntry(params: URLSearchParams): boolean {
-  return params.get('view') === 'reports';
+  return ['reports', 'return'].includes(params.get('view') || '');
+}
+
+export function reportEntryUrl(origin: string, storeId: number): string {
+  const url = new URL('/', origin);
+  url.searchParams.set('store', String(Number.isSafeInteger(storeId) && storeId > 0 ? storeId : 1));
+  url.searchParams.set('view', 'reports');
+  return url.href;
+}
+
+export function reportEntryHasBack(state: { hxy_report_entry_back?: boolean } | null, historyLength: number, referrer: string): boolean {
+  if (typeof state?.hxy_report_entry_back === 'boolean') return state.hxy_report_entry_back;
+  return historyLength > 2 || historyLength > 1 && Boolean(referrer);
 }
 
 export function isServiceAccountEntry(params: URLSearchParams): boolean {

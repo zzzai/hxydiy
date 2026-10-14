@@ -1,7 +1,26 @@
 import type { Occupancy, SelectionSession } from './api';
+import { mergeSubmittedSelectionItems, type SelectionItem } from './domain.ts';
 
 type SessionStatus = SelectionSession['status'];
 type OccupancyStatus = Occupancy['status'] | undefined;
+
+export function revisionItems(status: SessionStatus, original: Array<SelectionItem & { item_kind?: string; source_project_id?: number }>, draft: SelectionItem[]): SelectionItem[] {
+  if (status !== 'submitted' && status !== 'confirmed') return draft;
+  // The API expands these units from the retained parent choices itself.
+  const explicit = original.filter(item => !(['catalog_linked_project', 'dedicated_option'].includes(item.item_kind || '')
+    && original.some(parent => parent.project_id === item.source_project_id && parent.catalog_version_id)
+    && !draft.some(added => added.project_id === item.project_id)));
+  return mergeSubmittedSelectionItems(explicit, draft);
+}
+
+export function selectionRequestAccess(status: SessionStatus, ownerToken: string, collaboratorToken: string, version: number, authToken?: string) {
+  if (status === 'draft') return collaboratorToken ? { collaborationToken: collaboratorToken, expectedVersion: version, authToken } : { authToken };
+  return ownerToken ? { authToken } : null;
+}
+
+export function submittedSelectionAccess(ownerToken: string, collaboratorToken: string): { collaborationToken: string; collaborationMode: 'browse_only' | '' } {
+  return ownerToken ? { collaborationToken: '', collaborationMode: '' } : { collaborationToken: collaboratorToken, collaborationMode: 'browse_only' };
+}
 
 export function expiredSelectionCopy() {
   return {

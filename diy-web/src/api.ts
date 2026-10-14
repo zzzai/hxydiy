@@ -8,7 +8,7 @@ export type SelectionSession = {
   source: string;
   device_label: string;
   status: 'draft' | 'submitted' | 'confirmed' | 'cancelled' | 'expired';
-  items: Array<SelectionItem & { name?: string; category?: string; code?: string }>;
+  items: Array<SelectionItem & { name?: string; category?: string; code?: string; item_kind?: string; catalog_selection?: { linked_snapshots?: Array<{ linked_project_id?: number | null }> } }>;
   pricing_snapshot: Record<string, unknown>;
   store_total_cents: number;
   group_total_cents?: number;
