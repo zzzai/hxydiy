@@ -1,10 +1,16 @@
 # hxy-diy 当前状态
 
-更新时间：2026-10-14（Asia/Shanghai）
+更新时间：2026-10-15（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
+
+- `REPORT-CENTER-BRAND-20261014`已上线，实际安装`github-87fbff8afa50-38677354836`。业务[PR #269](https://github.com/zzzai/hxydiy/pull/269)，候选`6f8d3fbf91888fbe77057915d34d94c50808294f`，合并/发布`87fbff8afa506fab6beac09e9142b03ad69cf3a9`；精确CI38589195554和唯一部署38677354836成功。2026-10-15 11:45:08–11:45:12一次只读生产终验11项通过：current前后相同、完整MANIFEST455项、实际运行后端、新主JS/CSS/可达报告lazy/IP的安装公网SHA及健康通过。
+- 报告中心采用用户确认的既有荷叶帽IP、白底品牌排版、14px灰色日期与“DIY 定制我的项目”整行入口。仅两个UI源码文件，不改P1报告直达/返回、身份/v2/API、菜单链接、价格、支付、QR或权限；不含总部新功能或报告/面部原图权限扩张。真实微信登录、本人报告及门店现场仍待验。见`operations/report-center-brand-release-20261015.md`；记录合并不再次部署。
+- 发布前按明确授权，只清理已离机备份且Linux实际恢复验证通过的一份旧VSCode2a594版本，释放约670.3MiB；最新两版/运行工具、全部业务版本、数据库和备份保留。发布后可用5737888KiB（约5.47GiB）、磁盘86%仍预警，下次仍须通过原容量门槛。见`operations/capacity-recovery-20261015.md`；没有自动清理历史release或备份。
+
+### 2026-10-14 上次发布记录（以下current为当时版本，P1修复仍包含于当前版本）
 
 - `CUSTOMER-EXPERIENCE-P1-20261014`已上线，实际安装`github-d9b4e520675c-38550544089`。业务[PR #266](https://github.com/zzzai/hxydiy/pull/266)，HEAD `58b103f40e87b96c56a36b7e94a9b422c884f53b`，合并/发布SHA `d9b4e520675c75910704ba93b3632e65b7dbbab2`；精确main CI `38545634999`、唯一部署 `38550544089`及实际guarded步骤成功。2026-10-14 18:51:51一次只读生产终验10项通过：current前后相同、完整MANIFEST452项、安装/运行API两后端Git blob和公网主JS/CSS/可达报告lazy SHA一致，health为`ok/production`。
 - 本批修复详情保存数量、关联来源撤销、本人受控追加与同行只读、完整目标修订差量及审批冻结。报告明确入口与企微原`?store=1&view=return`兼容，登录/首次查看后直开最近有效报告，原站返回进入报告中心，不自动再开；最新/历史/公开菜单可达。服务号`view=menu`与普通裸入口不被刷新误判为报告任务，既有本人v2动作/归属/撤回及no-referrer不变，不新增独立授权页。企微欢迎语无需因旧return链接失效而调整，本次未写企微配置。
