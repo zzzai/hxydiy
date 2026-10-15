@@ -1,3 +1,11 @@
+# 2026-10-15 本人报告免重复授权上线与会员生产同步
+
+- `CUSTOMER-REPORT-NO-EXTRA-CONSENT-20261015`：#272候选7143d636564ab001c71add291d31fd8d3fe48921，合并/发布0b88c66e57639fe70ef8e5f09a10f6ddf48a5d72；精确main CI38709471700、唯一Deploy38713160429/attempt1与实际guarded步骤成功。actual current github-0b88c66e5763-38713160429；17:45:27终验生产通过，MANIFEST457、安装/运行后端103个raw Git文件、公网HTML/JS/CSS/报告lazy/IP精确hash、health200/匿名401和新镜像隔离合成5项通过。最终回执SHA5004905cf96c9e0a5ca2b704ce889f0bb9df7ef45735e8cb90672f24c88e1150。
+- 检测已授权，H5本人报告不再增加授权页/勾选、v2或来源授权证明门禁；身份/当前手机号/来源归属和URL白名单仍保留，不写consent/audit。原企微view=return链接不改，登录直达最近报告、Back防循环及DIY可达，不扩大总部/员工/照片权限。真实微信/OTP/原站和现场未验，未读真人报告或发短信。
+- 独立reader于17:25:34预检/一致备份/独立恢复/单次安装通过，实际新SHA ed0964494f5c9627b46fc1da5f4ea21b166b7a0d0dcfd1b1f2026b7b0e45d42b；原模块及两份37,199,872字节SQLite备份保留，安装模块合成10项通过。先前两次终验输入断言分别为Windows archive换行和任意路径SPA回退，原回执保留，修验收输入后复用已过门禁、只续未完项；没有重发/现场改业务。
+- 发布前按精确plan14ac2bd1757c26f3e0e6e91b4353746ba4447e2d5be416465186b84c412cb3ec清理7旧重复解压输入，先完整离机归档/逐文件恢复核验，实际释放193978368字节；对应安装版本、DB、备份、rehearsal均保留。终验可用5181919232字节，长期容量风险保留，不降低门槛。详见`operations/customer-report-no-extra-consent-release-20261015.md`；此文档合并不重发生产。
+- `MEMBER-SYNC-ZHB-20261015`于14:43:09生产单次新增35卡/34新用户，23年卡+12储值卡；总量276用户/57来源卡，旧242用户/22卡及钱包财务不变，精确重放0写，真实备份恢复通过。automation-2每日10:00仅异常通知，依赖本机与来源登录。wrapper/runbook未合并，不把数据导入当网站部署；脱敏证据见`operations/member-sync-zhb-production-result-20261015.md`。
+
 # 2026-10-15 报告中心品牌界面上线及可恢复容量清理
 
 - `REPORT-CENTER-BRAND-20261014`：#269候选6f8d3fbf91888fbe77057915d34d94c50808294f，合并/发布87fbff8afa506fab6beac09e9142b03ad69cf3a9；精确CI38589195554、唯一Deploy38677354836/attempt1与实际guarded步骤成功，安装`github-87fbff8afa50-38677354836`。不是仅已合并或已触发。

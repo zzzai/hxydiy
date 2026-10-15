@@ -1,5 +1,12 @@
 # 顾客端工作流
 
+## 2026-10-15 CUSTOMER-REPORT-NO-EXTRA-CONSENT-20261015（已生产，现场待验）
+
+- 用户确认检测时已授权；本人报告前后端不再要求DIY v2/active、重复勾选或原检测授权证明，不写consent/audit。JWT/当前登录/当前手机号证明、来源归属、严格原站URL、no-referrer与换号/退出/迟到响应隔离保留。原企微view=return继续直达任务，登录后打开最近完整报告，Back留中心，历史和DIY可达，不改公开菜单/签名QR/价格或扩大员工、总部、照片用途。
+- 定向30/30与最终build成功；真实loopback前后端/provider HTTP合成联调28/28、浏览器17/17（8个未受纯文案影响行为复用，9个最终源码场景），未用全API mock。后端本地59与Linux隔离59、来源升级/恢复/回滚3项及独立审查通过；OpenAPI三处ASCII pattern生成快照补齐，新CI通过，不重跑旧失败head。
+- #272候选7143d636564ab001c71add291d31fd8d3fe48921合并/发布0b88c66e57639fe70ef8e5f09a10f6ddf48a5d72，CI38709471700、唯一Deploy38713160429成功；actual current github-0b88c66e5763-38713160429。生产MANIFEST457、安装/运行后端raw Git103、公网主JS/CSS/报告lazy/IP精确hash及新镜像隔离合成5项通过，source新模块与合成10项通过。两次验收输入问题有原始回执，不改生产或重发；完整证据见`../operations/customer-report-no-extra-consent-release-20261015.md`。
+- 真实微信、OTP、真实原站及门店现场未验，没有读取真人报告/照片或发短信。已通过scope不再扩大/重复验证，文档合并不再次部署。下方旧工作流中的授权/v2及current是历史快照，由本条和当前合同取代。
+
 ## 2026-10-15 REPORT-CENTER-BRAND-20261014（已生产，微信现场待验）
 
 - 用户最终确认既有荷叶帽IP、报告页白底品牌排版、14px灰色时间和“DIY 定制我的项目”/“按喜好搭配，选适合自己的项目”。仅ReportEntryPage与CSS，所有报告、身份/v2、API、返回和菜单链接不变；旧#268拒绝版没有单独发布。

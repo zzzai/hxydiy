@@ -4,6 +4,15 @@
 
 ## 状态模型
 
+### 2026-10-15 本人报告免重复授权与会员同步（已生产）
+
+| 任务 | 状态 | 唯一责任与范围 | 下一门禁 |
+| --- | --- | --- | --- |
+| `CUSTOMER-REPORT-NO-EXTRA-CONSENT-20261015` | `Deployed` | 顾客端/后端限定实现；总控契约、精确门禁与记录；唯一运维执行source升级/发布/终验 | #272合并/发布0b88c66e57639fe70ef8e5f09a10f6ddf48a5d72，CI38709471700、Deploy38713160429成功；current github-0b88c66e5763-38713160429，MANIFEST457、安装/运行raw Git103、公网资产及实际镜像合成5项通过。source同步升级/合成10项通过。免重复授权条款取代下表历史v2门禁，保留本人验证/归属；原return链接、Back/历史/DIY可达。仅真实微信/OTP/原站和营业现场待验，不重复部署/套件，不扩大总部/照片。见operations/customer-report-no-extra-consent-release-20261015.md。 |
+| `MEMBER-SYNC-ZHB-20261015` | `Production Data Applied` | 后台冻结来源与guard；唯一运维单次事务；总控脱敏事实/每日任务 | 35新卡/34新用户已入生产，旧用户/卡/钱包不变，重放0写；每日10:00、异常通知的automation-2已启用，依赖本机及网页登录，未来批次重新验证。wrapper/runbook未合并，不重放本批、不称应用部署。见operations/member-sync-zhb-production-result-20261015.md。 |
+
+下列为历史阶段及其当时版本；当前生产以上表和CURRENT-STATE为准，历史“独立授权/v2”不再作为本人读取门禁。
+
 ### 2026-10-15 报告中心品牌界面（已生产，微信现场待验）
 
 | 任务 | 状态 | 责任与范围 | 核验与下一门禁 |
