@@ -4,11 +4,17 @@
 
 ## 状态模型
 
+### 2026-10-15 报告中心品牌界面（已生产，微信现场待验）
+
+| 任务 | 状态 | 责任与范围 | 核验与下一门禁 |
+| --- | --- | --- | --- |
+| `REPORT-CENTER-BRAND-20261014` | `Deployed` | 顾客端两文件UI及精确脚本等待；后台唯一可恢复清理/只读终验；总控精确SHA审核/唯一发布/共享记录 | #269发布87fbff8afa506fab6beac09e9142b03ad69cf3a9，CI38589195554、Deploy38677354836成功；11:45生产11项、MANIFEST455项、新主JS/CSS/报告lazy/IP安装公网SHA及新文案/14px规则通过。实际current github-87fbff8afa50-38677354836。P1修复仍包含于本版本；真实微信及营业现场待验，容量86%预警保留。不重发生产或扩总部权限，见operations/report-center-brand-release-20261015.md。 |
+
 ### 2026-10-14 顾客体验P1（已生产，现场待验）
 
 | Feature ID | 状态 | 唯一执行窗口 | 下一门禁 |
 |---|---|---|---|
-| `CUSTOMER-EXPERIENCE-P1-20261014` | `Deployed` | 顾客端写选购/报告和只读最终等待；管理后台+后端写修订及PG/安装验收；技师端合成验收；总控契约/唯一发布 | #266合并/发布`d9b4e520675c75910704ba93b3632e65b7dbbab2`，CI38545634999、部署38550544089成功；真实隔离PG4双线程/29HTTP/8锁等待及生产10项、MANIFEST452项/运行API/公网精确资产通过。实际current github-d9b4e520675c-38550544089，磁盘86%预警保留。下一门禁仅微信/provider真实登录看报告及Back/门店现场；不重复发布/build/套件或扩权限。详见operations/customer-experience-p1-release-20261014.md，四窗口事件接续，不轮询。 |
+| `CUSTOMER-EXPERIENCE-P1-20261014` | `Deployed` | 顾客端写选购/报告和只读最终等待；管理后台+后端写修订及PG/安装验收；技师端合成验收；总控契约/唯一发布 | #266合并/发布`d9b4e520675c75910704ba93b3632e65b7dbbab2`，CI38545634999、部署38550544089成功；真实隔离PG4双线程/29HTTP/8锁等待及生产10项、MANIFEST452项/运行API/公网精确资产通过。2026-10-14当时current为github-d9b4e520675c-38550544089，现已由10-15报告中心版本替代，P1修复仍包含；该次磁盘86%预警保留。下一门禁仅微信/provider真实登录看报告及Back/门店现场；不重复发布/build/套件或扩权限。详见operations/customer-experience-p1-release-20261014.md，四窗口事件接续，不轮询。 |
 | `FOLLOWUP-ANONYMOUS-SERVICE-ORDER-20261014` | `Spec Ready` | 技师端只读核查完成；总控记录后续建议 | 正式签名扫码实现会建/复用anon主体，首轮直接创建的null身份fixture不证明扫码故障；既有前端user_id门槛会隐藏历史/异常空身份活动选单。建议当前履约按占用/选单、历史/画像仍按身份；仅完成诊断，本轮未实施加固或扩权限。证据及未验范围见`operations/customer-experience-p1-local-acceptance-20261014.md`。 |
 
 ### 无需选座的本人报告入口

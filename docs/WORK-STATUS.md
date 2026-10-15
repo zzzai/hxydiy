@@ -1,3 +1,11 @@
+# 2026-10-15 报告中心品牌界面上线及可恢复容量清理
+
+- `REPORT-CENTER-BRAND-20261014`：#269候选6f8d3fbf91888fbe77057915d34d94c50808294f，合并/发布87fbff8afa506fab6beac09e9142b03ad69cf3a9；精确CI38589195554、唯一Deploy38677354836/attempt1与实际guarded步骤成功，安装`github-87fbff8afa50-38677354836`。不是仅已合并或已触发。
+- 用户确认原IP、14px灰色时间及DIY入口文案；最终build退出0、27报告测试通过、独立源码审查通过。仅ReportEntryPage与CSS，不改报告/API/v2/登录返回、价格/支付/QR/权限，不包含总部新能力。
+- 11:45:08–11:45:12一次只读生产终验11项通过：完整MANIFEST455项、实际运行未变后端、公网HTML可达新主JS/CSS/报告lazy和既有IP安装SHA一致、新文案/14px规则、health production、三端匿名、新备份/成功输入收尾元数据及容量通过。原始JSON SHA7f4f6e449c404fcdcc92aa739292ba5ce887f96e808ccd1c2a2282c5ac0880ae；真实微信及营业现场未验，不读真人报告/照片或发短信。
+- `OPS-CAPACITY-RECOVER-20261015`仅按精确plan a0652aa85de2cbb4812eea5f24e4d44b5ce1ee86e50ba664476ef4d9bc046f1c单次移除旧VSCode2a594版本，释放686392KiB；232900092B离机归档SHA464f8772154c387bfb087c738fd1cadad5094ca3cbd6de0fec856936d7b07aa5及4286条Linux恢复验证通过，所有业务版本/数据库/备份保留。旧临时恢复目录缺失原因不推测，补充独立持久恢复成功，没有重跑删除。
+- 发布后free5737888KiB、磁盘86%仍预警；本次成功输入自动收尾，未另清盘或改变长期保留政策。详见`operations/report-center-brand-release-20261015.md`与`operations/capacity-recovery-20261015.md`；事实补录不重新部署。
+
 # 2026-10-14 顾客体验P1上线与一次只读生产终验
 
 - `CUSTOMER-EXPERIENCE-P1-20261014`：业务PR #266，HEAD `58b103f40e87b96c56a36b7e94a9b422c884f53b`，合并/发布SHA `d9b4e520675c75910704ba93b3632e65b7dbbab2`；精确main CI38545634999及唯一Deploy Production38550544089成功。current实际为`github-d9b4e520675c-38550544089`。
