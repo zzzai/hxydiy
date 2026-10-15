@@ -120,7 +120,7 @@ def build_router(db_path, read_token, privileged_tokens):
         return {"items": [summary(row) for row in rows[:limit]], "limit": limit, "offset": offset, "has_more": len(rows) > limit}
 
     @router.get("/reports/{report_id}", dependencies=[Depends(authorize)])
-    def report(request: Request, report_id: str = ApiPath(pattern=r"^[\w-]{1,128}$"),
+    def report(request: Request, report_id: str = ApiPath(pattern=r"^[A-Za-z0-9_-]{1,128}$"),
                phone: str = Header(alias="X-TCM-Verified-Phone", pattern=r"^1[3-9]\d{9}$", min_length=11, max_length=11)):
         validate_query(request, set())
         rows = query("SELECT report_no,report_time,heart_rate,blood_oxygen,moisture_index,"

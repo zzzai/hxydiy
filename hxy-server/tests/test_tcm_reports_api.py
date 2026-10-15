@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.db.session import Base, get_db
-from app.models import CustomerProfileConsent, CustomerVerificationCode, User
+from app.models import AuditLog, CustomerProfileConsent, CustomerVerificationCode, User
 from app.core.security import create_access_token
 from app.api.admin import create_staff_token
 
@@ -65,6 +65,39 @@ def grant(client, headers):
                        json={"accepted": True, "version": "tcm-report-access-v2-original"})
 
 
+@pytest.mark.parametrize("consent_state", [None, "legacy-v1", "revoked-v2", "active-v2"])
+def test_report_reads_do_not_require_or_mutate_diy_consent(context, consent_state):
+    client, sessions, identifier, calls = context
+    now = datetime.now(UTC)
+    with sessions.begin() as db:
+        db.add(AuditLog(actor_type="customer", actor_id=str(identifier), action="fixture_existing_audit",
+                       entity_type="user", entity_id=str(identifier), detail={"preserved": True}))
+        if consent_state is not None:
+            db.add(CustomerProfileConsent(customer_id=identifier, consent_type="tcm_report_access",
+                purpose="existing fixture", data_categories_json=["health_detection_report"],
+                scope_json={"phone_sha256": hashlib.sha256(b"13800138000").hexdigest(), "audience": "self",
+                            "external_original_report": consent_state != "legacy-v1"},
+                consent_method="explicit_customer_action",
+                consent_text_version="tcm-report-access-v1" if consent_state == "legacy-v1" else "tcm-report-access-v2-original",
+                granted_at=now, status="revoked" if consent_state == "revoked-v2" else "active",
+                revoked_at=now if consent_state == "revoked-v2" else None))
+        db.flush()
+        before_consents = db.execute(select(CustomerProfileConsent.__table__)).all()
+        before_audits = db.execute(select(AuditLog.__table__)).all()
+
+    headers = customer_header(identifier)
+    listed = client.get("/api/v1/me/tcm-reports", headers=headers)
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["report_id"] == "R1"
+    detail = client.get("/api/v1/me/tcm-reports/R1", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["heart_rate"] == 77
+    assert calls == [("13800138000", None), ("13800138000", "R1")]
+    with sessions() as db:
+        assert db.execute(select(CustomerProfileConsent.__table__)).all() == before_consents
+        assert db.execute(select(AuditLog.__table__)).all() == before_audits
+
+
 def test_old_consent_never_silently_upgrades_to_external_report_scope(context):
     client, sessions, identifier, calls = context
     from app.domain.customer_phone_proof import phone_digest
@@ -76,8 +109,8 @@ def test_old_consent_never_silently_upgrades_to_external_report_scope(context):
     status=client.get("/api/v1/me/tcm-report-consent",headers=headers)
     assert status.json()["consented"] is False
     assert status.json()["version"] == "tcm-report-access-v2-original"
-    assert client.get("/api/v1/me/tcm-reports/R1",headers=headers).status_code == 403
-    assert calls == []
+    assert client.get("/api/v1/me/tcm-reports/R1",headers=headers).status_code == 200
+    assert calls == [("13800138000", "R1")]
     assert client.post("/api/v1/me/tcm-report-consent",headers=headers,json={"accepted":True,"version":"tcm-report-access-v1"}).status_code == 422
     assert grant(client,headers).status_code == 200
     detail=client.get("/api/v1/me/tcm-reports/R1",headers=headers)
@@ -85,7 +118,7 @@ def test_old_consent_never_silently_upgrades_to_external_report_scope(context):
     assert detail.json()["original_report_url"] is None
 
 
-def test_owned_original_link_requires_new_consent_and_rejects_url_override(context, monkeypatch):
+def test_owned_original_link_without_diy_consent_rejects_url_override(context, monkeypatch):
     client, _, identifier, calls = context
     from app.api import tcm_reports
     previous = tcm_reports.read_report_source
@@ -95,9 +128,6 @@ def test_owned_original_link_requires_new_consent_and_rejects_url_override(conte
     monkeypatch.setattr(tcm_reports, "read_report_source", source)
     headers=customer_header(identifier)
     endpoint="/api/v1/me/tcm-reports/R1"
-    assert client.get(endpoint,headers=headers).status_code == 403
-    assert calls == []
-    assert grant(client,headers).status_code == 200
     result=client.get(endpoint,headers=headers)
     assert result.status_code == 200 and result.json()["original_report_url"] == link
     assert "13800138000" not in result.text and "Bearer" not in result.text
@@ -107,13 +137,10 @@ def test_owned_original_link_requires_new_consent_and_rejects_url_override(conte
     assert client.get("/api/v1/me/tcm-reports/R2",headers=headers).status_code == 404
 
 
-def test_existing_otp_login_reused_separate_consent_withdrawal_and_minimal_fields(context):
+def test_existing_otp_login_reused_and_legacy_consent_withdrawal_does_not_gate_reports(context):
     client, _, identifier, calls = context
     headers = customer_header(identifier)
     endpoint = "/api/v1/me/tcm-reports"
-    assert client.get(endpoint, headers=headers).status_code == 403
-    assert calls == []
-    assert grant(client, headers).status_code == 200
     listed = client.get(endpoint, headers=headers)
     assert listed.status_code == 200
     assert set(listed.json()["items"][0]) == {"report_id", "reported_at", "title"}
@@ -122,9 +149,10 @@ def test_existing_otp_login_reused_separate_consent_withdrawal_and_minimal_field
     assert detail.json()["heart_rate"] == 77
     assert "private.invalid" not in detail.text
     assert calls == [("13800138000", None), ("13800138000", "R1")]
+    assert grant(client, headers).status_code == 200
     assert client.delete("/api/v1/me/tcm-report-consent", headers=headers).status_code == 200
-    assert client.get(endpoint + "/R1", headers=headers).status_code == 403
-    assert len(calls) == 2
+    assert client.get(endpoint + "/R1", headers=headers).status_code == 200
+    assert len(calls) == 3
 
 
 def test_unauthorized_phone_override_stale_session_and_other_report_rejected(context):
@@ -134,10 +162,19 @@ def test_unauthorized_phone_override_stale_session_and_other_report_rejected(con
     assert client.get(endpoint).status_code == 401
     assert client.get(endpoint, headers={"Authorization": "Bearer " + create_staff_token(identifier, "manager")}).status_code == 401
     assert client.get(endpoint, headers=customer_header(identifier, 1)).status_code == 401
-    assert grant(client, headers).status_code == 200
     assert client.get(endpoint + "?phone=13900139000", headers=headers).status_code == 422
     assert client.get(endpoint + "/R2", headers=headers).status_code == 404
     assert calls == [("13800138000", "R2")]
+
+
+def test_expired_customer_token_never_reads_reports(context, monkeypatch):
+    client, _, identifier, calls = context
+    from app.core import security
+    monkeypatch.setattr(security.settings, "access_token_expire_minutes", -1)
+    headers = customer_header(identifier)
+    for endpoint in ("/api/v1/me/tcm-reports", "/api/v1/me/tcm-reports/R1"):
+        assert client.get(endpoint, headers=headers).status_code == 401
+    assert calls == []
 
 
 def test_arbitrary_old_used_code_or_stored_phone_is_not_session_proof(context):
@@ -146,6 +183,8 @@ def test_arbitrary_old_used_code_or_stored_phone_is_not_session_proof(context):
         user = db.get(User, identifier)
         user.last_login_at = user.last_login_at + timedelta(seconds=1)
     assert grant(client, customer_header(identifier)).status_code == 403
+    for endpoint in ("/api/v1/me/tcm-reports", "/api/v1/me/tcm-reports/R1"):
+        assert client.get(endpoint, headers=customer_header(identifier)).status_code == 403
     assert calls == []
 
 
@@ -155,22 +194,25 @@ def test_unverified_cookie_and_non_customer_tokens_never_read(context):
         db.query(CustomerVerificationCode).delete()
     client.cookies.set("hxy_trusted_device", "unverified-fixture")
     assert grant(client, customer_header(identifier)).status_code == 403
-    for role in ("admin", "technician", "staff"):
+    for endpoint in ("/api/v1/me/tcm-reports", "/api/v1/me/tcm-reports/R1"):
+        assert client.get(endpoint, headers=customer_header(identifier)).status_code == 403
+    for role in ("manager", "admin", "technician", "staff"):
         headers = {"Authorization": "Bearer " + create_staff_token(identifier, role)}
         assert client.get("/api/v1/me/tcm-reports", headers=headers).status_code == 401
+        assert client.get("/api/v1/me/tcm-reports/R1", headers=headers).status_code == 401
         assert client.delete("/api/v1/me/tcm-report-consent", headers=headers).status_code == 401
     assert calls == []
 
 
-def test_explicit_consent_cannot_be_replaced_by_extra_identity_fields(context):
+def test_legacy_consent_contract_still_rejects_invalid_actions_and_identity_fields(context):
     client, _, identifier, calls = context
     headers = customer_header(identifier)
     endpoint = "/api/v1/me/tcm-report-consent"
     assert client.post(endpoint, headers=headers, json={"accepted": False, "version": "tcm-report-access-v2-original"}).status_code == 422
     assert client.post(endpoint, headers=headers, json={"accepted": True, "version": "tcm-report-access-v2-original", "phone": "13900139000"}).status_code == 422
     assert client.get(endpoint + "?phone=13900139000", headers=headers).status_code == 422
-    assert client.get("/api/v1/me/tcm-reports", headers=headers).status_code == 403
     assert calls == []
+    assert client.get("/api/v1/me/tcm-reports", headers=headers).status_code == 200
 
 
 def test_real_otp_login_proof_survives_code_cleanup_and_phone_change_is_rejected(context):
@@ -186,10 +228,20 @@ def test_real_otp_login_proof_survives_code_cleanup_and_phone_change_is_rejected
     assert login.status_code == 200
     headers = {"Authorization": "Bearer " + login.json()["token"]}
     with sessions.begin() as db:
+        assert db.scalar(select(CustomerProfileConsent)) is None
         db.query(CustomerVerificationCode).delete()
-    assert grant(client, headers).status_code == 200
+    assert client.get("/api/v1/me/tcm-reports", headers=headers).status_code == 200
     with sessions.begin() as db:
         db.get(User, identifier).phone = "13900139000"
     assert client.get("/api/v1/me/tcm-reports", headers=headers).status_code == 403
-    assert calls == []
+    assert calls == [("13800138000", None)]
     assert client.delete("/api/v1/me/tcm-report-consent", headers=headers).status_code == 200
+
+
+@pytest.mark.parametrize("report_id", ["报告1", "Réport1", "Ｒ１"])
+def test_non_ascii_report_id_rejected_before_reading_source(context, report_id):
+    client, _, identifier, calls = context
+    assert grant(client, customer_header(identifier)).status_code == 200
+    response = client.get("/api/v1/me/tcm-reports/" + report_id, headers=customer_header(identifier))
+    assert response.status_code == 422
+    assert calls == []

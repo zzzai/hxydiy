@@ -12,7 +12,7 @@ CONSENT_TEXT = "我单独同意使用已验证手机号查询本人健康检测�
 
 class ReportSummary(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
-    report_id: str = Field(pattern=r"^[\w-]{1,128}$")
+    report_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,128}$")
     reported_at: datetime | None = None
     title: Literal["检测报告"] = "检测报告"
 

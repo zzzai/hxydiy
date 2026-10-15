@@ -12,11 +12,9 @@ test('the dedicated report intent does not enter arrival or return flows', () =>
 });
 
 const api = reports as unknown as {
-  ensureReportConsent: (token: string, status: { consented: boolean; version: string; notice: string }, signal: AbortSignal) => Promise<unknown>;
   latestOriginalReport: (token: string, signal: AbortSignal) => Promise<{ kind: string; url?: string }>;
-  resolveReportEntry: (token: string, status: { consented: boolean; version: string; notice: string }, displayedNotice: string | null, signal: AbortSignal) => Promise<{ kind: string; url?: string; consent: { consented: boolean } }>;
+  resolveReportEntry: (token: string, signal: AbortSignal) => Promise<{ kind: string; url?: string }>;
 };
-const status = { consented: false, version: 'tcm-report-access-v2-original', notice: 'Synthetic notice' };
 const row = (id: string, date: string | null) => ({ report_id: id, reported_at: date, title: '检测报告' });
 const page = (items: ReturnType<typeof row>[], offset = 0, has_more = false) => ({ items, offset, limit: 20, has_more });
 const detail = (id: string, url: string | null = `https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=${id}`) => ({ ...row(id, '2026-10-13T10:00:00+08:00'), original_report_url: url, physiques: [], heart_rate: null, blood_oxygen: null, moisture: null });
@@ -32,30 +30,6 @@ async function withApi(responses: Array<unknown>, action: (calls: Array<{ path: 
   }) as typeof fetch;
   try { await action(calls); } finally { globalThis.fetch = original; }
 }
-
-test('an explicit first view grants only current self consent; valid consent is reused', async () => {
-  assert.equal(typeof api.ensureReportConsent, 'function');
-  await withApi([{ ...status, consented: true }], async calls => {
-    await api.ensureReportConsent('synthetic-token', status, new AbortController().signal);
-    assert.equal(calls[0].path, '/api/v1/me/tcm-report-consent');
-    assert.equal(calls[0].options.method, 'POST');
-    assert.deepEqual(JSON.parse(String(calls[0].options.body)), { accepted: true, version: 'tcm-report-access-v2-original' });
-    await api.ensureReportConsent('synthetic-token', { ...status, consented: true }, new AbortController().signal);
-    assert.equal(calls.length, 1);
-  });
-});
-
-test('unknown consent versions and failed consent never permit a report query', async () => {
-  await withApi([], async calls => {
-    await assert.rejects(api.ensureReportConsent('token', { ...status, version: 'old-v1' }, new AbortController().signal), /说明已更新/);
-    assert.equal(calls.length, 0);
-  });
-  await withApi([Response.json({ detail: 'Synthetic failure' }, { status: 503 })], async calls => {
-    await assert.rejects(api.ensureReportConsent('token', status, new AbortController().signal));
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].path, '/api/v1/me/tcm-report-consent');
-  });
-});
 
 test('abort after a late list response prevents detail reads', async () => {
   const originalFetch = globalThis.fetch;
@@ -110,7 +84,7 @@ test('a missing or mismatched newest link does not fall back to an older report'
   }
 });
 
-test('expired identity and consent failures stop before detail reads', async () => {
+test('expired identity and forbidden reads stop before detail reads', async () => {
   assert.equal(typeof api.latestOriginalReport, 'function');
   for (const code of [401, 403, 503]) {
     await withApi([Response.json({ detail: { message: 'Synthetic failure' } }, { status: code })], async calls => {
@@ -145,50 +119,22 @@ test('original report navigation stays in the same window without referrer or cr
   } finally { Object.defineProperty(globalThis, 'document', { configurable: true, value: original }); }
 });
 
-test('combined login and view continues directly through self consent to the newest original', async () => {
-  assert.equal(typeof api.resolveReportEntry, 'function');
-  await withApi([{ ...status, consented: true }, page([row('NEW', '2026-10-13T10:00:00+08:00')]), detail('NEW')], async calls => {
-    const result = await api.resolveReportEntry('token', status, 'Synthetic notice', new AbortController().signal);
-    assert.equal(result.kind, 'ready');
-    assert.ok(result.url?.endsWith('reportId=NEW'));
-    assert.equal(result.consent.consented, true);
-    assert.deepEqual(calls.map(call => [call.options.method || 'GET', call.path]), [['POST', '/api/v1/me/tcm-report-consent'], ['GET', '/api/v1/me/tcm-reports?limit=20&offset=0'], ['GET', '/api/v1/me/tcm-reports/NEW']]);
-  });
-});
-
-test('an existing verified v2 session enters its report without another view action or grant POST', async () => {
+test('report entry directly queries the newest original without consent probes or writes', async () => {
   assert.equal(typeof api.resolveReportEntry, 'function');
   await withApi([page([row('NEW', '2026-10-13T10:00:00+08:00')]), detail('NEW')], async calls => {
-    const result = await api.resolveReportEntry('token', { ...status, consented: true }, null, new AbortController().signal);
+    const result = await api.resolveReportEntry('token', new AbortController().signal);
     assert.equal(result.kind, 'ready');
-    assert.ok(calls.every(call => (call.options.method || 'GET') === 'GET'));
+    assert.ok(result.url?.endsWith('reportId=NEW'));
+    assert.deepEqual(calls.map(call => [call.options.method || 'GET', call.path]), [['GET', '/api/v1/me/tcm-reports?limit=20&offset=0'], ['GET', '/api/v1/me/tcm-reports/NEW']]);
   });
 });
 
-test('an existing session with missing, old or revoked consent never grants on page entry', async () => {
+test('a failed report entry stops without detail queries or consent writes', async () => {
   assert.equal(typeof api.resolveReportEntry, 'function');
-  await withApi([], async calls => {
-    for (const version of ['tcm-report-access-v2-original', 'tcm-report-access-v1']) {
-      assert.equal((await api.resolveReportEntry('token', { ...status, version }, null, new AbortController().signal)).kind, 'action-required');
-    }
-    assert.equal(calls.length, 0);
-  });
-});
-
-test('a changed notice cannot silently reuse the combined login intent', async () => {
-  assert.equal(typeof api.resolveReportEntry, 'function');
-  await withApi([], async calls => {
-    assert.equal((await api.resolveReportEntry('token', { ...status, notice: 'Changed notice' }, 'Synthetic notice', new AbortController().signal)).kind, 'action-required');
-    assert.equal(calls.length, 0);
-  });
-});
-
-test('a failed combined-view consent stops before listing or opening any report', async () => {
-  assert.equal(typeof api.resolveReportEntry, 'function');
-  await withApi([Response.json({ detail: 'Synthetic consent failure' }, { status: 503 })], async calls => {
-    await assert.rejects(api.resolveReportEntry('token', status, 'Synthetic notice', new AbortController().signal));
+  await withApi([Response.json({ detail: 'Synthetic source failure' }, { status: 503 })], async calls => {
+    await assert.rejects(api.resolveReportEntry('token', new AbortController().signal));
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].path, '/api/v1/me/tcm-report-consent');
+    assert.equal(calls[0].path, '/api/v1/me/tcm-reports?limit=20&offset=0');
   });
 });
 
@@ -196,7 +142,7 @@ test('cancelled automatic entry does not grant, list or navigate', async () => {
   assert.equal(typeof api.resolveReportEntry, 'function');
   const controller = new AbortController(); controller.abort();
   await withApi([], async calls => {
-    await assert.rejects(api.resolveReportEntry('token', status, 'Synthetic notice', controller.signal), { name: 'AbortError' });
+    await assert.rejects(api.resolveReportEntry('token', controller.signal), { name: 'AbortError' });
     assert.equal(calls.length, 0);
   });
 });

@@ -83,3 +83,14 @@ def test_missing_credential_does_not_contact_source(enabled, monkeypatch):
     with pytest.raises(HTTPException) as error:
         source.read_report_source("13800138000")
     assert error.value.status_code == 503
+
+
+@pytest.mark.parametrize("report_id", ["报告1", "Réport1", "Ｒ１"])
+@pytest.mark.parametrize("detail", [False, True])
+def test_non_ascii_source_report_id_rejected(enabled, monkeypatch, report_id, detail):
+    item = {"report_id": report_id}
+    payload = item if detail else {"items": [item], "limit": 20, "offset": 0, "has_more": False}
+    transport(monkeypatch, lambda request: httpx.Response(200, json=payload))
+    with pytest.raises(HTTPException) as error:
+        source.read_report_source("13800138000", report_id=report_id if detail else None)
+    assert error.value.status_code == 502

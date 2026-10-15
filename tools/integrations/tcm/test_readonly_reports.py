@@ -69,6 +69,16 @@ def test_public_ip_spoofed_forward_header_and_invalid_query_rejected(reports):
                           headers={**headers, "X-Forwarded-For": "172.18.0.55"}).status_code == 403
 
 
+@pytest.mark.parametrize("report_id", ["报告1", "Réport1", "Ｒ１"])
+def test_non_ascii_report_id_rejected(reports, report_id):
+    client, _, path = reports
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO tcm_reports(report_no,phone) VALUES(?,?)", (report_id, "13800138000"))
+    response = client.get("/api/tcm/readonly/reports/" + report_id,
+                          headers={"Authorization": "Bearer read-fixture", "X-TCM-Verified-Phone": "13800138000"})
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize("link", [None, "", "https://evil.invalid/", "https://yk.qianmaitcm.com.evil.invalid/print_smart_healthcare/#/discriminateRingReport?reportId=R1",
     "https://u@yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=R1",
     "https://yk.qianmaitcm.com:443/print_smart_healthcare/#/discriminateRingReport?reportId=R1",
