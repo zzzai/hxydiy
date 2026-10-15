@@ -4,8 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError, loginByPhone, sendPhoneCode } from '../api';
 import { isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
 import { customerLoginCopy } from '../customerCopy';
-import { TCM_REPORT_VIEW_NOTICE } from '../tcmReports';
-import ReportViewNotice from './ReportViewNotice';
 
 export default function RecordLoginDialog({ open, selectionSessionId, selectionToken, onClose, onSuccess, purpose = 'record', notice = '' }: {
   open: boolean;
@@ -92,7 +90,7 @@ export default function RecordLoginDialog({ open, selectionSessionId, selectionT
         {purpose === 'report' && notice && <p className="coupon-login-error" role="alert">{notice}</p>}
         {error && <p className="coupon-login-error">{error}</p>}
       </main>
-      <footer><button type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button>{purpose === 'report' ? <ReportViewNotice notice={TCM_REPORT_VIEW_NOTICE} login /> : <p><ShieldCheck size={12} style={{ verticalAlign: '-2px' }} /> 仅用于识别您的到店服务记录。</p>}</footer>
+      <footer><button type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button>{purpose === 'report' ? <p>仅查看本人报告</p> : <p><ShieldCheck size={12} style={{ verticalAlign: '-2px' }} /> 仅用于识别您的到店服务记录。</p>}</footer>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-"""Customer-only health report consent and bounded personal report access."""
+"""Bounded personal report access and legacy customer consent records."""
 
 from datetime import datetime, timezone
 
@@ -41,11 +41,6 @@ def consent(db, user):
         CustomerProfileConsent.scope_json["external_original_report"].as_boolean().is_(True),
         (CustomerProfileConsent.expires_at.is_(None) | (CustomerProfileConsent.expires_at > datetime.now(timezone.utc))),
     ).order_by(CustomerProfileConsent.id.desc()))
-
-
-def require_consent(db, user):
-    if consent(db, user) is None:
-        raise HTTPException(403, detail={"code": "TCM_CONSENT_REQUIRED", "message": "请先单独同意查看本人检测报告"})
 
 
 def reject_unknown_query(request, allowed):
@@ -91,15 +86,13 @@ def revoke(request: Request, user: User = Depends(consent_owner), db: Session = 
 
 @router.get("/tcm-reports", response_model=ReportList)
 def reports(request: Request, limit: int = Query(20, ge=1, le=20), offset: int = Query(0, ge=0, le=100000),
-            user: User = Depends(owner), db: Session = Depends(get_db)):
+            user: User = Depends(owner)):
     reject_unknown_query(request, {"limit", "offset"})
-    require_consent(db, user)
     return read_report_source(user.phone, limit=limit, offset=offset)
 
 
 @router.get("/tcm-reports/{report_id}", response_model=ReportDetail)
-def report(request: Request, report_id: str = Path(pattern=r"^[\w-]{1,128}$"),
-           user: User = Depends(owner), db: Session = Depends(get_db)):
+def report(request: Request, report_id: str = Path(pattern=r"^[A-Za-z0-9_-]{1,128}$"),
+           user: User = Depends(owner)):
     reject_unknown_query(request, set())
-    require_consent(db, user)
     return read_report_source(user.phone, report_id=report_id)

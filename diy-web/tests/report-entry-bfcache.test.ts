@@ -17,7 +17,7 @@ const code = ts.transpileModule(fs.readFileSync(new URL('../src/components/Repor
 const user = { id: 901, phone: '13800000001', openid: 'synthetic', nickname: 'Synthetic', is_member: false, member_type: null, balance_cents: 0 };
 const token = `synthetic.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.fixture`;
 
-function subject() {
+function subject({ consented = true, returned = true } = {}) {
   const originalFetch = globalThis.fetch;
   let finishIdentity!: (response: Response) => void;
   const identity = new Promise<Response>(resolve => { finishIdentity = resolve; });
@@ -35,8 +35,9 @@ function subject() {
   globalThis.fetch = (async (url: string) => {
     const path = String(url); paths.push(path);
     if (path === '/api/v1/auth/h5/me') return identity;
-    if (path === '/api/v1/me/tcm-report-consent') return Response.json({ consented: true, version: 'tcm-report-access-v2-original', notice: reports.TCM_REPORT_VIEW_NOTICE });
+    if (path === '/api/v1/me/tcm-report-consent') return Response.json({ consented, version: 'tcm-report-access-v2-original', notice: 'Legacy synthetic notice' });
     if (path === '/api/v1/me/tcm-reports?limit=20&offset=0') return Response.json({ items: [{ report_id: 'SYNTHETIC-NEW', title: '检测报告', reported_at: '2026-10-14T10:00:00+08:00' }], limit: 20, offset: 0, has_more: false });
+    if (path === '/api/v1/me/tcm-reports/SYNTHETIC-NEW') return Response.json({ report_id: 'SYNTHETIC-NEW', title: '检测报告', reported_at: '2026-10-14T10:00:00+08:00', physiques: [], heart_rate: null, blood_oxygen: null, moisture: null, original_report_url: 'https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=SYNTHETIC-NEW' });
     throw new Error(`Unexpected network operation: ${path}`);
   }) as typeof fetch;
   const hooks = {
@@ -64,7 +65,7 @@ function subject() {
   const context = vm.createContext({ exports, AbortController, URLSearchParams,
     require: (name: string) => { if (!(name in modules)) throw new Error(`Unexpected component dependency: ${name}`); return modules[name]; },
     document: { ...browserEvents, visibilityState: 'visible', referrer: '' },
-    window: { ...browserEvents, performance: { getEntriesByType: () => [{ type: 'back_forward' }] }, location: { search: '?store=1&view=reports', origin: 'http://synthetic.local' }, history: { state: { hxy_report_original_opened: true, hxy_report_entry_back: false }, length: 3, replaceState() {} }, setInterval: () => 1, clearInterval() {} },
+    window: { ...browserEvents, performance: { getEntriesByType: () => [{ type: 'back_forward' }] }, location: { search: '?store=1&view=reports', origin: 'http://synthetic.local' }, history: { state: { hxy_report_original_opened: returned, hxy_report_entry_back: false }, length: 3, replaceState() {} }, setInterval: () => 1, clearInterval() {} },
   });
   new vm.Script(code, { filename: 'ReportEntryPage.actual-component.js' }).runInContext(context);
   exports.default!();
@@ -81,6 +82,15 @@ function subject() {
 }
 
 const drain = async () => { for (let turn = 0; turn < 12; turn++) await new Promise<void>(resolve => setImmediate(resolve)); };
+
+test('an existing verified session without DIY consent directly opens its latest report without consent calls', async () => {
+  const page = subject({ consented: false, returned: false });
+  try {
+    page.resolveIdentity(); await drain();
+    assert.deepEqual(page.navigations, ['https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?reportId=SYNTHETIC-NEW']);
+    assert.deepEqual(page.paths.filter(path => path.includes('tcm-report-consent')), []);
+  } finally { page.close(); }
+});
 
 test('pending identity refresh + persisted pageshow loads the report center once without reopening the provider', async () => {
   const page = subject();

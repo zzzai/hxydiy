@@ -1,7 +1,5 @@
 import type { TcmReportSummary } from './api';
-import { getTcmReport, getTcmReports, updateTcmReportConsent, type TcmReportConsent } from './api.ts';
-
-export const TCM_REPORT_VIEW_NOTICE = '我单独同意使用已验证手机号查询本人健康检测报告，并在有有效来源链接时跳转到检测方原站查看完整报告。完整报告可能包含个人及健康信息，以原站展示为准；DIY不向原站传递我的手机号、登录令牌或读取密钥，不复制报告图片，也不向店员开放、不用于推送或新增诊断。原站链接无需原站登录即可打开，获得链接的人可能查看报告，请勿转发。我可撤回DIY报告查看授权，但撤回不能使已经获得的原站链接失效，也不能阻止他人打开已转发的链接。';
+import { getTcmReport, getTcmReports } from './api.ts';
 
 export function verifiedOriginalReportUrl(value: string | null, reportId: string): string | null {
   if (!value || value.length > 4096 || !value.startsWith('https://yk.qianmaitcm.com/print_smart_healthcare/#/discriminateRingReport?') || /[\x00-\x20\x7f\\]/.test(value) || !/^[A-Za-z0-9_-]{1,128}$/.test(reportId)) return null;
@@ -20,15 +18,6 @@ export function reportsByDate(items: TcmReportSummary[]): TcmReportSummary[] {
     const second = b.reported_at ? Date.parse(b.reported_at) : -Infinity;
     return second === first ? 0 : second > first ? 1 : -1;
   });
-}
-
-export async function ensureReportConsent(token: string, status: TcmReportConsent, signal: AbortSignal): Promise<TcmReportConsent> {
-  signal.throwIfAborted();
-  if (status.version !== 'tcm-report-access-v2-original' || !status.notice.trim()) throw new Error('报告查看说明已更新，请刷新后重新查看。');
-  const result = status.consented ? status : await updateTcmReportConsent(token, status.version, signal);
-  signal.throwIfAborted();
-  if (!result.consented) throw new Error('暂时无法确认本人报告查看，请重试。');
-  return result;
 }
 
 export async function originalReportUrl(token: string, reportId: string, signal: AbortSignal): Promise<string> {
@@ -72,11 +61,6 @@ export async function latestOriginalReport(token: string, signal: AbortSignal): 
   return { kind: 'ready', url: await originalReportUrl(token, sorted[0].report_id, signal) };
 }
 
-export async function resolveReportEntry(token: string, status: TcmReportConsent, displayedNotice: string | null, signal: AbortSignal) {
-  signal.throwIfAborted();
-  if (status.version !== 'tcm-report-access-v2-original' || !status.consented && (displayedNotice === null || displayedNotice !== status.notice)) return { kind: 'action-required' as const, consent: status };
-  const consent = await ensureReportConsent(token, status, signal);
-  const result = await latestOriginalReport(token, signal);
-  signal.throwIfAborted();
-  return { ...result, consent };
+export async function resolveReportEntry(token: string, signal: AbortSignal) {
+  return latestOriginalReport(token, signal);
 }
