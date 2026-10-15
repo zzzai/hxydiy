@@ -4738,7 +4738,7 @@
             "type": "array"
           },
           "report_id": {
-            "pattern": "^[\\w-]{1,128}$",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
             "title": "Report Id",
             "type": "string"
           },
@@ -4806,7 +4806,7 @@
       "ReportSummary": {
         "properties": {
           "report_id": {
-            "pattern": "^[\\w-]{1,128}$",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
             "title": "Report Id",
             "type": "string"
           },
@@ -18477,7 +18477,7 @@
             "name": "report_id",
             "required": true,
             "schema": {
-              "pattern": "^[\\w-]{1,128}$",
+              "pattern": "^[A-Za-z0-9_-]{1,128}$",
               "title": "Report Id",
               "type": "string"
             }
