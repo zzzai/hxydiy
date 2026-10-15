@@ -6,6 +6,14 @@
 
 ## 当前生产
 
+- `CUSTOMER-REPORT-NO-EXTRA-CONSENT-20261015`已上线，实际安装`github-0b88c66e5763-38713160429`。业务[PR #272](https://github.com/zzzai/hxydiy/pull/272)，候选`7143d636564ab001c71add291d31fd8d3fe48921`，合并/发布`0b88c66e57639fe70ef8e5f09a10f6ddf48a5d72`；精确main CI38709471700与唯一Deploy38713160429/attempt1成功。2026-10-15 17:45:27完成终验：MANIFEST457项、安装/运行后端103个raw Git文件、公网HTML/主JS/CSS/报告lazy/IP精确hash、健康200/匿名报告401及实际新镜像隔离合成5项通过。实际API镜像`sha256:4f787978517092c416c59a946691fddc8730d45f1c82615ffe7696f84efae6d7`，current/API核验前后稳定。
+- 检测时已授权的顾客查看本人报告不再经过DIY授权页、勾选或v2/active/来源授权证明门禁；保留本人JWT、当前登录版本、手机号短信证明、来源phone+report_no及原站URL校验。企微原`store=1&view=return`链接不变；验证登录后直达最近完整报告，Back到报告中心不循环打开，历史与“DIY 定制我的项目”可达。登录/读取不补写或删除consent/audit，不扩大员工、总部、照片或营销用途，菜单/QR/价格不变。
+- 独立来源reader于17:25:34按精确SHA升级到`ed0964494f5c9627b46fc1da5f4ea21b166b7a0d0dcfd1b1f2026b7b0e45d42b`，预检、一致SQLite备份/独立恢复integrity及安装模块合成10项通过；仅重启TCM服务，原模块和两份备份保留。真机微信、真实OTP、真实原站/营业现场未验，未读取真人报告或照片。详见`operations/customer-report-no-extra-consent-release-20261015.md`；本记录合并不再次部署。
+- `MEMBER-SYNC-ZHB-20261015`于14:43:09生产单次新增35卡/34名用户（23年卡、12储值卡），导入后276用户/57来源卡；旧242用户/22卡和钱包财务未改，同manifest重放0写。每日10:00、仅异常通知的单一automation-2已启用，依赖本机及智慧宝登录可用；未来批次需新核验，不复用当天56卡状态。wrapper/runbook尚未合并，不能把生产数据导入称为应用部署或脚本已入主干。见`operations/member-sync-zhb-production-result-20261015.md`。
+- 此次发布前仅清理离机归档及逐文件恢复核验通过的7个旧重复解压输入，释放193978368字节；所有安装版本、DB、备份、rehearsal保留，可从归档或对应release恢复。终验可用5181919232字节（约4.83GiB），满足3GiB储备但长期容量风险仍保留；不降低门禁、不自动删历史版本或备份。
+
+### 2026-10-15 11:45 上次发布记录（以下current为当时版本，品牌UI仍包含，报告授权门禁已由上文取代）
+
 - `REPORT-CENTER-BRAND-20261014`已上线，实际安装`github-87fbff8afa50-38677354836`。业务[PR #269](https://github.com/zzzai/hxydiy/pull/269)，候选`6f8d3fbf91888fbe77057915d34d94c50808294f`，合并/发布`87fbff8afa506fab6beac09e9142b03ad69cf3a9`；精确CI38589195554和唯一部署38677354836成功。2026-10-15 11:45:08–11:45:12一次只读生产终验11项通过：current前后相同、完整MANIFEST455项、实际运行后端、新主JS/CSS/可达报告lazy/IP的安装公网SHA及健康通过。
 - 报告中心采用用户确认的既有荷叶帽IP、白底品牌排版、14px灰色日期与“DIY 定制我的项目”整行入口。仅两个UI源码文件，不改P1报告直达/返回、身份/v2/API、菜单链接、价格、支付、QR或权限；不含总部新功能或报告/面部原图权限扩张。真实微信登录、本人报告及门店现场仍待验。见`operations/report-center-brand-release-20261015.md`；记录合并不再次部署。
 - 发布前按明确授权，只清理已离机备份且Linux实际恢复验证通过的一份旧VSCode2a594版本，释放约670.3MiB；最新两版/运行工具、全部业务版本、数据库和备份保留。发布后可用5737888KiB（约5.47GiB）、磁盘86%仍预警，下次仍须通过原容量门槛。见`operations/capacity-recovery-20261015.md`；没有自动清理历史release或备份。
