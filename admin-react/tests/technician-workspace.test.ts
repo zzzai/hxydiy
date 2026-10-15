@@ -81,6 +81,14 @@ test('技师服务收尾先判断结果，普通完成可一键结束', () => {
   assert.doesNotMatch(source, /更多服务细节|Collapse/);
 });
 
+test('技师服务交接直接展示年龄段和男女选项，不藏在折叠项', () => {
+  const source = readFileSync(new URL('../src/technician/ServiceHandoffSheet.tsx', import.meta.url), 'utf8');
+  assert.match(source, /<h2>顾客基本信息<\/h2>/);
+  assert.match(source, /<h3>年龄段<\/h3>/);
+  assert.match(source, /<h3>性别<\/h3>/);
+  assert.doesNotMatch(source, /补充基本信息（选填）/);
+});
+
 test('快记文本仅引导服务交接，身体补充先选大部位再显示精确图', () => {
   const quickNote = readFileSync(new URL('../src/technician/LegacyTechnicianProfileSheet.tsx', import.meta.url), 'utf8');
   const bodyMap = readFileSync(new URL('../src/technician/BodyMapNoteDrawer.tsx', import.meta.url), 'utf8');
