@@ -1,3 +1,9 @@
+# 2026-10-15 技师服务交接基本标签直接展示上线
+
+- `TECHNICIAN-BASIC-TAGS-VISIBLE-20261015`：业务PR #271候选`5dd23262f79c75e8554321ea001dde1a53a03368`，合并/发布`1fa97d179c1f15e8d842d108d26dab13ca023f54`；精确main CI `38717299576`、唯一Deploy `38725804357`及资格校验、备份、隔离恢复演练、发布验证全部成功。
+- 实际current为`github-1fa97d179c1f-38725804357`，完整MANIFEST 457项通过；CI管理端制品、安装和公网主JS/CSS逐项同哈希，生产包含“顾客基本信息 / 年龄段 / 性别”且不再含旧折叠标题。仅改变既有选项在技师交接页的展示位置，不改字段、API、权限、会员、数据、保存语义或历史记录。
+- 公网health为`ok/production`，技师登录页和今日页匿名HTML均200；未使用真实技师账号、未读顾客数据、未执行服务动作。真实微信、登录后服务结束及门店现场仍待验；详见`operations/technician-basic-tags-visible-release-20261015.md`。本事实记录合并不再次部署应用。
+
 # 2026-10-15 本人报告免重复授权上线与会员生产同步
 
 - `CUSTOMER-REPORT-NO-EXTRA-CONSENT-20261015`：#272候选7143d636564ab001c71add291d31fd8d3fe48921，合并/发布0b88c66e57639fe70ef8e5f09a10f6ddf48a5d72；精确main CI38709471700、唯一Deploy38713160429/attempt1与实际guarded步骤成功。actual current github-0b88c66e5763-38713160429；17:45:27终验生产通过，MANIFEST457、安装/运行后端103个raw Git文件、公网HTML/JS/CSS/报告lazy/IP精确hash、health200/匿名401和新镜像隔离合成5项通过。最终回执SHA5004905cf96c9e0a5ca2b704ce889f0bb9df7ef45735e8cb90672f24c88e1150。
