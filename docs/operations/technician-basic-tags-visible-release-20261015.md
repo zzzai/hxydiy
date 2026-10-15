@@ -13,7 +13,7 @@
 - 业务PR：[#271](https://github.com/zzzai/hxydiy/pull/271)，候选`5dd23262f79c75e8554321ea001dde1a53a03368`，合并/发布主干`1fa97d179c1f15e8d842d108d26dab13ca023f54`。
 - 本地证据：管理端前端测试`222 passed`、生产构建和`git diff --check`通过。
 - 精确main CI [38717299576](https://github.com/zzzai/hxydiy/actions/runs/38717299576)成功，管理端与顾客端双制品齐全。正式部署仅派发一次：[38725804357](https://github.com/zzzai/hxydiy/actions/runs/38725804357)；资格校验及“Backup, rehearse, deploy and verify”均成功。
-- 发布前current为`github-0b88c66e5763-38713160429`，两把发布锁均空闲，可用`5067152 KiB`。本批只有前端两个展示文件，使用CI双制品及服务器既有镜像/构建缓存；原3 GiB门槛只是部署脚本的最低保留空间，不作为完整峰值预算，也未降低或绕过。没有清理旧release、数据库或备份。
+- 发布前current为`github-0b88c66e5763-38713160429`，两把发布锁均空闲，可用`5067152 KiB`。本批业务差异仅一个前端组件及其测试，使用CI双制品及服务器既有镜像/构建缓存；原3 GiB门槛只是部署脚本的最低保留空间，不作为完整峰值预算，也未降低或绕过。没有清理旧release、数据库或备份。
 
 ## 生产终验
 
