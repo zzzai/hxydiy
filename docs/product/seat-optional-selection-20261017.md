@@ -90,6 +90,6 @@ API 由后台在本批对应 contract 维护，顾客直接对齐，不另复制
 - 顾客最终回执：output/seat-optional/customer-final-receipt-v9.json，SHA256 826f7f579c652e9194fb20f56ec51c133113d3506253ff3d42607172979d45d6。
 - 技师最终回执：technician 工作区 output/playwright/seat-optional-technician-20261017-v4/run-receipt-v4-1792212342871.json，SHA256 d8eaf7ed54a6395bee23488b796116c60c9760496524561d8997e027c6401e3c。
 - FIFO 冻结回执：admin 工作区 output/seat-optional-business-20261017-v3/runtime-ready-v3.json，SHA256 a28b4566511bc0a76b01e12439fa5291047ff5e6edca45ac2bc8f40aae42cc1f。网关 8 项测试及 18 次读取通过并定向复审；仅修测试层并发，不修改产品认证逻辑、不替代 PostgreSQL 并发合同。
-- 准许唯一发布窗口“管理后台+后端”仅提交核定 25 个文件，完成必需 PR/main CI 后发布对应精确 SHA。排除全部 output、两个 tsbuildinfo、原 automation 仓库脏 watcher 和其他窗口改动。当前仍未提交、合并、部署；生产结论须由实际发布者以 current/MANIFEST/制品/API 证据更新。
+- 准许唯一发布窗口“管理后台+后端”仅提交核定 26 个文件，完成必需 PR/main CI 后发布对应精确 SHA。排除全部 output、两个 tsbuildinfo、原 automation 仓库脏 watcher 和其他窗口改动。当前仍未提交、合并、部署；生产结论须由实际发布者以 current/MANIFEST/制品/API 证据更新。
 - 生产基线与本候选 models/alembic 逐文件无差异，不触发结构迁移。标准发布备份、隔离恢复演练照常；不是“零数据库操作”。数据库结构/真实业务资料变更仍另行确认。
 - 保留未验范围：真实微信扫码、短链跨域与门店营业现场。签名短链合同和共享前端代码测试已通过，不将现场未验改写为已验；旧 IAB 失败单仍保留，不冒充已恢复。
