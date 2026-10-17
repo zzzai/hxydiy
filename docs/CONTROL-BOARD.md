@@ -4,11 +4,11 @@
 
 ## 状态模型
 
-### 2026-10-17 无座选购与原单后配位（仅服务器隔离实施）
+### 2026-10-17 无座选购与原单后配位（已生产）
 
 | 任务 | 状态 | 文件归属 | 下一门禁 |
 | --- | --- | --- | --- |
-| `SEAT-OPTIONAL-SELECTION-20261017` | `Accepted / Awaiting CI and Release` | hxy 独立工作区；顾客端写 diy-web，后台写 hxy-server/admin-react/contracts 与隔离工具，技师执行隔离履约验收，总控规格和独立终审 | 同一合成单已通过无座配置、原键重试、门店配位、顾客读回、技师开始/结束/v7 保存及历史回读；顾客默认测试 308 通过、1 项显式生产冒烟跳过，独立复审闭合。FIFO 仅绕开 SQLite 测试并发限制，不改产品认证或冒充生产并发。仅授权后台唯一执行本批核定 26 文件提交、必需 CI、合并和精确 SHA 发布；当前未提交、未发布。DB 变更另行确认，真实微信/营业现场未验，旧失败单与误跳生产证据保留。见 product/seat-optional-selection-20261017.md。 |
+| `SEAT-OPTIONAL-SELECTION-20261017` | `Deployed` | hxy 独立工作区；顾客端写 diy-web，后台写 hxy-server/admin-react/contracts 并唯一发布，技师执行隔离履约验收，总控规格和独立终审 | 业务 PR #276 核定26文件已合并/发布8b352fab22085c56bfa691fb092c7987b43a074e；CI39005206802、Deploy39005452064成功，current github-8b352fab2208-39005452064。MANIFEST459、安装/运行后端raw Git99、两端公网HTML及5资源、新配位合同/health/匿名401与备份checksum通过。同一合成单三端闭环及独立复审通过；SQLite FIFO不冒充生产并发，PostgreSQL证据独立。只读终验0业务写，不扩张权限或变更schema；真实微信/营业现场仍待验，旧失败单与误跳生产诊断保留。发布证据见 WORK-STATUS.md 顶部；记录合并不重复部署。 |
 
 ### 2026-10-15 本人报告免重复授权与会员同步（已生产）
 
