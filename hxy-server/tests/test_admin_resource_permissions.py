@@ -167,7 +167,12 @@ class AdminResourcePermissionTests(unittest.TestCase):
         self.assertEqual(allowed.status_code, 200, allowed.text)
         self.assertEqual(allowed.json()["total"], 1)
         item = allowed.json()["items"][0]
-        self.assertEqual(set(item), {"id", "source", "device_label", "status", "items", "submitted_at"})
+        self.assertEqual(set(item), {
+            "id", "source", "device_label", "status", "items", "submitted_at",
+            "position", "needs_position_assignment",
+        })
+        self.assertIsNone(item["position"])
+        self.assertIs(item["needs_position_assignment"], True)
         self.assertNotIn("customer", item)
         self.assertNotIn("pricing_snapshot", item)
 
