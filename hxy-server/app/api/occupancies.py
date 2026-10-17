@@ -906,11 +906,11 @@ def customer_position_map(
         Room.is_space_container.is_(False),
         Room.customer_selectable.is_(True),
     ).order_by(Room.sort_order, Room.id)))
-    # 房间不进入公共平面图；仅向已验证的当前房间会话追加“当前房间”，
-    # 便于刷新恢复，同时不暴露其他房间编号或选择入口。
+    # Include only the verified session's assigned position beyond the public map.
+    # Avoid duplicating a selectable sofa already present in the public results.
     if current_occupancy:
         current_room = db.get(Room, current_occupancy.active_room_id)
-        if current_room and current_room.room_type == "room":
+        if current_room and current_room.store_id == store_id and all(room.id != current_room.id for room in rooms):
             rooms.append(current_room)
     occupancies = {
         item.active_room_id: item

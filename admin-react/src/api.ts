@@ -110,7 +110,10 @@ export const settleService = (serviceOrderId: number, idempotencyKey: string) =>
 
 // Orders
 export const getOrders = (status?: string) => client.get('/admin/orders', { params: { status } });
-export const getSelectionSessions = (status?: string) => client.get('/admin/v2/selection-sessions', { params: { status } });
+export const getSelectionSessions = (status?: string, needsPositionAssignment?: boolean) =>
+  client.get('/admin/v2/selection-sessions', { params: { status, needs_position_assignment: needsPositionAssignment } });
+export const assignSelectionPosition = (sessionId: string, roomId: number) =>
+  client.post<PositionOccupancy>(`/admin/v2/selection-sessions/${sessionId}/assign-position`, { room_id: roomId });
 export const getCustomerProfileRecords = (userId: number) => client.get(`/admin/v2/users/${userId}/customer-profile-records`);
 export const getProjectRecordOptions = (schemaVersion: 6 | 7 = 7) => client.get('/technician/service-record-options', { params: { schema_version: schemaVersion } });
 export const getOwnRecordVersions = (id: number, page = 1) => client.get(`/technician/service-records/${id}/versions`, {params:{page}});

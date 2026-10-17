@@ -1,5 +1,15 @@
 # 顾客端工作流
 
+## 2026-10-17 CUSTOMER-SEAT-OPTIONAL-20261017（隔离验收通过，未提交/未发布）
+
+- 在 SSH hxy 独立工作区 `/root/hxy-diy-development/seat-optional-20261017`、分支 `codex/seat-optional-selection-20261017`、基线 `4aa412787c623e66506cc3e8f88221e1a4a28296` 实现无座私有选单。服务号正常菜单保留“我的”，匿名可配置/保存/提交；使用原 session/token 读回门店后配位，不复制或静默转移到共享座位草稿。
+- 完整配置、关联来源、数量、版本和提交意图持久化；换号/退出/旧响应隔离，完成服务后新建下一轮私有选单。保留原品牌、项目内容、价格规则及有座共享流程；生成素材、tsbuildinfo 和其他窗口改动未纳入交付。
+- 最终默认 `npm test`（Node 22.19.0）308 通过、0 失败、1 既有跳过，含原 11 项真实 App React 时序用例及新增共享座位共存/轮询/提交锁定回归。原 11 项用例主体和断言逐字保留；旧有座返回测试仅补 `publicBrowsing:false` 上下文。React renderer 精确 18.3.1 为 dev 依赖，临时 bundle 用独立目录并在 finally 清理，不再依赖 ignored output runtime。
+- 独立干净副本 `npm ci`、构建与默认测试通过；测试包装后的主资产仍 `index-B2VvFGyQ.js`，业务源码未再变动。日志 `output/seat-optional/customer-clean-ci-v7.log` 保留首轮旧 stub 失败，`customer-clean-ci-green-v7.log`、`customer-default-final-v8.log` 与 `customer-test-proof-v8.json` 为通过证据；临时安装副本已清理，原文件和日志保留。
+- 新守卫合成单 `7e453074-c000-434b-a900-6379bd17f533` 真实页面配置/刷新、数量 1→2→1、前后端 11100→21000→11100 一致；服务端真正受理后丢失一次响应，实际 UI 用同 session/key/载荷重试返回同 revision。门店真实 UI 为原单配 room1，顾客原 context/token 读回 `waiting_service`。技师同单开始、结束、v7 记录1保存和历史 `record_completed=true` 通过；顾客最终只读确认原配置、11100、room1、`post_service_present` 及评价入口，随后安全关闭自有浏览器。
+- 技师间歇401定位为合成 SQLite 内存连接并发限制；仅测试预览增加统一 FIFO 网关后完成同单，不改产品认证、不重启 fixture。浏览器仍仅允许18319/18320，原顾客 context/token 未迁移；起始 attestation 标为历史事实，最终另绑定 runtime-ready-v3 `a28b4566511bc0a76b01e12439fa5291047ff5e6edca45ac2bc8f40aae42cc1f`。此串行测试设施不是 PostgreSQL 生产并发证明。完整脱敏顾客回执 `output/playwright/seat-optional-20261017-v1/customer-final-receipt-v9.json` SHA `826f7f579c652e9194fb20f56ec51c133113d3506253ff3d42607172979d45d6`，有效截图为未配位提交、配位待服务、服务完成三个稳定状态；动画过渡截图不计入验收。
+- 此新用例不代表旧 `244b87b6` 用例恢复。旧 IAB、QR/报告链路与此前越界证据保持冻结；不宣称整个历史过程生产零请求/零写入。隔离复验不等于上线或微信现场验收。安装审计提示基线已有 dev 传递依赖 source-map-js 1.2.1 高危告警，未夹带升级；本窗口不自行提交、合并或发布。
+
 ## 2026-10-15 CUSTOMER-REPORT-NO-EXTRA-CONSENT-20261015（已生产，现场待验）
 
 - 用户确认检测时已授权；本人报告前后端不再要求DIY v2/active、重复勾选或原检测授权证明，不写consent/audit。JWT/当前登录/当前手机号证明、来源归属、严格原站URL、no-referrer与换号/退出/迟到响应隔离保留。原企微view=return继续直达任务，登录后打开最近完整报告，Back留中心，历史和DIY可达，不改公开菜单/签名QR/价格或扩大员工、总部、照片用途。

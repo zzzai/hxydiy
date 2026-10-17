@@ -121,7 +121,10 @@ class SelectionSessionApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         session_id = response.json()["session"]["id"]
         with self.SessionLocal() as db:
-            self.assertIsNone(db.get(SelectionSession, session_id).customer_id)
+            customer_id = db.get(SelectionSession, session_id).customer_id
+            self.assertIsNotNone(customer_id)
+            self.assertNotEqual(customer_id, 999999)
+            self.assertTrue(db.get(User, customer_id).openid.startswith("anon_"))
 
     def test_submit_is_idempotent_and_does_not_create_order(self):
         session_id, token = self.create_session()

@@ -6,7 +6,7 @@ import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,6 +35,7 @@ from app.schemas.selection import (
     SelectionSessionOut,
 )
 from app.core.customer_auth import current_customer_id
+from app.core.config import settings
 
 router = APIRouter(prefix="/selection-sessions", tags=["selection-sessions"])
 SESSION_TTL_HOURS = 12
@@ -630,16 +631,20 @@ def submit_selection_revision(
 
 
 @router.post("", response_model=SelectionCreateOut)
-def create_selection_session(body: SelectionCreateIn, db: Session = Depends(get_db)) -> SelectionCreateOut:
+def create_selection_session(body: SelectionCreateIn, request: Request, response: Response, db: Session = Depends(get_db)) -> SelectionCreateOut:
+    # Share the existing anonymous-browser repair rules with seated entry.
+    from app.api.occupancies import ANONYMOUS_COOKIE, _browser_customer
+
     if not db.get(Store, body.store_id):
         raise HTTPException(status_code=404, detail="门店不存在")
+    anonymous_customer_id, browser_token, _ = _browser_customer(db, request)
     token = secrets.token_urlsafe(32)
     session = SelectionSession(
         id=str(uuid.uuid4()),
         access_token_hash=_hash_token(token),
         store_id=body.store_id,
-        # 当前选单链路支持匿名手机/平板使用，不接受客户端自行绑定顾客账号。
-        customer_id=None,
+        # Only server-owned browser identity can supply this link.
+        customer_id=anonymous_customer_id,
         source=body.source,
         device_label=body.device_label,
         expires_at=datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS),
@@ -649,6 +654,10 @@ def create_selection_session(body: SelectionCreateIn, db: Session = Depends(get_
     db.add(session)
     db.commit()
     db.refresh(session)
+    response.set_cookie(
+        ANONYMOUS_COOKIE, browser_token, httponly=True, samesite="lax",
+        secure=settings.environment == "production", max_age=60 * 60 * 24 * 365 * 2, path="/",
+    )
     return SelectionCreateOut(session=session, access_token=token)
 
 

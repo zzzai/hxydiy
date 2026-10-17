@@ -36,7 +36,7 @@ from app.models import (
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.membership_pricing import price_book_snapshot
-from app.domain.occupancy import audit_occupancy, release_occupancy
+from app.domain.occupancy import audit_occupancy, occupancy_view, release_occupancy
 from app.services.customer_profile_projection import rebuild_customer_profile_current
 from app.models.operations import Room, Technician
 from app.models.room_assign import RoomAssignment
@@ -999,6 +999,7 @@ def update_feedback_follow_up(
 @router.get("/selection-sessions")
 def list_selection_sessions(
     status: str | None = Query(None),
+    needs_position_assignment: bool | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -1011,6 +1012,15 @@ def list_selection_sessions(
         q = q.where(SelectionSession.status == "submitted")
     elif status:
         q = q.where(SelectionSession.status == status)
+    unassigned = and_(
+        SelectionSession.status.in_(("submitted", "confirmed")),
+        SelectionSession.fulfillment_order_id.is_(None),
+        ~select(PositionOccupancy.id).where(
+            PositionOccupancy.selection_session_id == SelectionSession.id,
+        ).exists(),
+    )
+    if needs_position_assignment is not None:
+        q = q.where(unassigned if needs_position_assignment else ~unassigned)
     q = q.order_by(SelectionSession.created_at.desc())
     total = db.scalar(select(sa_func.count()).select_from(q.subquery())) or 0
     rows = db.execute(
@@ -1026,6 +1036,25 @@ def list_selection_sessions(
         if staff.role == "staff"
         else [_selection_view(session, customer, feedback) for session, customer, feedback in rows]
     )
+    session_ids = [session.id for session, _, _ in rows]
+    positions = {
+        occupancy.selection_session_id: (occupancy, room)
+        for occupancy, room in db.execute(
+            select(PositionOccupancy, Room)
+            .join(Room, Room.id == PositionOccupancy.room_id)
+            .where(PositionOccupancy.store_id == store_id, PositionOccupancy.selection_session_id.in_(session_ids))
+            .order_by(PositionOccupancy.id)
+        ).all()
+    } if session_ids else {}
+    for item, (session, _, _) in zip(items, rows):
+        linked = positions.get(session.id)
+        item["position"] = None if not linked else {
+            "occupancy_id": linked[0].id, "room_id": linked[1].id,
+            "name": linked[1].customer_label or linked[1].name, "status": linked[0].status,
+        }
+        item["needs_position_assignment"] = (
+            linked is None and session.status in {"submitted", "confirmed"} and session.fulfillment_order_id is None
+        )
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -1046,6 +1075,96 @@ def _locked_owned_selection(db: Session, session_id: str, staff: Staff) -> Selec
     if not session or session.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail="选单不存在")
     return session
+
+
+class AssignSelectionPositionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    room_id: StrictInt = Field(gt=0)
+
+
+@router.post("/selection-sessions/{session_id}/assign-position")
+def assign_selection_position(
+    session_id: str,
+    body: AssignSelectionPositionIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    session = _locked_owned_selection(db, session_id, staff)
+    if session.status not in {"submitted", "confirmed"}:
+        raise HTTPException(status_code=409, detail="只有已提交或已确认的选单可以安排座位")
+    existing = db.scalar(
+        select(PositionOccupancy)
+        .where(PositionOccupancy.selection_session_id == session.id)
+        .order_by(PositionOccupancy.id.desc())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if existing:
+        if existing.active_session_id == session.id and existing.active_room_id == body.room_id:
+            return occupancy_view(existing)
+        raise HTTPException(status_code=409, detail={
+            "code": "SELECTION_POSITION_ALREADY_ASSIGNED", "message": "该选单已有座位记录，请刷新后查看",
+        })
+    if session.fulfillment_order_id:
+        raise HTTPException(status_code=409, detail="该选单已进入服务流程，请核对原服务位")
+
+    target = db.scalar(select(Room).where(Room.id == body.room_id, Room.store_id == session.store_id))
+    if not target:
+        raise HTTPException(status_code=404, detail="服务位不存在")
+    display_room_id = target.parent_room_id or target.id
+    # Lock the existing display-room group in a stable order. Technician actions
+    # already reject multiple active selections under the same parent room.
+    room_group = list(db.scalars(
+        select(Room).where(
+            Room.store_id == session.store_id,
+            or_(Room.id == display_room_id, Room.parent_room_id == display_room_id),
+        ).order_by(Room.id).with_for_update().execution_options(populate_existing=True)
+    ))
+    target = next((room for room in room_group if room.id == body.room_id), None)
+    parent = next((room for room in room_group if room.id == display_room_id), None)
+    if (
+        not target or (target.parent_room_id or target.id) != display_room_id
+        or not target.is_service_position or target.is_space_container
+        or target.operational_status != "active" or target.status != "available"
+        or not parent or parent.operational_status != "active" or parent.status != "available"
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "POSITION_UNAVAILABLE", "message": "目标服务位暂不可用，请刷新后重新选择",
+        })
+    occupied = db.scalar(select(PositionOccupancy).where(
+        PositionOccupancy.store_id == session.store_id,
+        PositionOccupancy.active_room_id.in_([room.id for room in room_group]),
+    ).order_by(PositionOccupancy.id).limit(1))
+    if occupied:
+        raise HTTPException(status_code=409, detail={
+            "code": "POSITION_OCCUPIED" if occupied.active_room_id == target.id else "POSITION_OCCUPANCY_CONFLICT",
+            "message": "该服务位或所属房间已有服务记录，请刷新后重新安排",
+        })
+    occupancy = PositionOccupancy(
+        store_id=session.store_id, room_id=target.id, selection_session_id=session.id,
+        active_room_id=target.id, active_session_id=session.id,
+        status="waiting_service", source=session.source, hold_expires_at=None,
+    )
+    try:
+        db.add(occupancy)
+        db.flush()
+        _audit(db, staff, "assign_selection_position", "selection_session", session.id, {
+            "room_id": target.id, "occupancy_id": occupancy.id,
+        })
+        audit_occupancy(db, occupancy, "position_assigned", "staff", str(staff.id), {
+            "selection_session_id": session.id, "room_id": target.id,
+        })
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail={
+            "code": "POSITION_OCCUPIED", "message": "座位或选单刚刚被安排，请刷新后查看",
+        }) from exc
+    db.refresh(occupancy)
+    return occupancy_view(occupancy)
 
 
 def _sync_unsettled_fulfillment_bill(

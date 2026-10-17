@@ -308,6 +308,13 @@ export function cancelOrder(orderId: number, token: string) {
   });
 }
 
+export function createPrivateSelectionSession(storeId: number, deviceLabel: string) {
+  return request<{ session: SelectionSession; access_token: string }>('/selection-sessions', {
+    method: 'POST',
+    body: JSON.stringify({ store_id: storeId, source: 'in_store', device_label: deviceLabel }),
+  });
+}
+
 export function createEntrySession(input: {
   store_id: number;
   position_code: string;
