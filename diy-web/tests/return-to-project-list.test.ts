@@ -14,6 +14,7 @@ function scenario(status: string, map: () => Promise<unknown>) {
   const messages: string[] = [];
   let drafts = 0;
   const deps = {
+    publicBrowsing: false,
     serviceStatus: { occupancy_status: status }, occupancy: { status },
     session: { id: 10 }, accessToken: 'test-only', position: {}, positionCode: 'sofa-01',
     query: { storeId: 1, positionCode: 'sofa-01' },

@@ -27,6 +27,7 @@ import {
   ApiError,
   bindSelectionCustomer,
   createEntrySession,
+  createPrivateSelectionSession,
   createVisitFeedbackEntry,
   getAddons,
   getCouponTemplates,
@@ -62,6 +63,7 @@ import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL
 import { anonymousBrowserEntryHint, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
 import { customerServiceProgress, shouldPollCustomerServiceStatus } from './customerServiceStatus';
 import { startSharedDraftPolling } from './sharedDraftPolling';
+import { readPrivateSelection, writePrivateSelection, clearPrivateSelection, privateSubmitIntent, restorePrivateSelectionDraft, type PrivateSelectionRecord } from './privateSelection';
 import { shareProjectLink } from './projectShare';
 import { configureWeChatProjectShare, isWeChatBrowser } from './wechatShare';
 import ProjectDetailPage from './components/ProjectDetailPage';
@@ -314,7 +316,7 @@ export default function App() {
   const [addons, setAddons] = useState<Addon[]>([]);
   const [couponTemplates, setCouponTemplates] = useState<CouponTemplate[]>([]);
   const [pageContent, setPageContent] = useState<PageContent | null>(null);
-  const [customerAuth, setCustomerAuth] = useState<CustomerAuth | null>(() => readCustomerAuth());
+  const [customerAuth, setCustomerAuthState] = useState<CustomerAuth | null>(() => readCustomerAuth());
   const [couponLoginOpen, setCouponLoginOpen] = useState(false);
   const [recordLoginOpen, setRecordLoginOpen] = useState(false);
   const [positions, setPositions] = useState<ServicePosition[]>([]);
@@ -364,6 +366,24 @@ export default function App() {
   const swipeBackTimer = useRef<number | null>(null);
   const visitFeedbackLock = useRef(false);
   const selectionSubmitIntent = useRef<{ signature: string; key: string }>({ signature: '', key: '' });
+  const privateSelection = useRef<PrivateSelectionRecord | null>(null);
+  const privateGeneration = useRef(0);
+  const privateSave = useRef<ReturnType<typeof saveSelectionSession> | null>(null);
+  const privateCustomerId = useRef(customerAuth?.user.id ?? null);
+  const customerAuthRef = useRef(customerAuth);
+  const privateCatalogReady = useRef(false);
+  const sessionContext = useRef({ sessionId: session?.id, accessToken });
+  sessionContext.current = { sessionId: session?.id, accessToken };
+  const setCustomerAuth = (next: CustomerAuth | null | ((current: CustomerAuth | null) => CustomerAuth | null)) => {
+    const auth = typeof next === 'function' ? next(customerAuthRef.current) : next;
+    if (customerAuthRef.current?.token !== auth?.token || customerAuthRef.current?.user.id !== auth?.user.id) {
+      // Invalidate in-flight work before React effects process the new identity.
+      privateGeneration.current += 1;
+      if (privateSelection.current && session?.status === 'draft') persistPrivateSelection({ items: selectionItems, draft: selectionDraft });
+    }
+    customerAuthRef.current = auth;
+    setCustomerAuthState(auth);
+  };
   const feedbackOpen = feedbackMode !== null;
   const activeOverlay: OverlayHistoryKind | null = feedbackOpen ? 'feedback'
     : recordLoginOpen ? 'record-login'
@@ -432,6 +452,7 @@ export default function App() {
     localParts,
     tea: null,
   }), [selectedProjectIds, independentProjectIds, projectLinkedIds, projectPreferences, projectAddonIds, projectCatalogSelections, localParts]);
+  const privateDraftSignature = useMemo(() => JSON.stringify(selectionDraft), [selectionDraft]);
   const selectionSummary = useMemo(() => buildSelectionSummary({
     projects,
     addons,
@@ -439,8 +460,9 @@ export default function App() {
     isMember,
   }), [projects, addons, selectionDraft, isMember]);
   const selectionPromotion = useMemo(() => activePromotion(preview, isMember), [preview, isMember]);
+  const publicBrowsing = query.serviceHub && query.publicPage === 'projects';
   const readOnly = collaborationMode === 'browse_only' || !canEditSelection(session?.status, occupancy?.status);
-  const publicBrowsing = boot === 'public-menu';
+  const preservedPrivateSelection = !publicBrowsing ? readPrivateSelection(localStorage, query.storeId, customerAuth?.user.id ?? null) : null;
   const hasSubmittedCustomerSession = session?.status === 'submitted' || session?.status === 'confirmed';
   const serviceProgress = customerServiceProgress(serviceStatus?.occupancy_status ?? occupancy?.status);
   const serviceFeedbackActionLabel = serviceFeedbackAction(Boolean(serviceStatus?.can_evaluate), Boolean(serviceStatus?.evaluated));
@@ -708,8 +730,7 @@ export default function App() {
     swipeStart.current = null;
   };
 
-  const hydrateSelection = (nextSession: SelectionSession) => {
-    const draft = hydrateSelectionDraft(nextSession.items || []);
+  const hydrateSelection = (nextSession: SelectionSession, draft = hydrateSelectionDraft(nextSession.items || [])) => {
     setSelectedProjectIds(draft.selectedProjectIds);
     setIndependentProjectIds(draft.independentProjectIds || []);
     setProjectLinkedIds(draft.projectLinkedIds || {});
@@ -726,6 +747,10 @@ export default function App() {
     nextCode = positionCode,
     draftClearedAfterSubmit = false,
   ) => {
+    if (publicBrowsing && nextSession && privateSelection.current) {
+      persistPrivateSelection({ sessionId: nextSession.id });
+      return;
+    }
     if (!nextSession || !nextOccupancy || !nextPosition || !(accessToken || collaborationToken) || !nextCode) return;
     writeRecord({
       storeId: query.storeId,
@@ -747,7 +772,19 @@ export default function App() {
     // 返回浏览不依赖服务位释放或网络；旧订单继续保留用于查看和评价。
     startFreshSelectionDraft();
     persistCurrent(session, occupancy, position, positionCode, true);
-    setBoot('ready');
+    setBoot(publicBrowsing ? 'public-menu' : 'ready');
+    if (publicBrowsing) {
+      if (currentStatus === 'post_service_present' || currentStatus === 'cleaning' || currentStatus === 'released') {
+        setBoot('loading');
+        try {
+          await initializePrivateSelection(customerAuthRef.current);
+        } catch (error) {
+          setBootMessage(error instanceof Error ? error.message : '暂时无法开始新一轮选购，请稍后重试');
+          setBoot('error');
+        }
+      }
+      return;
+    }
     if (currentStatus === 'post_service_present' || currentStatus === 'cleaning' || currentStatus === 'released') {
       // 服务状态可能先于服务位地图返回，不能让旧 in_service 快照开放历史订单编辑。
       if (occupancy) setOccupancy({ ...occupancy, status: currentStatus });
@@ -893,6 +930,85 @@ export default function App() {
     }
   };
 
+  const persistPrivateSelection = (changes: Partial<PrivateSelectionRecord>) => {
+    if (!privateSelection.current) return;
+    const record = { ...privateSelection.current, ...changes };
+    writePrivateSelection(localStorage, record);
+    privateSelection.current = record;
+  };
+
+  const restorePrivateIdentity = async (auth: CustomerAuth | null, isCurrent: () => boolean) => {
+    const customerId = auth?.user.id ?? null;
+    let record = readPrivateSelection(localStorage, query.storeId, customerId);
+    if (!record && auth) {
+      const anonymous = readPrivateSelection(localStorage, query.storeId, null);
+      if (anonymous) {
+        const bound = await bindSelectionCustomer(anonymous.sessionId, anonymous.accessToken, auth.token);
+        if (!isCurrent()) return null;
+        const latest = readPrivateSelection(localStorage, query.storeId, null);
+        if (bound.selection_session_id !== anonymous.sessionId || bound.customer_id !== customerId
+          || latest?.sessionId !== anonymous.sessionId || latest.accessToken !== anonymous.accessToken) {
+          throw new Error('选单状态已更新，请重新打开菜单');
+        }
+        record = { ...latest, customerId };
+        writePrivateSelection(localStorage, record);
+      }
+    }
+    return record;
+  };
+
+  const initializePrivateSelection = async (auth: CustomerAuth | null, catalog = projects) => {
+    const generation = ++privateGeneration.current;
+    const isCurrent = () => generation === privateGeneration.current && customerAuthRef.current?.token === auth?.token;
+    const customerId = auth?.user.id ?? null;
+    let record = await restorePrivateIdentity(auth, isCurrent).catch((error) => {
+      if (!isCurrent()) return null;
+      throw error;
+    });
+    if (!isCurrent()) return;
+    let restored: SelectionSession | null = null;
+    if (record) {
+      try {
+        restored = await getSelectionSession(record.sessionId, record.accessToken);
+        if (!isCurrent()) return;
+        if (restored.store_id !== query.storeId || ['cancelled', 'expired'].includes(restored.status)) restored = null;
+        if (restored && (restored.status === 'submitted' || restored.status === 'confirmed')) {
+          const status = await getServiceStatus(record.sessionId, record.accessToken);
+          if (!isCurrent()) return;
+          if (['post_service_present', 'cleaning', 'released'].includes(status.occupancy_status || '')) restored = null;
+        }
+      } catch (error) {
+        if (!isCurrent()) return;
+        if (!(error instanceof ApiError) || ![401, 403, 404, 409].includes(error.status)) throw error;
+      }
+    }
+    if (!restored) {
+      const created = await createPrivateSelectionSession(query.storeId, deviceLabel()).catch((error) => {
+        if (!isCurrent()) return null;
+        throw error;
+      });
+      if (!isCurrent() || !created) return;
+      restored = created.session;
+      record = { storeId: query.storeId, customerId, sessionId: restored.id, accessToken: created.access_token };
+    }
+    if (!isCurrent() || !record) return;
+    writePrivateSelection(localStorage, record);
+    privateSelection.current = record;
+    selectionSubmitIntent.current = record.submitIntent || { signature: '', key: '' };
+    setSession(restored);
+    setAccessToken(record.accessToken);
+    setCollaborationToken('');
+    setCollaborationMode('');
+    setPosition(null);
+    setOccupancy(null);
+    setServiceStatus(null);
+    setFeedbackToken('');
+    hydrateSelection(restored, restored.status === 'draft'
+      ? restorePrivateSelectionDraft(record, restored.items || [], catalog) : undefined);
+    hydrated.current = true;
+    setBoot(restored.status === 'draft' ? 'public-menu' : 'submitted');
+  };
+
   const initialize = async () => {
     setBoot('loading');
     if (query.returnVisit) {
@@ -922,7 +1038,8 @@ export default function App() {
       setCouponTemplates(coupons);
       setPageContent(content);
       if (query.serviceHub && query.publicPage === 'projects') {
-        setBoot('public-menu');
+        privateCatalogReady.current = true;
+        await initializePrivateSelection(customerAuthRef.current, catalog);
         return;
       }
       const sharedProject = query.projectCode ? catalog.find((project) => project.code === query.projectCode) : undefined;
@@ -1046,27 +1163,32 @@ export default function App() {
   };
 
   const handleCouponSuccess = (auth: CustomerAuth, message: string) => {
-    setCustomerAuth(auth);
+    refreshAfterCustomerLogin(auth, message);
     dismissTopOverlay();
-    flash(message);
-    void getCouponTemplates(auth.token).then(setCouponTemplates).catch(() => undefined);
-    if (session && accessToken) {
-      void getSelectionSession(session.id, accessToken).then(setSession).catch(() => undefined);
-    }
+    void getCouponTemplates(auth.token).then((coupons) => {
+      if (customerAuthRef.current?.token === auth.token) setCouponTemplates(coupons);
+    }).catch(() => undefined);
   };
 
   const refreshAfterCustomerLogin = (auth: CustomerAuth, message: string) => {
+    const previousId = customerAuthRef.current?.user.id ?? null;
     setCustomerAuth(auth);
-    if (!session || !accessToken) {
+    // Private identity restoration handles a changed owner; never refresh the previous owner's cart.
+    if (!session || !accessToken || publicBrowsing && previousId !== auth.user.id) {
       flash(message);
       return;
     }
+    const generation = privateGeneration.current;
+    const isCurrent = () => generation === privateGeneration.current
+      && customerAuthRef.current?.token === auth.token
+      && sessionContext.current.sessionId === session.id && sessionContext.current.accessToken === accessToken;
     void getSelectionSession(session.id, accessToken)
       .then((updated) => {
+        if (!isCurrent()) return;
         setSession(updated);
         flash(auth.user.is_member ? '已识别会员身份，会员价已更新' : message);
       })
-      .catch(() => flash(message));
+      .catch(() => { if (isCurrent()) flash(message); });
   };
 
   useEffect(() => {
@@ -1117,6 +1239,43 @@ export default function App() {
       window.removeEventListener('focus', refreshCustomer);
     };
   }, [customerAuth?.token]);
+
+  useEffect(() => {
+    const auth = customerAuthRef.current;
+    const currentId = auth?.user.id ?? null;
+    const previousId = privateCustomerId.current;
+    privateCustomerId.current = currentId;
+    const changedOwner = previousId !== currentId;
+    if (previousId !== null && changedOwner) {
+      clearPrivateSelection(localStorage, query.storeId);
+      privateSelection.current = null;
+    }
+    if (!publicBrowsing) {
+      // Report, home and seat entry logins must preserve the same anonymous draft too.
+      const generation = privateGeneration.current;
+      void restorePrivateIdentity(auth, () => generation === privateGeneration.current
+        && customerAuthRef.current?.token === auth?.token).catch(() => {
+        // Keep the original record; menu restoration retries verified ownership, never guesses it.
+      });
+      return;
+    }
+    if (!changedOwner || !privateCatalogReady.current) return;
+    selectionSubmitIntent.current = { signature: '', key: '' };
+    hydrated.current = false;
+    setSession(null);
+    setAccessToken('');
+    setFeedbackToken('');
+    setServiceStatus(null);
+    setOccupancy(null);
+    setPosition(null);
+    startFreshSelectionDraft();
+    setBoot('loading');
+    void initializePrivateSelection(auth).catch((error) => {
+      if (customerAuthRef.current?.token !== auth?.token) return;
+      setBootMessage(error instanceof Error ? error.message : '选单暂时无法恢复，请重试');
+      setBoot('error');
+    });
+  }, [customerAuth?.user.id]);
 
   useEffect(() => {
     if (query.returnVisit || boot === 'loading' || entryTracked.current) return;
@@ -1180,15 +1339,31 @@ export default function App() {
   }, [boot, occupancy?.hold_expires_at]);
 
   useEffect(() => {
-    if (boot !== 'ready' || !session || session.status !== 'draft' || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || !hydrated.current) return undefined;
+    if (publicBrowsing && boot === 'public-menu' && session?.status === 'draft' && accessToken && hydrated.current) {
+      persistPrivateSelection({ items: selectionItems, draft: selectionDraft });
+    }
+  }, [privateDraftSignature, boot, session?.id, session?.status, accessToken]);
+
+  useEffect(() => {
+    if (!['ready', 'public-menu'].includes(boot) || !session || session.status !== 'draft' || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || !hydrated.current) return undefined;
+    const generation = privateGeneration.current;
     const timer = window.setTimeout(async () => {
+      if (publicBrowsing && (generation !== privateGeneration.current || menuSyncStateRef.current.submitting)) return;
+      let pendingSave: ReturnType<typeof saveSelectionSession> | null = null;
       menuSyncStateRef.current.saving = true;
       setSaving(true);
       try {
-        const saved = await saveSelectionSession(session.id, accessToken, selectionItems, deviceLabel(), collaborationToken ? {
-          collaborationToken,
-          expectedVersion: cartVersion,
-        } : undefined);
+        const save = () => {
+          if (publicBrowsing && generation !== privateGeneration.current) return Promise.reject(new Error('Selection identity changed'));
+          return saveSelectionSession(session.id, accessToken, selectionItems, deviceLabel(), collaborationToken ? {
+            collaborationToken,
+            expectedVersion: cartVersion,
+          } : undefined);
+        };
+        pendingSave = publicBrowsing && privateSave.current ? privateSave.current.catch(() => undefined).then(save) : save();
+        if (publicBrowsing) privateSave.current = pendingSave;
+        const saved = await pendingSave;
+        if (publicBrowsing && generation !== privateGeneration.current) return;
         setSession(saved);
         setCartVersion(saved.cart_version ?? cartVersion);
         if (position?.type === 'sofa') {
@@ -1204,6 +1379,7 @@ export default function App() {
           persistCurrent(saved, refreshed, position);
         }
       } catch (error) {
+        if (publicBrowsing && generation !== privateGeneration.current) return;
         if (error instanceof ApiError && error.code === 'CART_VERSION_CONFLICT') {
           const latest = error.detail.session as SelectionSession | undefined;
           if (latest) {
@@ -1218,6 +1394,7 @@ export default function App() {
           flash('选单暂未同步，网络恢复后请再试');
         }
       } finally {
+        if (privateSave.current === pendingSave) privateSave.current = null;
         menuSyncStateRef.current.saving = false;
         setSaving(false);
       }
@@ -1295,17 +1472,19 @@ export default function App() {
   useEffect(() => {
     const token = feedbackToken || accessToken;
     if (!shouldPollCustomerServiceStatus({
-      boot,
+      boot: publicBrowsing && boot === 'public-menu' ? 'ready' : boot,
       hasSession: Boolean(session),
       hasToken: Boolean(token),
       readOnly,
       hasSubmittedService: hasSubmittedCustomerSession,
     }) || !session) return undefined;
     let active = true;
+    const generation = privateGeneration.current;
+    const isCurrent = () => active && (!publicBrowsing || generation === privateGeneration.current);
     const refresh = async () => {
       try {
         const status = await getServiceStatus(session.id, token);
-        if (!active) return;
+        if (!isCurrent()) return;
         setServiceStatus(status);
       } catch {
         // 评价状态不是选单主流程，暂时不可用时保持当前页面可用。
@@ -1317,7 +1496,7 @@ export default function App() {
           getSelectionSession(session.id, token),
           getServicePositionMap(query.storeId, session.id, token),
         ]);
-        if (!active) return;
+        if (!isCurrent()) return;
         setSession(latestSession);
         setPositions(map.positions);
         const currentRequested = resolveRequestedPosition(map.positions, resolveActivePositionCode(positionCode, query.positionCode));
@@ -1585,20 +1764,22 @@ export default function App() {
 
   const submitRevision = async () => {
     if (!session || !(accessToken || collaborationToken)) return;
+    const generation = privateGeneration.current;
     const requestAccess = selectionRequestAccess(session.status, accessToken, collaborationToken, cartVersion, customerAuth?.token);
     if (!requestAccess) return;
     menuSyncStateRef.current.submitting = true;
     setSubmitting(true);
     try {
       const submissionSignature = JSON.stringify(submissionItems);
-      if (selectionSubmitIntent.current.signature !== submissionSignature) {
-        selectionSubmitIntent.current = { signature: submissionSignature, key: crypto.randomUUID() };
-      }
+      selectionSubmitIntent.current = privateSubmitIntent(selectionSubmitIntent.current, submissionSignature);
+      if (publicBrowsing) persistPrivateSelection({ submitIntent: selectionSubmitIntent.current, items: selectionItems, draft: selectionDraft });
       await submitSelectionRevision(session.id, accessToken, submissionItems, deviceLabel(), { ...requestAccess, idempotencyKey: selectionSubmitIntent.current.key });
-      selectionSubmitIntent.current = { signature: '', key: '' };
       const submitted = accessToken
         ? await getSelectionSession(session.id, accessToken)
         : { ...session, status: 'submitted' as const };
+      if (publicBrowsing && generation !== privateGeneration.current) return;
+      selectionSubmitIntent.current = { signature: '', key: '' };
+      if (publicBrowsing) persistPrivateSelection({ items: undefined, draft: undefined, submitIntent: undefined });
       setSession(submitted);
       const afterSubmit = submittedSelectionAccess(accessToken, collaborationToken);
       setCollaborationToken(afterSubmit.collaborationToken);
@@ -1634,7 +1815,8 @@ export default function App() {
   };
 
   const submit = async () => {
-    if (!session || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || submitting) return;
+    if (!session || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || submitting || menuSyncStateRef.current.submitting) return;
+    const generation = privateGeneration.current;
     const requestAccess = selectionRequestAccess(session.status, accessToken, collaborationToken, cartVersion, customerAuth?.token);
     if (!requestAccess) return;
     if (!hasChargeableService) {
@@ -1645,6 +1827,8 @@ export default function App() {
     menuSyncStateRef.current.submitting = true;
     setSubmitting(true);
     try {
+      if (publicBrowsing && privateSave.current) await privateSave.current.catch(() => undefined);
+      if (publicBrowsing && generation !== privateGeneration.current) return;
       if (customerAuth && !collaborationToken) {
         try {
           await bindSelectionCustomer(session.id, accessToken, customerAuth.token);
@@ -1658,7 +1842,9 @@ export default function App() {
           throw error;
         }
       }
+      if (publicBrowsing && generation !== privateGeneration.current) return;
       const quote = await quoteSelectionSession(session.id, accessToken, submissionItems, deviceLabel(), requestAccess);
+      if (publicBrowsing && generation !== privateGeneration.current) return;
       if (quote.saving_hint?.kind === 'member') {
         setSavingHint(quote.saving_hint);
         setSavingHintOpen(true);
@@ -1843,7 +2029,8 @@ export default function App() {
           <span className="success-symbol"><CheckCircle2 size={36} /></span>
           <span className="eyebrow">{serviceProgress.eyebrow}</span>
           <h1>{serviceProgress.title}</h1>
-          <p>{position?.customer_label || '服务位置'} · {serviceProgress.message}</p>
+          <p>{publicBrowsing && !serviceStatus?.occupancy_status && !occupancy ? '已提交，等待门店安排座位' : `${position?.customer_label || '服务位置'} · ${serviceProgress.message}`}</p>
+          {publicBrowsing && <small>选单号：{session.id.slice(0, 8)}</small>}
         </div>
         <section className="success-order" id="success-order">
           <header><strong>本次选择</strong><span>{session.items.filter((item) => item.item_type === 'service').length} 项服务 · 共 {totalServiceMinutes} 分钟</span></header>
@@ -1921,7 +2108,8 @@ export default function App() {
         </button>
       </header>
 
-      {boot === 'ready' && hasSubmittedCustomerSession && collaborationMode !== 'browse_only' && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
+      {['ready', 'public-menu'].includes(boot) && hasSubmittedCustomerSession && collaborationMode !== 'browse_only' && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
+      {preservedPrivateSelection?.items?.length && preservedPrivateSelection.sessionId !== session?.id ? <div className="submitted-browse-banner"><span>原选单已保留</span><a href={serviceAccountEntry(window.location.origin, query.storeId, 'projects')}>返回未入座选单</a></div> : null}
       {boot === 'ready' && collaborationMode === 'browse_only' && <div className="shared-cart-banner read-only" role="status">本服务位清单已提交；可继续浏览项目或提交评价与建议</div>}
 
       <section className="miniapp-promo-strip" aria-label="门店推荐">
@@ -2035,7 +2223,7 @@ export default function App() {
           </span>
         </button>
         <button className="submit-button" type="button" disabled={readOnly || submitting || !online} onClick={submit}>
-          {readOnly ? '已提交前台' : submitting ? '正在提交' : '提交给前台'}<ChevronRight size={18} />
+          {readOnly ? '已提交前台' : submitting ? '正在提交' : publicBrowsing ? '提交给门店' : '提交给前台'}<ChevronRight size={18} />
         </button>
       </motion.footer>}
       </AnimatePresence>
@@ -2053,7 +2241,7 @@ export default function App() {
         realizedSavingCents={priceDisplay.realizedSavingCents}
         saving={saving}
         readOnly={readOnly}
-        positionLabel={position?.customer_label || '服务位置待确认'}
+        positionLabel={position?.customer_label || (publicBrowsing ? '由门店安排' : '服务位置待确认')}
         identityLabel={customerAuth?.user.is_member ? '会员价' : customerAuth ? '普通顾客' : '匿名顾客'}
         onClose={dismissTopOverlay}
         onModify={handleSummaryModify}
@@ -2064,7 +2252,7 @@ export default function App() {
 
       <SeatMapDialog open={seatMapOpen} current={position} positions={positions} moving={moving} source={session?.source || occupancy?.source || query.source} onClose={dismissTopOverlay} onSelect={handleMove} onBlocked={flash} />
       <AnimatePresence initial={false} mode="wait">
-      {localDetailOpen && <LocalDetailPage open project={localProject || null} selectedParts={localParts} positionLabel={publicBrowsing ? '' : position?.customer_label || '服务位待核对'} isMember={isMember} readOnly={publicBrowsing ? false : readOnly} onStartSelection={publicBrowsing ? () => window.location.assign(serviceAccountEntry(window.location.origin, query.storeId, 'seats')) : undefined} onClose={dismissTopOverlay} onConfirm={saveLocalParts} />}
+      {localDetailOpen && <LocalDetailPage open project={localProject || null} selectedParts={localParts} positionLabel={position?.customer_label || (publicBrowsing ? '由门店安排' : '服务位待核对')} isMember={isMember} readOnly={readOnly} unseated={publicBrowsing && !position} onClose={dismissTopOverlay} onConfirm={saveLocalParts} />}
       {detailProject && <ProjectDetailPage
         project={detailProject}
         projects={projects}
@@ -2076,10 +2264,10 @@ export default function App() {
         localParts={localParts}
         catalogSelection={detailProject ? projectCatalogSelections?.[detailProject.id] : undefined}
         coupon={featuredCoupon}
-        positionLabel={publicBrowsing ? '' : position?.customer_label || '服务位待核对'}
+        positionLabel={position?.customer_label || (publicBrowsing ? '由门店安排' : '服务位待核对')}
         isMember={isMember}
-        readOnly={publicBrowsing ? false : readOnly}
-        onStartSelection={publicBrowsing ? () => window.location.assign(serviceAccountEntry(window.location.origin, query.storeId, 'seats')) : undefined}
+        readOnly={readOnly}
+        unseated={publicBrowsing && !position}
         onClose={dismissTopOverlay}
         onConfirm={saveProject}
         onCouponInfo={openCouponLogin}

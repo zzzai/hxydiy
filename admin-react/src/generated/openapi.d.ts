@@ -1425,6 +1425,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/selection-sessions/{session_id}/assign-position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assign Selection Position */
+        post: operations["assign_selection_position_api_v1_admin_v2_selection_sessions__session_id__assign_position_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/selection-sessions/{session_id}/cancel": {
         parameters: {
             query?: never;
@@ -3769,6 +3786,11 @@ export interface components {
             room_id: number;
             /** Technician Id */
             technician_id: number;
+        };
+        /** AssignSelectionPositionIn */
+        AssignSelectionPositionIn: {
+            /** Room Id */
+            room_id: number;
         };
         /** AssignmentIn */
         AssignmentIn: {
@@ -9719,6 +9741,7 @@ export interface operations {
         parameters: {
             query?: {
                 status?: string | null;
+                needs_position_assignment?: boolean | null;
                 page?: number;
                 page_size?: number;
             };
@@ -9766,6 +9789,45 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AnnualGiftRedeemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_selection_position_api_v1_admin_v2_selection_sessions__session_id__assign_position_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignSelectionPositionIn"];
             };
         };
         responses: {

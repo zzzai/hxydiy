@@ -14,12 +14,12 @@ type Props = {
   positionLabel: string;
   isMember: boolean;
   readOnly?: boolean;
-  onStartSelection?: () => void;
+  unseated?: boolean;
   onClose: () => void;
   onConfirm: (parts: string[]) => void;
 };
 
-export default function LocalDetailPage({ open, project, selectedParts, positionLabel, isMember, readOnly = false, onStartSelection, onClose, onConfirm }: Props) {
+export default function LocalDetailPage({ open, project, selectedParts, positionLabel, isMember, readOnly = false, unseated = false, onClose, onConfirm }: Props) {
   const [draft, setDraft] = useState<string[]>(selectedParts);
   const [focusedPart, setFocusedPart] = useState<string>(selectedParts[0] || LOCAL_PARTS[0]);
 
@@ -55,7 +55,7 @@ export default function LocalDetailPage({ open, project, selectedParts, position
           <DetailPrice current={effectivePrice(project, isMember)} comparison={priceOf(project, isMember ? 'store' : 'member')} isMember={isMember} unit="每个部位" />
         </section>
 
-        {!onStartSelection && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong><small>请确认位置无误</small></section>}
+        {<section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong>{!unseated && <small>请确认位置无误</small>}</section>}
 
         <section className="mini-config-card">
           <div className="mini-config-title"><strong>选择调理部位</strong><span>可多选 · 按部位计价</span></div>
@@ -68,7 +68,7 @@ export default function LocalDetailPage({ open, project, selectedParts, position
 
       <footer className="mini-detail-footer">
         <div className="mini-detail-total"><span>预计合计</span><strong>{formatMoney(total)}</strong></div>
-        <div className="mini-detail-actions"><button className="primary" type="button" disabled={!onStartSelection && (readOnly || draft.length === 0)} onClick={() => onStartSelection ? onStartSelection() : onConfirm(draft)}>{onStartSelection ? '到店选项目' : readOnly ? '已提交前台' : '加入本次服务'}<ChevronRight size={17} /></button></div>
+        <div className="mini-detail-actions"><button className="primary" type="button" disabled={readOnly || draft.length === 0} onClick={() => onConfirm(draft)}>{readOnly ? '已提交前台' : unseated ? '加入选单' : '加入本次服务'}<ChevronRight size={17} /></button></div>
       </footer>
     </motion.div>
   );

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Card, Collapse, Descriptions, Drawer, Empty, Input, Segmented, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Card, Collapse, Descriptions, Drawer, Empty, Input, Modal, Segmented, Select, Space, Table, Tag, Typography } from 'antd';
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
 import { approveSelectionChangeRequest, cancelSelectionServiceLine, cancelSelectionSession, confirmSelectionSession, getCustomerProfileRecords, getSelectionChangeRequests, getSelectionSessions, getStaff, redeemAnnualGift, rejectSelectionChangeRequest } from '../api';
+import { assignSelectionPosition, getLiveServicePositionMap } from '../api';
 import { canApproveSelectionChange, canRejectSelectionChange, selectionChangeItemSummary } from '../selectionChanges';
 import { buildServiceReferenceDisplay } from '../serviceReferenceDisplay';
 
@@ -23,9 +24,14 @@ export default function SelectionSessionsPage() {
   const [changeRequests, setChangeRequests] = useState<any[]>([]);
   const [changeLoading, setChangeLoading] = useState(false);
   const [profileRecords, setProfileRecords] = useState<any[]>([]);
+  const [assignment, setAssignment] = useState<any | null>(null);
+  const [positionOptions, setPositionOptions] = useState<Array<{ value: number; label: string }>>([]);
+  const [targetRoomId, setTargetRoomId] = useState<number | undefined>();
+  const [positionLoading, setPositionLoading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const load = async () => {
     setLoading(true);
-    try { const response = await getSelectionSessions(status === 'all' ? undefined : status); setItems(response.data?.items || []); }
+    try { const response = await getSelectionSessions(status === 'all' || status === 'unassigned' ? undefined : status, status === 'unassigned' ? true : undefined); setItems(response.data?.items || []); }
     catch { message.error('选单加载失败'); }
     finally { setLoading(false); }
   };
@@ -41,6 +47,30 @@ export default function SelectionSessionsPage() {
     if (readOnly || !selected?.customer?.id) { setProfileRecords([]); return; }
     void getCustomerProfileRecords(selected.customer.id).then((response) => setProfileRecords(response.data?.items || [])).catch(() => setProfileRecords([]));
   }, [readOnly, selected]);
+  const loadPositionOptions = async () => {
+    setPositionLoading(true);
+    try {
+      const response = await getLiveServicePositionMap();
+      setPositionOptions(response.data.positions
+        .filter((position) => position.state === 'available' && position.operational_status === 'active')
+        .map((position) => ({ value: position.id, label: position.customer_label || position.name })));
+    } catch { setPositionOptions([]); }
+    finally { setPositionLoading(false); }
+  };
+  const openAssignment = (record: any) => {
+    setAssignment(record); setTargetRoomId(undefined); setPositionOptions([]);
+    void loadPositionOptions();
+  };
+  const assignPosition = async () => {
+    if (!assignment || !targetRoomId || assigning) return;
+    setAssigning(true);
+    try {
+      await assignSelectionPosition(assignment.id, targetRoomId);
+      message.success('座位已安排，原选单项目与价格保持不变');
+      setAssignment(null); setSelected(null); await load();
+    } catch { /* Keep the same target so an uncertain request can be safely retried. */ }
+    finally { setAssigning(false); }
+  };
   const act = (record: any, action: 'confirm' | 'cancel') => modal.confirm({
     title: action === 'confirm' ? '确认接收这份选单？' : '取消这份选单？',
     content: action === 'confirm' ? '确认后可按此需求继续安排服务，仍不创建订单。' : '取消后本次需求不再进入门店处理队列。',
@@ -113,13 +143,23 @@ export default function SelectionSessionsPage() {
     <Card>{!loading && !items.length ? <Empty description="暂无选单" /> : <Table rowKey="id" loading={loading} dataSource={items} pagination={{ pageSize: 20 }} columns={[
       { title: '提交时间', dataIndex: 'submitted_at', width: 180, render: dateText },
       { title: '来源', dataIndex: 'source', width: 180, render: (value: string, record: any) => <Tag>{sourceLabel(value)}{record.device_label ? ` · ${record.device_label}` : ''}</Tag> },
+      { title: '座位', render: (_: unknown, record: any) => record.position?.name || (record.needs_position_assignment ? '待安排座位' : '未安排座位') },
       { title: '服务需求', dataIndex: 'items', render: (value: any[]) => <Typography.Text ellipsis style={{ maxWidth: 480, display: 'inline-block' }}>{itemSummary(value)}</Typography.Text> },
       { title: '状态', dataIndex: 'status', width: 90, render: (value: string) => <Tag color={STATUS[value]?.color}>{STATUS[value]?.label || value}</Tag> },
     ]} />}</Card>
   </Space>;
   return <Space direction="vertical" size={18} style={{ width: '100%' }}>
-    <div className="page-heading"><div><Typography.Title level={3} style={{ margin: 0 }}>到店服务选单</Typography.Title><Typography.Text type="secondary">顾客先选服务与偏好，门店确认后再进入现场服务流程</Typography.Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
-    <Card><Segmented value={status} onChange={(value) => setStatus(String(value))} options={[{ label: '待确认', value: 'submitted' }, { label: '已确认', value: 'confirmed' }, { label: '已取消', value: 'cancelled' }, { label: '全部', value: 'all' }]} /></Card>
+    <div className="page-heading"><div><Typography.Title level={3} style={{ margin: 0 }}>到店服务选单</Typography.Title><Typography.Text type="secondary">顾客可先选项目和偏好，门店确认并安排座位后提供服务</Typography.Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
+    <Modal title="给这份选单安排座位" open={Boolean(assignment)} okText="确认安排" cancelText="返回" confirmLoading={assigning} okButtonProps={{ disabled: !targetRoomId || positionLoading }} onOk={() => void assignPosition()} onCancel={() => { if (!assigning) setAssignment(null); }}>
+      <Space direction="vertical" style={{ width: '100%' }}>
+        <Typography.Text>选单号：{assignment?.id}</Typography.Text>
+        <Typography.Paragraph>{itemSummary(assignment?.items)}</Typography.Paragraph>
+        <Select aria-label="安排座位" placeholder="选择当前可用的座位" style={{ width: '100%' }} value={targetRoomId} onChange={setTargetRoomId} loading={positionLoading} options={positionOptions} disabled={assigning} notFoundContent={positionLoading ? '正在加载' : '暂无可用座位'} />
+        <Button onClick={() => void loadPositionOptions()} loading={positionLoading} disabled={assigning}>刷新可用座位</Button>
+        <Typography.Text type="secondary">安排后保留原选单，服务仍需技师确认开始。多人房间的其他床位是否可接待，以系统核验为准。</Typography.Text>
+      </Space>
+    </Modal>
+    <Card><Segmented value={status} onChange={(value) => setStatus(String(value))} options={[{ label: '待安排座位', value: 'unassigned' }, { label: '待确认', value: 'submitted' }, { label: '已确认', value: 'confirmed' }, { label: '已取消', value: 'cancelled' }, { label: '全部', value: 'all' }]} /></Card>
     <Card title="服务中追加项目" extra={<Button icon={<ReloadOutlined />} loading={changeLoading} onClick={() => void loadChangeRequests()}>刷新</Button>}>
       {!changeLoading && !changeRequests.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待确认加选" /> : <Table rowKey="id" loading={changeLoading} dataSource={changeRequests} pagination={false} columns={[
         { title: '提交时间', dataIndex: 'created_at', width: 180, render: dateText },
@@ -131,15 +171,19 @@ export default function SelectionSessionsPage() {
     </Card>
     <Card>{!loading && !items.length ? <Empty description="暂无选单" /> : <Table rowKey="id" loading={loading} dataSource={items} pagination={{ pageSize: 20 }} onRow={(record) => ({ onClick: () => setSelected(record), style: { cursor: 'pointer' } })} columns={[
       { title: '提交时间', dataIndex: 'submitted_at', width: 180, render: dateText },
+      { title: '选单号', width: 120, render: (_: unknown, record: any) => <Typography.Text copyable={{ text: record.id }}>{record.id.slice(0, 8)}</Typography.Text> },
+      { title: '座位', width: 140, render: (_: unknown, record: any) => record.position?.name || <Tag color={record.needs_position_assignment ? 'orange' : 'default'}>{record.needs_position_assignment ? '待安排座位' : '未安排座位'}</Tag> },
       { title: '顾客', dataIndex: 'customer', width: 170, render: (customer: any) => customer ? <Space size={4}><span>{customer.nickname || '已登录顾客'}</span>{customer.is_member && <Tag color="gold">会员</Tag>}</Space> : <Typography.Text type="secondary">未登录</Typography.Text> },
       { title: '来源', dataIndex: 'source', width: 130, render: (value: string, record: any) => <Tag>{sourceLabel(value)}{record.device_label ? ` · ${record.device_label}` : ''}</Tag> },
       { title: '服务需求', dataIndex: 'items', render: (value: any[]) => <Typography.Text ellipsis style={{ maxWidth: 380, display: 'inline-block' }}>{itemSummary(value)}</Typography.Text> },
       { title: '评价', dataIndex: 'feedback', width: 130, render: (feedback: any) => feedback ? <Space size={4}><Tag color="gold">{feedback.rating} 星</Tag><Typography.Text type="secondary">{feedback.tags?.length || 0} 项</Typography.Text></Space> : <Typography.Text type="secondary">未评价</Typography.Text> },
       { title: '状态', dataIndex: 'status', width: 90, render: (value: string) => <Tag color={STATUS[value]?.color}>{STATUS[value]?.label || value}</Tag> },
-      { title: '操作', width: 190, render: (_: any, record: any) => record.status === 'submitted' ? <Space onClick={(event) => event.stopPropagation()}><Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => act(record, 'confirm')}>确认选单</Button><Button size="small" danger icon={<CloseOutlined />} onClick={() => act(record, 'cancel')}>取消</Button></Space> : <Typography.Text type="secondary">查看详情</Typography.Text> },
+      { title: '操作', width: 290, render: (_: any, record: any) => <Space wrap onClick={(event) => event.stopPropagation()}>{record.needs_position_assignment && <Button size="small" onClick={() => openAssignment(record)}>安排座位</Button>}{record.status === 'submitted' ? <><Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => act(record, 'confirm')}>确认选单</Button><Button size="small" danger icon={<CloseOutlined />} onClick={() => act(record, 'cancel')}>取消</Button></> : <Typography.Text type="secondary">查看详情</Typography.Text>}</Space> },
     ]} />}</Card>
     <Drawer title="选单详情" open={Boolean(selected)} onClose={() => setSelected(null)} width={420}>{selected && <Space direction="vertical" size={18} style={{ width: '100%' }}>
       <Descriptions column={1} size="small" items={[{ label: '状态', children: <Tag color={STATUS[selected.status]?.color}>{STATUS[selected.status]?.label || selected.status}</Tag> }, { label: '顾客', children: selected.customer ? `${selected.customer.nickname || '已登录顾客'} · ${selected.customer.phone}` : '匿名访客，尚未登录' }, { label: '会员身份', children: selected.customer?.is_member ? <Tag color="gold">会员</Tag> : selected.customer ? '非会员' : '-' }, { label: '来源', children: sourceLabel(selected.source) }, { label: '设备', children: selected.device_label || '-' }, { label: '提交时间', children: dateText(selected.submitted_at) }]} />
+      <Typography.Text copyable={{ text: selected.id }}>选单号：{selected.id}</Typography.Text>
+      <Space><Typography.Text>座位：{selected.position?.name || '未安排座位'}</Typography.Text>{selected.needs_position_assignment && <Button onClick={() => openAssignment(selected)}>安排座位</Button>}</Space>
       <div><Typography.Text strong>项目</Typography.Text><Typography.Paragraph style={{ marginTop: 8 }}>{itemSummary(selected.items)}</Typography.Paragraph></div>
       {selected.status === 'confirmed' && selected.customer?.is_member && <Card size="small" title="年度赠送服务">
         <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>只可核销一项本店已发布、门店价不高于99元且无加项的未开始服务。取消该服务项目会释放仍有效周期的赠送权益。</Typography.Paragraph>
