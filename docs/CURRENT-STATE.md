@@ -1,10 +1,16 @@
 # hxy-diy 当前状态
 
-更新时间：2026-10-15（Asia/Shanghai）
+更新时间：2026-10-17（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
+
+- `SEAT-OPTIONAL-SELECTION-20261017`已上线，实际安装`github-8b352fab2208-39005452064`。业务[PR #276](https://github.com/zzzai/hxydiy/pull/276)，已审候选`b97b18795dc9353f30aa104cb2b1430159937eb7`，合并/发布`8b352fab22085c56bfa691fb092c7987b43a074e`；精确main [CI 39005206802](https://github.com/zzzai/hxydiy/actions/runs/39005206802)与唯一[Deploy 39005452064](https://github.com/zzzai/hxydiy/actions/runs/39005452064)成功，包含既定备份、隔离恢复和发布验证。
+- 顾客可先在门店内无座配置并提交私有选单，原键重试不重复下单；店长在同门店为原单后配服务位，保留项目配置和金额。配位进入`waiting_service`且不提前开始服务；原顾客会话可读回位置，技师复用既有开始、结束、v7记录及历史流程。没有数据库结构迁移、凭据修改或顾客数据可见范围扩张。
+- 实际current前后稳定，完整MANIFEST 459项、安装及运行后端99个raw Git文件、两端公网HTML与5个引用资源哈希通过；新配位OpenAPI合同、health `ok/production`、匿名选单401及本次备份checksum通过。此次终验只读、0业务写且未直连数据库；三端合成闭环已通过，真实微信/手机与营业现场仍待验。证据路径及SHA见`WORK-STATUS.md`顶部；本记录合并不再次部署。
+
+### 2026-10-15 既往发布与同步记录（以下current和容量均为当时状态，既有能力包含于上文当前版本）
 
 - `TECHNICIAN-BASIC-TAGS-VISIBLE-20261015`已上线，实际安装`github-1fa97d179c1f-38725804357`。业务[PR #271](https://github.com/zzzai/hxydiy/pull/271)，候选`5dd23262f79c75e8554321ea001dde1a53a03368`，合并/发布`1fa97d179c1f15e8d842d108d26dab13ca023f54`；精确main CI `38717299576`与唯一Deploy `38725804357`成功。
 - 技师服务交接把既有年龄段和性别从折叠项移到主流程第一步直接展示；年龄档仍为互不重叠的25–29至60以上，性别仍只有男、女，重点部位及保存、可见范围、权限和历史兼容均未改变。完整MANIFEST 457项通过，CI制品、安装文件和公网主JS/CSS哈希一致，运行后端选项源码匹配精确Git blob，health为`ok/production`。真实技师登录、微信手机及门店服务结束现场仍待验。详见`operations/technician-basic-tags-visible-release-20261015.md`；本记录合并不再次部署。

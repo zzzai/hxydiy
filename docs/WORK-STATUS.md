@@ -1,3 +1,11 @@
+# 2026-10-17 无座选购与原单后配位上线
+
+- `SEAT-OPTIONAL-SELECTION-20261017`业务[PR #276](https://github.com/zzzai/hxydiy/pull/276)已合并，26个核定文件；候选`b97b18795dc9353f30aa104cb2b1430159937eb7`与合并/发布`8b352fab22085c56bfa691fb092c7987b43a074e`的Git tree一致。精确main [CI 39005206802](https://github.com/zzzai/hxydiy/actions/runs/39005206802)与唯一[Deploy 39005452064](https://github.com/zzzai/hxydiy/actions/runs/39005452064)成功，实际备份/隔离恢复/发布验证job成功，不是仅触发。
+- actual current `/root/hxy-diy-20260811/releases/github-8b352fab2208-39005452064`。完整MANIFEST 459项、安装及实际运行后端99个raw Git文件匹配已审源码；两端公网HTML及5个引用资源与安装文件同哈希。新配位合同含必填正整数`room_id`及禁止额外字段、待配位查询参数；health `ok/production`、匿名选单401通过。API镜像`sha256:504a8ca1af95757ccc5d7acf116028ff9280cabc5ffa8981d910d79ac2b0009d`，current终验前后未变。
+- 服务器终验回执`/root/hxy-diy-development/seat-optional-20261017/output/seat-optional/production-verification-github-8b352fab2208-39005452064.json`，SHA-256 `ba9152f228c2fbb225ad87555707573de9c653a7cbc97778ac46d7e08af89f17`。发布前备份`/root/hxy-diy-20260811/backups/pre-github-8b352fab2208-39005452064-20261017T052739Z.dump.sha256`核验通过。终验0业务写、未直连数据库；未修改schema、凭据或扩大权限，原测试环境、旧版本及备份保留。
+- 同一合成单已完成无座配置、丢响应后的原键重试、店长配位、原顾客读回、技师开始/结束/v7保存与历史及顾客最终完成态。顾客默认测试308通过/1跳过，权限与配位补充12项通过；SQLite FIFO只解决隔离测试共享连接限制，不代表生产并发，PostgreSQL合同证据独立保留。旧失败单与历史误跳生产诊断仍保留，不能把本次只读终验扩写成历史生产请求或写入均为零。
+- 真实微信、手机和营业现场验收未完成；详见`contracts/seat-optional-selection-v1.md`及`product/seat-optional-selection-20261017.md`。本次仅补三份共享发布记录，合并不再次部署应用。
+
 # 2026-10-15 技师服务交接基本标签直接展示上线
 
 - `TECHNICIAN-BASIC-TAGS-VISIBLE-20261015`：业务PR #271候选`5dd23262f79c75e8554321ea001dde1a53a03368`，合并/发布`1fa97d179c1f15e8d842d108d26dab13ca023f54`；精确main CI `38717299576`、唯一Deploy `38725804357`及资格校验、备份、隔离恢复演练、发布验证全部成功。
