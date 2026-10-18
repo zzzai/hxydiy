@@ -20,10 +20,10 @@ export function isReportEntry(params: URLSearchParams): boolean {
   return ['reports', 'return'].includes(params.get('view') || '');
 }
 
-export function reportEntryUrl(origin: string, storeId: number): string {
+export function reportEntryUrl(origin: string, storeId: number, view: 'reports' | 'return' = 'reports'): string {
   const url = new URL('/', origin);
   url.searchParams.set('store', String(Number.isSafeInteger(storeId) && storeId > 0 ? storeId : 1));
-  url.searchParams.set('view', 'reports');
+  url.searchParams.set('view', view);
   return url.href;
 }
 
