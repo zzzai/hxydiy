@@ -1,5 +1,9 @@
 # hxy-diy 共享记忆
 
+2026-10-18 `CUSTOMER-REPORT-CENTER-20261018` 已合并/生产：#281、SHA `6c3179850f25907ac9081672c67329b5867959fd`，current `github-6c3179850f25-39136488194`；精确主干 CI/唯一 Deploy、真实备份恢复、472 MANIFEST、211安装/202运行Git、正式主干132顾客制品文件及公网报告链通过。reports 停既有中心、点击后看报告，return 保持旧直达；推荐自动回复 `?store=1&view=reports`，本次未改企微配置。59表发布前后完全相同，#280三人/角色/绑定保持，不新建或重放；真机与微信返回交人验收，不能以自动化替代。当前状态与容量见 `CURRENT-STATE.md`；下文保留先前员工发布和报告实现阶段的历史快照。
+
+2026-10-18 `WECOM-STORE-STAFF-20261018` 已合并/生产：#280、SHA `bfa16198b34666e28ff8ed2d5d7924000b909664`，current `github-bfa16198b346-39123878971`。主干 CI 成功；原 GitHub Deploy 容量失败保留，清理本批可重建缓存后同包经原发布器单次服务器恢复成功，锁/容量/真实备份恢复/迁移/验证门禁不变。470 MANIFEST、211安装/202运行Git及公网核验通过。三人仅新增3 Staff/2 Technician/1本店店长授权/3身份/3审计，59表旧行不变，原批次重放0新增。店长无技师档案且唯一同店scope，技师保持原边界。三人实际首登待本人验收；v1专用测试身份的Windows首登不能代替三人、手机/BFCache或真实报告验收。完整事实见 `CURRENT-STATE.md`、`WORK-STATUS.md` 顶部；下文保留本批实现阶段快照。
+
 2026-10-18 `CUSTOMER-REPORT-CENTER-20261018` 入口模式拆分：`view=reports` 首次/登录或换号后/刷新/普通 Back 停既有 IP 报告中心，只在点击“查看报告”后发放并打开严格原站链接；`view=return` 保留旧直达及 Back 中心、刷新直达规则，URL 规范化不再丢失模式。首页/选座页/个人中心既有 reports 链接一起承接中心，无新 UI、授权、选座或 history 陷阱；身份、同手机号归属、取消/失效和 no-referrer 保护不变。建议企微自动回复在本功能上线后用 `?store=1&view=reports`；本次不自动改企微配置。合同见 `contracts/tcm-my-reports-v1.md`，验证与交付见 customer workstream；本条不代表已发布或真实微信手势验收。
 
 2026-10-18 `WECOM-STORE-STAFF-20261018` 增量：店长仅允许同店、无技师关联、恰好一个 active `store_manager/store` 授权，签发精确 `staff_scope` JWT；每次请求复验授权与身份，撤销/跨店/多授权立即拒绝。技师会话与档案边界保持。新增可空 technician_id 迁移仅供店长身份，降级遇空值拒绝；正式三人建号与绑定使用独立私有预览/精确摘要/官方姓名与主体复核/整批事务/审计/幂等工具，不改旧账号及业务。前端固定店长交接管理后台，技师离页清会话仍保持。见 `contracts/wecom-store-staff-v2.md`。本条是实现契约，不代表本增量已发布或三人已接入。

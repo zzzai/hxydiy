@@ -6,6 +6,18 @@
 
 ## 当前生产
 
+- `CUSTOMER-REPORT-CENTER-20261018` 已上线：[PR #281](https://github.com/zzzai/hxydiy/pull/281)，主干/生产 `6c3179850f25907ac9081672c67329b5867959fd`；精确 [CI 39126459099](https://github.com/zzzai/hxydiy/actions/runs/39126459099) 和唯一 [Deploy 39136488194](https://github.com/zzzai/hxydiy/actions/runs/39136488194) 成功。实际 current=`github-6c3179850f25-39136488194`，472 项 MANIFEST、211 安装/202 运行 Git 文件、正式主干顾客制品全部 132 文件和公网 HTML→主 JS→报告页 chunk 一致，health=`ok/production`。
+- `view=reports` 停在既有报告中心，顾客点击后查看报告；原 `view=return` 继续旧直达语义。建议自动回复使用 `https://diy.hexiaoyue.com/?store=1&view=reports`；本次没有修改企微自动回复配置。无后台/技师/API/数据库结构变化，上一批店长与三人接入能力保持；59 表发布前后行摘要完全相同，不新建或重放绑定。真实备份恢复演练、checksum 通过，revision 仍为 `20261018_wecom_store_manager`。
+- 微信/企微真机、真实跨源返回手势及三人本人首登由人验收，未观察的结果不算通过。发布前精确清理三个可重建 source.local 缓存和一个已停自有测试容器，未动镜像、数据卷、源码、旧版本或备份；发布后可用 3090600 KiB，低于下一批 3 GiB 门槛，后续须重新检查容量，不继续自动清理或降低门槛。详见 `WORK-STATUS.md` 顶部；本次共享事实文档合并不再部署。
+
+### 2026-10-18 v2 员工接入既往发布（能力包含于当前版本）
+
+- `WECOM-STORE-STAFF-20261018` 已上线：[PR #280](https://github.com/zzzai/hxydiy/pull/280)，候选 `4b04149f17e59e6939e19fbc1e0f894bede9acd8`，合并/生产 `bfa16198b34666e28ff8ed2d5d7924000b909664`；主干 [CI 39123372817](https://github.com/zzzai/hxydiy/actions/runs/39123372817) 成功。原 [Deploy 39123878971](https://github.com/zzzai/hxydiy/actions/runs/39123878971) 因解包后容量不足而失败，此结果保留；仅清理本批可重建缓存后，同一已核验包经原发布器单次服务器恢复成功，未重传、新 dispatch 或降低门禁。实际 current 为 `github-bfa16198b346-39123878971`。
+- 新版本 470 项 MANIFEST、211 安装/202 运行 Git 文件与两端及企微入口公网资源匹配，健康 `ok/production`；真实备份恢复、演练迁移及正式迁移通过，revision=`20261018_wecom_store_manager`。店长仅接受唯一同店授权的 scoped 会话；技师权限不变，降级遇店长空 technician_id 身份时拒绝，应用回滚不得删除新身份。
+- 已批准三人完成建号/绑定：恰好新增 3 Staff、2 Technician、1 本店店长授权、3 外部身份、3 审计；59 表所有旧行保持，预览及同批重放均零新增。真实个人清单仍只在服务器私有目录；不修改旧账号/旧授权/顾客/订单/余额，不发密码或短信。三人本人首次登录未观察；此前专用测试身份已通过真实 Windows 企微首登，不能替代三人的现场验收。手机、BFCache 和真实报告来源仍未验。
+
+### 2026-10-18 v1 既往发布（下述待验/未建号为当时快照）
+
 - `WECOM-TECHNICIAN-20261017` 已上线：[PR #278](https://github.com/zzzai/hxydiy/pull/278)，合并/发布 `05a837d1c7e45145b71243709a1e3ad996006162`；精确主干 [CI 39114153899](https://github.com/zzzai/hxydiy/actions/runs/39114153899) 和唯一 [Deploy 39114515295](https://github.com/zzzai/hxydiy/actions/runs/39114515295) 成功，实际 current 为 `github-05a837d1c7e4-39114515295`。三张新表已迁移至 `20261017_wecom_technician`，真实备份/隔离恢复及备份 checksum 通过。
 - 468 项 MANIFEST、209 个安装 Git 文件、200 个运行 Git 文件及两端/企微入口公网资源匹配。企微功能已启用，同一 Secret 的在职/可见性验证、一次性浏览器绑定、角色和门店隔离保留；回调日志查询串保护及合成 303/no-referrer 检查通过。应用主页指向 `https://diy.hexiaoyue.com/technician/wecom`，其他应用字段未改。
 - 已获批的单个专用测试 Staff/Technician/身份绑定及一条绑定审计已创建，重复执行零新增，原员工/技师资料哈希不变；没有创建顾客单或派单。真实企微登录、真实报告来源、手机/BFCache 和营业现场仍未验。三位正式员工的单店真实角色接入为独立后续任务，尚未建号/绑定，不计入本次完成；详见 `WORK-STATUS.md` 顶部。
