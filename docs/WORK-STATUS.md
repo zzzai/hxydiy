@@ -1,3 +1,11 @@
+# 2026-10-18 单店店长与三人企微接入上线
+
+- [PR #280](https://github.com/zzzai/hxydiy/pull/280) 候选 `4b04149f17e59e6939e19fbc1e0f894bede9acd8`，合并/生产 `bfa16198b34666e28ff8ed2d5d7924000b909664`；主干 CI `39123372817` 成功。首轮 CI 的历史迁移夹具缺少 technicians 外键目标已定点修复，未改业务迁移、跳过测试或降低断言。PG 差额 19 权限/13 建号并发与事务/2 迁移通过；前端 10 单测及 2 合成真实 pagehide 移交通过，不重复旧组。
+- GitHub Deploy `39123878971` 保留 failure：包解压后 `3137100<3145728 KiB` 容量拒绝，未改 current/迁移/账号。按精确计划只清除本批 44 个可重建 Vite 缓存文件（约24MiB），源代码、依赖、旧版本及备份保留。同包 SHA256 `f68708f47b6c2cae16eb8e110832010a594076a80a2946ddb72df6407229773a` 的 387 包内文件、211 Git 文件、83 旧 current 继承资源校验后，以已安装原 `deploy_and_clean` 单次恢复成功；部署双锁、3GiB容量、真实备份恢复、迁移 allowlist 与健康/资源验证均未改，没有重新 dispatch 或重传。原发布器完成验证后清理可由新 release 恢复的重复输入。
+- 实际 current `/root/hxy-diy-20260811/releases/github-bfa16198b346-39123878971`；470 项 MANIFEST SHA256 `31f9009f5b385cffdd29a19e46b4392321eb23564a20141bf3e0295e7a3b3731`，211 安装/202 运行 Git 文件及公网资源一致；镜像 `sha256:edb444efcbe9a3e64d6129b511b13e9019f50c115d5d2c114e32394e10e1f5bd`，health `ok/production`，revision `20261018_wecom_store_manager`。备份 `backups/pre-github-bfa16198b346-39123878971-20261018T120340Z.dump` checksum 与真实隔离恢复、演练迁移通过。
+- 私有三人批次预览摘要 `6da61293a50e7a9f2419972bb5c551c898e212318f39e6b808c6c85b18d11357`；单次事务仅新增 Staff 3 / Technician 2 / store_manager grant 1 / identities 3 / audit 3。manager_1=Staff6/technician=null/identity2；两位技师分别 Staff7/Tech3/identity3、Staff8/Tech4/identity4，均 store1。59 表所有旧行 hash 不变；重放 unchanged、0新增，摘要维持 `282fe5335cb60fa6135ce7d271cad1ec897337c3aefe74ce584048307f99b239`。官方 subject/name 精确复验通过；官方未返回手机号，不宣称验证手机号。无真实顾客单、派单或余额改动。
+- 脱敏回执：`/root/hxy-diy-development/wecom-store-staff-20261018/output/backend-delta/{server-recovery-result,production-release-result,production-batch-preview,production-batch-apply,production-batch-replay}.json`；真实输入、逐旧行摘要和恢复日志仅在 `/root/hxy-wecom-private/`。GitHub失败、服务器恢复、只读终验、授权12行新增、重放零写分别记录。三人本人实际登录/手机/BFCache/真实报告来源待验；发布后空间3075360KiB低于下一次3GiB预检门槛，不可降低门槛或擅清旧版本/备份。本文档合并不再次部署。
+
 # 2026-10-18 企微技师正式接入上线
 
 - [PR #278](https://github.com/zzzai/hxydiy/pull/278) 候选 `31d37202ff10c9dd453c03142b9dbf1a4595ca85` 已合并为 `05a837d1c7e45145b71243709a1e3ad996006162`；主干 CI `39114153899` 与唯一 Deploy `39114515295` 成功。最初旧迁移测试与两份生成契约快照缺失已修复，不改业务权限、不跳过门禁；后端 1062 测试/102 子案例通过、14 项跳过，管理端 232 测试通过。未重复已有 PG 67 项与隔离业务验收。
