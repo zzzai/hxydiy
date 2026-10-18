@@ -8,6 +8,7 @@ import { serviceAccountEntry, reportEntryUrl, reportEntryHasBack } from '../retu
 import RecordLoginDialog from './RecordLoginDialog';
 
 export default function ReportEntryPage() {
+  const [entryView] = useState<'reports' | 'return'>(() => new URLSearchParams(window.location.search).get('view') === 'return' ? 'return' : 'reports');
   const [auth, setAuth] = useState<CustomerAuth | null>(readCustomerAuth);
   const [loginOpen, setLoginOpen] = useState(() => !readCustomerAuth());
   const [history, setHistory] = useState(false);
@@ -23,7 +24,7 @@ export default function ReportEntryPage() {
   const storeId = Number(new URLSearchParams(window.location.search).get('store') || 1);
   const menuUrl = serviceAccountEntry(window.location.origin, storeId, 'projects');
   const hasPreviousPage = useRef(reportEntryHasBack(window.history.state, window.history.length, document.referrer));
-  useEffect(() => { window.history.replaceState({ ...window.history.state, hxy_report_entry_back: hasPreviousPage.current }, '', reportEntryUrl(window.location.origin, storeId)); }, [storeId]);
+  useEffect(() => { window.history.replaceState({ ...window.history.state, hxy_report_entry_back: hasPreviousPage.current }, '', reportEntryUrl(window.location.origin, storeId, entryView)); }, [storeId, entryView]);
 
   function clearView() {
     controller.current?.abort();
@@ -107,7 +108,7 @@ export default function ReportEntryPage() {
     async function enter() {
       try {
         if (!await refreshIdentity() || !active || entryController.signal.aborted) return;
-        if (returnedFromReport.current) {
+        if (entryView === 'reports' || returnedFromReport.current) {
           await loadCenter(token, entryController.signal);
           return;
         }
@@ -183,7 +184,7 @@ export default function ReportEntryPage() {
           <div className="report-entry-brand-copy"><h1 aria-label="我的检测报告">我的<br />检测报告</h1><p className="report-entry-brand-caption">查看最近一次及历史报告</p></div>
           <img className="report-entry-brand-ip" src="/assets/seat-entry-ip.png" width={144} height={144} alt="" loading="eager" decoding="async" />
         </section>
-        {(checking || busy) && <p role="status">{center || returnedFromReport.current ? '正在加载本人报告…' : '正在打开本人报告…'}</p>}
+        {(checking || busy) && <p role="status">{entryView === 'reports' || center || returnedFromReport.current ? '正在加载本人报告…' : '正在打开本人报告…'}</p>}
         {message && <p className="report-entry-message" role="alert">{message}</p>}
         {center && auth && !checking && !busy ? <section className="report-entry-results" aria-label="检测报告">
           {latest && <div className="report-entry-latest"><span className="report-entry-latest-label">最近一次检测</span><time dateTime={latest.reported_at!}>{formatDateTime(latest.reported_at)}</time><button className="report-entry-primary" type="button" onClick={() => void viewReport('latest', latest.report_id)}>查看报告<ChevronRight size={18} aria-hidden="true" /></button></div>}

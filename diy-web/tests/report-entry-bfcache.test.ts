@@ -65,7 +65,7 @@ function subject({ consented = true, returned = true } = {}) {
   const context = vm.createContext({ exports, AbortController, URLSearchParams,
     require: (name: string) => { if (!(name in modules)) throw new Error(`Unexpected component dependency: ${name}`); return modules[name]; },
     document: { ...browserEvents, visibilityState: 'visible', referrer: '' },
-    window: { ...browserEvents, performance: { getEntriesByType: () => [{ type: 'back_forward' }] }, location: { search: '?store=1&view=reports', origin: 'http://synthetic.local' }, history: { state: { hxy_report_original_opened: returned, hxy_report_entry_back: false }, length: 3, replaceState() {} }, setInterval: () => 1, clearInterval() {} },
+    window: { ...browserEvents, performance: { getEntriesByType: () => [{ type: 'back_forward' }] }, location: { search: '?store=1&view=return', origin: 'http://synthetic.local' }, history: { state: { hxy_report_original_opened: returned, hxy_report_entry_back: false }, length: 3, replaceState() {} }, setInterval: () => 1, clearInterval() {} },
   });
   new vm.Script(code, { filename: 'ReportEntryPage.actual-component.js' }).runInContext(context);
   exports.default!();
