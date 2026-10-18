@@ -27,7 +27,7 @@ class StaffExternalIdentity(Base):
     corp_id: Mapped[str] = mapped_column(String(128))
     userid: Mapped[str] = mapped_column(String(128))
     staff_id: Mapped[int] = mapped_column(ForeignKey("staff.id"), index=True)
-    technician_id: Mapped[int] = mapped_column(ForeignKey("technicians.id"))
+    technician_id: Mapped[int | None] = mapped_column(ForeignKey("technicians.id"), nullable=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"))
     status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
     binding_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")

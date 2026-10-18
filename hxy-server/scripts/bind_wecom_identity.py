@@ -1,4 +1,4 @@
-"""Preview or explicitly apply one verified WeCom technician binding.
+"""Preview or explicitly apply one verified WeCom store staff binding.
 
 Run as a module: python -m scripts.bind_wecom_identity --input /private/input.json
 The input and its operator-approved preview must remain outside Git.
@@ -39,7 +39,10 @@ def _inspect(db, body, lock=False):
     required = {"corp_id", "userid", "store_id"} | ({"create_test"} if create is not None else {"staff_id", "technician_id"})
     if set(body) != required or not settings.wecom_corp_id or body.get("corp_id") != settings.wecom_corp_id:
         raise BindingRefused("INVALID_INPUT")
-    if any(type(body.get(key)) is not int or body[key] <= 0 for key in required & {"store_id", "staff_id", "technician_id"}):
+    integer_keys = required & {"store_id", "staff_id", "technician_id"}
+    if create is None and body.get("technician_id") is None:
+        integer_keys -= {"technician_id"}
+    if any(type(body.get(key)) is not int or body[key] <= 0 for key in integer_keys):
         raise BindingRefused("INVALID_INPUT")
     try:
         userid = canonical_userid(body["userid"])
@@ -67,20 +70,23 @@ def _inspect(db, body, lock=False):
             raise BindingRefused("ACCOUNT_CONFLICT")
     else:
         staff = row(select(Staff).where(Staff.id == body["staff_id"]))
-        tech = row(select(Technician).where(Technician.id == body["technician_id"]))
-        if staff is None or tech is None:
+        tech = row(select(Technician).where(Technician.id == body["technician_id"])) if body["technician_id"] is not None else None
+        if staff is None or (body["technician_id"] is not None and tech is None):
             raise BindingRefused("ACCOUNT_CONFLICT")
     if staff:
-        proposed = StaffExternalIdentity(provider="wecom", corp_id=body["corp_id"], userid=userid, staff_id=staff.id, technician_id=tech.id, store_id=store.id, status="active")
+        proposed = StaffExternalIdentity(provider="wecom", corp_id=body["corp_id"], userid=userid, staff_id=staff.id, technician_id=tech.id if tech else None, store_id=store.id, status="active")
         try:
             local_binding(db, proposed)
         except HTTPException:
             raise BindingRefused("ACCOUNT_CONFLICT") from None
     identity = row(select(StaffExternalIdentity).where(StaffExternalIdentity.provider == "wecom", StaffExternalIdentity.corp_id == body["corp_id"], StaffExternalIdentity.userid == userid))
-    if identity and (not staff or identity.status != "active" or (identity.staff_id, identity.technician_id, identity.store_id) != (staff.id, tech.id, store.id)):
+    if identity and (not staff or identity.status != "active" or (identity.staff_id, identity.technician_id, identity.store_id) != (staff.id, tech.id if tech else None, store.id)):
         raise BindingRefused("IDENTITY_CONFLICT")
     if staff:
-        other = row(select(StaffExternalIdentity).where(StaffExternalIdentity.provider == "wecom", StaffExternalIdentity.status == "active", or_(StaffExternalIdentity.staff_id == staff.id, StaffExternalIdentity.technician_id == tech.id)))
+        account_match = [StaffExternalIdentity.staff_id == staff.id]
+        if tech:
+            account_match.append(StaffExternalIdentity.technician_id == tech.id)
+        other = row(select(StaffExternalIdentity).where(StaffExternalIdentity.provider == "wecom", StaffExternalIdentity.status == "active", or_(*account_match)))
         if other and (identity is None or other.id != identity.id):
             raise BindingRefused("ACCOUNT_CONFLICT")
     if create is not None and staff and identity is None:
@@ -116,11 +122,11 @@ def apply_binding(db, body, expected):
         staff = Staff(username=create["username"], name=create["name"], password_hash=hash_password(secrets.token_urlsafe(40)), role="technician", status="active", store_id=body["store_id"], technician_id=tech.id)
         db.add(staff)
         db.flush()
-    identity = StaffExternalIdentity(provider="wecom", corp_id=body["corp_id"], userid=userid, staff_id=staff.id, technician_id=tech.id, store_id=body["store_id"], status="active")
+    identity = StaffExternalIdentity(provider="wecom", corp_id=body["corp_id"], userid=userid, staff_id=staff.id, technician_id=tech.id if tech else None, store_id=body["store_id"], status="active")
     db.add(identity)
     db.flush()
-    db.add(AuditLog(actor_type="system", actor_id="wecom-binding-cli", store_id=body["store_id"], action="wecom_identity.bind", entity_type="staff_external_identity", entity_id=str(identity.id), detail={"request_sha256": plan["request_sha256"], "staff_id": staff.id, "technician_id": tech.id, "created_test_account": plan["action"] == "create_test"}))
-    return {"action": "created", "staff_id": staff.id, "technician_id": tech.id, "identity_id": identity.id}
+    db.add(AuditLog(actor_type="system", actor_id="wecom-binding-cli", store_id=body["store_id"], action="wecom_identity.bind", entity_type="staff_external_identity", entity_id=str(identity.id), detail={"request_sha256": plan["request_sha256"], "staff_id": staff.id, "technician_id": tech.id if tech else None, "created_test_account": plan["action"] == "create_test"}))
+    return {"action": "created", "staff_id": staff.id, "technician_id": tech.id if tech else None, "identity_id": identity.id}
 
 
 def main():

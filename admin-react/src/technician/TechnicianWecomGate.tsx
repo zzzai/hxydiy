@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { getStaff } from '../api';
 import { beginWecomEntry, clearStaffSession, completeWecomEntry } from '../wecomSession';
 
 export default function TechnicianWecomGate({ complete = false }: { complete?: boolean }) {
@@ -13,7 +14,10 @@ export default function TechnicianWecomGate({ complete = false }: { complete?: b
     pending.current ||= complete ? completeWecomEntry() : beginWecomEntry();
     void pending.current.then((accepted) => {
       if (!active || !complete) return;
-      if (accepted) navigate('/today', { replace: true });
+      if (accepted) {
+        if (getStaff()?.role === 'manager') window.location.replace('/admin/#/today');
+        else navigate('/today', { replace: true });
+      }
       else setError('本次登录已失效，请重新进入企业微信工作台。');
     }).catch(() => {
       if (active) setError('企业微信身份验证未完成，请重试或使用账号登录。');

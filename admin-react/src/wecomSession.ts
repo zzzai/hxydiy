@@ -1,3 +1,5 @@
+import { interpretStaffLogin, type StaffLoginResponse } from './workspaceLogin.ts';
+
 type StaffSessionResponse = { token: string; staff: object; auth_method?: 'wecom' };
 type PendingEntry = { entry_nonce: string; attempt_id?: string };
 const PENDING_KEY = 'hxy_wecom_pending';
@@ -98,12 +100,26 @@ export async function completeWecomEntry(): Promise<boolean> {
     throw error;
   }
   if (getSessionEpoch() !== expectedEpoch || pendingEntry()?.entry_nonce !== pending.entry_nonce) return false;
-  if (data.auth_method !== 'wecom' || data.staff?.role !== 'technician' || !Number.isInteger(data.staff?.id)
-      || !Number.isInteger(data.staff?.store_id) || !Number.isInteger(data.staff?.technician_id)
-      || data.staff.store_id <= 0 || data.staff.technician_id <= 0 || typeof data.token !== 'string' || !data.token) {
+  if (data.auth_method !== 'wecom' || !Number.isInteger(data.staff?.id)
+      || !Number.isInteger(data.staff?.store_id) || data.staff.store_id <= 0
+      || typeof data.token !== 'string' || !data.token) {
     throw new Error('企业微信身份响应无效');
   }
-  return commitStaffSession(data as StaffSessionResponse, expectedEpoch);
+  if (data.staff.role === 'technician') {
+    if (!Number.isInteger(data.staff.technician_id) || data.staff.technician_id <= 0) {
+      throw new Error('企业微信身份响应无效');
+    }
+    return commitStaffSession(data as StaffSessionResponse, expectedEpoch);
+  }
+  const workspace = Array.isArray(data.workspaces) && data.workspaces.length === 1 ? data.workspaces[0] : null;
+  if (data.staff.role !== 'store_manager' || data.staff.id <= 0 || data.staff.technician_id !== null
+      || data.selector_token !== null || !Number.isInteger(workspace?.assignment_id) || workspace.assignment_id <= 0
+      || workspace.role !== 'store_manager' || workspace.scope_type !== 'store' || workspace.scope_id !== data.staff.store_id) {
+    throw new Error('企业微信身份响应无效');
+  }
+  const session = interpretStaffLogin(data as StaffLoginResponse);
+  if (session.kind !== 'ready' || session.staff.role !== 'manager') throw new Error('企业微信身份响应无效');
+  return commitStaffSession({ token: session.token, staff: session.staff, auth_method: 'wecom' }, expectedEpoch);
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event: StorageEvent) => {

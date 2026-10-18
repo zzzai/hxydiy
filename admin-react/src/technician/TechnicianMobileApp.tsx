@@ -27,7 +27,7 @@ function TechnicianSessionRoutes() {
   const logout = clearStaffSession;
   useEffect(() => {
     const hide = () => {
-      if (!isWecomSession()) return;
+      if (!isWecomSession() || getStaff()?.role !== 'technician') return;
       restoreIdentity.current = true;
       flushSync(() => { setSuspended(true); clearStaffSession(); });
     };
