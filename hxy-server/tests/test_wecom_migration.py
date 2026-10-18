@@ -25,10 +25,13 @@ def test_upgrade_matches_models_and_downgrade_preserves_existing_tables():
     old_tables = [table for table in Base.metadata.sorted_tables if table.name not in NEW_TABLES]
     Base.metadata.create_all(engine, tables=old_tables)
     migration = load_migration()
+    from test_wecom_store_manager_migration import load_manager_migration
+    manager_migration = load_manager_migration()
     with engine.begin() as connection:
         before = set(inspect(connection).get_table_names())
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()
+            manager_migration.upgrade()
         assert set(inspect(connection).get_table_names()) - before == NEW_TABLES
         # SQLite autogenerate treats unspecified VARCHAR lengths as equivalent.
         # Reflect actual migration output so a missing FK string bound is caught.
@@ -43,6 +46,7 @@ def test_upgrade_matches_models_and_downgrade_preserves_existing_tables():
         })
         assert compare_metadata(context, Base.metadata) == []
         with Operations.context(MigrationContext.configure(connection)):
+            manager_migration.downgrade()
             migration.downgrade()
         assert set(inspect(connection).get_table_names()) == before
     engine.dispose()

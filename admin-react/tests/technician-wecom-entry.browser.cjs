@@ -6,6 +6,78 @@ const { chromium } = require(process.env.TECHNICIAN_TEST_PLAYWRIGHT || 'playwrig
 const { startDenyProxy, createBrowserGuard } = require(process.env.TECHNICIAN_TEST_GUARD);
 const origin = process.env.TECHNICIAN_TEST_ORIGIN || 'http://127.0.0.1:18331';
 const actor = { id: 1, technician_id: 1, store_id: 1, role: 'technician', name: '测试技师甲' };
+async function verifyRoleHandoffs(browser, events, report, diagnostics) {
+  for (const manager of [true, false]) {
+    const guard = await createBrowserGuard(browser, new Set([origin]), events);
+    report.phase = manager ? 'manager-entry' : 'technician-entry';
+    try {
+      const requests = [];
+      const staff = manager
+        ? { id: 3, technician_id: null, store_id: 1, role: 'store_manager', name: '合成店长', store_name: '合成门店' }
+        : actor;
+      const response = { token: 'synthetic-role-token', staff, auth_method: 'wecom',
+        ...(manager ? { selector_token: null, workspaces: [{ assignment_id: 7, role: 'store_manager', scope_type: 'store', scope_id: 1, scope_name: '合成门店' }] } : {}) };
+      await guard.context.addInitScript(() => {
+        if (location.pathname !== '/technician/wecom/complete') return;
+        sessionStorage.setItem('hxy_wecom_pending', JSON.stringify({ attempt_id: 'synthetic-role-attempt', entry_nonce: 'synthetic-role-nonce' }));
+        window.addEventListener('pagehide', event => {
+          sessionStorage.setItem('synthetic-role-pagehide', event.isTrusted ? 'trusted' : 'synthetic');
+        }, { once: true });
+      });
+      await guard.context.route(origin + '/api/v1/**', async route => {
+        const pathname = new URL(route.request().url()).pathname;
+        requests.push(pathname);
+        if (diagnostics.requests.length < 64) diagnostics.requests.push(pathname);
+        const body = pathname.endsWith('/auth/wecom/exchange') ? response
+          : pathname.endsWith('/technician/me') ? { staff: actor, technician: { id: 1, name: actor.name } } : { items: [] };
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+      });
+      await guard.context.route(origin + '/admin/', route => route.fulfill({
+        status: 200, contentType: 'text/html',
+        body: '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>Synthetic handoff destination</title><h1>合成管理交接页</h1></html>',
+      }));
+      const rolePage = await guard.context.newPage();
+      rolePage.on('requestfailed', request => {
+        if (diagnostics.failedResources.length < 16) diagnostics.failedResources.push({ path: new URL(request.url()).pathname, error: request.failure()?.errorText });
+      });
+      rolePage.on('pageerror', error => {
+        if (diagnostics.pageErrors.length < 8) diagnostics.pageErrors.push(error.message.slice(0, 250));
+      });
+      rolePage.on('response', response => {
+        if (response.status() >= 400 && diagnostics.httpErrors.length < 16) diagnostics.httpErrors.push({ path: new URL(response.url()).pathname, status: response.status() });
+      });
+      await rolePage.goto(origin + '/technician/wecom/complete', { waitUntil: 'commit' });
+      if (!manager) {
+        await rolePage.waitForURL(origin + '/technician/today');
+        await rolePage.getByText('目前没有本人正在服务的顾客', { exact: true }).waitFor();
+        assert.ok(requests.includes('/api/v1/technician/my-tasks'));
+        await rolePage.goto(origin + '/admin/#/today', { waitUntil: 'domcontentloaded' });
+      }
+      await rolePage.waitForURL(origin + '/admin/#/today');
+      await rolePage.getByRole('heading', { name: '合成管理交接页', exact: true }).waitFor();
+      const observed = await rolePage.evaluate(() => {
+        const current = JSON.parse(localStorage.getItem('hxy_admin_staff') || 'null');
+        return {
+          tokenPresent: Boolean(localStorage.getItem('hxy_admin_token')),
+          roleMatchesManager: current?.role === 'manager',
+          storeMatches: current?.store_id === 1,
+          noTechnician: current?.technician_id === null,
+          wecomMethod: localStorage.getItem('hxy_staff_auth_method') === 'wecom',
+          trustedPagehide: sessionStorage.getItem('synthetic-role-pagehide') === 'trusted',
+        };
+      });
+      assert.equal(observed.trustedPagehide, true, 'The role handoff must traverse an actual document pagehide');
+      assert.equal(observed.tokenPresent, manager);
+      assert.equal(observed.wecomMethod, manager);
+      if (manager) {
+        assert.equal(observed.roleMatchesManager && observed.storeMatches && observed.noTechnician, true);
+        assert.equal(requests.some(pathname => pathname.startsWith('/api/v1/technician/')), false);
+      }
+      report.cases.push({ name: manager ? 'manager keeps its scoped session across a real admin handoff without technician requests'
+        : 'technician still reaches its own tasks and clears its session on actual document departure', status: 'passed', actualPagehide: true });
+    } finally { await guard.context.close(); }
+  }
+}
 async function main() {
   const events = new Map();
   const proxy = await startDenyProxy(new Set([origin]), events);
@@ -14,7 +86,13 @@ async function main() {
   const diagnostics = { pageErrors: [], httpErrors: [], requests: [], failedResources: [] };
   const report = { scope: 'actual React entry with synthetic HTTP timing only', productionWrites: 0, cases: [] };
   try {
-    browser = await chromium.launch({ channel: 'msedge', headless: true, proxy: { server: proxy.url, bypass: '<-loopback>' } });
+    browser = await chromium.launch({ ...(process.env.TECHNICIAN_TEST_EXECUTABLE ? { executablePath: process.env.TECHNICIAN_TEST_EXECUTABLE } : { channel: 'msedge' }), headless: true, proxy: { server: proxy.url, bypass: '<-loopback>' } });
+    if (process.env.TECHNICIAN_TEST_CASE === 'role-handoff') {
+      report.scope = 'real React OAuth shell and actual document pagehide; synthetic API and admin destination; not real WeCom, manager UI or BFCache';
+      await verifyRoleHandoffs(browser, events, report, diagnostics);
+      report.passed = true;
+      return;
+    }
     const guard = await createBrowserGuard(browser, new Set([origin]), events);
     await guard.context.addInitScript(({ actor }) => {
       localStorage.setItem('hxy_admin_token', 'synthetic-t1-token');
@@ -46,6 +124,7 @@ async function main() {
     assert.equal(oldReads.length, 0, 'Residual T1 must not issue business reads before the new WeCom identity is verified');
     assert.equal(authorized, true, 'Workbench launch must request identity verification even with a valid DIY token');
     assert.equal(result.oldIdentityVisible, false);
+    await verifyRoleHandoffs(browser, events, report, diagnostics);
     report.passed = true;
   } catch (error) {
     report.passed = false;
@@ -56,6 +135,7 @@ async function main() {
   } finally {
     if (browser) await browser.close();
     await proxy.close();
+    report.guardEvents = Object.fromEntries(events);
     const out = process.env.TECHNICIAN_TEST_OUTPUT || __dirname;
     await fs.mkdir(out, { recursive: true });
     const file = path.join(out, 'entry-' + Date.now() + '.json');

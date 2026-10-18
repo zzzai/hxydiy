@@ -16,9 +16,7 @@ from app.models.staff_external_identity import StaffExternalIdentity
 
 
 def load_tool():
-    path = Path('/app/scripts/bind_wecom_identity.py')
-    if not path.exists():
-        path = Path(__file__).resolve().parents[1] / 'scripts/bind_wecom_identity.py'
+    path = Path(__file__).resolve().parents[1] / 'scripts/bind_wecom_identity.py'
     spec = importlib.util.spec_from_file_location('bind_wecom_identity', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -40,6 +38,24 @@ def database():
 def request():
     return {'corp_id': 'synthetic-corp', 'userid': 'USER-1', 'store_id': 1,
             'create_test': {'username': 'wecom-test-user', 'code': 'wecom-test-tech', 'name': 'Synthetic test - do not assign'}}
+
+
+def test_existing_manager_binding_requires_explicit_null_and_single_store_grant(database):
+    from app.models.staff_access import StaffScopeAssignment
+    tool = load_tool()
+    database.add(Staff(id=2, username='manager-existing', name='Synthetic manager', password_hash='unused', role='manager', store_id=1))
+    database.add(StaffScopeAssignment(staff_id=2, role='store_manager', scope_type='store', scope_id=1))
+    database.commit()
+    body = {'corp_id': 'synthetic-corp', 'userid': 'MANAGER-1', 'store_id': 1, 'staff_id': 2, 'technician_id': None}
+    with patch.object(settings, 'wecom_corp_id', 'synthetic-corp'):
+        preview = tool.prepare_binding(database, body)
+        result = tool.apply_binding(database, body, preview['preview_sha256'])
+        database.commit()
+        assert result['technician_id'] is None and counts(database) == [2, 0, 1, 1]
+        assert tool.apply_binding(database, body, preview['preview_sha256'])['action'] == 'unchanged'
+        for change in ({'staff_id': 1}, {'technician_id': 999}, {'store_id': 999}):
+            with pytest.raises(tool.BindingRefused):
+                tool.prepare_binding(database, {**body, **change})
 
 
 def counts(db):

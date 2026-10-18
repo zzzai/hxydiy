@@ -87,3 +87,60 @@ test('invalid exchange role never commits', async () => {
   await assert.rejects(completeWecomEntry());
   assert.equal(storage.getItem('hxy_admin_token'), null);
 });
+
+const managerResponse = {
+  token: 'synthetic-manager', auth_method: 'wecom',
+  staff: { id: 3, name: 'Synthetic manager', role: 'store_manager', store_id: 1, technician_id: null, store_name: 'Synthetic store' },
+  selector_token: null,
+  workspaces: [{ assignment_id: 7, role: 'store_manager', scope_type: 'store', scope_id: 1, scope_name: 'Synthetic store' }],
+};
+async function prepareExchange() {
+  reset();
+  globalThis.fetch = async () => reply({ attempt_id: 'manager-attempt', authorization_url: 'https://open.weixin.qq.com/connect/oauth2/authorize', expires_in: 300 });
+  await beginWecomEntry();
+}
+test('single-store manager preserves scoped token and uses the existing manager navigation role', async () => {
+  await prepareExchange();
+  globalThis.fetch = async () => reply(managerResponse);
+  assert.equal(await completeWecomEntry(), true);
+  assert.equal(storage.getItem('hxy_admin_token'), 'synthetic-manager');
+  assert.deepEqual(JSON.parse(storage.getItem('hxy_admin_staff')!), { ...managerResponse.staff, role: 'manager' });
+  assert.equal(isWecomSession(), true);
+  assert.equal(isWecomEntryPending(), false);
+});
+test('manager exchange rejects missing, ambiguous or inconsistent authorization instead of choosing a workspace', async () => {
+  const grant = managerResponse.workspaces[0];
+  const variants = [
+    { staff: { ...managerResponse.staff, id: 0 } },
+    { staff: { ...managerResponse.staff, store_id: 0 } },
+    { staff: { ...managerResponse.staff, store_id: null } },
+    { staff: { ...managerResponse.staff, technician_id: 1 } },
+    { staff: { ...managerResponse.staff, technician_id: undefined } },
+    ...['manager', 'admin', 'brand_admin', 'hq_operator', 'store_staff', 'unknown'].map(role => ({ staff: { ...managerResponse.staff, role } })),
+    { selector_token: 'synthetic-selector' }, { selector_token: undefined },
+    { workspaces: undefined }, { workspaces: [] }, { workspaces: [grant, { ...grant, assignment_id: 8 }] },
+    { workspaces: [{ ...grant, assignment_id: 0 }] },
+    { workspaces: [{ ...grant, role: 'brand_admin' }] },
+    { workspaces: [{ ...grant, scope_type: 'brand' }] },
+    { workspaces: [{ ...grant, scope_id: 2 }] },
+    { workspaces: [null] },
+  ];
+  for (const [index, change] of variants.entries()) {
+    await prepareExchange();
+    globalThis.fetch = async () => reply({ ...managerResponse, ...change });
+    await assert.rejects(completeWecomEntry(), { message: '企业微信身份响应无效' }, 'Rejected manager variant ' + index);
+    assert.equal(storage.getItem('hxy_admin_token'), null);
+    assert.equal(storage.getItem('hxy_admin_staff'), null);
+  }
+});
+test('late manager exchange cannot replace a newer technician session', async () => {
+  await prepareExchange();
+  let resolve!: (response: Response) => void;
+  globalThis.fetch = () => new Promise<Response>((done) => { resolve = done; });
+  const completing = completeWecomEntry();
+  commitStaffSession(t2, getSessionEpoch());
+  resolve(reply(managerResponse));
+  assert.equal(await completing, false);
+  assert.equal(storage.getItem('hxy_admin_token'), t2.token);
+  assert.equal(JSON.parse(storage.getItem('hxy_admin_staff')!).role, 'technician');
+});

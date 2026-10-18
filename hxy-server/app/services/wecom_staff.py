@@ -14,7 +14,8 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Staff, Technician
+from app.domain.staff_workspaces import list_staff_workspaces
+from app.models import Staff, Store, Technician
 from app.models.staff_external_identity import StaffExternalIdentity, StaffOAuthAttempt
 
 
@@ -87,12 +88,14 @@ class WecomProvider:
         payload = self._request("auth/getuserinfo", {"access_token": self._access_token(), "code": code})
         return canonical_userid(payload.get("userid"))
 
-    def verify_member(self, userid: str) -> None:
+    def verify_member(self, userid: str, expected_name: str | None = None) -> None:
         token = self._access_token()
         # user/get enforces this application's visibility, including departments.
         # Keep the same app Secret/token; never fall back to a directory token.
         member = self._request("user/get", {"access_token": token, "userid": userid})
         if canonical_userid(member.get("userid")) != userid or member.get("status") != 1:
+            raise WecomProviderError()
+        if expected_name is not None and member.get("name") != expected_name:
             raise WecomProviderError()
         application = self._request("agent/get", {"access_token": token, "agentid": settings.wecom_agent_id})
         if str(application.get("agentid")) != settings.wecom_agent_id or application.get("close") != 0:
@@ -137,14 +140,30 @@ def browser_matches(attempt: StaffOAuthAttempt, cookies) -> bool:
     return bool(secret) and secrets.compare_digest(attempt.browser_hash, digest(secret))
 
 
+def manager_workspace(db: Session, staff: Staff, store_id: int):
+    workspaces = list_staff_workspaces(db, staff)
+    if (len(workspaces) != 1 or workspaces[0].role != "store_manager"
+        or workspaces[0].scope_type != "store" or workspaces[0].scope_id != store_id):
+        raise auth_error()
+    return workspaces[0]
+
+
 def local_binding(db: Session, identity: StaffExternalIdentity | None) -> Staff:
     if not identity or identity.provider != "wecom" or identity.corp_id != settings.wecom_corp_id or identity.status != "active":
         raise auth_error()
     staff = db.get(Staff, identity.staff_id)
-    tech = db.get(Technician, identity.technician_id)
-    if (not staff or staff.status != "active" or staff.role != "technician" or staff.technician_id != identity.technician_id
-        or not tech or tech.status not in {"available", "busy"}
-        or staff.store_id != identity.store_id or tech.store_id != identity.store_id):
+    if not staff or staff.status != "active" or staff.store_id != identity.store_id:
+        raise auth_error()
+    if staff.role == "technician":
+        tech = db.get(Technician, identity.technician_id) if identity.technician_id else None
+        if (staff.technician_id != identity.technician_id or not tech
+            or tech.status not in {"available", "busy"} or tech.store_id != identity.store_id):
+            raise auth_error()
+    elif staff.role == "manager":
+        if staff.technician_id is not None or identity.technician_id is not None or not db.get(Store, identity.store_id):
+            raise auth_error()
+        manager_workspace(db, staff, identity.store_id)
+    else:
         raise auth_error()
     if staff.temporary_expires_at is not None and datetime.now(timezone.utc) >= utc(staff.temporary_expires_at):
         raise auth_error()
@@ -193,8 +212,16 @@ def exchange_attempt(db: Session, attempt_id: str, nonce: str, cookies, provider
     if identity.binding_version != attempt.binding_version or int(staff.credentials_version or 1) != attempt.credentials_version:
         raise auth_error()
     verify_identity_proof(db, identity, provider)
-    payload = {"sub": str(staff.id), "token_type": "staff", "role": "technician", "auth_method": "wecom", "external_identity_id": identity.id, "binding_version": identity.binding_version, "credentials_version": int(staff.credentials_version or 1), "exp": now + timedelta(hours=12)}
-    return {"token": jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm), "staff": {"id": staff.id, "name": staff.name, "role": "technician", "store_id": staff.store_id, "technician_id": staff.technician_id}, "auth_method": "wecom"}
+    payload = {"sub": str(staff.id), "token_type": "staff", "role": staff.role, "auth_method": "wecom", "external_identity_id": identity.id, "binding_version": identity.binding_version, "credentials_version": int(staff.credentials_version or 1), "exp": now + timedelta(hours=12)}
+    result = {"staff": {"id": staff.id, "name": staff.name, "role": staff.role, "store_id": staff.store_id, "technician_id": staff.technician_id}, "auth_method": "wecom"}
+    if staff.role == "manager":
+        workspace = manager_workspace(db, staff, identity.store_id)
+        payload.update(token_type="staff_scope", role=workspace.role, assignment_id=workspace.assignment_id,
+            scope_type=workspace.scope_type, scope_id=workspace.scope_id)
+        result["staff"].update(role=workspace.role, store_name=workspace.scope_name)
+        result.update(selector_token=None, workspaces=[workspace.as_dict()])
+    result["token"] = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return result
 
 
 def verify_identity_proof(db: Session, identity: StaffExternalIdentity, provider: WecomProvider) -> None:
@@ -211,10 +238,17 @@ def verify_identity_proof(db: Session, identity: StaffExternalIdentity, provider
 
 def validate_wecom_session(db: Session, payload: dict, staff: Staff) -> None:
     configured_urls()
-    if payload.get("token_type") != "staff" or payload.get("role") != "technician":
-        raise auth_error()
     identity = db.get(StaffExternalIdentity, int(payload["external_identity_id"]))
     resolved = local_binding(db, identity)
     if resolved.id != staff.id or identity.binding_version != payload.get("binding_version"):
+        raise auth_error()
+    if resolved.role == "manager":
+        workspace = manager_workspace(db, resolved, identity.store_id)
+        expected = {"token_type": "staff_scope", "role": workspace.role, "assignment_id": workspace.assignment_id,
+            "scope_type": workspace.scope_type, "scope_id": workspace.scope_id}
+        if (type(payload.get("assignment_id")) is not int or type(payload.get("scope_id")) is not int
+            or any(payload.get(key) != value for key, value in expected.items())):
+            raise auth_error()
+    elif payload.get("token_type") != "staff" or payload.get("role") != "technician":
         raise auth_error()
     verify_identity_proof(db, identity, get_wecom_provider())

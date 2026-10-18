@@ -22,6 +22,8 @@ class StaffScopeAssignmentMigrationTests(unittest.TestCase):
                 connection.execute(text("CREATE TABLE stores (id INTEGER PRIMARY KEY, name VARCHAR(128) NOT NULL)"))
                 connection.execute(text("INSERT INTO stores VALUES (1, '一号店'), (2, '二号店')"))
                 connection.execute(text("CREATE TABLE service_position_qrs (id INTEGER PRIMARY KEY)"))
+                # SQLite batch reflection needs the legacy identity FK target.
+                connection.execute(text("CREATE TABLE technicians (id INTEGER PRIMARY KEY)"))
                 connection.execute(text("""
                     CREATE TABLE staff (
                         id INTEGER PRIMARY KEY,
@@ -58,14 +60,15 @@ class StaffScopeAssignmentMigrationTests(unittest.TestCase):
             engine.dispose()
 
             environment = {**os.environ, "DATABASE_URL": database_url}
-            subprocess.run(
+            migration = subprocess.run(
                 [sys.executable, "-m", "alembic", "upgrade", "head"],
                 cwd=project_root,
                 env=environment,
                 capture_output=True,
                 text=True,
-                check=True,
+                check=False,
             )
+            self.assertEqual(migration.returncode, 0, migration.stderr)
 
             engine = create_engine(database_url)
             with engine.begin() as connection:
