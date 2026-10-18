@@ -1,10 +1,16 @@
 # hxy-diy 当前状态
 
-更新时间：2026-10-17（Asia/Shanghai）
+更新时间：2026-10-18（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
+
+- `WECOM-TECHNICIAN-20261017` 已上线：[PR #278](https://github.com/zzzai/hxydiy/pull/278)，合并/发布 `05a837d1c7e45145b71243709a1e3ad996006162`；精确主干 [CI 39114153899](https://github.com/zzzai/hxydiy/actions/runs/39114153899) 和唯一 [Deploy 39114515295](https://github.com/zzzai/hxydiy/actions/runs/39114515295) 成功，实际 current 为 `github-05a837d1c7e4-39114515295`。三张新表已迁移至 `20261017_wecom_technician`，真实备份/隔离恢复及备份 checksum 通过。
+- 468 项 MANIFEST、209 个安装 Git 文件、200 个运行 Git 文件及两端/企微入口公网资源匹配。企微功能已启用，同一 Secret 的在职/可见性验证、一次性浏览器绑定、角色和门店隔离保留；回调日志查询串保护及合成 303/no-referrer 检查通过。应用主页指向 `https://diy.hexiaoyue.com/technician/wecom`，其他应用字段未改。
+- 已获批的单个专用测试 Staff/Technician/身份绑定及一条绑定审计已创建，重复执行零新增，原员工/技师资料哈希不变；没有创建顾客单或派单。真实企微登录、真实报告来源、手机/BFCache 和营业现场仍未验。三位正式员工的单店真实角色接入为独立后续任务，尚未建号/绑定，不计入本次完成；详见 `WORK-STATUS.md` 顶部。
+
+### 2026-10-17 既往发布（能力已包含于上文当前版本）
 
 - `SEAT-OPTIONAL-SELECTION-20261017`已上线，实际安装`github-8b352fab2208-39005452064`。业务[PR #276](https://github.com/zzzai/hxydiy/pull/276)，已审候选`b97b18795dc9353f30aa104cb2b1430159937eb7`，合并/发布`8b352fab22085c56bfa691fb092c7987b43a074e`；精确main [CI 39005206802](https://github.com/zzzai/hxydiy/actions/runs/39005206802)与唯一[Deploy 39005452064](https://github.com/zzzai/hxydiy/actions/runs/39005452064)成功，包含既定备份、隔离恢复和发布验证。
 - 顾客可先在门店内无座配置并提交私有选单，原键重试不重复下单；店长在同门店为原单后配服务位，保留项目配置和金额。配位进入`waiting_service`且不提前开始服务；原顾客会话可读回位置，技师复用既有开始、结束、v7记录及历史流程。没有数据库结构迁移、凭据修改或顾客数据可见范围扩张。

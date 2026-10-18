@@ -1,3 +1,12 @@
+# 2026-10-18 企微技师正式接入上线
+
+- [PR #278](https://github.com/zzzai/hxydiy/pull/278) 候选 `31d37202ff10c9dd453c03142b9dbf1a4595ca85` 已合并为 `05a837d1c7e45145b71243709a1e3ad996006162`；主干 CI `39114153899` 与唯一 Deploy `39114515295` 成功。最初旧迁移测试与两份生成契约快照缺失已修复，不改业务权限、不跳过门禁；后端 1062 测试/102 子案例通过、14 项跳过，管理端 232 测试通过。未重复已有 PG 67 项与隔离业务验收。
+- current `/root/hxy-diy-20260811/releases/github-05a837d1c7e4-39114515295`；MANIFEST 468 项，SHA256 `0d6234ce33be20cae34346a99098f6362e90414886c87b8ef941bc7bd39911b4`。209 安装 Git 文件、200 运行 Git 文件、两端及企微入口 HTML/资源一致；镜像 `sha256:482e6433265e8e52655a333baea58692e89defdd37ec5621ea8967b0c92f9ccf`，健康 `ok/production`。
+- 发布备份 `backups/pre-github-05a837d1c7e4-39114515295-20261018T093025Z.dump` 的 checksum 与真实隔离恢复通过；三表迁移至 `20261017_wecom_technician`。回滚保留新增表，不删除已产生的身份/认证/标签事实。
+- 功能先关闭部署，再完成官方身份复核与专用测试 Staff 5 / Technician 2 / identity 1 的事务创建；重放 `unchanged`，原全部 Staff/Technician 哈希不变，恰好一条绑定审计。没有修改原管理员、旧测试员工或创建真实顾客单/派单；随机密码不落明文、不发送短信。正式三人的新账号及店长兼容增量属于独立后续批准范围，本批尚未执行。
+- 已启用企微，仅重建 API 且镜像不变；精确 callback 的代理/应用日志不含合成查询值，303 固定跳转/no-referrer 检查通过。应用 AgentID 1000003 的 `home_url` 设为正式 `/technician/wecom`，其他应用字段逐项不变。真实桌面 OAuth、手机、真实报告来源、实际 BFCache 及现场验收仍待验证，不能以合成检查代替。
+- 服务器脱敏回执：`/root/hxy-diy-development/wecom-technician-20261017/output/production-delta-v1/production-release-result.json`；配置前备份/激活回执：`/root/hxy-diy-20260811/backups/wecom-config-20261018-v1/`。个人映射仅在仓库外受限私有目录；Secret 未进入 Git/前端/日志。本机断连曾使等待器超时，重连后核验原部署已成功，未重复 dispatch；此文档补录不再次部署。
+
 # 2026-10-17 无座选购与原单后配位上线
 
 - `SEAT-OPTIONAL-SELECTION-20261017`业务[PR #276](https://github.com/zzzai/hxydiy/pull/276)已合并，26个核定文件；候选`b97b18795dc9353f30aa104cb2b1430159937eb7`与合并/发布`8b352fab22085c56bfa691fb092c7987b43a074e`的Git tree一致。精确main [CI 39005206802](https://github.com/zzzai/hxydiy/actions/runs/39005206802)与唯一[Deploy 39005452064](https://github.com/zzzai/hxydiy/actions/runs/39005452064)成功，实际备份/隔离恢复/发布验证job成功，不是仅触发。
