@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { App, Button, Form, Input, Typography } from 'antd';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { activateTechnician, login } from '../api';
+import { commitStaffSession, getSessionEpoch } from '../wecomSession';
 
 type LoginValues = { username?: string; password: string; token?: string; confirmPassword?: string };
 
@@ -10,6 +11,7 @@ export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'activate'>('login');
   const submit = async (values: LoginValues) => {
+    const epoch = getSessionEpoch();
     setLoading(true);
     try {
       if (mode === 'activate') {
@@ -18,19 +20,16 @@ export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff
           return;
         }
         const response = await activateTechnician(values.token || '', values.password);
-        localStorage.setItem('hxy_admin_token', response.data.token);
-        localStorage.setItem('hxy_admin_staff', JSON.stringify(response.data.staff));
-        onLogin(response.data.staff);
+        if (commitStaffSession(response.data, epoch)) onLogin(response.data.staff);
         return;
       }
       const response = await login(values.username || '', values.password);
+      if (epoch !== getSessionEpoch()) return;
       if (!['technician', 'manager'].includes(response.data.staff?.role)) {
         message.error('该账号没有移动端权限');
         return;
       }
-      localStorage.setItem('hxy_admin_token', response.data.token);
-      localStorage.setItem('hxy_admin_staff', JSON.stringify(response.data.staff));
-      onLogin(response.data.staff);
+      if (response.data.token && response.data.staff && commitStaffSession({ token: response.data.token, staff: response.data.staff }, epoch)) onLogin(response.data.staff);
     } catch {
       // API interceptor displays the server error.
     } finally {

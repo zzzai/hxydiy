@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { installSessionGuards } from './apiSession.ts';
+import { clearStaffSession, isStaleSessionError } from './wecomSession.ts';
+import type { Page, TechnicianCustomerTask, CustomerSummary, CustomerHistoryItem, CustomerReviewItem, CustomerReportItem, CustomerReportDetail, CustomerTags } from './technicianCustomer.ts';
 import type { MembershipExplanation } from './memberCards';
 import type { LiveServicePositionMap, PositionOccupancy } from './servicePositions.ts';
 import { getEntryLoginPath, isTechnicianEntry } from './auth.ts';
@@ -8,6 +11,7 @@ const API = '/api/v1/admin';
 const API2 = '/api/v1/admin/v2';
 
 export const client = axios.create({ baseURL: '/api/v1' });
+installSessionGuards(client);
 
 let apiErrorHandler: (message: string) => void = () => undefined;
 
@@ -25,16 +29,16 @@ client.interceptors.request.use((config) => {
   const token = getToken();
   if (token && !config.headers.Authorization) config.headers.Authorization = `Bearer ${token}`;
   return config;
-});
+}, undefined, { synchronous: true });
 
 client.interceptors.response.use(
   (res) => res,
   (err) => {
+    if (isStaleSessionError(err)) return Promise.reject(err);
     if (err.response?.status === 401) {
       const detail = err.response?.data?.detail;
       const msg = typeof detail === 'string' ? detail : detail?.message || '账号不可用，请联系店长';
-      localStorage.removeItem('hxy_admin_token');
-      localStorage.removeItem('hxy_admin_staff');
+      clearStaffSession();
       if (err.config?.url?.includes('/admin/login') || err.config?.url?.includes('/technician/activate')) {
         apiErrorHandler(msg);
         return Promise.reject(err);
@@ -67,6 +71,22 @@ export const selectStaffWorkspace = (assignmentId: number, selectorToken: string
 
 export const getTechnicianMe = () => client.get('/technician/me');
 export const getTechnicianTasks = () => client.get('/technician/tasks');
+export const getTechnicianMyTasks = () => client.get<{ items: TechnicianCustomerTask[] }>('/technician/my-tasks');
+const customerPath = (id: number, section: string) => `/technician/occupancies/${id}/customer-${section}`;
+export const getTechnicianCustomerSummary = (id: number) => client.get<CustomerSummary>(customerPath(id, 'summary'));
+export const getTechnicianCustomerHistory = (id: number, page = 1, pageSize = 20) =>
+  client.get<Page<CustomerHistoryItem>>(customerPath(id, 'history'), { params: { page, page_size: pageSize } });
+export const getTechnicianCustomerReviews = (id: number, page = 1, pageSize = 20) =>
+  client.get<Page<CustomerReviewItem>>(customerPath(id, 'reviews'), { params: { page, page_size: pageSize } });
+export const getTechnicianCustomerReports = (id: number, page = 1, pageSize = 20) =>
+  client.get<Page<CustomerReportItem>>(customerPath(id, 'reports'), { params: { page, page_size: pageSize } });
+export const getTechnicianCustomerReport = (id: number, reportId: string) =>
+  client.get<CustomerReportDetail>(`${customerPath(id, 'reports')}/${encodeURIComponent(reportId)}`);
+export const getTechnicianCustomerTags = (id: number) => client.get<CustomerTags>(customerPath(id, 'tags'));
+export const addTechnicianCustomerTag = (id: number, tagId: number, idempotencyKey: string) =>
+  client.post<{ id: number; tag_id: number; version: number }>(customerPath(id, 'tags'), { tag_id: tagId, idempotency_key: idempotencyKey });
+export const revokeTechnicianCustomerTag = (id: number, contributionId: number, version: number, reason: string) =>
+  client.delete<{ id: number; version: number; revoked: true }>(`${customerPath(id, 'tags')}/contributions/${contributionId}`, { data: { expected_version: version, reason } });
 export const getTechnicianServiceReference = (occupancyId: number) =>
   client.get<TechnicianServiceReferenceResponse>(`/technician/occupancies/${occupancyId}/service-reference`);
 export const getTechnicianServiceReferenceTaxonomy = () => client.get('/technician/service-reference-taxonomy');

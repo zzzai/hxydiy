@@ -861,6 +861,21 @@
         "title": "AssignmentIn",
         "type": "object"
       },
+      "AuthorizeRequest": {
+        "properties": {
+          "entry_nonce": {
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Entry Nonce",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_nonce"
+        ],
+        "title": "AuthorizeRequest",
+        "type": "object"
+      },
       "AutomationIn": {
         "properties": {
           "actions": {
@@ -1723,6 +1738,28 @@
           "cart_version"
         ],
         "title": "EntrySessionOut",
+        "type": "object"
+      },
+      "ExchangeRequest": {
+        "properties": {
+          "attempt_id": {
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "entry_nonce": {
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Entry Nonce",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_nonce",
+          "attempt_id"
+        ],
+        "title": "ExchangeRequest",
         "type": "object"
       },
       "FeedbackFollowUpIn": {
@@ -7059,6 +7096,28 @@
         "title": "StoreOut",
         "type": "object"
       },
+      "TagContributionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "tag_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Tag Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tag_id",
+          "idempotency_key"
+        ],
+        "title": "TagContributionIn",
+        "type": "object"
+      },
       "TagIn": {
         "properties": {
           "auto_rule": {
@@ -7097,6 +7156,28 @@
           "name"
         ],
         "title": "TagIn",
+        "type": "object"
+      },
+      "TagRevokeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_version": {
+            "minimum": 1.0,
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_version",
+          "reason"
+        ],
+        "title": "TagRevokeIn",
         "type": "object"
       },
       "TechIn": {
@@ -17869,6 +17950,135 @@
         ]
       }
     },
+    "/api/v1/auth/wecom/authorize": {
+      "post": {
+        "operationId": "authorize_api_v1_auth_wecom_authorize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize",
+        "tags": [
+          "wecom-staff"
+        ]
+      }
+    },
+    "/api/v1/auth/wecom/callback": {
+      "get": {
+        "operationId": "callback_api_v1_auth_wecom_callback_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "State",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Callback",
+        "tags": [
+          "wecom-staff"
+        ]
+      }
+    },
+    "/api/v1/auth/wecom/exchange": {
+      "post": {
+        "operationId": "exchange_api_v1_auth_wecom_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExchangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange",
+        "tags": [
+          "wecom-staff"
+        ]
+      }
+    },
     "/api/v1/coupons": {
       "get": {
         "description": "我的优惠券列表（合并模板信息；unused 且过期的动态标记为 expired）。",
@@ -21345,6 +21555,53 @@
         ]
       }
     },
+    "/api/v1/technician/my-tasks": {
+      "get": {
+        "operationId": "my_tasks_api_v1_technician_my_tasks_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Tasks",
+        "tags": [
+          "technician-customers"
+        ]
+      }
+    },
     "/api/v1/technician/occupancies/{occupancy_id}/confirm": {
       "post": {
         "operationId": "confirm_service_api_v1_technician_occupancies__occupancy_id__confirm_post",
@@ -21412,6 +21669,605 @@
         "summary": "Confirm Service",
         "tags": [
           "technician"
+        ]
+      }
+    },
+    "/api/v1/technician/occupancies/{occupancy_id}/customer-history": {
+      "get": {
+        "operationId": "history_api_v1_technician_occupancies__occupancy_id__customer_history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occupancy_id",
+            "required": true,
+            "schema": {
+              "title": "Occupancy Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "History",
+        "tags": [
+          "technician-customers"
+        ]
+      }
+    },
+    "/api/v1/technician/occupancies/{occupancy_id}/customer-reports": {
+      "get": {
+        "operationId": "reports_api_v1_technician_occupancies__occupancy_id__customer_reports_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occupancy_id",
+            "required": true,
+            "schema": {
+              "title": "Occupancy Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "report_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Report Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reports",
+        "tags": [
+          "technician-customers"
+        ]
+      }
+    },
+    "/api/v1/technician/occupancies/{occupancy_id}/customer-reports/{report_id}": {
+      "get": {
+        "operationId": "reports_api_v1_technician_occupancies__occupancy_id__customer_reports__report_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occupancy_id",
+            "required": true,
+            "schema": {
+              "title": "Occupancy Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Report Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reports",
+        "tags": [
+          "technician-customers"
+        ]
+      }
+    },
+    "/api/v1/technician/occupancies/{occupancy_id}/customer-reviews": {
+      "get": {
+        "operationId": "reviews_api_v1_technician_occupancies__occupancy_id__customer_reviews_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occupancy_id",
+            "required": true,
+            "schema": {
+              "title": "Occupancy Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reviews",
+        "tags": [
+          "technician-customers"
+        ]
+      }
+    },
+    "/api/v1/technician/occupancies/{occupancy_id}/customer-summary": {
+      "get": {
+        "operationId": "summary_api_v1_technician_occupancies__occupancy_id__customer_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occupancy_id",
+            "required": true,
+            "schema": {
+              "title": "Occupancy Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Summary",
+        "tags": [
+          "technician-customers"
+        ]
+      }
+    },
+    "/api/v1/technician/occupancies/{occupancy_id}/customer-tags": {
+      "get": {
+        "operationId": "tags_api_v1_technician_occupancies__occupancy_id__customer_tags_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occupancy_id",
+            "required": true,
+            "schema": {
+              "title": "Occupancy Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tags",
+        "tags": [
+          "technician-customers"
+        ]
+      },
+      "post": {
+        "operationId": "contribute_api_v1_technician_occupancies__occupancy_id__customer_tags_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occupancy_id",
+            "required": true,
+            "schema": {
+              "title": "Occupancy Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagContributionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Contribute",
+        "tags": [
+          "technician-customers"
+        ]
+      }
+    },
+    "/api/v1/technician/occupancies/{occupancy_id}/customer-tags/contributions/{contribution_id}": {
+      "delete": {
+        "operationId": "revoke_api_v1_technician_occupancies__occupancy_id__customer_tags_contributions__contribution_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "occupancy_id",
+            "required": true,
+            "schema": {
+              "title": "Occupancy Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "contribution_id",
+            "required": true,
+            "schema": {
+              "title": "Contribution Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagRevokeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke",
+        "tags": [
+          "technician-customers"
         ]
       }
     },

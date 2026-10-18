@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20260928_membership_cards"])
+        self.assertEqual(scripts.get_heads(), ["20261017_wecom_technician"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -90,6 +90,7 @@ class AlembicContractTests(unittest.TestCase):
             "service_position_qrs", "customer_profile_records", "customer_profile_consents",
             "customer_profile_current", "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
             "staff_scope_assignments", "membership_cards",
+            "staff_external_identities", "staff_oauth_attempts", "customer_tag_contributions",
         }
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
@@ -278,6 +279,7 @@ class AlembicContractTests(unittest.TestCase):
             "membership_codes",
             "visit_feedback",
             "staff_scope_assignments", "membership_cards",
+            "staff_external_identities", "staff_oauth_attempts", "customer_tag_contributions",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():

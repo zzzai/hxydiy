@@ -1,5 +1,24 @@
 # 技师端工作流
 
+## 2026-10-18 企微认证诊断收尾（第三回调与普通返回已验，真实BFCache未验；未发布）
+
+- 已证实并修复测试代理CONNECT半开连接缺陷：仅增加upstream close联动下游destroy，原5000ms/TLS/白名单不变；纯HTTPS回归RED→GREEN、对称关闭及外域403通过。R5真实隔离集成三次OAuth均满足原9000ms DCL与exchange/身份语义，不改业务源码。
+- R5整体failed保留：neutral迟到pageshow被测试驱动误收为返回完成，实际目标today请求在cleanup才发出并被中止；不是资料泄漏或有效缓存未命中结论。R6以源path筛选并先等neutral自身pageshow，仅补返回，不重业务前置；筛选纯回归RED→GREEN六例通过。
+- R6真实history普通返回通过：today新文档后安全回登录页，token/staff/auth method/身份头/顾客DOM全false；不是自动恢复登录会话，也不扩大为逐帧零闪回。实际persisted未命中，CDP原因MainResourceHasCacheControlNoStore、JsNetworkRequestReceivedCacheControlNoStoreResource、BrowsingInstanceNotSwapped；保留partial/exit2，不调整no-store或反复追命中。
+- R6六认证路由、59表业务数据零变化，protected_unchanged/business_unchanged/public均true，仅own认证attempt1/used1及验证时间窄豁免；意外身份0。未执行finish/profile/标签等业务写。API20.43秒/guard33.45秒正常关闭，三隔离容器exited且无OOM；PID12728/8760退出，18000/18443监听0，自有隔离Chrome精确路径进程0。
+- 最终本机交付output/wecom-technician-20261017/AUTH-RETURN-FINAL-v2.md；R6原结果SHA b31c2285bc712660ab9c99a29ef104d1daf238e696c3a2124344457c61559b71，后台closed-result SHA31d1d95613264646fa1ed56c24bc971b2ee0ec43a143711dab514d066b62457c。十三依赖冻结清单fdfa137084e0b1169eed8e6dbe7acc81779b0c932944b4df7bb0ef4504880961，运行后仍匹配。
+- 既有React模拟分支在admin-react/tests/technician-session.browser.cjs:94-108：合成pagehide/pageshow＋authorize503，不是实际BFCache或角色/门店变化重验；本轮仅只读定位。真实缓存恢复、权限变化成功重验及微信现场仍未验。没有提交/推送/合并/部署或生产库操作，生产状态未改变；本轮不再新开测试。
+
+## 2026-10-18 企微第三回调诊断阶段记录（R5接续前资源等待，已由上文最终结果替代）
+
+- 本轮仅在授权隔离环境诊断，未访问生产库、未读取真实企微 Secret、未提交/推送/合并/部署；业务源码未因本轮猜测修改。原七组业务验收不重跑。
+- R2、R3、R4 定向复现第三 callback：服务端及代理返回303，但浏览器 complete 请求未到本地终端、无文档提交或第三 exchange，原9000ms DCL超时。保留路由和匹配Chromium151均未单独消除故障。R3/R4后台59表保护、两次必要业务写精确校验与独立关闭通过；R2因fixture误判原生finish键保留失败，不追改通过。
+- 已证实诊断代理缺陷：CONNECT上游空闲5000ms销毁时未同步关闭浏览器侧隧道。相同合成HTTPS/CA/SPKI纯传输测试旧版303后目标超时，新版仅补upstream close联动socket.destroy后目标200；外域仍403，客户端主动关闭的对称回归也通过。未增加超时、放宽TLS或白名单，此处不是业务代码修复。
+- R5候选沿用固定Chromium151.0.7922.34/revision1234，唯一集成变量为上述代理单行修复。客户端入口SHA1b5f4a3daa6fa29ce951eab0e21b1cfa3348a3652af19ed17a9d93a93a8acea4；11依赖清单SHA0a248844dfa6fafedaeb65d65063a021e402cd62181b7520cde097bb7baa9e55。
+- R5尚未arm或消费：本机启动前仅638MiB可用，低于授权轻量门槛；自有隔离Chrome精确路径残留为0，未关闭用户或其他窗口程序。后台保持关闭，等待总控协调资源后复用同一未消费轮次进行新鲜门禁，不循环重试。
+- 本机证据位于技师工作区output/wecom-technician-20261017/：PROXY-IDLE-R5-RED-GREEN-v1.json（SHA33d3433f5a0b2c6a7f81d0af442818dd74b59f8e2a9893260d2ca5c8dac4dcd6）、CLIENT-AUTH-RETURN-R3-RESULT-v1.md及各轮原始result；后台R4关闭证据SHA b1a9f496226616fec7f129f70d011d2f5719d29926e01c69efe6403db9750d7f。
+- 剩余：真实集成确认修复后第三callback仍满足原9s/DCL、exchange和身份语义；再分别验实际后退的安全重载与pageshow.persisted真实缓存恢复。此前未进入返回阶段；合成React生命周期测试不能替代角色/门店变化重验或零闪回证据，不称整体完成或已生产。
+
 ## 2026-10-07 TECH-MEMBER-CODE-HIDE-01 会员码入口隐藏（本地完成，待合并发布）
 
 - 技师端底部导航移除“会员核验”，技师访问旧 `/technician/member-verify` 地址会返回今日服务，不再加载摄像头、扫码或码输入界面。

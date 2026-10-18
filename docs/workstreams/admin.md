@@ -1,5 +1,24 @@
 # 管理后台与员工工作台工作流
 
+## 2026-10-18 WECOM 正式接入最小差异（未提交/合并/生产）
+
+- 最新授权允许真实备份及恢复验证后新增既定三表，通过必要验证与 CI 后合并发布到正式域名；另明确允许新增专用测试 Staff/Technician 和企微绑定，保留原管理员与旧测试员工，不造单/派单。本段取代下文初始阶段的禁止生产授权范围，但不是发布完成事实。
+- 官方 `user/get` 使用同一自建应用 token 验证可见范围，不再因部门成员未逐人列出而拒绝；保留成员身份/在职、AgentID/close、本地角色/门店、一次性 OAuth 及 300 秒证明刷新门禁。新增 3 项、11 子案例通过；权限撤回和身份错配不续期证明。既有 PG 67 项和七组隔离业务证据不重复跑。
+- Compose 补五个默认关闭的 WECOM 配置占位；发布迁移 allowlist 只补本批精确文件。Secret 不进入仓库、前端或日志。受控 CLI 默认预览、显式目标、官方复核、锁后复核、冲突拒绝、事务审计及重复零写；测试技师不是隐藏账号或权限沙箱，会出现在门店列表。
+- 只读生产盘点未找到明确测试技师；两个旧测试员工不改。尚未新建/绑定。真实企业微信首登、报告来源、BFCache 实际命中与现场仍未验；R6 普通返回通过不升级为真实 BFCache 通过。差异证据位于隔离树 `output/production-delta-v1/`。
+
+## 2026-10-18 WECOM-TECHNICIAN-20261017（隔离验证未完成，未发布）
+
+- 基线 `77ce71f`，指定隔离树 `/root/hxy-diy-development/wecom-technician-20261017`。后台独占后端/三表迁移/共享认证和 API；技师窗口负责 technician UI。不提交、合并或部署，不读真实企业微信 Secret，不复用生产库。
+- 契约：`../contracts/wecom-technician-access-v1.md`。保留原密码会话、待认领服务入口、v7 和店长旧标签维护；新本人在店档案逐请求校验，报告缺真实用途/来源证据默认拒绝。
+- SSH 已恢复；已在指定树按冻结源码、隔离 PG 与资源上限完成受控窗口。复用既有验收证据，不重复已通过七组；真实企业微信、真实报告源及现场仍未验。
+- AUTH-RETURN-R2 保持失败事实：第三次 callback 后页面超时，未到真实返回；夹具错误把原生 `tech-finish-613-<UUIDv4>` 当裸 UUID，导致 `state_transitions` 提前拒绝，其他 58 表摘要相等。该行后续逐列校验未执行，不能追改为通过。脱敏闭合证据：`../../output/wecom-technician-resume/fixture-auth-return-r2/closed-result.json`。
+- AUTH-RETURN-R3 仅修正夹具精确前缀与 UUIDv4 校验，完整键请求摘要及其余保护不变；定向先失败后通过，10 项纯保护测试通过。受控运行 59 表保护、允许的结束服务/画像/审计逐列值及 public 摘要均通过，意外身份 0；未改业务代码或生产数据。
+- R3 保留一次性 v7 拦截器、不执行 unroute 后仍复现第三次 callback 页面超时；服务端第三次 callback 15.263 ms 返回 303，没有第三次 exchange 请求，BFCache 返回验收未到达。API/guard 正常关闭，独立核验 3 容器退出且无 OOM，所属客户端/转发进程退出、18000/18443 零监听。当前只分析已存脱敏链路证据，不重启旧轮次、不推测修复后端。证据：`../../output/wecom-technician-resume/fixture-auth-return-r3/closed-result.json`。
+- AUTH-RETURN-R4 仅将浏览器换为固定匹配的 Chromium 151.0.7922.34，仍在第三次 callback 的原 9 秒 DCL 等待超时，未执行后退；不能把旧 Edge 版本作为唯一根因。复用 R3 精确保护规则、不重测后台合同或旧七组；本轮 59 表、精确业务写入、public 摘要通过，意外身份 0。服务端第三次 callback 12.931 ms 返回 303、无第三次 exchange；API 33.36 秒、guard 46.8 秒正常关闭，独立确认 3 容器停且无 OOM、所属 PID 退出、18000/18443 零监听。无业务/生产改动，不新开轮次；证据：`../../output/wecom-technician-resume/fixture-auth-return-r4/closed-result.json`。
+- AUTH-RETURN-R5 仅修测试代理上游关闭时同步关闭下游连接；相同前置下三次 OAuth 均满足原 9 秒 DCL 与身份语义，服务端三组 authorize/callback/exchange 全成功，旧回调阻塞已在隔离场景消除。整体仍失败：真实历史导航命令已确认，但驱动误收中间页迟到的 pageshow，未等到返回目标文档就因缺 pagehide-after 快照断言失败；不能声称返回完成、BFCache 命中或未命中，也无泄漏证明。59 表/精确允许写入/public 保护通过，认证 used3、意外身份 0；API 23.84 秒、guard 37.47 秒正常关闭，3 容器退出无 OOM，所属 PID 退出、18000/18443 零监听。后续仅按单独冻结范围验证 auth-only 返回，不再重跑登录前置、finish/profile 或旧七组。证据：`../../output/wecom-technician-resume/fixture-auth-return-r5/closed-result.json`。
+- AUTH-RETURN-R6 仅补 auth-only 真实返回，保留六认证路由，删除 R5 全部业务字段/插入行豁免；六项纯保护测试通过。密码登录、一次本人 OAuth、真实 history 普通重载返回安全登录均通过，返回页 token/staff/认证方式/身份头/顾客显示检查均为空；本轮不加载顾客档案或填写脏表单，不扩大其覆盖。实际 persisted 未观察，浏览器记录 no-store 与 BrowsingInstanceNotSwapped 原因；整体 partial/exit2（严格完成封套 failed2），无 failure 对象，不视为真实 BFCache 通过且不重试。59 表所有业务字段零变，唯一 own1401 认证 used1/范围有效、public 摘要通过；API 20.43 秒、guard 33.45 秒正常关闭。独立 3 容器退出无 OOM，客户端/转发 PID 退出，18000/18443 零监听；无业务代码/生产改动、未提交合并发布。闭环证据：`../../output/wecom-technician-resume/fixture-auth-return-r6/closed-result.json`。
+
 ## 2026-10-17 SEAT-OPTIONAL-20261017（三端隔离联调完成；待合并发布）
 
 - 独立 hxy 工作区基线 `4aa4127`，无座选单派生待安排座位，店长可给原单首次配位；同单同座重试不重复占用，保留价格、项目和偏好，遵守同父房间冲突与门店隔离。

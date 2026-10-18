@@ -1,11 +1,12 @@
+import { clearStaffSession } from '../../wecomSession.ts';
+
 export const ADMIN_TOKEN_KEY = 'hxy_admin_token';
 export const ADMIN_STAFF_KEY = 'hxy_admin_staff';
 
 export type AuthStaff = { role?: string; store_id?: number | null };
 
 export function clearAuthSession() {
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
-  localStorage.removeItem(ADMIN_STAFF_KEY);
+  clearStaffSession();
 }
 
 export function redirectToLogin() {
