@@ -1,3 +1,11 @@
+# 2026-10-18 顾客报告中心入口独立上线
+
+- [PR #281](https://github.com/zzzai/hxydiy/pull/281) 候选 `91674d3700d1d8f71e26d2650788c0fb232e9343` 已合并为 `6c3179850f25907ac9081672c67329b5867959fd`；主干 CI `39126459099` 和唯一 Deploy `39136488194` 全部成功。只改变两份顾客业务源码及配套测试/文档，后台/技师/API/迁移与 #280 相同；没有重建三人账号或重放绑定事务。
+- 实际 current=`/root/hxy-diy-20260811/releases/github-6c3179850f25-39136488194`；MANIFEST 472 项，SHA256 `aaba38034db870692b2f7b6cca50f28a72476778e329cd626d7fec0e49969926`；211 安装/202 运行 Git 文件、两端/企微入口公网资源及 health=`ok/production` 通过。镜像 `sha256:961724d835a90b3c4505a1f1b60a447be6bb6cd4b1a67befd7295c13e7b4f0c1`。备份 `backups/pre-github-6c3179850f25-39136488194-20261018T145147Z.dump` checksum、真实隔离恢复和演练通过；revision 保持 `20261018_wecom_store_manager`。
+- 正式主干 customer artifact `12136058487`，12858267 B，完整 ZIP SHA256 `d06889de87da833f958f07c40d539c945c7ac524df4f28d3ddd38b8a5b9d1dcf`，132 文件逐项匹配安装目录。公网引用链 `index.html`→`assets/index-DmgHwJyT.js`→`assets/ReportEntryPage-BazpiX02.js` 与该主干制品匹配，不以候选制品代替；59 表发布前后摘要均为 `181516f49fce0a8d4664c3be5519ab6b0cdd8fb4b2dc37de111de9f8f7f5b79e`，changed_tables=[]，终验零业务写。
+- 清理 planSHA `86e568859230675b298dcad80d6a814cf69fa9d5fe6c481e8ebb26070b542812` 一次执行，仅删除三个精确 source.local cache 和已停测试容器，实际回收 160688 KiB；源码/镜像/卷/其他容器/current 保护不变。第三缓存为历史创建、本轮复用，不称作自有源码。日志/验收证据已保留，缓存可重建；dispatch 前可用 3229924 KiB 达到 3 GiB+80 MiB 输入/解包余量要求。发布后 3090600 KiB 低于下一次门槛，不新增清理目标、不降低门槛。
+- 脱敏回执均在 `/root/hxy-diy-development/wecom-store-staff-20261018/output/backend-delta/`：`precise-cache-result.json`、`report-production-release-result.json`、`report-production-artifact-result.json`、`report-release-data-{before,after}.json`。顾客端 42 项回归及 CI 证据复用，未重复扩测；真实微信返回手势/跨源 Back 与本人登录由人验收，未观察不写通过。推荐自动回复 `?store=1&view=reports`，原 return 仍直达；本次不操作企微配置。本记录合并不再发布业务包。
+
 # 2026-10-18 单店店长与三人企微接入上线
 
 - [PR #280](https://github.com/zzzai/hxydiy/pull/280) 候选 `4b04149f17e59e6939e19fbc1e0f894bede9acd8`，合并/生产 `bfa16198b34666e28ff8ed2d5d7924000b909664`；主干 CI `39123372817` 成功。首轮 CI 的历史迁移夹具缺少 technicians 外键目标已定点修复，未改业务迁移、跳过测试或降低断言。PG 差额 19 权限/13 建号并发与事务/2 迁移通过；前端 10 单测及 2 合成真实 pagehide 移交通过，不重复旧组。

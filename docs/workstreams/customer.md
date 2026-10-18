@@ -1,5 +1,18 @@
 # 顾客端工作流
 
+## 2026-10-18 CUSTOMER-REPORT-CENTER-20261018（已合并/生产，真机由人验收）
+
+- #281 候选 `91674d3700d1d8f71e26d2650788c0fb232e9343` 已合并为 `6c3179850f25907ac9081672c67329b5867959fd`；主干 CI `39126459099`、唯一 Deploy `39136488194` 成功，后台单一负责人核验 current=`github-6c3179850f25-39136488194`。42 项回归和正式 CI 构建通过；下节“未提交/构建未完成”保留为当时快照，不是当前状态。
+- 正式主干 customer artifact `12136058487` 完整大小/摘要及132文件与安装目录匹配，公网 HTML→主 JS→ReportEntryPage chunk 哈希一致；472 MANIFEST、安装运行源码、备份恢复、59表前后完全一致，零业务写。后台/技师/权限/数据结构和三人绑定未改。完整证据见 `../WORK-STATUS.md` 顶部。
+- 自动回复建议 `https://diy.hexiaoyue.com/?store=1&view=reports`，先停报告中心；原 `view=return` 仍直达，不自动修改企微配置。人工验收：已登录及登录后均停报告中心→点击查看→系统返回不循环跳出→DIY入口正常，并确认旧return兼容。真实跨源Back、微信返回手势和真实报告不曾自动实测；按用户决定交人验收，不以其未测阻塞本批发布，也不记为通过。
+
+## 2026-10-18 CUSTOMER-REPORT-CENTER-20261018（独立候选，未提交/未发布）
+
+- 独立分支 `codex/customer-report-center-20261018` 基于 `bfa16198b34666e28ff8ed2d5d7924000b909664`；hxy 工作区 `/root/hxy-diy-development/customer-report-center-20261018`。旧 dirty worktree、BUSINESS-SAFETY 候选及 #280 工作区不动。后台发布期间仅在对应本地 snapshot 实现和测试，不占服务器测试/构建资源。
+- 仅调整 `ReportEntryPage.tsx` 与 `returnEntry.ts`：reports 显式中心模式优先于登录/换号及刷新标记，return 保留模式和旧直达。无 CSS/IP/菜单/后台/API/数据库改动，无额外 history 条目；报告权限与严格原站地址校验保留。
+- 新增 12 项真实 React 渲染回归，修复前 8 失败（中心自动跳出及 return 规范化丢失）；修复后连同报告/身份/原站合同共 42/42 通过。原 BFCache 用例仅把用于测试旧直达的入口改为 return，保护断言保留。此层模拟 navigation，不冒充真实浏览器 Back。
+- 证据目录：本地 `output/report-center-20261018/`。完整构建因启动前可用内存不足 3 GiB 暂未启动，门槛和 Job 限制未降低；真实合成跨源浏览器与构建仍待完成。真实身份/报告访问为零，不代表微信或供应商现场已验；待总控审查后独立排批，不能混入三员工发布。
+
 ## 2026-10-17 CUSTOMER-SEAT-OPTIONAL-20261017（隔离验收通过，未提交/未发布）
 
 - 在 SSH hxy 独立工作区 `/root/hxy-diy-development/seat-optional-20261017`、分支 `codex/seat-optional-selection-20261017`、基线 `4aa412787c623e66506cc3e8f88221e1a4a28296` 实现无座私有选单。服务号正常菜单保留“我的”，匿名可配置/保存/提交；使用原 session/token 读回门店后配位，不复制或静默转移到共享座位草稿。
