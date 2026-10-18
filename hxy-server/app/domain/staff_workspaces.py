@@ -178,6 +178,10 @@ def resolve_staff_context(token: str, db: Session) -> StaffContext:
         if token_type not in {"staff", "staff_scope"}:
             raise _auth_error(401, "INVALID_TOKEN_TYPE", "令牌类型无效")
         staff = _validate_staff(db.get(Staff, int(payload["sub"])), payload.get("credentials_version"))
+        if payload.get("auth_method") == "wecom":
+            from app.services.wecom_staff import validate_wecom_session
+
+            validate_wecom_session(db, payload, staff)
         if token_type == "staff":
             if staff.role == "technician" or assignments_are_not_initialized(db):
                 context = StaffContext(staff)

@@ -1,3 +1,5 @@
+import { commitStaffSession, getSessionEpoch } from './wecomSession.ts';
+
 export type StaffSummary = {
   id: number;
   name: string;
@@ -64,6 +66,10 @@ export function finishWorkspaceSelection(response: WorkspaceSelectResponse, assi
 }
 
 export function storeStaffSession(storage: Pick<Storage, 'setItem'>, session: ReadyStaffSession): void {
+  if (typeof localStorage !== 'undefined' && storage === localStorage) {
+    commitStaffSession(session, getSessionEpoch());
+    return;
+  }
   storage.setItem('hxy_admin_token', session.token);
   storage.setItem('hxy_admin_staff', JSON.stringify(session.staff));
 }

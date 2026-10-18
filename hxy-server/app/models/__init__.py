@@ -22,6 +22,8 @@ from app.models.customer_profile_state import CustomerProfileConsent, CustomerPr
 from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
 from app.models.media import MediaAsset
 from app.models.staff_access import StaffScopeAssignment
+from app.models.staff_external_identity import StaffExternalIdentity, StaffOAuthAttempt
+from app.models.customer_tag_contribution import CustomerTagContribution
 from app.models.catalog_options import (
     CHARGE_MODES,
     CHOICE_TYPES,
@@ -44,6 +46,7 @@ __all__ = [
     "TechnicianInvite", "TechnicianLeaveRequest",
     "MediaAsset",
     "StaffScopeAssignment",
+    "StaffExternalIdentity", "StaffOAuthAttempt", "CustomerTagContribution",
     "CHARGE_MODES", "CHOICE_TYPES", "OptionChoicePrice", "ProjectCatalogVersion",
     "ProjectOptionChoice", "ProjectOptionGroup",
 ]

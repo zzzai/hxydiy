@@ -1,0 +1,10 @@
+.technician-my-services > header { margin-bottom: 16px; }
+.technician-my-services h1 { margin: 0 0 8px; font-size: 24px; color: #0d2f29; }
+.technician-my-services > header p, .technician-customer-panel header p { color: #61766d; }
+.technician-customer-entry { margin: 14px 0; padding: 16px; border: 1px solid #dce9e2; border-radius: 12px; background: #fff; overflow-wrap: anywhere; }
+.technician-customer-entry h2, .technician-customer-entry h3 { margin: 0 0 12px; font-size: 18px; }
+.technician-customer-entry time { color: #61766d; font-size: 13px; }
+.technician-my-service-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.technician-my-service-actions .ant-btn { min-height: 44px; flex: 1; }
+.technician-customer-panel { max-width: 640px; margin: 0 auto; }
+.technician-customer-panel > .ant-btn { margin-top: 12px; min-height: 44px; }

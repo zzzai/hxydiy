@@ -36,9 +36,11 @@ from app.models import (
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.membership_pricing import price_book_snapshot
+from app.domain.customer_operational_tags import customer_tag_ids, tagged_user_ids
 from app.domain.occupancy import audit_occupancy, occupancy_view, release_occupancy
 from app.services.customer_profile_projection import rebuild_customer_profile_current
 from app.models.operations import Room, Technician
+from app.models.customer_tag_contribution import CustomerTagContribution
 from app.models.room_assign import RoomAssignment
 from app.models.service import ServiceAssignment, ServiceOrder, Visit
 from app.models.scrm import (
@@ -2883,8 +2885,7 @@ def list_tags(db: Session = Depends(get_db),
         "tag_type": t.tag_type, "description": t.description,
         "auto_rule": t.auto_rule, "status": t.status,
         "user_count": db.scalar(
-            select(sa_func.count()).select_from(CustomerTagRelation)
-            .where(CustomerTagRelation.tag_id == t.id)
+            select(sa_func.count()).select_from(tagged_user_ids(store_id, [t.id]).subquery())
         ),
     } for t in tags]
 
@@ -3426,9 +3427,13 @@ def delete_tag(tag_id: int, db: Session = Depends(get_db),
     t = db.scalar(select(CustomerTag).where(
         CustomerTag.id == tag_id,
         CustomerTag.store_id == _staff_store_id(s),
-    ))
+    ).with_for_update())
     if not t:
         raise HTTPException(404)
+    if db.scalar(select(CustomerTagContribution.id).where(
+        CustomerTagContribution.tag_id == tag_id,
+    ).limit(1)):
+        raise HTTPException(409, detail={"code": "TAG_HAS_CONTRIBUTIONS", "message": "该标签已有贡献记录，不能删除，请停用标签"})
     # 删除关联
     db.execute(select(CustomerTagRelation).where(CustomerTagRelation.tag_id == tag_id)).scalars()
     rels = db.execute(
@@ -4148,10 +4153,7 @@ def list_users(
     store_id = _staff_store_id(staff)
     q = select(User).where(User.id.in_(_store_user_ids(store_id)))
     if tag_id:
-        sub = select(CustomerTagRelation.user_id).where(
-            CustomerTagRelation.tag_id == tag_id,
-            CustomerTagRelation.tag_id.in_(select(CustomerTag.id).where(CustomerTag.store_id == store_id)),
-        )
+        sub = tagged_user_ids(store_id, [tag_id])
         q = q.where(User.id.in_(sub))
     if segment_id:
         seg = db.get(CustomerSegment, segment_id)
@@ -4163,9 +4165,7 @@ def list_users(
                     CustomerTag.store_id == store_id,
                     CustomerTag.name.in_(tag_names),
                 )
-                tagged_users = select(CustomerTagRelation.user_id).where(
-                    CustomerTagRelation.tag_id.in_(tag_ids_sub)
-                )
+                tagged_users = tagged_user_ids(store_id, tag_ids_sub)
                 q = q.where(User.id.in_(tagged_users))
             if conds.get("is_member"):
                 q = q.where(User.is_member == True)
@@ -4193,14 +4193,11 @@ def list_users(
     users = db.execute(q.offset((page - 1) * page_size).limit(page_size)).scalars().all()
     items = []
     for u in users:
-        tags_rel = db.execute(
-            select(CustomerTagRelation).where(CustomerTagRelation.user_id == u.id)
-        ).scalars().all()
-        tag_info = []
-        for tr in tags_rel:
-            t = db.get(CustomerTag, tr.tag_id)
-            if t:
-                tag_info.append({"id": t.id, "name": t.name, "color": t.color})
+        visible_tags = db.scalars(select(CustomerTag).where(
+            CustomerTag.store_id == store_id,
+            CustomerTag.id.in_(customer_tag_ids(store_id, u.id)),
+        ).order_by(CustomerTag.id)).all()
+        tag_info = [{"id": t.id, "name": t.name, "color": t.color} for t in visible_tags]
         items.append({
             "id": u.id, "nickname": _customer_display_name(u),
             "phone_tail": u.phone[-4:] if u.phone else "",
@@ -4756,7 +4753,7 @@ def recount_segment(seg_id: int, db: Session = Depends(get_db),
             CustomerTag.store_id == store_id,
             CustomerTag.name.in_(conds["tags"]),
         )
-        tagged = select(CustomerTagRelation.user_id).where(CustomerTagRelation.tag_id.in_(tag_ids_sub))
+        tagged = tagged_user_ids(store_id, tag_ids_sub)
         q = q.where(User.id.in_(tagged))
     if conds.get("is_member"):
         q = q.where(User.is_member == True)

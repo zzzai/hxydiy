@@ -20,7 +20,7 @@ export default function TechnicianMobileShell({ children, onLogout }: { children
   const staff = me?.staff || me?.technician?.staff || JSON.parse(localStorage.getItem('hxy_admin_staff') || 'null');
   const visiblePaths = technicianMobileTabs(staff?.role);
   const visibleTabs = tabs.filter((tab) => visiblePaths.includes(tab.path));
-  const logout = () => { onLogout(); message.success('已退出登录'); navigate('/technician/login', { replace: true }); };
+  const logout = () => { onLogout(); message.success('已退出登录'); navigate('/login', { replace: true }); };
   return (
     <div className="technician-mobile-app">
       <header className="technician-mobile-header">

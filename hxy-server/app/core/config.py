@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     wechat_official_appid: str = ""
     wechat_official_appsecret: str = ""
 
+    # WeCom staff credentials are server-only; entry remains disabled by default.
+    wecom_staff_enabled: bool = False
+    wecom_corp_id: str = ""
+    wecom_agent_id: str = ""
+    wecom_agent_secret: str = ""
+    wecom_callback_url: str = ""
+
     @property
     def wechat_official_enabled(self) -> bool:
         return bool(self.wechat_official_appid and self.wechat_official_appsecret)
