@@ -146,7 +146,6 @@ export default function TechnicianTodayPage() {
     return counts;
   }, { waiting: 0, inService: 0, completed: 0, conflict: 0 });
   const boardSummary = [
-    unassignedTasks.length ? `无座待安排 ${unassignedTasks.length} 单` : '',
     boardCounts.inService ? `服务中 ${boardCounts.inService} 单` : '',
     boardCounts.waiting ? `待服务 ${boardCounts.waiting} 单` : '',
     boardCounts.conflict ? `待核对 ${boardCounts.conflict} 项` : '',
@@ -160,25 +159,25 @@ export default function TechnicianTodayPage() {
       <div>
         <span className="technician-eyebrow">{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</span>
         <h1>服务看板</h1>
-            <p>{me?.technician?.name || '技师'} · {boardSummary || '当前没有待处理服务'} · 共 {tasks.length} 个服务位{unassignedTasks.length ? ` · 无座 ${unassignedTasks.length} 单` : ''}</p>
+            <p>{me?.technician?.name || '技师'} · {boardSummary || '当前没有待处理服务'} · 共 {tasks.length} 个服务位{unassignedTasks.length ? ` · 未排座 ${unassignedTasks.length} 单` : ''}</p>
       </div>
       <Button shape="circle" aria-label="刷新服务看板" icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} />
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => void load()}>重试</Button>} />}
     {unassignedTasks.length > 0 && <section className="technician-board-section">
-      <div className="technician-section-heading"><h2>无座订单</h2><span>{unassignedTasks.length} 单待安排座位</span></div>
-      <div style={{ margin: '-2px 0 10px', color: '#7a8d86', fontSize: 12 }}>顾客提交后直接显示，无需技师或店长确认；门店安排座位后即可开始服务。</div>
-      <div className="technician-position-grid">
+      <div className="technician-section-heading"><h2>未排座</h2><span>{unassignedTasks.length} 单</span></div>
+      <div className="technician-unassigned-list">
         {unassignedTasks.map((task: any) => {
           const order = taskToOrder(task);
+          const items = task.items || [];
+          const itemCount = items.reduce((total: number, item: any) => total + Math.max(1, Number(item.quantity) || 1), 0);
           const submittedAt = task.submitted_at
-            ? new Date(task.submitted_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
-            : '刚刚提交';
-          return <button type="button" className="technician-position-tile tone-waiting" key={task.selection_session_id} onClick={() => setSelectedOrder(order)} aria-label={`查看无座订单${task.customer?.nickname || ''}`}>
-            <div className="technician-position-tile-top"><strong>{task.customer?.nickname || '顾客'}</strong><Tag color="gold">待安排座位</Tag></div>
-            <div className="technician-position-tile-body"><span className="technician-position-count">{(task.items || []).length}</span><span>个项目</span></div>
-            <div className="technician-position-tile-summary">{orderSummary(order)}</div>
-            <div className="technician-position-tile-action"><EyeOutlined /> {submittedAt} 提交 · 查看订单</div>
+            ? new Date(task.submitted_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+            : '--:--';
+          return <button type="button" className="technician-unassigned-row" key={task.selection_session_id} onClick={() => setSelectedOrder(order)} aria-label={`查看${submittedAt}提交的未排座订单`}>
+            <div className="technician-unassigned-row-head"><span className="technician-unassigned-time">{submittedAt}</span><span className="technician-unassigned-tag">未排座</span></div>
+            <div className="technician-unassigned-summary">{orderSummary(order)}</div>
+            <div className="technician-unassigned-count">{itemCount} 个项目</div>
           </button>;
         })}
       </div>
@@ -204,9 +203,14 @@ export default function TechnicianTodayPage() {
         </div>
       </section>)}
     </section>}
-    <Drawer title={selectedOrder ? (selectedOrder.conflict ? `${selectedOrder.room_name || '服务位'}待核对` : '顾客服务单') : '顾客服务单'} placement="bottom" height="min(78vh, 620px)" open={!!selectedOrder} onClose={() => setSelectedOrder(undefined)}>
+    <Drawer title={selectedOrder ? (selectedOrder.conflict ? `${selectedOrder.room_name || '服务位'}待核对` : selectedOrder.status === 'waiting_assignment' ? '未排座' : '顾客服务单') : '顾客服务单'} placement="bottom" height="min(78vh, 620px)" open={!!selectedOrder} onClose={() => setSelectedOrder(undefined)}>
       {selectedOrder && <div className="technician-order-drawer">
-        {selectedOrder.conflict ? <Alert type="warning" showIcon message="服务位记录待核对" description={`该房间存在 ${selectedOrder.conflict_count || 2} 条活动占用记录。为避免误操作，当前不展示顾客选单，也不能确认或结束服务；请联系店长核对现场服务位。`} /> : <>
+        {selectedOrder.conflict ? <Alert type="warning" showIcon message="服务位记录待核对" description={`该房间存在 ${selectedOrder.conflict_count || 2} 条活动占用记录。为避免误操作，当前不展示顾客选单，也不能确认或结束服务；请联系店长核对现场服务位。`} /> : selectedOrder.status === 'waiting_assignment' ? <>
+        <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">未排座</span><h2>未排座</h2></div><Tag>未排座</Tag></div>
+        <Typography.Paragraph type="secondary">{selectedOrder.submitted_at ? new Date(selectedOrder.submitted_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '刚刚'} 提交</Typography.Paragraph>
+        <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
+        <Typography.Paragraph type="secondary">座位由前台安排。安排后会出现在对应沙发或房间。</Typography.Paragraph>
+        </> : <>
         <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">本次服务</span><h2>{selectedOrder.room_name || '服务位'}</h2></div><Tag color={statusColor(selectedOrder.status)}>{orderStatusLabel(selectedOrder.status)}</Tag></div>
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
         <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
@@ -214,7 +218,7 @@ export default function TechnicianTodayPage() {
         <div className="technician-task-card-foot">
           {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>开始服务</Button>}
           {selectedActions.includes('finish') && <Button type="primary" block size="large" icon={<CheckCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'finish')}>服务结束</Button>}
-          {selectedOccupancyId === null && <Typography.Text type="secondary">{selectedOrder.status === 'waiting_assignment' ? '门店尚未安排服务位，当前可查看顾客需求；安排座位后即可开始服务。' : '当前服务单接口未提供服务位占用凭证，仅支持查看。'}</Typography.Text>}
+          {selectedOccupancyId === null && <Typography.Text type="secondary">当前服务单接口未提供服务位占用凭证，仅支持查看。</Typography.Text>}
           {selectedOrder.completed_by_me && selectedOrder.customer?.id && selectedOrder.selection_session_id && <Button block size="large" onClick={() => { setProfileOrder(selectedOrder); setSelectedOrder(undefined); }}>填写服务参考</Button>}
           {selectedOrder.status === 'completed' && <Typography.Text type="secondary">服务记录完成后，服务位由前台按离店流程释放。</Typography.Text>}
         </div>
