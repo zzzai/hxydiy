@@ -260,7 +260,47 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             "conflict": False,
             "conflict_count": 0,
         })
-    return {"items": items}
+
+    # 无座订单没有 occupancy，单独返回给技师直接查看；门店只需安排服务位，不要求先确认选单。
+    unassigned_sessions = list(db.scalars(
+        select(SelectionSession)
+        .where(
+            SelectionSession.store_id == technician.store_id,
+            SelectionSession.status.in_(("submitted", "confirmed")),
+            ~exists(select(PositionOccupancy.id).where(
+                PositionOccupancy.selection_session_id == SelectionSession.id,
+            )),
+        )
+        .order_by(func.coalesce(SelectionSession.submitted_at, SelectionSession.created_at).asc())
+        .limit(50)
+    ))
+    unassigned_items = []
+    for session in unassigned_sessions:
+        customer = db.get(User, session.customer_id) if session.customer_id else None
+        submitted_at = session.submitted_at or session.created_at
+        unassigned_items.append({
+            "unassigned": True,
+            "occupancy_id": None,
+            "user_id": session.customer_id,
+            "selection_session_id": session.id,
+            "occupancy_status": "unassigned",
+            "completed_by_me": False,
+            "selection_status": session.status,
+            "room_id": None,
+            "room_name": "待安排座位",
+            "room_type": "unassigned",
+            "room_status": None,
+            "items": session.items or [],
+            "conflict": False,
+            "conflict_count": 0,
+            "submitted_at": submitted_at.isoformat() if submitted_at else None,
+            "customer": {
+                "id": customer.id,
+                "nickname": customer.nickname or "顾客",
+                "phone_masked": _masked_phone(customer.phone),
+            } if customer else None,
+        })
+    return {"items": items, "unassigned_items": unassigned_items}
 
 
 def _technician_occupancy(db: Session, occupancy_id: int, technician: Technician) -> PositionOccupancy:
