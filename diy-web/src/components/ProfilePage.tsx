@@ -2,7 +2,7 @@ import { ArrowLeft, BadgeCheck, ChevronRight, Clock3, LogOut, MessageSquareText,
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-import { ApiError, cancelOrder, enrollTrustedDevice, getMyCoupons, getMyOrders, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
+import { ApiError, cancelOrder, enrollTrustedDevice, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
 import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth, type CustomerUser } from '../customerAuth';
 import { formatMoney } from '../domain';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
@@ -15,10 +15,10 @@ import { ProfileReturnTools } from './CustomerReturnTools';
 type TabKey = 'records' | 'coupons';
 
 // Temporary customer presentation switches; server rules and records remain intact.
-const SHOW_PROFILE_HISTORY = false;
+const SHOW_PROFILE_HISTORY = true;
 const SHOW_DYNAMIC_MEMBER_CODE = false;
 
-export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, onReportsBack, onOpenReports, storeId = 1 }: {
+export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, onReportsBack, onOpenReports, storeId = 1, refreshKey = 0 }: {
   open: boolean;
   auth: CustomerAuth | null;
   onClose: () => void;
@@ -27,6 +27,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   onReportsBack?: () => void;
   onOpenReports?: () => void;
   storeId?: number;
+  refreshKey?: number;
 }) {
   const [tab, setTab] = useState<TabKey>('records');
   const [reportsOpen, setReportsOpen] = useState(initialReportsOpen);
@@ -55,7 +56,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
     setLoading(true);
     setLoadError('');
     Promise.all([
-      SHOW_PROFILE_HISTORY ? getMyOrders(token) : Promise.resolve([] as Order[]),
+      Promise.resolve([] as Order[]),
       SHOW_PROFILE_HISTORY ? getMySelectionSessions(token) : Promise.resolve([] as SelectionSession[]),
       // 会员不展示券入口，也不应请求会员无权限的券接口；否则任一 403 会让整个个人中心误报加载失败。
       isMember ? Promise.resolve([] as MyCoupon[]) : getMyCoupons(token),
@@ -79,7 +80,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
     if (!open || !auth || reportsOpen || (!SHOW_PROFILE_HISTORY && auth.user.is_member)) { setLoading(false); return; }
     loadData(auth.token, auth.user.is_member);
     return () => { loadRequest.current += 1; };
-  }, [open, auth?.token, auth?.user.is_member, reportsOpen, loadData]);
+  }, [open, auth?.token, auth?.user.is_member, reportsOpen, loadData, refreshKey]);
 
   useEffect(() => { if (auth?.user.is_member && tab === 'coupons') setTab('records'); }, [auth?.user.is_member, tab]);
 
@@ -122,7 +123,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
             <ProfileReturnTools storeId={storeId} />
             {!auth.user.is_member && <MembershipBanner />}
             {(SHOW_PROFILE_HISTORY || shouldShowCouponTab(auth.user.is_member)) && <nav className="profile-tabs" aria-label="个人中心板块">
-              {SHOW_PROFILE_HISTORY && <TabButton active={tab === 'records'} onClick={() => setTab('records')} icon={<Clock3 size={15} />} label="到店记录" count={sessions.length} />}
+              {SHOW_PROFILE_HISTORY && <TabButton active={tab === 'records'} onClick={() => setTab('records')} icon={<Clock3 size={15} />} label="下单记录" count={sessions.length} />}
               {shouldShowCouponTab(auth.user.is_member) && <TabButton active={!SHOW_PROFILE_HISTORY || tab === 'coupons'} onClick={() => setTab('coupons')} icon={<Ticket size={15} />} label="我的券" count={coupons.length} />}
             </nav>}
             {loadError && <p className="profile-error">{loadError}</p>}
@@ -264,7 +265,7 @@ function OrderList({ orders, cancelling, onCancel }: {
 }
 
 function RecordFilters({ value, onChange }: { value: RecordFilter; onChange: (value: RecordFilter) => void }) {
-  return <div className="profile-record-filters" aria-label="到店记录筛选">{([['all', '全部'], ['pending-feedback', '待评价'], ['in-service', '服务中'], ['completed', '已完成']] as const).map(([key, label]) => <button key={key} type="button" className={value === key ? 'active' : ''} aria-pressed={value === key} onClick={() => onChange(key)}>{label}</button>)}</div>;
+  return <div className="profile-record-filters" aria-label="下单记录筛选">{([['all', '全部'], ['pending-feedback', '待评价'], ['in-service', '服务中'], ['completed', '已完成']] as const).map(([key, label]) => <button key={key} type="button" className={value === key ? 'active' : ''} aria-pressed={value === key} onClick={() => onChange(key)}>{label}</button>)}</div>;
 }
 
 function MemberCodeDialog({ token, phone, onTokenReplaced, onClose }: { token: string; phone: string; onTokenReplaced: (token: string) => void; onClose: () => void }) {
@@ -292,7 +293,7 @@ function MemberCodeDialog({ token, phone, onTokenReplaced, onClose }: { token: s
 }
 
 function SelectionList({ sessions, onContinue, onOpen, onFeedback }: { sessions: Awaited<ReturnType<typeof getMySelectionSessions>>; onContinue: () => void; onOpen: (record: SelectionSession) => void; onFeedback: (record: SelectionSession) => void }) {
-  if (!sessions.length) return <p className="profile-empty">还没有到店选单记录。</p>;
+  if (!sessions.length) return <p className="profile-empty">还没有下单记录。选一份服务提交后会在这里看到。</p>;
   return (
     <ul className="profile-list">
       {sessions.map((session) => (

@@ -141,6 +141,9 @@ function fakeApi({ delayedGet = null, delayedCreate = null, delayedCatalog = nul
       ? { ok: false, status: 409, json: async () => ({ detail: 'Synthetic ownership conflict' }) }
       : response({ selection_session_id: pathname.split('/')[4], customer_id: 42 });
     if (pathname.endsWith('/service-status')) return response({ selection_session_id: pathname.split('/')[4], occupancy_status: completed ? 'released' : null, service_ended_at: completed ? '2026-10-17T00:30:00Z' : null, can_evaluate: completed, evaluated: false });
+    if (pathname === '/api/v1/selection-sessions/mine') {
+      return response({ items: [session('anonymous-draft', 'submitted')], total: 1 });
+    }
     if (pathname.startsWith('/api/v1/selection-sessions/')) {
       const id = pathname.split('/')[4];
       if (patchFailure && options.method === 'PATCH' && patchFailuresRemaining > 0) {
@@ -421,6 +424,24 @@ test('menu draft 409 recreates a private draft instead of showing the seat-relea
   assert.equal(loginProps(app).selectionSessionId, 'new-1');
   assert.equal(JSON.parse(env.values.get(privateKey)).sessionId, 'new-1');
   assert.equal(JSON.stringify(app.toJSON()).includes('本次位置已释放'), false);
+  await unmount(app);
+  env.cleanup();
+});
+
+test('my page shows order history after logging in on the seat-free menu', async () => {
+  const env = environment(
+    'http://synthetic.invalid/?store=1&view=menu&page=projects',
+    new Map([[privateKey, JSON.stringify(record())]]),
+  );
+  fakeApi();
+  const app = await mount();
+  await act(async () => profile(app).props.onAuthChange(auth(42)));
+  await settle();
+  await act(async () => app.root.findByProps({ className: 'miniapp-profile-entry' }).props.onClick());
+  await settle();
+  const text = JSON.stringify(app.toJSON());
+  assert.ok(text.includes('下单记录'), 'profile must expose the order history tab');
+  assert.ok(text.includes('待前台确认') || text.includes('Synthetic project'), 'submitted selection must be listed');
   await unmount(app);
   env.cleanup();
 });

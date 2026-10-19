@@ -94,14 +94,17 @@ test('局部调理在订单中使用局部简称展示顾客选择的部位', ()
   assert.equal(technicianOrderItemLabel({ name: '草本泡脚', code: 'hxy-qiqing-30', diy_preferences: ['老姜'] }), '草本泡脚');
 });
 
-test('技师看板按沙发和房间分组，保留顾客提交的服务位顺序', () => {
+test('技师看板按沙发和房间分组，并按服务位数字顺序排列', () => {
   const groups = technicianBoardGroups([
+    { occupancy_id: 5, room_type: 'sofa', room_name: '5号沙发' },
+    { occupancy_id: 10, room_type: 'sofa', room_name: '10号沙发' },
     { occupancy_id: 2, room_type: 'bed', room_name: '包间 02 A 床' },
-    { occupancy_id: 1, room_type: 'sofa', room_name: '沙发 01' },
+    { occupancy_id: 1, room_type: 'sofa', room_name: '1号沙发' },
+    { occupancy_id: 3, room_type: 'bed', room_name: '包间 10 A 床' },
   ]);
   assert.deepEqual(groups.map((group) => group.label), ['沙发', '房间']);
-  assert.equal(groups[0].items[0].room_name, '沙发 01');
-  assert.equal(groups[1].items[0].room_name, '包间 02 A 床');
+  assert.deepEqual(groups[0].items.map((item) => item.room_name), ['1号沙发', '5号沙发', '10号沙发']);
+  assert.deepEqual(groups[1].items.map((item) => item.room_name), ['包间 02 A 床', '包间 10 A 床']);
 });
 
 test('本人历史状态文案区分顾客确认与本次观察', () => {
