@@ -83,7 +83,7 @@ import {
 import { entryMenuNotice, getEntrySource, getPositionSelectionDecision, resolveActivePositionCode, resolveEntryConflict, resolveRequestedPosition, shouldResumeCurrentPosition } from './positionSelection';
 import { detailMotion, fadeInMotion, sheetMotion, toastMotion } from './motionPresets';
 import SeatMapDialog from './components/SeatMapDialog';
-import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision, revisionItems, selectionRequestAccess, submittedSelectionAccess } from './selectionFlow';
+import { canEditSelection, expiredSelectionCopy, shouldPreserveOccupancyAfterRevision, shouldRecoverPublicDraft, revisionItems, selectionRequestAccess, submittedSelectionAccess } from './selectionFlow';
 import { isEdgeSwipeBack, shouldReturnToProjectListFromSubmittedScreen } from './swipeBack';
 import { shouldHydrateStoredSelection, shouldRestartStoredEntry } from './submittedSelectionRestore';
 import { createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldRenewVisitFeedbackToken, updateVisitFeedbackDraft, visitFeedbackErrorMessage } from './visitFeedback';
@@ -979,7 +979,7 @@ export default function App() {
         }
       } catch (error) {
         if (!isCurrent()) return;
-        if (!(error instanceof ApiError) || ![401, 403, 404, 409].includes(error.status)) throw error;
+        if (!(error instanceof ApiError) || ![401, 403, 404, 409, 410].includes(error.status)) throw error;
       }
     }
     if (!restored) {
@@ -1007,6 +1007,45 @@ export default function App() {
       ? restorePrivateSelectionDraft(record, restored.items || [], catalog) : undefined);
     hydrated.current = true;
     setBoot(restored.status === 'draft' ? 'public-menu' : 'submitted');
+  };
+
+  // 服务号无座菜单的私有草稿过期/被提交后，PATCH 会返回 409；不能把它当成座位释放。
+  // 保留顾客当前已选项目，换一个新的私有草稿继续提交。
+  const recoverPublicSelection = async () => {
+    const generation = ++privateGeneration.current;
+    const preservedDraft = selectionDraft;
+    clearPrivateSelection(localStorage, query.storeId);
+    privateSelection.current = null;
+    privateSave.current = null;
+    try {
+      const created = await createPrivateSelectionSession(query.storeId, deviceLabel());
+      if (generation !== privateGeneration.current) return;
+      const record: PrivateSelectionRecord = {
+        storeId: query.storeId,
+        customerId: customerAuthRef.current?.user.id ?? null,
+        sessionId: created.session.id,
+        accessToken: created.access_token,
+      };
+      writePrivateSelection(localStorage, record);
+      privateSelection.current = record;
+      selectionSubmitIntent.current = { signature: '', key: '' };
+      setSession(created.session);
+      setAccessToken(created.access_token);
+      setCartVersion(created.session.cart_version ?? 0);
+      setCollaborationToken('');
+      setCollaborationMode('');
+      setPosition(null);
+      setOccupancy(null);
+      setServiceStatus(null);
+      setFeedbackToken('');
+      hydrateSelection(created.session, preservedDraft);
+      hydrated.current = true;
+      setBoot('public-menu');
+      flash('原选单已失效，已为你新建选单，请确认后提交');
+    } catch (error) {
+      setBootMessage(error instanceof Error ? error.message : '选单暂时无法恢复，请返回菜单重试');
+      setBoot('error');
+    }
   };
 
   const initialize = async () => {
@@ -1388,6 +1427,8 @@ export default function App() {
             hydrateSelection(latest);
           }
           flash('选单刚被同行人更新，已显示最新内容');
+        } else if (error instanceof ApiError && shouldRecoverPublicDraft(error, publicBrowsing)) {
+          await recoverPublicSelection();
         } else if (error instanceof ApiError && error.status === 409) {
           setBoot('expired');
         } else {

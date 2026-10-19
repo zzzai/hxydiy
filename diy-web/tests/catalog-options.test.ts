@@ -15,7 +15,7 @@ import {
 } from '../src/catalogOptions.ts';
 import { buildSelectionItems, type Project } from '../src/domain.ts';
 import type { SelectionDraft } from '../src/selectionSummary.ts';
-import { bundleProgressCount, catalogChoicesByType, linkedProjectIdsForChoices, removeSelectionEntry } from '../src/selectionSummary.ts';
+import { bundleProgressCount, catalogChoicesByType, linkedProjectIdsForChoices, removeSelectionEntry, saveProjectSelection } from '../src/selectionSummary.ts';
 
 function project(partial: Partial<Project> & Pick<Project, 'id' | 'code' | 'category' | 'name'>): Project {
   return {
@@ -148,6 +148,35 @@ test('目录选择写入服务 payload，保留且仅保留版本和选项 ID', 
     project_id: 1, quantity: 1, addon_ids: [], diy_preferences: [], item_type: 'service', chargeable: true,
     catalog_version_id: 901, option_choice_ids: [1001, 1002],
   }]);
+});
+
+test('项目有已发布目录版本但未选目录项时仍提交版本，避免后端 409', () => {
+  const versioned = project({
+    id: 7, code: 'hxy-versioned-30', category: 'bath', name: '有目录版本的项目',
+    catalog_version_id: 901,
+  });
+  const items = buildSelectionItems({
+    projects: [versioned], selectedProjectIds: [7], localParts: [], tea: null,
+  });
+
+  assert.deepEqual(items, [{
+    project_id: 7, quantity: 1, addon_ids: [], diy_preferences: [], item_type: 'service', chargeable: true,
+    catalog_version_id: 901, option_choice_ids: [],
+  }]);
+});
+
+test('保存无选项项目时仍写入目录版本，刷新后不会退回无版本草稿', () => {
+  const emptyDraft: SelectionDraft = {
+    selectedProjectIds: [], projectPreferences: {}, projectAddonIds: {},
+    projectCatalogSelections: {}, localParts: [], tea: null,
+  };
+  const next = saveProjectSelection(emptyDraft, {
+    projectId: 7, preferences: [], addonIds: [], localParts: [], catalogVersionId: 901, optionChoiceIds: [],
+  });
+
+  assert.deepEqual(next.projectCatalogSelections, {
+    7: { projectId: 7, catalogVersionId: 901, optionChoiceIds: [] },
+  });
 });
 
 test('保存同一主项目目录选择时覆盖旧 ID 并保留其他草稿字段', () => {
