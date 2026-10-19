@@ -683,7 +683,8 @@ export function buildSelectionItems(input: BuildSelectionInput): SelectionItem[]
       (projectById.get(Number(parentId))?.option_groups || []).some(group => group.choices.some(choice => selection.optionChoiceIds.includes(choice.id) && choice.linked_project_id === project.id))
     )))
     .map(({ project, quantity }) => {
-      const catalogSelection = input.projectCatalogSelections?.[project.id];
+      const catalogSelection = input.projectCatalogSelections?.[project.id]
+        ?? (project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: [] } : undefined);
       return {
         project_id: project.id,
         quantity,

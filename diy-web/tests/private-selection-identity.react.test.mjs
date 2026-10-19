@@ -109,8 +109,9 @@ function environment(url, values = new Map()) {
     cleanup() { for (const handle of timers) { clearTimeout(handle); clearInterval(handle); } },
   };
 }
-function fakeApi({ delayedGet = null, delayedCreate = null, delayedCatalog = null, completed = false, denyBind = false, catalogProjects = [project], storedSessions = [], positions = [] } = {}) {
+function fakeApi({ delayedGet = null, delayedCreate = null, delayedCatalog = null, completed = false, denyBind = false, patchFailure = null, catalogProjects = [project], storedSessions = [], positions = [] } = {}) {
   let created = 0;
+  let patchFailuresRemaining = patchFailure ? 1 : 0;
   const sessions = new Map([['anonymous-draft', session('anonymous-draft')], ['account-a', session('account-a')], ['completed', session('completed', 'submitted')]]);
   for (const stored of storedSessions) sessions.set(stored.id, stored);
   const calls = [];
@@ -142,6 +143,10 @@ function fakeApi({ delayedGet = null, delayedCreate = null, delayedCatalog = nul
     if (pathname.endsWith('/service-status')) return response({ selection_session_id: pathname.split('/')[4], occupancy_status: completed ? 'released' : null, service_ended_at: completed ? '2026-10-17T00:30:00Z' : null, can_evaluate: completed, evaluated: false });
     if (pathname.startsWith('/api/v1/selection-sessions/')) {
       const id = pathname.split('/')[4];
+      if (patchFailure && options.method === 'PATCH' && patchFailuresRemaining > 0) {
+        patchFailuresRemaining -= 1;
+        return { ok: false, status: 409, json: async () => ({ detail: patchFailure }) };
+      }
       if (delayedGet && id === delayedGet.id && delayedGet.enabled) {
         delayedGet.enabled = false;
         await delayedGet.wait.promise;
@@ -398,4 +403,24 @@ test('shared seat polling and submission lock cannot overwrite a separate privat
   assert.equal(api.calls.filter(call => call.method === 'PATCH').length, writesBeforeLock, 'a queued autosave must be cancelled after lock');
   assert.equal(api.calls.filter(call => call.method === 'POST' && call.path.endsWith('/revisions')).length, 0);
   assert.equal(values.get(privateKey), privateDraft);
+});
+
+test('menu draft 409 recreates a private draft instead of showing the seat-released page', async () => {
+  const env = environment(
+    'http://synthetic.invalid/?store=1&view=menu&page=projects',
+    new Map([[privateKey, JSON.stringify({ ...record(), items: [] })]]),
+  );
+  const api = fakeApi({ patchFailure: { code: 'CURRENT_VERSION_CONFLICT', message: '选单已更新' } });
+  const app = await mount();
+  assert.equal(loginProps(app).selectionSessionId, 'anonymous-draft');
+  await act(async () => app.root.findByProps({ 'aria-label': '选择Synthetic project' }).props.onClick({ stopPropagation() {} }));
+  const detail = app.root.find(node => typeof node.type === 'function' && node.type.name === 'ProjectDetailPage');
+  await act(async () => detail.props.onConfirm({ project: detail.props.project, preferences: [], addonIds: [], localParts: [] }));
+  await env.fireTimeouts(500);
+  assert.equal(api.created(), 1, 'public menu must create a replacement private draft');
+  assert.equal(loginProps(app).selectionSessionId, 'new-1');
+  assert.equal(JSON.parse(env.values.get(privateKey)).sessionId, 'new-1');
+  assert.equal(JSON.stringify(app.toJSON()).includes('本次位置已释放'), false);
+  await unmount(app);
+  env.cleanup();
 });

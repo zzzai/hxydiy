@@ -24,7 +24,7 @@ from app.domain.selection_options import (
     resolve_catalog_selection,
 )
 from app.domain.selection_collaboration_tokens import BROWSER_COOKIE, resolve_collaboration_token
-from app.models import Addon, CouponTemplate, PositionOccupancy, Project, ProjectCatalogVersion, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
+from app.models import Addon, CouponTemplate, PositionOccupancy, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
 from app.schemas.selection import (
     MySelectionRecordOut,
     MySelectionSessionsOut,
@@ -229,6 +229,19 @@ def _expire_if_needed(session: SelectionSession) -> bool:
     return False
 
 
+def _catalog_has_active_options(db: Session, catalog_version_id: int) -> bool:
+    """目录只有存在可选活动选项时才要求顾客提交 catalog_version_id。"""
+    return db.scalar(
+        select(ProjectOptionChoice.id)
+        .join(ProjectOptionGroup, ProjectOptionChoice.option_group_id == ProjectOptionGroup.id)
+        .where(
+            ProjectOptionGroup.catalog_version_id == catalog_version_id,
+            ProjectOptionChoice.status == "active",
+        )
+        .limit(1)
+    ) is not None
+
+
 def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) -> list[dict]:
     normalized = []
     linked_items = []
@@ -318,6 +331,7 @@ def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) ->
                 current_catalog is not None
                 and current_catalog.project_id == project.id
                 and current_catalog.status == "published"
+                and _catalog_has_active_options(db, current_catalog.id)
             ):
                 raise HTTPException(status_code=409, detail={
                     "code": "CATALOG_VERSION_REQUIRED",

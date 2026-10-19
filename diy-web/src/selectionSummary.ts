@@ -66,7 +66,7 @@ export function saveProjectSelection(draft: SelectionDraft, input: {
     localParts: input.localParts,
     projectCatalogSelections: {
       ...draft.projectCatalogSelections,
-      ...(input.catalogVersionId && input.optionChoiceIds ? { [input.projectId]: {
+      ...(input.catalogVersionId !== undefined && input.optionChoiceIds !== undefined ? { [input.projectId]: {
         projectId: input.projectId, catalogVersionId: input.catalogVersionId, optionChoiceIds: [...new Set(input.optionChoiceIds)],
       } } : {}),
     },

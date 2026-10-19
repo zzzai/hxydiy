@@ -29,6 +29,11 @@ export function expiredSelectionCopy() {
   } as const;
 }
 
+// 服务号无座菜单没有座位可释放；草稿接口的 409 应重建私有草稿，而不是展示座位释放页。
+export function shouldRecoverPublicDraft(error: { status?: number; code?: string } | null | undefined, publicBrowsing: boolean): boolean {
+  return Boolean(publicBrowsing && error?.status === 409 && error.code !== 'CART_VERSION_CONFLICT');
+}
+
 export function canEditSelection(status: SessionStatus | undefined, occupancyStatus: OccupancyStatus): boolean {
   if (!status || status === 'cancelled' || status === 'expired') return false;
   if (occupancyStatus === 'post_service_present' || occupancyStatus === 'cleaning' || occupancyStatus === 'released') return false;

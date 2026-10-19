@@ -495,6 +495,38 @@ def test_selection_requires_catalog_version_for_project_with_published_catalog(
     _assert_error_code(response, "CATALOG_VERSION_REQUIRED")
 
 
+def test_selection_allows_versioned_project_without_active_catalog_options(
+    expanded_scenario: CatalogSelectionScenario,
+):
+    # 目录版本存在但没有可选活动选项时，普通项目不应被强制要求传目录版本。
+    with _session_local()() as db:
+        groups = db.scalars(
+            select(ProjectOptionGroup).where(
+                ProjectOptionGroup.catalog_version_id == expanded_scenario.qiqing_version_id
+            )
+        ).all()
+        for group in groups:
+            for choice in db.scalars(
+                select(ProjectOptionChoice).where(ProjectOptionChoice.option_group_id == group.id)
+            ).all():
+                choice.status = "inactive"
+        db.commit()
+
+    response = _post_revision(expanded_scenario, [{"project_id": expanded_scenario.qiqing_id}])
+
+    assert response.status_code == 200, response.text
+    assert [item["project_id"] for item in _items(response)] == [expanded_scenario.qiqing_id]
+
+    # 前端修复后会主动带上目录版本和空选项，同样必须可用。
+    with_version = _post_revision(expanded_scenario, [{
+        "project_id": expanded_scenario.qiqing_id,
+        "catalog_version_id": expanded_scenario.qiqing_version_id,
+        "option_choice_ids": [],
+    }])
+    assert with_version.status_code == 200, with_version.text
+    assert [item["project_id"] for item in _items(with_version)] == [expanded_scenario.qiqing_id]
+
+
 def test_selection_rejects_missing_required_group(expanded_scenario: CatalogSelectionScenario):
     with _session_local()() as db:
         group = db.get(ProjectOptionGroup, expanded_scenario.qiqing_small_group_id)
