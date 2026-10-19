@@ -338,6 +338,7 @@ export default function App() {
   const [visitFeedbackSubmitted, setVisitFeedbackSubmitted] = useState(false);
   const [visitFeedbackIntent, setVisitFeedbackIntent] = useState(() => createVisitFeedbackIntent());
   const [positionCode, setPositionCode] = useState(query.positionCode);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
   const [independentProjectIds, setIndependentProjectIds] = useState<number[]>([]);
   const [projectLinkedIds, setProjectLinkedIds] = useState<Record<number, number[]>>({});
@@ -1210,10 +1211,9 @@ export default function App() {
   };
 
   const refreshAfterCustomerLogin = (auth: CustomerAuth, message: string) => {
-    const previousId = customerAuthRef.current?.user.id ?? null;
     setCustomerAuth(auth);
     // Private identity restoration handles a changed owner; never refresh the previous owner's cart.
-    if (!session || !accessToken || publicBrowsing && previousId !== auth.user.id) {
+    if (!session || !accessToken) {
       flash(message);
       return;
     }
@@ -1309,7 +1309,9 @@ export default function App() {
     setPosition(null);
     startFreshSelectionDraft();
     setBoot('loading');
-    void initializePrivateSelection(auth).catch((error) => {
+    void initializePrivateSelection(auth).then(() => {
+      if (customerAuthRef.current?.token === auth?.token) setProfileRefreshKey(value => value + 1);
+    }).catch((error) => {
       if (customerAuthRef.current?.token !== auth?.token) return;
       setBootMessage(error instanceof Error ? error.message : '选单暂时无法恢复，请重试');
       setBoot('error');
@@ -2378,6 +2380,7 @@ export default function App() {
         open={profileOpen}
         storeId={query.storeId}
         auth={customerAuth}
+        refreshKey={profileRefreshKey}
         onClose={dismissTopOverlay}
         onAuthChange={(auth) => {
           if (auth) refreshAfterCustomerLogin(auth, '登录成功');

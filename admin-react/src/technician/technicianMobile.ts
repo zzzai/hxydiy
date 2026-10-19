@@ -153,6 +153,22 @@ export type TechnicianBoardGroup = {
   items: any[];
 };
 
+function technicianPositionNumber(task: any): number {
+  const label = String(task?.room_name || task?.customer_label || task?.name || '');
+  const match = label.match(/\d+/);
+  return match ? Number(match[0]) : Number.POSITIVE_INFINITY;
+}
+
+function compareTechnicianPositions(left: any, right: any): number {
+  const leftNumber = technicianPositionNumber(left);
+  const rightNumber = technicianPositionNumber(right);
+  if (leftNumber !== rightNumber) return leftNumber < rightNumber ? -1 : 1;
+  const leftLabel = String(left?.room_name || left?.customer_label || left?.name || '');
+  const rightLabel = String(right?.room_name || right?.customer_label || right?.name || '');
+  return leftLabel.localeCompare(rightLabel, 'zh-CN', { numeric: true })
+    || Number(left?.room_id || 0) - Number(right?.room_id || 0);
+}
+
 export function technicianBoardGroups(tasks: any[]): TechnicianBoardGroup[] {
   const definitions = [
     { key: 'sofa', label: '沙发' },
@@ -165,7 +181,7 @@ export function technicianBoardGroups(tasks: any[]): TechnicianBoardGroup[] {
       label,
       items: tasks.filter((task) => key === 'room'
         ? ['room', 'bed'].includes(task.room_type)
-        : (task.room_type || 'other') === key),
+        : (task.room_type || 'other') === key).sort(compareTechnicianPositions),
     }))
     .filter((group) => group.items.length > 0);
 }
