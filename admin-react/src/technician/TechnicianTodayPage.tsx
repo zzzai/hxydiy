@@ -19,7 +19,7 @@ function orderSummary(order: any): string {
 function orderStatusLabel(status: string): string {
   return ({
     draft: '待处理',
-    waiting_assignment: '待派单',
+    waiting_assignment: '待安排座位',
     assigned: '已派单',
     ready: '待服务',
     in_service: '服务中',
@@ -40,6 +40,7 @@ function positionTagColor(status: string): string {
 function taskToOrder(task: any): any {
   const occupancyStatus = task.occupancy_status;
   const status = task.conflict ? 'conflict'
+    : task.unassigned || occupancyStatus === 'unassigned' ? 'waiting_assignment'
     : occupancyStatus === 'waiting_service' ? 'ready'
     : occupancyStatus === 'post_service_present' ? 'completed'
       : occupancyStatus === 'in_service' ? 'in_service' : 'cancelled';
@@ -47,7 +48,7 @@ function taskToOrder(task: any): any {
     ...task,
     id: task.occupancy_id ?? null,
     status,
-    customer: task.user_id ? { id: task.user_id, nickname: '顾客', phone_masked: '' } : null,
+    customer: task.customer || (task.user_id ? { id: task.user_id, nickname: '顾客', phone_masked: '' } : null),
   };
 }
 
@@ -55,6 +56,7 @@ export default function TechnicianTodayPage() {
   const { message } = App.useApp();
   const [me, setMe] = useState<any>();
   const [tasks, setTasks] = useState<any[]>([]);
+  const [unassignedTasks, setUnassignedTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>();
@@ -75,6 +77,7 @@ export default function TechnicianTodayPage() {
           if (requestId !== latestLoadRequest.current) return;
           setMe(profile.data);
           setTasks(list.data?.items || []);
+          setUnassignedTasks(list.data?.unassigned_items || []);
           setError('');
     } catch {
       if (requestId === latestLoadRequest.current && !background) setError('任务加载失败，请检查网络后重试');
@@ -143,25 +146,44 @@ export default function TechnicianTodayPage() {
     return counts;
   }, { waiting: 0, inService: 0, completed: 0, conflict: 0 });
   const boardSummary = [
+    unassignedTasks.length ? `无座待安排 ${unassignedTasks.length} 单` : '',
     boardCounts.inService ? `服务中 ${boardCounts.inService} 单` : '',
     boardCounts.waiting ? `待服务 ${boardCounts.waiting} 单` : '',
     boardCounts.conflict ? `待核对 ${boardCounts.conflict} 项` : '',
     boardCounts.completed ? `已完成 ${boardCounts.completed} 单` : '',
   ].filter(Boolean).join(' · ');
 
-  if (loading && !tasks.length) return <div className="technician-loading"><Spin size="large" /></div>;
+  if (loading && !tasks.length && !unassignedTasks.length) return <div className="technician-loading"><Spin size="large" /></div>;
 
   return <div className="technician-today-page">
     <div className="technician-page-title">
       <div>
         <span className="technician-eyebrow">{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</span>
         <h1>服务看板</h1>
-            <p>{me?.technician?.name || '技师'} · {boardSummary || '当前没有待处理服务'} · 共 {tasks.length} 个服务位</p>
+            <p>{me?.technician?.name || '技师'} · {boardSummary || '当前没有待处理服务'} · 共 {tasks.length} 个服务位{unassignedTasks.length ? ` · 无座 ${unassignedTasks.length} 单` : ''}</p>
       </div>
       <Button shape="circle" aria-label="刷新服务看板" icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} />
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => void load()}>重试</Button>} />}
-    {!tasks.length && !error ? <div className="technician-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前门店暂无服务位" /></div> : <section className="technician-board-section">
+    {unassignedTasks.length > 0 && <section className="technician-board-section">
+      <div className="technician-section-heading"><h2>无座订单</h2><span>{unassignedTasks.length} 单待安排座位</span></div>
+      <div style={{ margin: '-2px 0 10px', color: '#7a8d86', fontSize: 12 }}>顾客提交后直接显示，无需技师或店长确认；门店安排座位后即可开始服务。</div>
+      <div className="technician-position-grid">
+        {unassignedTasks.map((task: any) => {
+          const order = taskToOrder(task);
+          const submittedAt = task.submitted_at
+            ? new Date(task.submitted_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+            : '刚刚提交';
+          return <button type="button" className="technician-position-tile tone-waiting" key={task.selection_session_id} onClick={() => setSelectedOrder(order)} aria-label={`查看无座订单${task.customer?.nickname || ''}`}>
+            <div className="technician-position-tile-top"><strong>{task.customer?.nickname || '顾客'}</strong><Tag color="gold">待安排座位</Tag></div>
+            <div className="technician-position-tile-body"><span className="technician-position-count">{(task.items || []).length}</span><span>个项目</span></div>
+            <div className="technician-position-tile-summary">{orderSummary(order)}</div>
+            <div className="technician-position-tile-action"><EyeOutlined /> {submittedAt} 提交 · 查看订单</div>
+          </button>;
+        })}
+      </div>
+    </section>}
+    {!tasks.length && !unassignedTasks.length && !error ? <div className="technician-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前门店暂无服务位" /></div> : tasks.length > 0 && <section className="technician-board-section">
       <div className="technician-section-heading"><h2>服务位</h2><span>共 {tasks.length} 个</span></div>
       {groups.map((group) => <section className="technician-position-group" key={group.key}>
         <div className="technician-section-heading"><h3>{group.label}</h3><span>{group.items.length} 个</span></div>
@@ -192,7 +214,7 @@ export default function TechnicianTodayPage() {
         <div className="technician-task-card-foot">
           {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>开始服务</Button>}
           {selectedActions.includes('finish') && <Button type="primary" block size="large" icon={<CheckCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'finish')}>服务结束</Button>}
-          {selectedOccupancyId === null && <Typography.Text type="secondary">当前服务单接口未提供服务位占用凭证，仅支持查看。</Typography.Text>}
+          {selectedOccupancyId === null && <Typography.Text type="secondary">{selectedOrder.status === 'waiting_assignment' ? '门店尚未安排服务位，当前可查看顾客需求；安排座位后即可开始服务。' : '当前服务单接口未提供服务位占用凭证，仅支持查看。'}</Typography.Text>}
           {selectedOrder.completed_by_me && selectedOrder.customer?.id && selectedOrder.selection_session_id && <Button block size="large" onClick={() => { setProfileOrder(selectedOrder); setSelectedOrder(undefined); }}>填写服务参考</Button>}
           {selectedOrder.status === 'completed' && <Typography.Text type="secondary">服务记录完成后，服务位由前台按离店流程释放。</Typography.Text>}
         </div>
