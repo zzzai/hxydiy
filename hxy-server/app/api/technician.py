@@ -276,7 +276,6 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
     ))
     unassigned_items = []
     for session in unassigned_sessions:
-        customer = db.get(User, session.customer_id) if session.customer_id else None
         submitted_at = session.submitted_at or session.created_at
         unassigned_items.append({
             "unassigned": True,
@@ -287,18 +286,13 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             "completed_by_me": False,
             "selection_status": session.status,
             "room_id": None,
-            "room_name": "待安排座位",
+            "room_name": "未排座",
             "room_type": "unassigned",
             "room_status": None,
             "items": session.items or [],
             "conflict": False,
             "conflict_count": 0,
             "submitted_at": submitted_at.isoformat() if submitted_at else None,
-            "customer": {
-                "id": customer.id,
-                "nickname": customer.nickname or "顾客",
-                "phone_masked": _masked_phone(customer.phone),
-            } if customer else None,
         })
     return {"items": items, "unassigned_items": unassigned_items}
 

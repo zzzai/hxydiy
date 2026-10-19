@@ -19,6 +19,14 @@
 .technician-section-heading span { color: #84958e; font-size: 12px; }
 .technician-position-group + .technician-position-group { margin-top: 16px; }
 .technician-position-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.technician-unassigned-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.technician-unassigned-row { display: flex; flex-direction: column; align-items: stretch; width: 100%; padding: 12px 14px; border: 1px solid #e1ebe5; border-radius: 12px; background: #fff; color: #183c34; text-align: left; box-shadow: 0 4px 12px rgba(23,64,52,.04); cursor: pointer; transition: transform .15s ease; }
+.technician-unassigned-row:active { transform: scale(.99); }
+.technician-unassigned-row-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.technician-unassigned-time { font-size: 12px; font-weight: 650; color: #536b62; }
+.technician-unassigned-tag { font-size: 11px; color: #7a8d86; background: #f3f6f4; padding: 3px 8px; border-radius: 999px; }
+.technician-unassigned-summary { margin-top: 8px; font-size: 14px; font-weight: 600; line-height: 1.45; }
+.technician-unassigned-count { margin-top: 4px; font-size: 12px; color: #7a8d86; }
 .technician-position-tile { min-height: 150px; display: flex; flex-direction: column; align-items: stretch; padding: 13px; border: 1px solid #dce9e2; border-radius: 14px; background: #fff; color: #183c34; text-align: left; box-shadow: 0 5px 18px rgba(23,64,52,.05); cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
 .technician-position-tile:active { transform: scale(.98); }
 .technician-position-tile.tone-idle { border-color: #dce5e1; background: #ffffff; }
