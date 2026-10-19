@@ -22,6 +22,23 @@ from app.schemas.service_handoff import safe_handoff_lines
 
 router = APIRouter(prefix="/technician", tags=["technician"])
 
+# 技师端自动隐藏窗口：只影响技师看板展示，不删除订单、不改变后台/顾客记录状态。
+TECHNICIAN_UNASSIGNED_VISIBLE = timedelta(hours=2)
+TECHNICIAN_WAITING_VISIBLE = timedelta(hours=2)
+TECHNICIAN_IN_SERVICE_GRACE = timedelta(hours=2)
+TECHNICIAN_POST_SERVICE_VISIBLE = timedelta(hours=1)
+
+
+def _utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def _within(value: datetime | None, now: datetime, window: timedelta) -> bool:
+    moment = _utc(value)
+    return moment is None or moment >= now - window
+
 
 class ActivateIn(BaseModel):
     token: str = Field(min_length=20, max_length=256)
@@ -219,6 +236,7 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
     ).order_by(Room.sort_order, Room.id)))
     rooms = sorted([*standalone_rooms, *room_containers], key=lambda room: (room.sort_order, room.id))
     display_room_ids = {room.id for room in rooms}
+    now = datetime.now(timezone.utc)
     occupancies_by_room: dict[int, list[tuple[PositionOccupancy, SelectionSession]]] = {}
     if display_room_ids:
         active_rows = db.execute(
@@ -234,6 +252,12 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             .order_by(PositionOccupancy.id)
         ).all()
         for occupancy, session, occupied_room in active_rows:
+            if not _within(occupancy.created_at, now, TECHNICIAN_WAITING_VISIBLE) and occupancy.status == "waiting_service":
+                continue
+            if occupancy.status == "in_service" and not _within(occupancy.expected_end_at, now, TECHNICIAN_IN_SERVICE_GRACE):
+                continue
+            if occupancy.status == "post_service_present" and not _within(occupancy.actual_service_end_at, now, TECHNICIAN_POST_SERVICE_VISIBLE):
+                continue
             display_room_id = occupied_room.parent_room_id or occupied_room.id
             if display_room_id in display_room_ids:
                 occupancies_by_room.setdefault(display_room_id, []).append((occupancy, session))
@@ -261,12 +285,14 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             "conflict_count": 0,
         })
 
-    # 无座订单没有 occupancy，单独返回给技师直接查看；门店只需安排服务位，不要求先确认选单。
+    # 无座订单没有 occupancy，单独返回给技师直接查看；超时后只从技师端隐藏，后台仍保留。
+    unassigned_cutoff = now - TECHNICIAN_UNASSIGNED_VISIBLE
     unassigned_sessions = list(db.scalars(
         select(SelectionSession)
         .where(
             SelectionSession.store_id == technician.store_id,
             SelectionSession.status.in_(("submitted", "confirmed")),
+            func.coalesce(SelectionSession.submitted_at, SelectionSession.created_at) >= unassigned_cutoff,
             ~exists(select(PositionOccupancy.id).where(
                 PositionOccupancy.selection_session_id == SelectionSession.id,
             )),

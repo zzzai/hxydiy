@@ -4,6 +4,7 @@ import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from threading import Barrier
 from uuid import uuid4
 
@@ -327,6 +328,12 @@ class SelectionPositionAssignmentTests(unittest.TestCase):
         self.assertTrue(unassigned["items"])
         self.assertEqual(unassigned["selection_status"], "submitted")
         self.assertNotIn("customer", unassigned)
+        with self.SessionLocal() as db:
+            stale_session = db.get(SelectionSession, session_id)
+            stale_session.submitted_at = datetime.now(timezone.utc) - timedelta(hours=3)
+            db.commit()
+        stale = self.client.get("/api/v1/technician/tasks", headers=headers)
+        self.assertNotIn(session_id, [item["selection_session_id"] for item in stale.json()["unassigned_items"]])
         self.assertEqual(self.assign(session_id).status_code, 200)
         after = self.client.get("/api/v1/technician/tasks", headers=headers)
         after_payload = after.json()
