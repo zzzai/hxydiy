@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as technicianMobile from '../src/technician/technicianMobile.ts';
-import { TECHNICIAN_MOBILE_ROUTES, technicianAccountStatusLabel, technicianEmploymentStatusLabel, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianPriceLabel, technicianPricingAppliedLabel, technicianPricingLines, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
+import { TECHNICIAN_MOBILE_ROUTES, technicianAccountStatusLabel, technicianEmploymentStatusLabel, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianPriceLabel, technicianPriceLineValue, technicianPriceMode, technicianPriceModeLabel, technicianPriceTotalValue, technicianPricingLines, technicianPricingSummary, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
 
 test('移动技师端不再暴露会员码核验路由', () => {
   assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/history', '/technician/me']);
@@ -141,18 +141,42 @@ test('本人历史空态按接口计数互斥分类', () => {
   assert.equal((technicianMobile as any).technicianHistoryEmptyState('confirmed', 2), 'filtered');
 });
 
-test('订单价格按元展示，并区分会员价与非会员价', () => {
+test('价格按元展示，并且只使用本单 applied_price_type 口径', () => {
   assert.equal(technicianPriceLabel(15900), '¥159');
   assert.equal(technicianPriceLabel(15950), '¥159.50');
   assert.equal(technicianPriceLabel(undefined), '—');
-  assert.equal(
-    technicianPricingAppliedLabel({ applied_price_type: 'member', store_total_cents: 19900, member_total_cents: 15900 }),
-    '本单按会员价记录',
+  assert.equal(technicianPriceMode({ applied_price_type: 'member' }), 'member');
+  assert.equal(technicianPriceMode({ applied_price_type: 'store' }), 'store');
+  assert.equal(technicianPriceMode({ applied_price_type: 'group' }), 'group');
+  assert.equal(technicianPriceMode({ applied_price_type: null }), 'unknown');
+  assert.equal(technicianPriceMode(undefined), 'unknown');
+  assert.equal(technicianPriceModeLabel('member'), '会员价');
+  assert.equal(technicianPriceModeLabel('store'), '门店价');
+  assert.equal(technicianPriceModeLabel('group'), '团购价');
+  assert.equal(technicianPriceModeLabel('unknown'), '价格类型待确认');
+  assert.deepEqual(
+    technicianPriceLineValue('member', { member_line_total_cents: 15900, store_line_total_cents: 19900 }),
+    { amount_cents: 15900, pending_label: null },
   );
-  assert.equal(
-    technicianPricingAppliedLabel({ applied_price_type: 'store', store_total_cents: 19900, member_total_cents: 15900 }),
-    '本单按非会员价记录',
+  assert.deepEqual(
+    technicianPriceLineValue('store', { member_line_total_cents: 15900, store_line_total_cents: 19900 }),
+    { amount_cents: 19900, pending_label: null },
   );
+  assert.deepEqual(
+    technicianPriceLineValue('unknown', { member_line_total_cents: 15900, store_line_total_cents: 19900 }),
+    { amount_cents: null, pending_label: null },
+  );
+  assert.deepEqual(
+    technicianPriceTotalValue('member', { member_total_cents: 15900, store_total_cents: 19900 }),
+    { amount_cents: 15900, pending_label: null },
+  );
+  assert.deepEqual(
+    technicianPriceTotalValue('store', { member_total_cents: 15900, store_total_cents: 19900 }),
+    { amount_cents: 19900, pending_label: null },
+  );
+  assert.equal(technicianPricingSummary({ applied_price_type: 'member', member_total_cents: 15900, store_total_cents: 19900 }), '会员价 ¥159');
+  assert.equal(technicianPricingSummary({ applied_price_type: 'store', member_total_cents: 15900, store_total_cents: 19900 }), '门店价 ¥199');
+  assert.equal(technicianPricingSummary(null), '');
   assert.equal(technicianPricingLines({ lines: [{ name: '荷小推', quantity: 1 }] }).length, 1);
   assert.deepEqual(technicianPricingLines(undefined), []);
 });

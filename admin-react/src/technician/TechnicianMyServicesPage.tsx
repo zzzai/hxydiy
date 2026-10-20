@@ -3,7 +3,7 @@ import { Alert, App, Button, Empty, Spin, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { finishTechnicianService, getTechnicianMyTasks } from '../api';
 import type { TechnicianCustomerTask } from '../technicianCustomer';
-import { createTechnicianActionRunner, technicianOrderItemLabel, technicianPriceLabel, technicianPricedItemRows, technicianPricingAppliedLabel, technicianStatusLabel } from './technicianMobile';
+import { createTechnicianActionRunner, technicianOrderItemLabel, technicianPriceLabel, technicianPriceMode, technicianPriceModeLabel, technicianPriceTotalValue, technicianPricedItemRows, technicianStatusLabel } from './technicianMobile';
 import TechnicianCustomerPanel from './TechnicianCustomerPanel';
 import TechnicianProfileSheet from './TechnicianProfileSheet';
 import { useTechnicianSession } from './useTechnicianSession';
@@ -60,6 +60,9 @@ export default function TechnicianMyServicesPage() {
     {error && <Alert type="error" message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     {loading ? <Spin /> : tasks.length ? tasks.map((task) => {
       const pricing = task.pricing;
+      const mode = technicianPriceMode(pricing);
+      const modeLabel = technicianPriceModeLabel(mode);
+      const total = technicianPriceTotalValue(mode, pricing);
       const rows = technicianPricedItemRows(task.items, pricing);
       const itemNames = task.items.map(technicianOrderItemLabel).filter(Boolean).join('、') || '未记录项目';
       return <article key={task.occupancy_id} className="technician-customer-entry">
@@ -70,20 +73,19 @@ export default function TechnicianMyServicesPage() {
               <span className="technician-my-service-item-name">{row.name}</span>
               <span className="technician-my-service-item-tail">
                 {row.quantity > 1 && <span className="technician-my-service-item-count">×{row.quantity}</span>}
-                {(row.member_total_cents != null || row.store_total_cents != null) && <span className="technician-my-service-item-price">
-                  <span>会员 {technicianPriceLabel(row.member_total_cents)}</span>
-                  <span>非会员 {technicianPriceLabel(row.store_total_cents)}</span>
-                </span>}
+                {row.amount_cents != null && <span className="technician-my-service-item-price">{modeLabel} {technicianPriceLabel(row.amount_cents)}</span>}
+                {row.amount_cents == null && row.pending_label && <span className="technician-my-service-item-pending">{row.pending_label}</span>}
               </span>
             </div>) : <p>未记录项目</p>}
           </div>
           : <p>{itemNames}</p>}
         {pricing && <section className="technician-order-pricing" aria-label="订单价格">
-          <div className="technician-order-pricing-head"><span>本单价格</span><span>{technicianPricingAppliedLabel(pricing)}</span></div>
-          <div className="technician-order-pricing-pair">
-            <div><span>会员价合计</span><strong>{technicianPriceLabel(pricing.member_total_cents)}</strong></div>
-            <div><span>非会员价合计</span><strong>{technicianPriceLabel(pricing.store_total_cents)}</strong></div>
-          </div>
+          <div className="technician-order-pricing-head"><span>本单价格</span><span>{modeLabel}</span></div>
+          {mode !== 'unknown' && <div className="technician-order-pricing-pair">
+            <div><span>{modeLabel}合计</span><strong>{total.pending_label ? '待确认' : technicianPriceLabel(total.amount_cents)}</strong></div>
+          </div>}
+          {mode === 'unknown' && <p className="technician-order-pricing-hint">价格类型待确认，暂不展示单价与合计</p>}
+          {total.pending_label && <p className="technician-order-pricing-hint">{total.pending_label}</p>}
         </section>}
         <div className="technician-my-service-actions">
           <Button onClick={() => setCustomer(task.occupancy_id)}>查看顾客资料</Button>
