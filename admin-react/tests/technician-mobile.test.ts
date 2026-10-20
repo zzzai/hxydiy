@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as technicianMobile from '../src/technician/technicianMobile.ts';
-import { TECHNICIAN_MOBILE_ROUTES, technicianAccountStatusLabel, technicianEmploymentStatusLabel, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianPositionTone, technicianPriceLabel, technicianPricingAppliedLabel, technicianPricingLines, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
+import { TECHNICIAN_MOBILE_ROUTES, technicianAccountStatusLabel, technicianEmploymentStatusLabel, technicianActions, technicianBoardGroups, technicianOrderItemLabel, technicianOrderPriceView, technicianPositionTone, technicianPriceLabel, technicianPricingAppliedLabel, technicianPricingLines, technicianStatusLabel } from '../src/technician/technicianMobile.ts';
 
 test('移动技师端不再暴露会员码核验路由', () => {
   assert.deepEqual(TECHNICIAN_MOBILE_ROUTES, ['/technician/today', '/technician/history', '/technician/me']);
@@ -155,4 +155,18 @@ test('订单价格按元展示，并区分会员价与非会员价', () => {
   );
   assert.equal(technicianPricingLines({ lines: [{ name: '荷小推', quantity: 1 }] }).length, 1);
   assert.deepEqual(technicianPricingLines(undefined), []);
+  const view = technicianOrderPriceView({
+    applied_price_type: 'member',
+    store_total_cents: 19900,
+    member_total_cents: 15900,
+    lines: [{ name: '舒享精油 SPA', quantity: 1, store_line_total_cents: 19900, member_line_total_cents: 15900 }],
+  });
+  assert.equal(view?.rows[0]?.name, '舒享精油 SPA');
+  assert.equal(view?.rows[0]?.storeCents, 19900);
+  assert.equal(view?.rows[0]?.memberCents, 15900);
+  assert.equal(view?.memberTotalCents, 15900);
+  assert.equal(view?.storeTotalCents, 19900);
+  assert.equal(view?.appliedLabel, '本单按会员价记录');
+  assert.equal(technicianOrderPriceView(null), null);
+  assert.equal(technicianOrderPriceView({ store_total_cents: 0, member_total_cents: 0, lines: [] }), null);
 });

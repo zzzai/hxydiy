@@ -4,7 +4,8 @@ import { ReloadOutlined } from '@ant-design/icons';
 import { getTechnicianServiceHistory } from '../api';
 import ProjectRecordHistory from './ProjectRecordHistory';
 import TechnicianProfileSheet from './TechnicianProfileSheet';
-import { technicianHistoryEmptyState, technicianHistorySummaryLines, technicianProfileStatusLabel, type TechnicianHistoryProfileSummary } from './technicianMobile';
+import TechnicianOrderPrices from './TechnicianOrderPrices';
+import { technicianHistoryEmptyState, technicianHistorySummaryLines, technicianOrderPriceView, technicianProfileStatusLabel, type TechnicianHistoryProfileSummary, type TechnicianOrderPricing } from './technicianMobile';
 
 type ProfileStatus = 'all' | 'confirmed' | 'pending';
 type HistoryItem = {
@@ -23,6 +24,7 @@ type HistoryItem = {
   profile_status: 'confirmed' | 'pending';
   customer: { display_name: string };
   projects: string[];
+  pricing?: TechnicianOrderPricing | null;
   service_position: string;
   profile_summary: TechnicianHistoryProfileSummary | null;
   record_completed?: boolean;
@@ -89,7 +91,8 @@ export default function TechnicianServiceHistoryPage() {
             <div className="technician-history-card-main">
               <div className="technician-history-card-headline"><strong>{item.service_position || '服务位'}</strong><Tag color={item.profile_status === 'confirmed' ? 'green' : 'gold'}>{technicianProfileStatusLabel(item.profile_status)}</Tag></div>
               <span>{new Date(item.completed_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} · {item.duration_minutes == null ? '时长未记录' : `${item.duration_minutes} 分钟`}</span>
-              <span>{item.customer?.display_name || '匿名顾客'} · {item.projects?.join('、') || '项目未记录'}</span>
+              <span>{item.customer?.display_name || '匿名顾客'}{technicianOrderPriceView(item.pricing, item.projects?.map((name) => ({ name })))?.rows.length ? '' : ` · ${item.projects?.join('、') || '项目未记录'}`}</span>
+              <TechnicianOrderPrices pricing={item.pricing} items={item.projects?.map((name) => ({ name }))} />
               <Tag color={item.record_completed ? 'green' : 'default'}>{item.record_completed ? (item.recording_outcome === 'no_additional_notes' ? '已记录 · 本次无补充' : '已完成记录') : '待记录'}</Tag>
               {item.service_note && <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.service_note}</Typography.Paragraph>}
               {item.own_record_id && <Button onClick={()=>setRecordId(item.own_record_id!)}>查看记录与更正</Button>}

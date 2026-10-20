@@ -8,7 +8,7 @@ from sqlalchemy import JSON, func, literal, select, union_all
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.technician import current_technician
+from app.api.technician import _selection_pricing, current_technician
 from app.db.session import get_db
 from app.domain.customer_operational_tags import operational_tag_view
 from app.models import AuditLog, PositionOccupancy, SelectionSession, User
@@ -107,7 +107,7 @@ def my_tasks(request: Request, authorization: str | None = Header(None), db: Ses
         PositionOccupancy.active_room_id == Room.id, PositionOccupancy.active_session_id == SelectionSession.id,
         PositionOccupancy.departed_at.is_(None), PositionOccupancy.released_at.is_(None), SelectionSession.status.in_(["submitted", "confirmed"]),
     ).order_by(PositionOccupancy.id.desc()).limit(100)).all()
-    return {"items": [{"occupancy_id": o.id, "user_id": s.customer_id, "selection_session_id": s.id, "occupancy_status": o.status, "room_id": r.id, "room_name": r.name, "items": _task_items(s.items)} for o, s, r in rows]}
+    return {"items": [{"occupancy_id": o.id, "user_id": s.customer_id, "selection_session_id": s.id, "occupancy_status": o.status, "room_id": r.id, "room_name": r.name, "items": _task_items(s.items), "pricing": _selection_pricing(s)} for o, s, r in rows]}
 
 
 @router.get("/occupancies/{occupancy_id}/customer-summary")

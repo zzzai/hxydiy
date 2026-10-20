@@ -260,6 +260,8 @@ def _selection_pricing(session: SelectionSession | None) -> dict | None:
         store_total = sum(line["store_line_total_cents"] or 0 for line in lines)
     if member_total is None and lines:
         member_total = sum(line["member_line_total_cents"] or 0 for line in lines)
+    if not lines and store_total is None and member_total is None:
+        return None
     store_total = store_total or 0
     member_total = member_total or 0
     applied = snapshot.get("applied_price_type")
@@ -962,6 +964,7 @@ def service_history(
             "service_note": service_note,
             "customer": {"display_name": f"顾客 #{customer.id}"} if customer else {"display_name": "匿名顾客"},
             "projects": project_names,
+            "pricing": _selection_pricing(session),
             "service_position": room.name,
             "profile_summary": _history_profile_summary(record),
         })

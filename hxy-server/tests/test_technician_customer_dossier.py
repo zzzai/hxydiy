@@ -85,6 +85,43 @@ def test_my_tasks_only_owned_present_and_minimal_items(dossier):
     assert result.status_code == 200, result.text
     assert [row["occupancy_id"] for row in result.json()["items"]] == [ids["occupancies"][5], ids["occupancies"][4], ids["occupancies"][0]]
     assert result.json()["items"][0]["items"] == [{"id": 7, "type": "project", "name": "Synthetic service", "quantity": 1}]
+    assert result.json()["items"][0]["pricing"] is None
+
+
+def test_my_tasks_expose_member_and_store_prices_without_customer_secrets(dossier):
+    client, factory, ids, headers, *_ = dossier
+    with factory() as db:
+        session = db.get(SelectionSession, "dossier-session-5")
+        session.store_total_cents = 19900
+        session.member_total_cents = 15900
+        session.pricing_snapshot = {
+            "applied_price_type": "member",
+            "store_total_cents": 19900,
+            "member_total_cents": 15900,
+            "customer_phone": "13800000000",
+            "lines": [{
+                "line_index": 0,
+                "name": "Synthetic service",
+                "quantity": 1,
+                "unit_store_price_cents": 19900,
+                "unit_member_price_cents": 15900,
+                "store_line_total_cents": 19900,
+                "member_line_total_cents": 15900,
+            }],
+        }
+        db.commit()
+    result = client.get("/api/v1/technician/my-tasks", headers=headers)
+    assert result.status_code == 200, result.text
+    item = next(row for row in result.json()["items"] if row["occupancy_id"] == ids["occupancies"][5])
+    assert item["items"] == [{"id": 7, "type": "project", "name": "Synthetic service", "quantity": 1}]
+    assert item["pricing"]["applied_price_type"] == "member"
+    assert item["pricing"]["store_total_cents"] == 19900
+    assert item["pricing"]["member_total_cents"] == 15900
+    assert item["pricing"]["lines"][0]["unit_store_price_cents"] == 19900
+    assert item["pricing"]["lines"][0]["unit_member_price_cents"] == 15900
+    assert "13800000000" not in result.text
+    assert "customer_phone" not in result.text
+    assert "9999" not in result.text
 
 
 @pytest.mark.parametrize("suffix", ["customer-summary", "customer-history", "customer-reviews", "customer-reports", "customer-reports/x", "customer-tags"])
