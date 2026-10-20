@@ -6,6 +6,7 @@ import { canApproveSelectionChange, selectionChangeItemSummary } from '../select
 import { useTechnicianSession } from './useTechnicianSession';
 import { MANAGER_FILTERS, MANAGER_PAGE_SIZE, createManagerActionRunner, isMobileManager, managerError, managerListParams, managerPrice, managerSelectionActions, managerSourceLabel, managerStatusLabel, readManagerPage } from './managerMobile';
 import type { ManagerChange, ManagerFilter, ManagerSelection, ManagerSelectionItem } from './managerMobile';
+import ManagerPositionView from './ManagerPositionView';
 import './manager-mobile.css';
 
 type Detail = { kind: 'selection'; item: ManagerSelection } | { kind: 'change'; item: ManagerChange };
@@ -22,6 +23,8 @@ export default function ManagerStorePage() {
   const { message } = App.useApp();
   const current = useTechnicianSession();
   const storeId = getStaff()?.store_id;
+  const [view, setView] = useState<'selections' | 'positions'>('selections');
+  const [mapRefresh, setMapRefresh] = useState(0);
   const [filter, setFilter] = useState<ManagerFilter>('submitted');
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -94,9 +97,10 @@ export default function ManagerStorePage() {
       }
     }
   }, [current]);
-  useEffect(() => { void load(); return () => { ++listVersion.current; listPending.current = null; }; }, [load]);
-  useEffect(() => { void loadChanges(); return () => { ++changeVersion.current; }; }, [loadChanges]);
+  useEffect(() => { if (view === 'selections') void load(); return () => { ++listVersion.current; listPending.current = null; }; }, [load, view]);
+  useEffect(() => { if (view === 'selections') void loadChanges(); return () => { ++changeVersion.current; }; }, [loadChanges, view]);
   useEffect(() => {
+    if (view !== 'selections') return;
     const refresh = () => {
       if (document.visibilityState !== 'visible') { close(); return; }
       if (panelRef.current || busyRef.current) return;
@@ -106,7 +110,7 @@ export default function ManagerStorePage() {
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
-  }, [load, loadChanges, close]);
+  }, [load, loadChanges, close, view]);
   const open = (next: Detail) => {
     ++positionVersion.current;
     setDetail(next); setAction('view'); setActionError(''); setRoomId(undefined); setPositions([]); setReason('');
@@ -152,6 +156,7 @@ export default function ManagerStorePage() {
       if (!current()) return;
       message.success(({ confirm: '选单已确认', cancel: '选单已取消', assign: '座位已安排', approve: '加选已确认', reject: '加选已拒绝' } as Record<string, string>)[action]);
       setDetail(null); setAction('view'); setRoomId(undefined); setReason('');
+      setMapRefresh(value => value + 1);
       await Promise.all([load(true, true), loadChanges()]);
     } catch (error) {
       if (!current()) return;
@@ -169,7 +174,9 @@ export default function ManagerStorePage() {
   const emptyText = filter === 'submitted' ? '暂无待确认选单' : filter === 'unassigned' ? '暂无待配位选单' : filter === 'confirmed' ? '暂无已确认选单' : '暂无选单';
 
   return <section className="manager-store-page">
-    <header className="manager-page-heading"><div><h1>门店选单</h1><p>处理选单与顾客加选</p></div><Button aria-label="刷新门店选单" icon={<ReloadOutlined />} loading={loading} onClick={() => { void load(); void loadChanges(); }} /></header>
+    <header className="manager-page-heading"><div><h1>门店工作台</h1><p>{view === 'selections' ? '处理选单与顾客加选' : '按沙发、床位查看当前选单'}</p></div><Button aria-label={view === 'selections' ? '刷新门店选单' : '刷新门店座位'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else { void load(); void loadChanges(); } }} /></header>
+    <nav className="manager-view-tabs" aria-label="工作台视图"><button type="button" aria-pressed={view === 'selections'} disabled={busy} onClick={() => { close(); setView('selections'); }}>选单</button><button type="button" aria-pressed={view === 'positions'} disabled={busy} onClick={() => { close(); setView('positions'); }}>座位</button></nav>
+    {view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} /> : <>
     {changeError && <Alert type="warning" message={changeError} />}
     {pendingChanges.length > 0 && <section className="manager-changes" aria-label="待确认加选">
       <div className="manager-section-heading"><h2>待确认加选 <span>{pendingChanges.length}</span></h2>{pendingChanges.length > 3 && <Button type="text" size="small" onClick={() => setShowAllChanges(!showAllChanges)}>{showAllChanges ? '收起' : '查看全部'}</Button>}</div>
@@ -190,6 +197,7 @@ export default function ManagerStorePage() {
       })}
     </div>}
     {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份选单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); close(); }} /></div>}
+    </>}
     <Drawer title={action !== 'view' ? actionLabels[action] : change ? '加选详情' : '选单详情'} placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(detail)} onClose={close} maskClosable={!busy} closable={!busy} destroyOnClose footer={detail && <div className="manager-detail-actions">
       {action === 'view' ? <>
         {actions?.assign && <Button size="large" disabled={forbidden} onClick={() => chooseAction('assign')}>安排座位</Button>}

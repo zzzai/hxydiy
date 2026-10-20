@@ -33,12 +33,21 @@
 ### 店长手机工作台增量（2026-10-20，待统一验收/发布）
 
 - `/technician/store` 及 `/technician/store/login` 固定使用既有 admin slot；登出/401 不回退到保留的 technician slot，不清除另一角色会话。店长必须 manager、正整数 store_id、technician_id=null。
-- 同一移动壳内仅一个门店选单页，按待确认/待配位/已确认/全部筛选；调用既有 `GET /admin/v2/selection-sessions` 的 page/page_size，使用服务端 total。待配位仅传 needs_position_assignment=true，不附加 submitted 过滤。
+- 同一移动壳内为“门店工作台”，提供“选单 / 座位”两种视图；选单按待确认/待配位/已确认/全部筛选；调用既有 `GET /admin/v2/selection-sessions` 的 page/page_size，使用服务端 total。待配位仅传 needs_position_assignment=true，不附加 submitted 过滤。
 - 项目、状态、服务位优先展示；金额只用 pricing_snapshot 的 payable_total_cents/applied_price_type，合法零价保留，缺价显示“金额待核实”，不按会员身份重算。来源枚举仅中文展示，存储值不改。
 - 确认/取消/配位与加选批准/拒绝沿用既有管理接口和权限。加选动作传 change.id，拒绝原因非空；操作成功后重新拉取列表与加选，不用缺少 position 的动作响应覆盖完整选单。错误保留目标和输入，403禁用操作，401/身份epoch改变清除旧界面；不新增接口、权限或幂等参数。
 - 不挂载技师业务页面，不请求技师 me/tasks/履约、顾客画像/报告/标签。空列表保持紧凑；没有加选时不显示加选空卡。
 - “更多 → 电脑后台”是主动选择，不再自动跳后台。普通企微离页清当前角色会话并隐藏旧界面；仅显式电脑后台交接保留店长会话，返回缓存页面先隐藏旧数据再重新验证。合成生命周期测试不等于真机/BFCache验收。
 - 验收仅合成数据，禁止对生产调用 live-service-position-map（该GET可能清理过期占位）。后端、数据库和真实订单不在本增量范围。
+
+### 座位只读视图增量（2026-10-21，PR #299 待统一验收/发布）
+
+- 全店服务位仅来自既有 `GET /admin/live-service-position-map` 的 positions，不从20条分页选单拼接、不调用固定布局补位、不虚构服务位。实际 sofa/bed/room 分别展示为沙发/床位/房间；停用服务位单独可收起，仍有关联或异常时默认展开。
+- map.store_id 必须等于当前店长 store_id；展示关联项目前必须同时满足 occupancy.store_id=map.store_id、occupancy.room_id=occupancy.active_room_id=position.id、occupancy.selection_session_id=occupancy.active_session_id=selection.id，且 ID、状态、项目结构有效。旧类型仅兼容新增可选 active_session_id，新视图缺值即待核实，禁止回退替代。关联不一致不展示任何该选单项目/价格；整个 map 错店或加载失败显示错误与重试，不降级为空位。后端会话门店完整性沿用受控写入及活动关联唯一性，本视图不声称 map 单独重验 session.store_id。
+- occupancy 状态为准：held=选购中、waiting_service=待服务、in_service=服务中、post_service_present=已结束服务·待离位确认、cleaning=已结束服务·清洁中。selection.confirmed 只是选单已确认，不能推断服务未结束。双空关联为“暂无当前选单”，不等同现场空闲。
+- 座位详情只读展示真实项目/偏好、选单 ID/状态、来源与价格快照（零元有效，缺价待核实）。不推断顾客、手机号、技师，不补查历史分页或用 live-board/rooms.current_tech 拼接。确认/取消/配位仅保留在选单视图，不新增开房、离位、开始或结束服务按钮。
+- 详情绑定 position.id + occupancy.id + selection.id；刷新遇到关联改变时隐藏原内容并显示“关联已变化”，必须关闭再打开，不能静默切换新单。地图请求受会话 epoch、门店、组件存活、页面可见生命周期及请求版本约束；晚到的旧读、换店、退出或 pagehide 均不得回填旧地图。选单写入成功失效地图版本，切换回座位重新读取完整地图。
+- 合成验收覆盖375/390宽度、25个真实返回服务位、空/停用/异常关联、服务结束、零价/缺价、错误不当空位、换单守卫、迟到响应、换店、退出、真实浏览器 pagehide 与写后重载。生产写入仍为0；合成浏览器行为不等同真实手机企业微信/BFCache验收。
 
 原技师任务/报告/标签接口仍只接受技师且维持本人当前在店服务范围；店长只获得其既有门店管理权限，不借此取得技师顾客档案新权限。
 

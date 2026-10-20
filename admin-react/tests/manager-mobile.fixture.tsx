@@ -23,7 +23,7 @@ if (params.has('reset') || !sessionStorage.getItem('manager-fixture-ready')) {
   params.delete('reset');
   history.replaceState(null, '', location.pathname + '?' + params);
 }
-const stats = { reads: 0, writes: 0, technicianCalls: 0, unexpected: 0, oldReadReleased: false };
+const stats = { reads: 0, writes: 0, technicianCalls: 0, unexpected: 0, oldReadReleased: false, mapReads: 0, mapPending: false, mapReleased: false };
 const entries = Array.from({ length: 42 }, (_, i) => ({
   id: 'synthetic-selection-' + String(i + 1).padStart(4, '0'), store_id: 1,
   status: i < 27 ? 'submitted' : i < 36 ? 'confirmed' : 'cancelled',
@@ -40,6 +40,34 @@ const changes = [28, 29].map(n => ({ id: 'synthetic-change-' + n, state: 'awaiti
   selection: { id: entries[n].id, source: entries[n].source, status: entries[n].status },
   revision: { id: 'synthetic-revision-' + n, revision_no: 2, added_items: [{ name: '头疗', quantity: 1 }], pricing: {} },
 }));
+
+let mapRevision = 0, holdNextMap = false, mapFailure = scenario === 'positions-error';
+let releaseMap: (() => void) | undefined;
+function positionFixture(storeId: number) {
+  const total = scenario.startsWith('positions') ? 25 : 3;
+  return Array.from({ length: total }, (_, i) => {
+    const n = i + 1, id = 100 + n;
+    const type = [4, 6, 7, 9].includes(n) ? 'bed' : [5, 8].includes(n) ? 'room' : 'sofa';
+    const name = (storeId === 2 ? '二店·' : '') + n + (type === 'bed' ? '号床位' : type === 'room' ? '号房间' : '号沙发');
+    const status = n === 4 ? 'post_service_present' : n === 5 ? 'cleaning' : n === 10 ? 'held' : n === 11 ? 'waiting_service' : 'in_service';
+    const assigned = n === 1 && entries[0].position?.room_id === 101 && !entries[0].needs_position_assignment;
+    const linked = assigned || (n >= 2 && n <= 11);
+    const selectionId = assigned ? entries[0].id : 'synthetic-position-' + id + (n === 2 && mapRevision ? '-changed' : '');
+    const selection = linked ? {
+      id: selectionId, status: assigned ? entries[0].status : 'confirmed', source: 'in_store',
+      items: assigned ? entries[0].items : [{ name: n === 8 || n === 9 ? '不应展示的错误关联项目' : n === 2 && mapRevision ? '新关联选单项目' : n === 2 ? '招牌草本泡与肩颈背部放松服务（合成长项目名称）' : '草本泡', quantity: 1, diy_preferences: ['肩颈多按一会'] }],
+      pricing_snapshot: n === 7 ? null : { payable_total_cents: n === 6 ? 0 : 8900, applied_price_type: 'member' },
+    } : null;
+    return {
+      id, name, customer_label: name, type, sort_order: n,
+      state: assigned ? 'waiting_service' : linked ? status : 'available', operational_status: n === 3 ? 'maintenance' : 'active',
+      occupancy: linked ? { id: 500 + n + (n === 2 ? mapRevision * 1000 : 0), store_id: storeId, room_id: id, active_room_id: n === 8 ? 999 : id,
+        selection_session_id: selectionId, active_session_id: n === 9 ? undefined : selectionId, status: assigned ? 'waiting_service' : status } : null,
+      selection,
+    };
+  });
+}
+
 let holdNextRead = false;
 let releaseOld: (() => void) | undefined;
 let completeCallback: (() => void) | undefined;
@@ -73,11 +101,18 @@ client.defaults.adapter = async config => {
     return response;
   }
   if (method === 'get' && path === '/admin/v2/selection-change-requests') return ok({ items: scenario === 'empty' ? [] : changes.filter(item => item.state === 'awaiting_staff_confirmation'), total: scenario === 'empty' ? 0 : changes.filter(item => item.state === 'awaiting_staff_confirmation').length });
-  if (method === 'get' && path === '/admin/live-service-position-map') return ok({ store_id: getStaff()?.store_id || 1, positions: [
-    { id: 101, name: '1号沙发', customer_label: '1号沙发', state: 'available', operational_status: 'active' },
-    { id: 102, name: '2号沙发', state: 'in_service', operational_status: 'active' },
-    { id: 103, name: '3号沙发', state: 'available', operational_status: 'maintenance' },
-  ] });
+  if (method === 'get' && path === '/admin/live-service-position-map') {
+    ++stats.mapReads;
+    if (mapFailure) return fail(503, '合成座位请求失败');
+    const storeId = Number(getStaff()?.store_id || 1);
+    const response = ok({ store_id: scenario === 'positions-wrong-store' ? 99 : storeId,
+      positions: scenario === 'positions-empty' ? [] : positionFixture(storeId) });
+    if (holdNextMap) {
+      holdNextMap = false; stats.mapPending = true;
+      await new Promise<void>(resolve => { releaseMap = () => { stats.mapPending = false; stats.mapReleased = true; resolve(); }; });
+    }
+    return response;
+  }
   if (method === 'post' && path.startsWith('/admin/v2/selection-')) {
     ++stats.writes; await wait(150);
     if (scenario === 'conflict') return fail(409, '合成冲突：服务状态已变化，请核对后重试');
@@ -128,9 +163,16 @@ function Fixture() {
   return <ConfigProvider theme={{ token: { colorPrimary: '#164f3c', borderRadius: 10 } }}><App>
     <aside style={{ padding: '8px 12px', background: '#fff4d9', color: '#57451a', fontSize: 11, overflowWrap: 'anywhere' }}>
       合成预览 · 不连接生产 · {scenario}<br />
-      列表读取 {stats.reads} · 操作 {stats.writes} · 技师接口 {stats.technicianCalls} · 非白名单 {stats.unexpected} · 旧读释放 {String(stats.oldReadReleased)}
+      列表读取 {stats.reads} · 操作 {stats.writes} · 技师接口 {stats.technicianCalls} · 非白名单 {stats.unexpected} · 旧读释放 {String(stats.oldReadReleased)} · 座位读取 {stats.mapReads} · 座位挂起 {String(stats.mapPending)} · 座位释放 {String(stats.mapReleased)}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
         <a href="/technician/store?scenario=normal&reset=1">正常</a><a href="/technician/store?scenario=empty&reset=1">空列表</a><a href="/technician/store?scenario=error&reset=1">加载失败</a><a href="/technician/store?scenario=conflict&reset=1">操作冲突</a><a href="/technician/store?scenario=forbidden&reset=1">权限拒绝</a><a href="/technician/store?scenario=race&reset=1">慢读竞态</a><a href="/technician/store?scenario=expired&reset=1">会话失效</a><a href="/technician/wecom/complete?scenario=callback&reset=1">双身份回调</a><a href="/technician/wecom/complete?scenario=callback-wait&reset=1">回调等待</a><a href="/technician/today?scenario=technician&reset=1">技师</a>
+        {scenario.startsWith('positions') && <>
+          <button onClick={() => { holdNextMap = true; }}>挂起下次座位读取（合成）</button>
+          <button onClick={() => { releaseMap?.(); releaseMap = undefined; }}>释放旧座位读取（合成）</button>
+          <button onClick={() => { ++mapRevision; }}>更换座位选单（合成）</button>
+          <button onClick={() => { mapFailure = false; }}>恢复座位读取（合成）</button>
+          <a href="/fixture-left">离开座位（合成）</a>
+        </>}
         {scenario === 'race' && <button onClick={() => { holdNextRead = true; }}>挂起下次列表读取（合成）</button>}
         {scenario === 'callback-wait' && <><button onClick={() => completeCallback?.()}>完成回调（合成）</button><a href="/fixture-left">离开回调（合成）</a></>}
         <button onClick={() => commitStaffSession({ token: 'synthetic-manager-2', staff: { ...manager, id: 4, store_id: 2, name: '另一位合成店长', store_name: '合成二店' }, auth_method: 'wecom' }, getSessionEpoch())}>换店长（合成）</button>

@@ -61,3 +61,25 @@
 .manager-change-identity p { margin: 8px 0; }
 
 .manager-order-code { display: block; color: #6b8077; font-size: 12px; margin: 6px 0; }
+
+.manager-view-tabs { display: flex; gap: 4px; padding: 4px; background: #edf5ef; border-radius: 12px; }
+.manager-view-tabs button { flex: 1; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: #526b61; font: inherit; cursor: pointer; }
+.manager-view-tabs button[aria-pressed="true"] { background: #fff; color: #164f3c; font-weight: 600; box-shadow: 0 1px 4px #183c3410; }
+.manager-position-note { font-size: 12px; line-height: 1.6; color: #6b8077; margin: 8px 0 14px; }
+.manager-position-group { margin: 20px 0; }
+.manager-position-group h2 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.manager-position-group h2 > span { font-size: 12px; font-weight: 400; color: #6b8077; }
+.manager-position-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.manager-position-card { background: #fff; border: 1px solid #e3ebe5; border-radius: 12px; padding: 12px; min-width: 0; overflow-wrap: anywhere; }
+.manager-position-card-heading { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; justify-content: space-between; }
+.manager-position-card-heading h3 { font-size: 15px; margin: 0; color: #183c34; }
+.manager-position-card-heading > span { font-size: 11px; color: #6b8077; }
+.manager-position-state { font-size: 12px; line-height: 1.6; margin: 6px 0 10px; color: #164f3c; }
+.manager-position-state.is-none { color: #6b8077; }
+.manager-position-state.is-unverified { color: #8b6018; }
+.manager-position-card .manager-item-list { font-size: 12px; line-height: 1.6; margin: 0; }
+.manager-position-card-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; margin-top: 8px; }
+.manager-position-card-footer strong { font-size: 14px; }
+.manager-position-card-footer .ant-btn { min-height: 44px; padding-inline: 10px; color: #164f3c; }
+.manager-position-disabled { border-top: 1px solid #e3ebe5; padding-top: 8px; margin-top: 20px; }
+.manager-position-disabled summary { min-height: 44px; align-content: center; font-size: 13px; color: #526b61; cursor: pointer; }

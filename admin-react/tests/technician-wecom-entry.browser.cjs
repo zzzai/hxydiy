@@ -50,7 +50,7 @@ async function verifyRoleHandoffs(browser, events, report, diagnostics) {
       await rolePage.goto(origin + '/technician/wecom/complete', { waitUntil: 'commit' });
       if (manager) {
         await rolePage.waitForURL(origin + '/technician/store');
-        await rolePage.getByRole('heading', { name: '门店选单', exact: true }).waitFor();
+        await rolePage.getByRole('heading', { name: '门店工作台', exact: true }).waitFor();
         await rolePage.getByText('更多', { exact: true }).click();
         await rolePage.getByRole('button', { name: '电脑后台', exact: true }).click();
       } else {

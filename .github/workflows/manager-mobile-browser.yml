@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'admin-react/src/technician/**'
+      - 'admin-react/src/servicePositions.ts'
       - 'admin-react/src/api.ts'
       - 'admin-react/src/apiSession.ts'
       - 'admin-react/src/auth.ts'
@@ -12,6 +13,7 @@ on:
       - 'admin-react/src/wecomSession.ts'
       - 'admin-react/src/workspaceLogin.ts'
       - 'admin-react/tests/manager-mobile*'
+      - 'admin-react/tests/manager-positions*'
       - 'admin-react/package*.json'
       - '.github/workflows/manager-mobile-browser.yml'
 
