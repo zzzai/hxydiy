@@ -1,10 +1,16 @@
 # hxy-diy 当前状态
 
-更新时间：2026-10-18（Asia/Shanghai）
+更新时间：2026-10-20（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
+
+- `CUSTOMER-SCALP-GROUP` 已上线：[PR #297](https://github.com/zzzai/hxydiy/pull/297)，候选 `151de654e7f94e12c2c0c5fc61653eadf45cbd56`，合并/生产 `6bd164881a5291fbeb69f5426ba4e039ca90881d`；精确主干 [CI 39440984059](https://github.com/zzzai/hxydiy/actions/runs/39440984059) 与唯一 [Deploy 39441666460](https://github.com/zzzai/hxydiy/actions/runs/39441666460) 成功。实际 current=`github-6bd164881a52-39441666460`。
+- 仅将现煮草本泡的头疗从“再放松一会”移入“重点多按一会”，保留原 choice/direct linked project 路径，不计入局部部位优惠。其他项目、旧版头部放松、内容、价格、时长、API/迁移/权限与品牌素材不变；已合并的企微人员脚本随主干携带，本批不执行建号或改数据。
+- 84 项定向测试、TypeScript、375/390px 合成真实组件布局及必需 CI 通过；完整 479 项 MANIFEST、公网 HTML/JS/CSS 与安装目录哈希一致，health=`ok/production`。生产未执行顾客业务写入，未做微信/现场验收；详见 `WORK-STATUS.md` 顶部。本次事实文档不再次部署。
+
+### 2026-10-18 报告中心既往发布（能力包含于当前版本）
 
 - `CUSTOMER-REPORT-CENTER-20261018` 已上线：[PR #281](https://github.com/zzzai/hxydiy/pull/281)，主干/生产 `6c3179850f25907ac9081672c67329b5867959fd`；精确 [CI 39126459099](https://github.com/zzzai/hxydiy/actions/runs/39126459099) 和唯一 [Deploy 39136488194](https://github.com/zzzai/hxydiy/actions/runs/39136488194) 成功。实际 current=`github-6c3179850f25-39136488194`，472 项 MANIFEST、211 安装/202 运行 Git 文件、正式主干顾客制品全部 132 文件和公网 HTML→主 JS→报告页 chunk 一致，health=`ok/production`。
 - `view=reports` 停在既有报告中心，顾客点击后查看报告；原 `view=return` 继续旧直达语义。建议自动回复使用 `https://diy.hexiaoyue.com/?store=1&view=reports`；本次没有修改企微自动回复配置。无后台/技师/API/数据库结构变化，上一批店长与三人接入能力保持；59 表发布前后行摘要完全相同，不新建或重放绑定。真实备份恢复演练、checksum 通过，revision 仍为 `20261018_wecom_store_manager`。

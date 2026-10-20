@@ -1,11 +1,12 @@
 # 顾客端工作流
 
-## 2026-10-20 CUSTOMER-SCALP-GROUP（候选，未发布）
+## 2026-10-20 CUSTOMER-SCALP-GROUP（已生产发布）
 
 - 基于主干 `a6b7ecfd3856049f1b5238521bd10b49a8c3207c`，服务器独立工作区 `/root/hxy-diy-development/customer-scalp-group-20261020`。仅将现煮草本泡的头疗移入“重点多按一会”，保留原卡片内容、价格、时长和选中路径；其他项目、旧版独立“头部放松”加购均不变。
 - 只做呈现分组：头疗仍使用原目录 choice / direct linked project，不进入 localParts 或基础泡脚费减免资格；上区只有头疗时仍显示，下区空时不显示空组。不修改后端、合同、数据库、凭据、IP 或 CSS。
 - 新增 13 项真实 React 交互回归，修复前 7 失败、6 通过；修复后与原详情、目录和价格回归共 84 项通过。覆盖单次出现、选中/取消、匿名/会员金额、原提交载荷、优惠进度、只读和恢复选择，以及其他项目与 legacy 路径。证据在本工作区 `output/scalp-group/`。
-- 以上为受限服务器自动验证，不代表生产发布或真机验收；正式构建/CI及发布结果另据精确提交记录。
+- 375/390px 合成真实组件布局已确认：上区6项，头疗位于足部旁，下区4项，无溢出或重复；仅合成数据，无真实API/身份。真实交互由上述13项React回归覆盖，微信/现场真机仍交人验收。
+- [PR #297](https://github.com/zzzai/hxydiy/pull/297) 候选 `151de654e7f94e12c2c0c5fc61653eadf45cbd56`，主干/生产 `6bd164881a5291fbeb69f5426ba4e039ca90881d`；CI `39440984059` 与唯一 Deploy `39441666460` 成功。实际 current=`github-6bd164881a52-39441666460`，479项MANIFEST及公网HTML/JS/CSS一致、health=`ok/production`。无API运行代码/迁移/权限/数据或IP变化；完整发布证据见 `../WORK-STATUS.md` 顶部。
 
 ## 2026-10-18 CUSTOMER-REPORT-CENTER-20261018（已合并/生产，真机由人验收）
 
