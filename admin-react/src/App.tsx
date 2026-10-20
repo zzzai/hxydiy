@@ -42,11 +42,6 @@ export default function App() {
 
   if (isTechnicianEntry()) return <TechnicianMobileApp />;
 
-  if (loggedIn && getStaff()?.role === 'technician') {
-    window.location.replace('/technician/today');
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>;
-  }
-
   return (
     <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
