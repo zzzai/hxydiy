@@ -227,8 +227,8 @@ async function main() {
         await start(); await loaded();
         if (password) {
           await page.getByText('更多', { exact: true }).click(); await page.getByRole('button', { name: '退出登录', exact: true }).click();
-          await page.getByRole('textbox', { name: '账号', exact: true }).fill('synthetic-manager');
-          await page.getByLabel('密码', { exact: true }).fill('synthetic-password');
+          await page.getByPlaceholder('请输入店长账号', { exact: true }).fill('synthetic-manager');
+          await page.getByPlaceholder('请输入密码', { exact: true }).fill('synthetic-password');
           await page.getByRole('button', { name: '登录移动工作台', exact: true }).click(); await loaded();
         }
         await page.getByText('更多', { exact: true }).click(); await page.getByRole('button', { name: '电脑后台', exact: true }).click();
