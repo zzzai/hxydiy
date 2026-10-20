@@ -772,6 +772,19 @@ export default function App() {
     const currentStatus = serviceStatus?.occupancy_status ?? occupancy?.status;
     // 返回浏览不依赖服务位释放或网络；旧订单继续保留用于查看和评价。
     startFreshSelectionDraft();
+    if (publicBrowsing && !occupancy) {
+      setBoot('loading');
+      try {
+        clearPrivateSelection(localStorage, query.storeId);
+        privateSelection.current = null;
+        privateSave.current = null;
+        await initializePrivateSelection(customerAuthRef.current);
+      } catch (error) {
+        setBootMessage(error instanceof Error ? error.message : '暂时无法开始新一轮选购，请稍后重试');
+        setBoot('error');
+      }
+      return;
+    }
     persistCurrent(session, occupancy, position, positionCode, true);
     setBoot(publicBrowsing ? 'public-menu' : 'ready');
     if (publicBrowsing) {
