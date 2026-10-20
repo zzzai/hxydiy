@@ -87,6 +87,138 @@ def test_my_tasks_only_owned_present_and_minimal_items(dossier):
     assert result.json()["items"][0]["items"] == [{"id": 7, "type": "project", "name": "Synthetic service", "quantity": 1}]
 
 
+def test_my_tasks_expose_member_and_non_member_prices(dossier):
+    client, factory, ids, headers, *_ = dossier
+    snapshot = {
+        "applied_price_type": "member",
+        "store_total_cents": 19900,
+        "member_total_cents": 15900,
+        "lines": [{
+            "line_index": 0,
+            "name": "Synthetic service",
+            "quantity": 1,
+            "unit_store_price_cents": 19900,
+            "unit_member_price_cents": 15900,
+            "store_line_total_cents": 19900,
+            "member_line_total_cents": 15900,
+        }],
+    }
+    with factory() as db:
+        session = db.get(SelectionSession, "dossier-session-0")
+        session.pricing_snapshot = snapshot
+        session.store_total_cents = 19900
+        session.member_total_cents = 15900
+        db.commit()
+    result = client.get("/api/v1/technician/my-tasks", headers=headers)
+    assert result.status_code == 200, result.text
+    task = next(row for row in result.json()["items"] if row["occupancy_id"] == ids["occupancies"][0])
+    assert task["pricing"] == {
+        "store_total_cents": 19900,
+        "member_total_cents": 15900,
+        "member_saving_cents": 4000,
+        "applied_price_type": "member",
+        "lines": [{
+            "line_index": 0,
+            "name": "Synthetic service",
+            "quantity": 1,
+            "unit_store_price_cents": 19900,
+            "unit_member_price_cents": 15900,
+            "store_line_total_cents": 19900,
+            "member_line_total_cents": 15900,
+        }],
+    }
+    assert task["items"] == [{"id": 7, "type": "project", "name": "Synthetic service", "quantity": 1}]
+    assert "customer_phone" not in result.text
+    assert "nested" not in result.text
+
+
+def test_my_tasks_pricing_is_null_without_snapshot(dossier):
+    client, factory, ids, headers, *_ = dossier
+    with factory() as db:
+        session = db.get(SelectionSession, "dossier-session-0")
+        # 只持久化了合计列、没有价格快照时仍不伪造价格。
+        session.store_total_cents = 19900
+        session.member_total_cents = 15900
+        db.commit()
+    result = client.get("/api/v1/technician/my-tasks", headers=headers)
+    assert result.status_code == 200, result.text
+    items = result.json()["items"]
+    assert {row["occupancy_id"] for row in items} == {ids["occupancies"][0], ids["occupancies"][4], ids["occupancies"][5]}
+    assert all(row["pricing"] is None for row in items)
+
+
+def test_my_tasks_pricing_degrades_when_snapshot_has_no_price_fields(dossier):
+    client, factory, ids, headers, *_ = dossier
+    with factory() as db:
+        session = db.get(SelectionSession, "dossier-session-0")
+        session.pricing_snapshot = {
+            "applied_price_type": "member",
+            "lines": [{"line_index": 0, "name": "Synthetic service", "quantity": 1}],
+        }
+        db.commit()
+    result = client.get("/api/v1/technician/my-tasks", headers=headers)
+    assert result.status_code == 200, result.text
+    task = next(row for row in result.json()["items"] if row["occupancy_id"] == ids["occupancies"][0])
+    assert task["pricing"] is None
+    assert task["items"] == [{"id": 7, "type": "project", "name": "Synthetic service", "quantity": 1}]
+
+
+def test_my_tasks_pricing_keeps_explicit_zero_and_derives_line_totals(dossier):
+    client, factory, ids, headers, *_ = dossier
+    with factory() as db:
+        unit_only = db.get(SelectionSession, "dossier-session-0")
+        unit_only.pricing_snapshot = {
+            "applied_price_type": "store",
+            "lines": [{
+                "line_index": 0,
+                "name": "Synthetic service",
+                "quantity": 2,
+                "unit_store_price_cents": 12900,
+                "unit_member_price_cents": 8900,
+            }],
+        }
+        unit_only.store_total_cents = 0
+        unit_only.member_total_cents = 0
+        explicit_zero = db.get(SelectionSession, "dossier-session-5")
+        explicit_zero.pricing_snapshot = {
+            "applied_price_type": "member",
+            "lines": [{
+                "line_index": 0,
+                "name": "Gift",
+                "quantity": 1,
+                "unit_store_price_cents": 0,
+                "unit_member_price_cents": 0,
+            }],
+        }
+        explicit_zero.store_total_cents = 0
+        explicit_zero.member_total_cents = 0
+        db.commit()
+    result = client.get("/api/v1/technician/my-tasks", headers=headers)
+    assert result.status_code == 200, result.text
+    pricing = {row["occupancy_id"]: row["pricing"] for row in result.json()["items"]}
+    derived = pricing[ids["occupancies"][0]]
+    assert derived["store_total_cents"] == 25800
+    assert derived["member_total_cents"] == 17800
+    assert derived["member_saving_cents"] == 8000
+    assert derived["applied_price_type"] == "store"
+    assert derived["lines"][0]["store_line_total_cents"] == 25800
+    assert derived["lines"][0]["member_line_total_cents"] == 17800
+    assert pricing[ids["occupancies"][5]]["lines"][0]["unit_store_price_cents"] == 0
+
+
+def test_shared_technician_pricing_helper_keeps_tasks_fallback_and_strict_null():
+    from app.domain.technician_pricing import selection_pricing
+    session = SelectionSession(
+        id="helper-session", store_id=1, access_token_hash="synthetic", status="submitted",
+        items=[], pricing_snapshot={}, store_total_cents=0, member_total_cents=0,
+    )
+    assert selection_pricing(session) == {
+        "store_total_cents": 0, "member_total_cents": 0, "member_saving_cents": 0,
+        "applied_price_type": None, "lines": [],
+    }
+    assert selection_pricing(session, require_snapshot=True) is None
+
+
 @pytest.mark.parametrize("suffix", ["customer-summary", "customer-history", "customer-reviews", "customer-reports", "customer-reports/x", "customer-tags"])
 @pytest.mark.parametrize("index", [1, 2, 3])
 def test_every_read_rechecks_owner_store_and_departure(dossier, suffix, index):

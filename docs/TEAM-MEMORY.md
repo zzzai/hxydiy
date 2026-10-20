@@ -1,5 +1,7 @@
 # hxy-diy 共享记忆
 
+2026-10-20 技师默认落地页价格：`GET /api/v1/technician/my-tasks` 的已排座任务新增 `pricing`，形状与 `/tasks` 完全一致（会员价/非会员价合计、差额、计价类型、逐行价格）；价格读取逻辑抽取到 `hxy-server/app/domain/technician_pricing.py` 供两个接口共用，`/tasks` 既有行为不变，`/my-tasks` 无可用价格快照（无快照或快照只有非价格字段）时严格返回 `null`，不伪造 0。来源仍为既有 `pricing_snapshot`，不改变定价、会员核验、订单状态、支付或顾客端契约；前端消费由对应窗口实现。契约见 `contracts/technician-order-pricing-v1.md`；本条不代表已合并或发布。
+
 2026-10-20 技师端订单价格：`GET /api/v1/technician/tasks` 的已排座和未排座任务新增 `pricing` 只读快照，返回会员价/非会员价合计、差额、实际计价类型和逐行价格；服务位卡片、未排座行和订单抽屉展示两种价格。价格字段来自既有 `pricing_snapshot`，不改变定价、会员核验、订单状态、支付或顾客端契约；无价格快照时为 `null`，前端降级为只显示项目。契约见 `contracts/technician-order-pricing-v1.md`，后端合同测试与前端构建验证在对应 PR；本条不代表已合并或发布。
 
 2026-10-18 `CUSTOMER-REPORT-CENTER-20261018` 已合并/生产：#281、SHA `6c3179850f25907ac9081672c67329b5867959fd`，current `github-6c3179850f25-39136488194`；精确主干 CI/唯一 Deploy、真实备份恢复、472 MANIFEST、211安装/202运行Git、正式主干132顾客制品文件及公网报告链通过。reports 停既有中心、点击后看报告，return 保持旧直达；推荐自动回复 `?store=1&view=reports`，本次未改企微配置。59表发布前后完全相同，#280三人/角色/绑定保持，不新建或重放；真机与微信返回交人验收，不能以自动化替代。当前状态与容量见 `CURRENT-STATE.md`；下文保留先前员工发布和报告实现阶段的历史快照。
