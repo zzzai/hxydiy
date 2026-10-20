@@ -1,5 +1,7 @@
 # hxy-diy 共享记忆
 
+2026-10-20 `WECOM-STAFF-ADD-20261020` 运维工具增量：技师私有请求可显式提供 `expected_wecom_name`，原 provider 严格校验官方姓名，`name` 保存用户已确认的本地姓名；不改官方响应、登录/API/schema或旧档案。缺省不插默认键，旧请求/审批/审计摘要保持；显式字段纳入摘要，变更即不能沿用旧预览/审计。原始编号必须原样向官方解析后，再以返回的 canonical UserID 验证和绑定，不可直接小写未解析输入。最多3人/批、角色/门店/冲突/整批事务及旧行保护不变；新名单须新审批，禁止混入旧三人重放。详见 `contracts/wecom-store-staff-v2.md`；本条仅记录工具契约，不代表本轮新人已建号或真机首登通过。
+
 2026-10-20 技师默认落地页价格：`GET /api/v1/technician/my-tasks` 的已排座任务新增 `pricing`，形状与 `/tasks` 完全一致（会员价/非会员价合计、差额、计价类型、逐行价格）；价格读取逻辑抽取到 `hxy-server/app/domain/technician_pricing.py` 供两个接口共用，`/tasks` 既有行为不变，`/my-tasks` 无可用价格快照（无快照或快照只有非价格字段）时严格返回 `null`，不伪造 0。来源仍为既有 `pricing_snapshot`，不改变定价、会员核验、订单状态、支付或顾客端契约；前端消费由对应窗口实现。契约见 `contracts/technician-order-pricing-v1.md`；本条不代表已合并或发布。
 
 2026-10-20 技师端订单价格：`GET /api/v1/technician/tasks` 的已排座和未排座任务新增 `pricing` 只读快照，返回会员价/非会员价合计、差额、实际计价类型和逐行价格；服务位卡片、未排座行和订单抽屉展示两种价格。价格字段来自既有 `pricing_snapshot`，不改变定价、会员核验、订单状态、支付或顾客端契约；无价格快照时为 `null`，前端降级为只显示项目。契约见 `contracts/technician-order-pricing-v1.md`，后端合同测试与前端构建验证在对应 PR；本条不代表已合并或发布。

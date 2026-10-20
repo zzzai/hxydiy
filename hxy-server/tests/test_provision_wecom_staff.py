@@ -3,6 +3,7 @@ import json
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -11,7 +12,7 @@ from sqlalchemy import event, func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 import test_wecom_staff_auth as auth_harness
-from app.models import AuditLog, Staff, Technician
+from app.models import AuditLog, Staff, Store, Technician
 from app.models.staff_access import StaffScopeAssignment
 from app.models.staff_external_identity import StaffExternalIdentity
 from app.services.wecom_staff import WecomProvider, WecomProviderError
@@ -48,6 +49,151 @@ def request(store_id):
 def counts(db):
     return [db.scalar(select(func.count()).select_from(model)) for model in
         (Staff, Technician, StaffScopeAssignment, StaffExternalIdentity, AuditLog)]
+
+
+def alias_request(store_id):
+    body = request(store_id)
+    body['members'] = [body['members'][1]]
+    body['members'][0]['expected_wecom_name'] = 'Official alias'
+    return body
+
+
+@contextmanager
+def official_provider(name='Official alias', userid='tech-new-1'):
+    provider = WecomProvider()
+
+    def response(endpoint, params):
+        if endpoint == 'gettoken':
+            return {'errcode': 0, 'access_token': 'synthetic', 'expires_in': 7200}
+        if endpoint == 'user/get':
+            return {'errcode': 0, 'userid': userid, 'status': 1, 'name': name,
+                'department': [1], 'enable': 1, 'mobile': ''}
+        if endpoint == 'agent/get':
+            return {'errcode': 0, 'agentid': 1000002, 'close': 0}
+        raise AssertionError('Unexpected official endpoint')
+
+    with patch.object(provider, '_request', side_effect=response):
+        yield provider
+
+
+def test_legacy_request_digest_is_unchanged_without_explicit_alias(harness):
+    # Frozen from the original three-member synthetic request with store 1.
+    assert harness.store_id == 1
+    with harness.sessions() as db:
+        preview = load_tool().prepare_provision(db, request(harness.store_id), Mock())
+    assert preview['request_sha256'] == '6a4217ac0aef1620bea492ca89b236a41cd33487d71c1a883037399742d2e3cf'
+
+
+def test_explicit_official_alias_keeps_local_name_audit_and_idempotent_replay(harness):
+    tool, body = load_tool(), alias_request(harness.store_id)
+    with harness.sessions() as db, official_provider() as provider:
+        before = counts(db)
+        old = db.get(Staff, harness.staff_id)
+        old_values = (old.name, old.username, old.password_hash, old.role, old.store_id, old.technician_id)
+        preview = tool.prepare_provision(db, body, provider)
+        assert counts(db) == before
+        result = tool.apply_provision(db, body, preview['preview_sha256'], provider)
+        db.commit()
+        assert counts(db) == [a + b for a, b in zip(before, [1, 1, 0, 1, 1])]
+        member = result['members'][0]
+        staff = db.get(Staff, member['staff_id'])
+        tech = db.get(Technician, member['technician_id'])
+        identity = db.get(StaffExternalIdentity, member['identity_id'])
+        assert staff.name == tech.name == 'Synthetic technician 1'
+        assert staff.role == 'technician' and staff.store_id == tech.store_id == identity.store_id == harness.store_id
+        assert identity.userid == 'tech-new-1' and identity.staff_id == staff.id and identity.technician_id == tech.id
+        audit = db.scalar(select(AuditLog).where(AuditLog.entity_id == str(identity.id)))
+        assert audit.detail['request_sha256'] == preview['request_sha256']
+        assert audit.detail['preview_sha256'] == preview['preview_sha256']
+        after = counts(db)
+        assert tool.apply_provision(db, body, preview['preview_sha256'], provider)['action'] == 'unchanged'
+        db.commit()
+        assert counts(db) == after
+        db.refresh(old)
+        assert (old.name, old.username, old.password_hash, old.role, old.store_id, old.technician_id) == old_values
+        assert all(value not in json.dumps(result) for value in ('Official alias', 'Synthetic technician 1', 'tech-new-1', '13000000001'))
+
+
+@pytest.mark.parametrize('name,userid', [('Wrong official name', 'tech-new-1'), ('Official alias', 'different-subject')])
+def test_official_alias_does_not_bypass_name_or_subject_verification(harness, name, userid):
+    tool, body = load_tool(), alias_request(harness.store_id)
+    with harness.sessions() as db:
+        before = counts(db)
+        with official_provider() as provider:
+            preview = tool.prepare_provision(db, body, provider)
+        with official_provider(name, userid) as provider, pytest.raises(WecomProviderError):
+            tool.apply_provision(db, body, preview['preview_sha256'], provider)
+        assert counts(db) == before
+
+
+def test_alias_change_invalidates_old_preview_before_writes(harness):
+    tool, body = load_tool(), alias_request(harness.store_id)
+    with harness.sessions() as db, official_provider() as provider:
+        before = counts(db)
+        preview = tool.prepare_provision(db, body, provider)
+        body['members'][0]['expected_wecom_name'] = 'Renamed official alias'
+        with official_provider('Renamed official alias') as renamed:
+            changed = tool.prepare_provision(db, body, renamed)
+            assert changed['request_sha256'] != preview['request_sha256']
+            with pytest.raises(tool.BindingRefused, match='PREVIEW_CHANGED'):
+                tool.apply_provision(db, body, preview['preview_sha256'], renamed)
+        assert counts(db) == before
+
+
+def test_alias_change_cannot_reuse_existing_batch_audit(harness):
+    tool, body = load_tool(), alias_request(harness.store_id)
+    with harness.sessions() as db, official_provider() as provider:
+        preview = tool.prepare_provision(db, body, provider)
+        tool.apply_provision(db, body, preview['preview_sha256'], provider)
+        db.commit()
+        before = counts(db)
+        body['members'][0]['expected_wecom_name'] = 'Renamed official alias'
+        with official_provider('Renamed official alias') as renamed, pytest.raises(tool.BindingRefused, match='ACCOUNT_CONFLICT'):
+            tool.apply_provision(db, body, preview['preview_sha256'], renamed)
+        assert counts(db) == before
+
+
+@pytest.mark.parametrize('value', [None, 1, [], '', ' padded', 'padded ', 'line\nbreak', 'x' * 33])
+def test_invalid_explicit_alias_refused_without_changes(harness, value):
+    tool, body = load_tool(), alias_request(harness.store_id)
+    body['members'][0]['expected_wecom_name'] = value
+    with harness.sessions() as db, official_provider() as provider:
+        before = counts(db)
+        with pytest.raises(tool.BindingRefused, match='INVALID_INPUT'):
+            tool.prepare_provision(db, body, provider)
+        assert counts(db) == before
+
+
+def test_manager_cannot_supply_official_alias(harness):
+    tool, body = load_tool(), request(harness.store_id)
+    body['members'][0]['expected_wecom_name'] = 'Official alias'
+    with harness.sessions() as db:
+        before = counts(db)
+        with pytest.raises(tool.BindingRefused, match='INVALID_INPUT'):
+            tool.prepare_provision(db, body, Mock())
+        assert counts(db) == before
+
+
+@pytest.mark.parametrize('field', ['role', 'store'])
+def test_alias_replay_cannot_override_changed_role_or_store(harness, field):
+    tool, body = load_tool(), alias_request(harness.store_id)
+    with harness.sessions() as db, official_provider() as provider:
+        preview = tool.prepare_provision(db, body, provider)
+        result = tool.apply_provision(db, body, preview['preview_sha256'], provider)
+        staff = db.get(Staff, result['members'][0]['staff_id'])
+        if field == 'role':
+            staff.role = 'admin'
+        else:
+            other = Store(store_code='synthetic-other', name='Other store', address='Synthetic')
+            db.add(other)
+            db.flush()
+            staff.store_id = other.id
+        db.commit()
+        before = counts(db)
+        values = (staff.role, staff.store_id)
+        with pytest.raises(tool.BindingRefused, match='IDENTITY_CONFLICT'):
+            tool.apply_provision(db, body, preview['preview_sha256'], provider)
+        assert counts(db) == before and (staff.role, staff.store_id) == values
 
 
 def test_preview_apply_replay_and_old_records_unchanged(harness):
