@@ -43,7 +43,7 @@ client.interceptors.response.use(
         return Promise.reject(err);
       }
       if (isTechnicianEntry()) {
-        window.location.replace(getEntryLoginPath(true));
+        window.location.replace(getEntryLoginPath(true, window.location.pathname));
       } else {
         window.dispatchEvent(new Event('hxy-admin-session-expired'));
         window.location.hash = '#/login';
@@ -129,8 +129,8 @@ export const settleService = (serviceOrderId: number, idempotencyKey: string) =>
 
 // Orders
 export const getOrders = (status?: string) => client.get('/admin/orders', { params: { status } });
-export const getSelectionSessions = (status?: string, needsPositionAssignment?: boolean) =>
-  client.get('/admin/v2/selection-sessions', { params: { status, needs_position_assignment: needsPositionAssignment } });
+export const getSelectionSessions = (status?: string, needsPositionAssignment?: boolean, pagination?: { page: number; page_size: number }) =>
+  client.get('/admin/v2/selection-sessions', { params: { status, needs_position_assignment: needsPositionAssignment, ...pagination } });
 export const assignSelectionPosition = (sessionId: string, roomId: number) =>
   client.post<PositionOccupancy>(`/admin/v2/selection-sessions/${sessionId}/assign-position`, { room_id: roomId });
 export const getCustomerProfileRecords = (userId: number) => client.get(`/admin/v2/users/${userId}/customer-profile-records`);

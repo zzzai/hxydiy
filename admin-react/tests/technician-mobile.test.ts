@@ -43,8 +43,8 @@ test('服务状态只显示允许的主操作', () => {
   assert.deepEqual(technicianActions('released'), []);
 });
 
-test('店长保留移动端登录但只进入暂停页，不能导航到技师功能', () => {
-  assert.equal(technicianMobile.technicianMobileHome('manager'), '/member-verify');
+test('店长进入门店工作台，不显示技师导航', () => {
+  assert.equal(technicianMobile.technicianMobileHome('manager'), '/store');
   assert.deepEqual(technicianMobile.technicianMobileTabs('manager'), []);
   assert.equal(technicianMobile.technicianMobileHome('technician'), '/today');
   assert.deepEqual(technicianMobile.technicianMobileTabs('technician'), ['/today', '/history', '/me']);

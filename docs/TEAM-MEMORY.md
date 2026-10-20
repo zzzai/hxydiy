@@ -1,5 +1,7 @@
 # hxy-diy 共享记忆
 
+2026-10-20 `MANAGER-MOBILE-20261020` 前端增量（未提交/合并/发布）：店长企微默认 `/technician/store`，保留 manager、technician_id=null，只接既有本店管理选单/加选接口。四种筛选、服务端分页、项目优先卡片与底部操作面板；价格只读快照，不重算。原选单与加选使用可对照尾号；写后强制新读，旧响应失效；错误保留目标/输入，403禁操作，401/换号清旧界面。manager路径固定admin slot，OAuth按本次验证角色落地且保留另一角色会话；电脑后台仅通过“更多”主动进入。无技师权限扩张/数据库/真实业务写入。见 `contracts/wecom-store-staff-v2.md`，最终发布状态由总控核验。
+
 2026-10-20 `WECOM-STAFF-ADD-20261020` 运维工具增量：技师私有请求可显式提供 `expected_wecom_name`，原 provider 严格校验官方姓名，`name` 保存用户已确认的本地姓名；不改官方响应、登录/API/schema或旧档案。缺省不插默认键，旧请求/审批/审计摘要保持；显式字段纳入摘要，变更即不能沿用旧预览/审计。原始编号必须原样向官方解析后，再以返回的 canonical UserID 验证和绑定，不可直接小写未解析输入。最多3人/批、角色/门店/冲突/整批事务及旧行保护不变；新名单须新审批，禁止混入旧三人重放。详见 `contracts/wecom-store-staff-v2.md`；本条仅记录工具契约，不代表本轮新人已建号或真机首登通过。
 
 2026-10-20 技师默认落地页价格：`GET /api/v1/technician/my-tasks` 的已排座任务新增 `pricing`，形状与 `/tasks` 完全一致（会员价/非会员价合计、差额、计价类型、逐行价格）；价格读取逻辑抽取到 `hxy-server/app/domain/technician_pricing.py` 供两个接口共用，`/tasks` 既有行为不变，`/my-tasks` 无可用价格快照（无快照或快照只有非价格字段）时严格返回 `null`，不伪造 0。来源仍为既有 `pricing_snapshot`，不改变定价、会员核验、订单状态、支付或顾客端契约；前端消费由对应窗口实现。契约见 `contracts/technician-order-pricing-v1.md`；本条不代表已合并或发布。

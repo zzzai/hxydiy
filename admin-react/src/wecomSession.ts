@@ -1,8 +1,8 @@
 import { interpretStaffLogin, type StaffLoginResponse } from './workspaceLogin.ts';
-import { ADMIN_TOKEN_KEY, TECHNICIAN_TOKEN_KEY, clearActiveStaffSession, readActiveAuthMethod, readActiveToken, writeStaffSession } from './staffSession.ts';
+import { ADMIN_TOKEN_KEY, TECHNICIAN_TOKEN_KEY, clearActiveStaffSession, readActiveAuthMethod, readActiveToken, writeStaffSession, browserPathname, isManagerMobilePath, readActiveStaff } from './staffSession.ts';
 
 type StaffSessionResponse = { token: string; staff: object; auth_method?: 'wecom' };
-type PendingEntry = { entry_nonce: string; attempt_id?: string };
+type PendingEntry = { entry_nonce: string; attempt_id?: string; entry_path?: string };
 const PENDING_KEY = 'hxy_wecom_pending';
 const listeners = new Set<() => void>();
 let epoch = 0;
@@ -40,8 +40,24 @@ function pendingEntry(): PendingEntry | null {
   } catch { return null; }
 }
 export function isWecomEntryPending(): boolean { return pendingEntry() !== null; }
-export function clearStaffSession(): void {
-  clearActiveStaffSession(localStorage);
+export function wecomSessionPath(): string {
+  return isManagerMobilePath(pendingEntry()?.entry_path || '') ? '/technician/store' : browserPathname();
+}
+export function clearDepartingWecomSession(preserveSession = false): boolean {
+  const path = wecomSessionPath();
+  const callbackPending = browserPathname() === '/technician/wecom/complete' && isWecomEntryPending();
+  const staff = readActiveStaff(localStorage, path);
+  const verified = readActiveToken(localStorage, path) && readActiveAuthMethod(localStorage, path) === 'wecom'
+    && ['technician', 'manager'].includes(staff?.role || '');
+  if (!callbackPending && !verified) return false;
+  if (!preserveSession) clearStaffSession(path);
+  return true;
+}
+export function wecomLoginPath(): '/store/login' | '/login' {
+  return isManagerMobilePath(pendingEntry()?.entry_path || browserPathname()) ? '/store/login' : '/login';
+}
+export function clearStaffSession(pathname = browserPathname()): void {
+  clearActiveStaffSession(localStorage, pathname);
   sessionStorage.removeItem(PENDING_KEY);
   changed();
 }
@@ -66,17 +82,18 @@ async function post(path: string, body: object): Promise<Record<string, any>> {
   return data;
 }
 export async function beginWecomEntry(): Promise<void> {
+  const entry_path = browserPathname();
   clearStaffSession();
   const expectedEpoch = getSessionEpoch();
   const entry_nonce = crypto.randomUUID();
-  sessionStorage.setItem(PENDING_KEY, JSON.stringify({ entry_nonce }));
+  sessionStorage.setItem(PENDING_KEY, JSON.stringify({ entry_nonce, entry_path }));
   try {
     const data = await post('authorize', { entry_nonce });
     if (getSessionEpoch() !== expectedEpoch || pendingEntry()?.entry_nonce !== entry_nonce) return;
     const destination = new URL(data.authorization_url);
     if (destination.origin !== 'https://open.weixin.qq.com' || destination.pathname !== '/connect/oauth2/authorize'
         || typeof data.attempt_id !== 'string' || !data.attempt_id) throw new Error('企业微信登录地址无效');
-    sessionStorage.setItem(PENDING_KEY, JSON.stringify({ entry_nonce, attempt_id: data.attempt_id }));
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify({ entry_nonce, attempt_id: data.attempt_id, entry_path }));
     window.location.assign(destination.href);
   } catch (error) {
     if (getSessionEpoch() !== expectedEpoch || pendingEntry()?.entry_nonce !== entry_nonce) return;
@@ -84,12 +101,12 @@ export async function beginWecomEntry(): Promise<void> {
     throw error;
   }
 }
-export async function completeWecomEntry(): Promise<boolean> {
+export async function completeWecomEntry(onAccepted?: (role: 'technician' | 'manager') => void): Promise<boolean> {
   const pending = pendingEntry();
   if (!pending?.attempt_id) return false;
   const expectedEpoch = getSessionEpoch();
   let data: Record<string, any>;
-  try { data = await post('exchange', pending); }
+  try { data = await post('exchange', { entry_nonce: pending.entry_nonce, attempt_id: pending.attempt_id }); }
   catch (error) {
     if (getSessionEpoch() !== expectedEpoch || pendingEntry()?.entry_nonce !== pending.entry_nonce) return false;
     throw error;
@@ -104,7 +121,9 @@ export async function completeWecomEntry(): Promise<boolean> {
     if (!Number.isInteger(data.staff.technician_id) || data.staff.technician_id <= 0) {
       throw new Error('企业微信身份响应无效');
     }
-    return commitStaffSession(data as StaffSessionResponse, expectedEpoch);
+    const accepted = commitStaffSession(data as StaffSessionResponse, expectedEpoch);
+    if (accepted) onAccepted?.('technician');
+    return accepted;
   }
   const workspace = Array.isArray(data.workspaces) && data.workspaces.length === 1 ? data.workspaces[0] : null;
   if (data.staff.role !== 'store_manager' || data.staff.id <= 0 || data.staff.technician_id !== null
@@ -114,7 +133,9 @@ export async function completeWecomEntry(): Promise<boolean> {
   }
   const session = interpretStaffLogin(data as StaffLoginResponse);
   if (session.kind !== 'ready' || session.staff.role !== 'manager') throw new Error('企业微信身份响应无效');
-  return commitStaffSession({ token: session.token, staff: session.staff, auth_method: 'wecom' }, expectedEpoch);
+  const accepted = commitStaffSession({ token: session.token, staff: session.staff, auth_method: 'wecom' }, expectedEpoch);
+  if (accepted) onAccepted?.('manager');
+  return accepted;
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event: StorageEvent) => {

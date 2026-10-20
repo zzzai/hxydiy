@@ -28,7 +28,17 @@
 
 示例编号为说明而非真实身份。JWT 使用既有 `token_type=staff_scope`、真实 `role=store_manager`、精确 assignment_id/scope_type/scope_id，同时保留 WeCom external_identity_id/binding_version/credentials_version。每次请求重验 Staff、身份和唯一授权；授权撤销、角色/门店改变、JWT scope 不符立即拒绝，不受官方证明缓存窗口影响。
 
-前端严格校验 staff 正整数 id/store_id、technician_id=null、selector_token=null 和唯一同店 grant，再复用现有导航别名 manager，固定进入 `/admin/#/today`。技师壳的 pagehide 清理仅针对真正技师，不清掉正在交给管理后台的店长会话。总部、任意 return URL 和多工作区选择均不在本批范围。
+前端严格校验 staff 正整数 id/store_id、technician_id=null、selector_token=null 和唯一同店 grant，再复用现有导航别名 manager。2026-10-20 移动工作台增量将店长默认落地改为 `/technician/store`（本增量未发布）；技师仍进 `/technician/today`。回调按本次验证身份决定落地，不能读取另一角色的保留会话。总部、任意 return URL 和多工作区选择均不在本批范围。
+
+### 店长手机工作台增量（2026-10-20，待统一验收/发布）
+
+- `/technician/store` 及 `/technician/store/login` 固定使用既有 admin slot；登出/401 不回退到保留的 technician slot，不清除另一角色会话。店长必须 manager、正整数 store_id、technician_id=null。
+- 同一移动壳内仅一个门店选单页，按待确认/待配位/已确认/全部筛选；调用既有 `GET /admin/v2/selection-sessions` 的 page/page_size，使用服务端 total。待配位仅传 needs_position_assignment=true，不附加 submitted 过滤。
+- 项目、状态、服务位优先展示；金额只用 pricing_snapshot 的 payable_total_cents/applied_price_type，合法零价保留，缺价显示“金额待核实”，不按会员身份重算。来源枚举仅中文展示，存储值不改。
+- 确认/取消/配位与加选批准/拒绝沿用既有管理接口和权限。加选动作传 change.id，拒绝原因非空；操作成功后重新拉取列表与加选，不用缺少 position 的动作响应覆盖完整选单。错误保留目标和输入，403禁用操作，401/身份epoch改变清除旧界面；不新增接口、权限或幂等参数。
+- 不挂载技师业务页面，不请求技师 me/tasks/履约、顾客画像/报告/标签。空列表保持紧凑；没有加选时不显示加选空卡。
+- “更多 → 电脑后台”是主动选择，不再自动跳后台。普通企微离页清当前角色会话并隐藏旧界面；仅显式电脑后台交接保留店长会话，返回缓存页面先隐藏旧数据再重新验证。合成生命周期测试不等于真机/BFCache验收。
+- 验收仅合成数据，禁止对生产调用 live-service-position-map（该GET可能清理过期占位）。后端、数据库和真实订单不在本增量范围。
 
 原技师任务/报告/标签接口仍只接受技师且维持本人当前在店服务范围；店长只获得其既有门店管理权限，不借此取得技师顾客档案新权限。
 
