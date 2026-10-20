@@ -11,6 +11,7 @@ if (!/^[a-f0-9]{40}$/.test(head) || head !== process.env.MANAGER_TEST_HEAD) thro
 const out = path.resolve('output/playwright/manager-mobile', head);
 const report = { head, productionWrites: 0, passed: false, cases: [], screenshots: [], unexpectedRequests: [], pageErrors: [] };
 let browserInstance, context, page, phase = 'startup';
+let resetPending = false;
 async function eventually(check, label) {
   const until = Date.now() + 10000;
   while (Date.now() < until) {
@@ -30,7 +31,7 @@ async function check(name, run) {
     report.cases.push({ name, passed: false, failure });
     report.failure ||= failure;
     await shot('failure-' + report.cases.length).catch(() => undefined);
-    if (report.unexpectedRequests.length) throw error;
+    if (report.unexpectedRequests.length || resetPending) throw error;
   } finally {
     for (const peer of context.pages()) if (peer !== page) await peer.close();
   }
@@ -41,8 +42,11 @@ async function shot(name) {
   report.screenshots.push(file);
 }
 async function start(scenario = 'normal', width = 375, route = '/technician/store') {
+  resetPending = true;
   await page.setViewportSize({ width, height: 812 });
   await page.goto(origin + route + '?scenario=' + scenario + '&reset=1', { waitUntil: 'domcontentloaded' });
+  await page.locator('aside').waitFor();
+  resetPending = false;
 }
 const cards = () => page.locator('.manager-selection-card');
 const drawer = () => page.locator('.manager-detail-drawer .ant-drawer-content');
