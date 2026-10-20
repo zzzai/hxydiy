@@ -190,7 +190,7 @@ export default function ManagerStorePage() {
       })}
     </div>}
     {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份选单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); close(); }} /></div>}
-    <Drawer title={action !== 'view' ? actionLabels[action] : change ? '加选详情' : '选单详情'} placement="bottom" height="min(90dvh, 760px)" className="manager-detail-drawer" open={Boolean(detail)} onClose={close} maskClosable={!busy} closable={!busy} destroyOnClose footer={detail && <div className="manager-detail-actions">
+    <Drawer title={action !== 'view' ? actionLabels[action] : change ? '加选详情' : '选单详情'} placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(detail)} onClose={close} maskClosable={!busy} closable={!busy} destroyOnClose footer={detail && <div className="manager-detail-actions">
       {action === 'view' ? <>
         {actions?.assign && <Button size="large" disabled={forbidden} onClick={() => chooseAction('assign')}>安排座位</Button>}
         {actions?.cancel && <Button size="large" danger disabled={forbidden} onClick={() => chooseAction('cancel')}>取消选单</Button>}

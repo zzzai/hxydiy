@@ -67,7 +67,7 @@ async function main() {
   await fs.mkdir(out, { recursive: true });
   try {
     browserInstance = await chromium.launch({ headless: true, args: ['--disable-background-networking'] });
-    context = await browserInstance.newContext({ viewport: { width: 375, height: 812 }, serviceWorkers: 'block' });
+    context = await browserInstance.newContext({ viewport: { width: 375, height: 812 }, serviceWorkers: 'block', timezoneId: 'Asia/Shanghai' });
     context.setDefaultTimeout(15000);
     await context.route('**/*', async route => {
       const url = new URL(route.request().url());
@@ -78,6 +78,7 @@ async function main() {
       await route.continue();
     });
     await context.addInitScript(() => {
+      if (location.origin !== 'http://127.0.0.1:18420') return;
       window.addEventListener('pagehide', event => sessionStorage.setItem('synthetic-pagehide', String(event.isTrusted)));
     });
     page = await context.newPage();
