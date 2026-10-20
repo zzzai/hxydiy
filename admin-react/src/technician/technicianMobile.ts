@@ -104,6 +104,40 @@ export function technicianOrderItemLabel(item: { name?: unknown; code?: unknown;
   return bodyParts.length ? `局部：${bodyParts.join('、')}` : (name || '局部调理');
 }
 
+export function technicianPriceLabel(cents: number | null | undefined): string {
+  if (typeof cents !== 'number' || !Number.isFinite(cents) || cents < 0) return '—';
+  return cents % 100 === 0 ? `¥${cents / 100}` : `¥${(cents / 100).toFixed(2)}`;
+}
+
+export type TechnicianPricingLine = {
+  line_index?: number;
+  name?: string;
+  quantity?: number;
+  unit_store_price_cents?: number | null;
+  unit_member_price_cents?: number | null;
+  store_line_total_cents?: number | null;
+  member_line_total_cents?: number | null;
+};
+
+export type TechnicianOrderPricing = {
+  store_total_cents?: number | null;
+  member_total_cents?: number | null;
+  member_saving_cents?: number | null;
+  applied_price_type?: 'store' | 'member' | 'group' | null;
+  lines?: TechnicianPricingLine[];
+};
+
+export function technicianPricingLines(pricing: TechnicianOrderPricing | null | undefined): TechnicianPricingLine[] {
+  return Array.isArray(pricing?.lines) ? pricing.lines : [];
+}
+
+export function technicianPricingAppliedLabel(pricing: TechnicianOrderPricing | null | undefined): string {
+  if (pricing?.applied_price_type === 'member') return '本单按会员价记录';
+  if (pricing?.applied_price_type === 'store') return '本单按非会员价记录';
+  if (pricing?.applied_price_type === 'group') return '本单按团购价记录';
+  return '会员价 / 非会员价并列展示';
+}
+
 export function createTechnicianIdempotencyKey(action: string, occupancyId: number): string {
   const suffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()

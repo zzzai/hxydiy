@@ -7,6 +7,9 @@ import {
   technicianBoardGroups,
   technicianOrderItemLabel,
   technicianPositionTone,
+  technicianPriceLabel,
+  technicianPricingAppliedLabel,
+  technicianPricingLines,
   technicianStatusLabel,
 } from './technicianMobile';
 import TechnicianProfileSheet from './TechnicianProfileSheet';
@@ -50,6 +53,54 @@ function taskToOrder(task: any): any {
     status,
     customer: task.customer || (task.user_id ? { id: task.user_id, nickname: '顾客', phone_masked: '' } : null),
   };
+}
+
+function orderPriceSummary(pricing: any): string {
+  if (!pricing) return '';
+  return `会员 ${technicianPriceLabel(pricing.member_total_cents)} · 非会员 ${technicianPriceLabel(pricing.store_total_cents)}`;
+}
+
+function OrderItems({ order }: { order: any }) {
+  const priced = technicianPricingLines(order.pricing);
+  const items = priced.length ? priced.map((line: any, index: number) => {
+    const original = (order.items || []).find((item: any, itemIndex: number) => Number(item.line_index ?? itemIndex) === Number(line.line_index ?? index))
+      || (order.items || [])[index];
+    return { ...original, ...line, name: line.name || original?.name, diy_preferences: original?.diy_preferences };
+  }) : (order.items || []);
+  return <List
+    header="服务项目"
+    dataSource={items}
+    locale={{ emptyText: '当前暂无服务项目' }}
+    renderItem={(item: any) => {
+      const member = item.member_line_total_cents ?? item.member_line_price_cents;
+      const store = item.store_line_total_cents ?? item.store_line_price_cents;
+      const hasPrice = member != null || store != null;
+      return <List.Item className="technician-order-item">
+        <span className="technician-order-item-name">{technicianOrderItemLabel(item)}</span>
+        <span className="technician-order-item-tail">
+          {hasPrice && <span className="technician-order-line-price">
+            <span>会员 {technicianPriceLabel(member)}</span>
+            <span>非会员 {technicianPriceLabel(store)}</span>
+          </span>}
+          <span>×{item.quantity || 1}</span>
+        </span>
+      </List.Item>;
+    }}
+  />;
+}
+
+function OrderPricingBlock({ pricing }: { pricing: any }) {
+  if (!pricing) return null;
+  return <section className="technician-order-pricing" aria-label="订单价格">
+    <div className="technician-order-pricing-head">
+      <span>本单价格</span>
+      <span>{technicianPricingAppliedLabel(pricing)}</span>
+    </div>
+    <div className="technician-order-pricing-pair">
+      <div><span>会员价合计</span><strong>{technicianPriceLabel(pricing.member_total_cents)}</strong></div>
+      <div><span>非会员价合计</span><strong>{technicianPriceLabel(pricing.store_total_cents)}</strong></div>
+    </div>
+  </section>;
 }
 
 export default function TechnicianTodayPage() {
@@ -178,6 +229,7 @@ export default function TechnicianTodayPage() {
             <div className="technician-unassigned-row-head"><span className="technician-unassigned-time">{submittedAt}</span><span className="technician-unassigned-tag">未排座</span></div>
             <div className="technician-unassigned-summary">{orderSummary(order)}</div>
             <div className="technician-unassigned-count">{itemCount} 个项目</div>
+            {task.pricing && <div className="technician-unassigned-price">{orderPriceSummary(task.pricing)}</div>}
           </button>;
         })}
       </div>
@@ -197,6 +249,7 @@ export default function TechnicianTodayPage() {
               <div className="technician-position-tile-top"><strong>{task.room_name || '服务位'}</strong><Tag color={positionTagColor(status)}>{technicianStatusLabel(status)}</Tag></div>
               <div className="technician-position-tile-body"><span className="technician-position-count">{hasConflict ? task.conflict_count : hasOrder ? ((task.items || []).length || 0) : '—'}</span><span>{hasConflict ? '条占用待核对' : hasOrder ? '个项目' : '暂无订单'}</span></div>
               <div className="technician-position-tile-summary">{hasConflict ? '同一房间存在多个活动占用，暂不可操作' : hasOrder ? orderSummary(order) : status === 'available' ? '空闲，可接待顾客' : '当前无可查看选单'}</div>
+              {hasOrder && task.pricing && <div className="technician-position-tile-price">{orderPriceSummary(task.pricing)}</div>}
               <div className="technician-position-tile-action"><EyeOutlined /> {hasConflict ? '查看核对提示' : hasOrder ? '查看顾客订单' : '查看区位状态'}</div>
             </button>;
           })}
@@ -208,12 +261,14 @@ export default function TechnicianTodayPage() {
         {selectedOrder.conflict ? <Alert type="warning" showIcon message="服务位记录待核对" description={`该房间存在 ${selectedOrder.conflict_count || 2} 条活动占用记录。为避免误操作，当前不展示顾客选单，也不能确认或结束服务；请联系店长核对现场服务位。`} /> : selectedOrder.status === 'waiting_assignment' ? <>
         <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">未排座</span><h2>未排座</h2></div><Tag>未排座</Tag></div>
         <Typography.Paragraph type="secondary">{selectedOrder.submitted_at ? new Date(selectedOrder.submitted_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '刚刚'} 提交</Typography.Paragraph>
-        <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
+        <OrderItems order={selectedOrder} />
+        <OrderPricingBlock pricing={selectedOrder.pricing} />
         <Typography.Paragraph type="secondary">座位由前台安排。安排后会出现在对应沙发或房间。</Typography.Paragraph>
         </> : <>
         <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">本次服务</span><h2>{selectedOrder.room_name || '服务位'}</h2></div><Tag color={statusColor(selectedOrder.status)}>{orderStatusLabel(selectedOrder.status)}</Tag></div>
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
-        <List header="服务项目" dataSource={selectedOrder.items || []} locale={{ emptyText: '当前暂无服务项目' }} renderItem={(item: any) => <List.Item><span>{technicianOrderItemLabel(item)}</span><span>×{item.quantity || 1}</span></List.Item>} />
+        <OrderItems order={selectedOrder} />
+        <OrderPricingBlock pricing={selectedOrder.pricing} />
         {selectedActions.length > 0 && selectedOrder.customer?.id && <TechnicianServiceReferenceDrawer inline occupancyId={selectedOccupancyId} open onClose={()=>{}} />}
         <div className="technician-task-card-foot">
           {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>开始服务</Button>}

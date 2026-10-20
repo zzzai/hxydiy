@@ -533,6 +533,82 @@ class TestTechnicianPortalApi:
         assert items[0]["selection_status"] == "submitted"
         assert items[0]["items"][0]["name"] == "舒享精油 SPA"
 
+    def test_technician_tasks_expose_member_and_non_member_prices(self):
+        pricing = {
+            "applied_price_type": "member",
+            "store_total_cents": 19900,
+            "member_total_cents": 15900,
+            "lines": [{
+                "line_index": 0,
+                "name": "舒享精油 SPA",
+                "quantity": 1,
+                "unit_store_price_cents": 19900,
+                "unit_member_price_cents": 15900,
+                "store_line_total_cents": 19900,
+                "member_line_total_cents": 15900,
+            }],
+        }
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-price-board", password_hash=hash_password("tech-pass"), name="价格看板技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            session = SelectionSession(
+                id="tech-price-session",
+                access_token_hash="hash",
+                store_id=self.store_id,
+                status="submitted",
+                items=[{"name": "舒享精油 SPA", "quantity": 1}],
+                pricing_snapshot=pricing,
+                store_total_cents=19900,
+                member_total_cents=15900,
+            )
+            room = Room(store_id=self.store_id, code="SOFA-PRICE", name="价格沙发", room_type="sofa", status="occupied")
+            occupancy = PositionOccupancy(store_id=self.store_id, room_id=0, selection_session_id=session.id, status="waiting_service")
+            db.add_all([staff, session, room])
+            db.flush()
+            occupancy.room_id = room.id
+            occupancy.active_room_id = room.id
+            occupancy.active_session_id = session.id
+            db.add(occupancy)
+            db.commit()
+            staff_id = staff.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/tasks", headers=headers)
+        assert response.status_code == 200, response.text
+        task = next(item for item in response.json()["items"] if item["room_name"] == "价格沙发")
+        assert task["pricing"]["store_total_cents"] == 19900
+        assert task["pricing"]["member_total_cents"] == 15900
+        assert task["pricing"]["applied_price_type"] == "member"
+        assert task["pricing"]["lines"][0]["unit_store_price_cents"] == 19900
+        assert task["pricing"]["lines"][0]["unit_member_price_cents"] == 15900
+
+    def test_technician_unassigned_task_exposes_prices(self):
+        with self.SessionLocal() as db:
+            staff = Staff(username="tech-price-unassigned", password_hash=hash_password("tech-pass"), name="未排座价格技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)
+            session = SelectionSession(
+                id="tech-price-unassigned-session",
+                access_token_hash="hash",
+                store_id=self.store_id,
+                status="submitted",
+                items=[{"name": "荷小推", "quantity": 1}],
+                pricing_snapshot={
+                    "applied_price_type": "store",
+                    "lines": [{"line_index": 0, "name": "荷小推", "quantity": 1, "unit_store_price_cents": 12900, "unit_member_price_cents": 8900, "store_line_total_cents": 12900, "member_line_total_cents": 8900}],
+                },
+                store_total_cents=12900,
+                member_total_cents=8900,
+            )
+            db.add_all([staff, session])
+            db.commit()
+            staff_id = staff.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/tasks", headers=headers)
+        assert response.status_code == 200, response.text
+        task = next(item for item in response.json()["unassigned_items"] if item["selection_session_id"] == "tech-price-unassigned-session")
+        assert task["pricing"]["store_total_cents"] == 12900
+        assert task["pricing"]["member_total_cents"] == 8900
+        assert task["pricing"]["applied_price_type"] == "store"
+
     def test_technician_tasks_show_one_room_card_instead_of_its_beds(self):
         with self.SessionLocal() as db:
             staff = Staff(username="tech-empty-board", password_hash=hash_password("tech-pass"), name="空位看板技师", role="technician", status="active", store_id=self.store_id, technician_id=self.technician_id)

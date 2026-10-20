@@ -51,6 +51,18 @@
 .technician-order-drawer .ant-list { margin-bottom: 18px; border-top: 1px solid #edf2ef; border-bottom: 1px solid #edf2ef; }
 .technician-order-drawer .ant-list-header { padding-inline: 0; color: #6d8178; font-size: 13px; }
 .technician-order-drawer .ant-list-item { padding-inline: 0; }
+.technician-order-item { align-items: flex-start !important; gap: 10px; }
+.technician-order-item-name { min-width: 0; flex: 1; font-weight: 600; line-height: 1.45; }
+.technician-order-item-tail { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: 0 0 auto; color: #71837c; font-size: 12px; }
+.technician-order-line-price { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; color: #2d5a4b; font-size: 11px; font-weight: 650; white-space: nowrap; }
+.technician-order-pricing { margin: -4px 0 18px; padding: 11px 12px; border: 1px solid #dce9e2; border-radius: 12px; background: #f5faf7; }
+.technician-order-pricing-head { display: flex; justify-content: space-between; gap: 8px; color: #6d8178; font-size: 11px; }
+.technician-order-pricing-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.technician-order-pricing-pair > div { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 9px; background: #fff; border: 1px solid #e4eee8; }
+.technician-order-pricing-pair span { color: #7a8d86; font-size: 11px; }
+.technician-order-pricing-pair strong { color: #183c34; font-size: 20px; line-height: 1.15; }
+.technician-unassigned-price { margin-top: 5px; color: #2d5a4b; font-size: 12px; font-weight: 650; }
+.technician-position-tile-price { margin-top: 4px; color: #2d5a4b; font-size: 11px; font-weight: 650; line-height: 1.35; }
 .technician-task-card, .technician-history-card, .technician-me-page .ant-card { background: #fff; border: 1px solid #dfebe5; border-radius: 14px; box-shadow: 0 5px 18px rgba(23,64,52,.05); }
 .technician-task-card { margin-bottom: 12px; padding: 15px; }
 .technician-task-card-head, .technician-history-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

@@ -207,6 +207,73 @@ def me(authorization: str | None = Header(None), db: Session = Depends(get_db)) 
     return {"staff": {"id": staff.id, "name": staff.name, "username": staff.username, "role": "technician", "status": staff.status, "store_id": staff.store_id, "technician_id": technician.id}, "technician": {"id": technician.id, "name": technician.name, "code": technician.code, "level": technician.level, "skills": technician.skills, "status": technician.status}}
 
 
+def _price_cents(value) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _selection_pricing(session: SelectionSession | None) -> dict | None:
+    """Return the persisted price snapshot without exposing customer data.
+
+    The technician view needs both member and non-member totals; applied_price_type
+    only tells the UI which one was selected, not what the other one was.
+    """
+    if session is None:
+        return None
+    snapshot = session.pricing_snapshot if isinstance(session.pricing_snapshot, dict) else {}
+    raw_lines = snapshot.get("lines") if isinstance(snapshot.get("lines"), list) else []
+    lines = []
+    for index, raw in enumerate(raw_lines):
+        if not isinstance(raw, dict):
+            continue
+        quantity = _price_cents(raw.get("quantity"))
+        quantity = max(1, quantity or 1)
+        unit_store = _price_cents(raw.get("unit_store_price_cents"))
+        unit_member = _price_cents(raw.get("unit_member_price_cents"))
+        store_line = _price_cents(raw.get("store_line_total_cents"))
+        member_line = _price_cents(raw.get("member_line_total_cents"))
+        if store_line is None and unit_store is not None:
+            store_line = unit_store * quantity
+        if member_line is None and unit_member is not None:
+            member_line = unit_member * quantity
+        lines.append({
+            "line_index": _price_cents(raw.get("line_index")) if raw.get("line_index") is not None else index,
+            "name": raw.get("name") if isinstance(raw.get("name"), str) else "",
+            "quantity": quantity,
+            "unit_store_price_cents": unit_store,
+            "unit_member_price_cents": unit_member,
+            "store_line_total_cents": store_line,
+            "member_line_total_cents": member_line,
+        })
+
+    store_total = _price_cents(session.store_total_cents)
+    member_total = _price_cents(session.member_total_cents)
+    if not store_total:
+        store_total = _price_cents(snapshot.get("store_total_cents"))
+    if not member_total:
+        member_total = _price_cents(snapshot.get("member_total_cents"))
+    if store_total is None and lines:
+        store_total = sum(line["store_line_total_cents"] or 0 for line in lines)
+    if member_total is None and lines:
+        member_total = sum(line["member_line_total_cents"] or 0 for line in lines)
+    store_total = store_total or 0
+    member_total = member_total or 0
+    applied = snapshot.get("applied_price_type")
+    if applied not in {"store", "member", "group"}:
+        applied = None
+    return {
+        "store_total_cents": store_total,
+        "member_total_cents": member_total,
+        "member_saving_cents": max(0, store_total - member_total),
+        "applied_price_type": applied,
+        "lines": lines,
+    }
+
+
 @router.get("/tasks")
 def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
     staff, technician = current_technician(authorization, db)
@@ -266,7 +333,7 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
     for room in rooms:
         room_occupancies = occupancies_by_room.get(room.id, [])
         if len(room_occupancies) > 1:
-            items.append({"occupancy_id": None, "user_id": None, "selection_session_id": None, "occupancy_status": "conflict", "completed_by_me": False, "selection_status": None, "room_id": room.id, "room_name": room.name, "room_type": room.room_type, "room_status": room.status, "items": [], "conflict": True, "conflict_count": len(room_occupancies)})
+            items.append({"occupancy_id": None, "user_id": None, "selection_session_id": None, "occupancy_status": "conflict", "completed_by_me": False, "selection_status": None, "room_id": room.id, "room_name": room.name, "room_type": room.room_type, "room_status": room.status, "items": [], "pricing": None, "conflict": True, "conflict_count": len(room_occupancies)})
             continue
         occupancy, session = room_occupancies[0] if room_occupancies else (None, None)
         items.append({
@@ -281,6 +348,7 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             "room_type": room.room_type,
             "room_status": room.status,
             "items": session.items or [] if session else [],
+            "pricing": _selection_pricing(session),
             "conflict": False,
             "conflict_count": 0,
         })
@@ -316,6 +384,7 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             "room_type": "unassigned",
             "room_status": None,
             "items": session.items or [],
+            "pricing": _selection_pricing(session),
             "conflict": False,
             "conflict_count": 0,
             "submitted_at": submitted_at.isoformat() if submitted_at else None,
