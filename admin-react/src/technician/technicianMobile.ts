@@ -117,6 +117,7 @@ export type TechnicianPricingLine = {
   unit_member_price_cents?: number | null;
   store_line_total_cents?: number | null;
   member_line_total_cents?: number | null;
+  group_line_total_cents?: number | null;
   store_line_price_cents?: number | null;
   member_line_price_cents?: number | null;
 };
@@ -124,6 +125,7 @@ export type TechnicianPricingLine = {
 export type TechnicianOrderPricing = {
   store_total_cents?: number | null;
   member_total_cents?: number | null;
+  group_total_cents?: number | null;
   member_saving_cents?: number | null;
   applied_price_type?: 'store' | 'member' | 'group' | null;
   lines?: TechnicianPricingLine[];
@@ -133,19 +135,66 @@ export function technicianPricingLines(pricing: TechnicianOrderPricing | null | 
   return Array.isArray(pricing?.lines) ? pricing.lines : [];
 }
 
-export function technicianPricingAppliedLabel(pricing: TechnicianOrderPricing | null | undefined): string {
-  if (pricing?.applied_price_type === 'member') return '本单按会员价记录';
-  if (pricing?.applied_price_type === 'store') return '本单按非会员价记录';
-  if (pricing?.applied_price_type === 'group') return '本单按团购价记录';
-  return '会员价 / 非会员价并列展示';
+export type TechnicianPriceMode = 'member' | 'store' | 'group' | 'unknown';
+
+export type TechnicianPriceAmount = {
+  amount_cents: number | null;
+  pending_label: string | null;
+};
+
+const GROUP_PRICE_PENDING = '团购价待确认';
+
+/** 本单实际计价口径；缺失或未知时返回 unknown，避免用会员价/门店价冒充。 */
+export function technicianPriceMode(pricing: TechnicianOrderPricing | null | undefined): TechnicianPriceMode {
+  const applied = pricing?.applied_price_type;
+  return applied === 'member' || applied === 'store' || applied === 'group' ? applied : 'unknown';
+}
+
+export function technicianPriceModeLabel(mode: TechnicianPriceMode): string {
+  if (mode === 'member') return '会员价';
+  if (mode === 'store') return '门店价';
+  if (mode === 'group') return '团购价';
+  return '价格类型待确认';
+}
+
+/** 逐项金额只按本单口径取值，group 缺少团购金额时给出待确认文案而不是借用会员/门店金额。 */
+export function technicianPriceLineValue(mode: TechnicianPriceMode, line: TechnicianPricingLine | null | undefined): TechnicianPriceAmount {
+  if (mode === 'member') return { amount_cents: technicianCentsOrNull(line?.member_line_total_cents ?? line?.member_line_price_cents), pending_label: null };
+  if (mode === 'store') return { amount_cents: technicianCentsOrNull(line?.store_line_total_cents ?? line?.store_line_price_cents), pending_label: null };
+  if (mode === 'group') {
+    const amount = technicianCentsOrNull(line?.group_line_total_cents);
+    return { amount_cents: amount, pending_label: amount === null ? GROUP_PRICE_PENDING : null };
+  }
+  return { amount_cents: null, pending_label: null };
+}
+
+/** 合计只按本单口径取值，与逐项金额口径保持一致。 */
+export function technicianPriceTotalValue(mode: TechnicianPriceMode, pricing: TechnicianOrderPricing | null | undefined): TechnicianPriceAmount {
+  if (mode === 'member') return { amount_cents: technicianCentsOrNull(pricing?.member_total_cents), pending_label: null };
+  if (mode === 'store') return { amount_cents: technicianCentsOrNull(pricing?.store_total_cents), pending_label: null };
+  if (mode === 'group') {
+    const amount = technicianCentsOrNull(pricing?.group_total_cents);
+    return { amount_cents: amount, pending_label: amount === null ? GROUP_PRICE_PENDING : null };
+  }
+  return { amount_cents: null, pending_label: null };
+}
+
+/** 服务位卡片/未排座行的一行价格摘要；无 pricing 时返回空字符串。 */
+export function technicianPricingSummary(pricing: TechnicianOrderPricing | null | undefined): string {
+  if (!pricing) return '';
+  const mode = technicianPriceMode(pricing);
+  if (mode === 'unknown') return technicianPriceModeLabel(mode);
+  const total = technicianPriceTotalValue(mode, pricing);
+  if (total.pending_label) return total.pending_label;
+  return `${technicianPriceModeLabel(mode)} ${technicianPriceLabel(total.amount_cents)}`;
 }
 
 export type TechnicianPricedItemRow = {
   key: string;
   name: string;
   quantity: number;
-  member_total_cents: number | null;
-  store_total_cents: number | null;
+  amount_cents: number | null;
+  pending_label: string | null;
 };
 
 function technicianPositiveQuantity(value: unknown): number {
@@ -159,8 +208,8 @@ function technicianCentsOrNull(value: unknown): number | null {
 
 /**
  * 技师“我的服务”（GET /technician/my-tasks）的价格行映射。
- * 有 pricing 时优先按 pricing.lines 展示逐项会员价/非会员价，并按 line_index 对齐任务项目；
- * 没有价格快照时只返回项目名且价格为 null，展示层据此降级，绝不把缺失价格显示成 0。
+ * 有 pricing 时按 applied_price_type 只取本单口径的逐项金额（与 /tasks 一致），
+ * 并按 line_index 对齐任务项目；没有价格快照时只返回项目名且金额为 null，绝不伪造 0。
  */
 export function technicianPricedItemRows(
   items: any[] | null | undefined,
@@ -168,17 +217,19 @@ export function technicianPricedItemRows(
 ): TechnicianPricedItemRow[] {
   const sourceItems = Array.isArray(items) ? items : [];
   const lines = technicianPricingLines(pricing);
+  const mode = technicianPriceMode(pricing);
   if (lines.length) {
     return lines.map((line, index) => {
       const lineIndex = typeof line.line_index === 'number' ? line.line_index : index;
       const original = sourceItems.find((item, itemIndex) => Number(item?.line_index ?? itemIndex) === Number(lineIndex)) || sourceItems[index];
       const name = typeof line.name === 'string' && line.name.trim() ? line.name.trim() : technicianOrderItemLabel(original);
+      const price = technicianPriceLineValue(mode, line);
       return {
         key: `line-${lineIndex}-${index}`,
         name,
         quantity: technicianPositiveQuantity(line.quantity !== undefined ? line.quantity : original?.quantity),
-        member_total_cents: technicianCentsOrNull(line.member_line_total_cents ?? line.member_line_price_cents),
-        store_total_cents: technicianCentsOrNull(line.store_line_total_cents ?? line.store_line_price_cents),
+        amount_cents: price.amount_cents,
+        pending_label: price.pending_label,
       };
     });
   }
@@ -186,8 +237,8 @@ export function technicianPricedItemRows(
     key: `item-${index}`,
     name: technicianOrderItemLabel(item),
     quantity: technicianPositiveQuantity(item?.quantity),
-    member_total_cents: null,
-    store_total_cents: null,
+    amount_cents: null,
+    pending_label: null,
   }));
 }
 

@@ -8,8 +8,12 @@ import {
   technicianOrderItemLabel,
   technicianPositionTone,
   technicianPriceLabel,
-  technicianPricingAppliedLabel,
+  technicianPriceLineValue,
+  technicianPriceMode,
+  technicianPriceModeLabel,
+  technicianPriceTotalValue,
   technicianPricingLines,
+  technicianPricingSummary,
   technicianStatusLabel,
 } from './technicianMobile';
 import TechnicianProfileSheet from './TechnicianProfileSheet';
@@ -56,11 +60,11 @@ function taskToOrder(task: any): any {
 }
 
 function orderPriceSummary(pricing: any): string {
-  if (!pricing) return '';
-  return `会员 ${technicianPriceLabel(pricing.member_total_cents)} · 非会员 ${technicianPriceLabel(pricing.store_total_cents)}`;
+  return technicianPricingSummary(pricing);
 }
 
 function OrderItems({ order }: { order: any }) {
+  const mode = technicianPriceMode(order.pricing);
   const priced = technicianPricingLines(order.pricing);
   const items = priced.length ? priced.map((line: any, index: number) => {
     const original = (order.items || []).find((item: any, itemIndex: number) => Number(item.line_index ?? itemIndex) === Number(line.line_index ?? index))
@@ -72,16 +76,14 @@ function OrderItems({ order }: { order: any }) {
     dataSource={items}
     locale={{ emptyText: '当前暂无服务项目' }}
     renderItem={(item: any) => {
-      const member = item.member_line_total_cents ?? item.member_line_price_cents;
-      const store = item.store_line_total_cents ?? item.store_line_price_cents;
-      const hasPrice = member != null || store != null;
+      const { amount_cents, pending_label } = technicianPriceLineValue(mode, item);
       return <List.Item className="technician-order-item">
         <span className="technician-order-item-name">{technicianOrderItemLabel(item)}</span>
         <span className="technician-order-item-tail">
-          {hasPrice && <span className="technician-order-line-price">
-            <span>会员 {technicianPriceLabel(member)}</span>
-            <span>非会员 {technicianPriceLabel(store)}</span>
+          {amount_cents != null && <span className="technician-order-line-price">
+            <span>{technicianPriceModeLabel(mode)} {technicianPriceLabel(amount_cents)}</span>
           </span>}
+          {amount_cents == null && pending_label && <span className="technician-order-line-pending">{pending_label}</span>}
           <span>×{item.quantity || 1}</span>
         </span>
       </List.Item>;
@@ -91,15 +93,19 @@ function OrderItems({ order }: { order: any }) {
 
 function OrderPricingBlock({ pricing }: { pricing: any }) {
   if (!pricing) return null;
+  const mode = technicianPriceMode(pricing);
+  const label = technicianPriceModeLabel(mode);
+  const total = technicianPriceTotalValue(mode, pricing);
   return <section className="technician-order-pricing" aria-label="订单价格">
     <div className="technician-order-pricing-head">
       <span>本单价格</span>
-      <span>{technicianPricingAppliedLabel(pricing)}</span>
+      <span>{label}</span>
     </div>
-    <div className="technician-order-pricing-pair">
-      <div><span>会员价合计</span><strong>{technicianPriceLabel(pricing.member_total_cents)}</strong></div>
-      <div><span>非会员价合计</span><strong>{technicianPriceLabel(pricing.store_total_cents)}</strong></div>
-    </div>
+    {mode !== 'unknown' && <div className="technician-order-pricing-pair">
+      <div><span>{label}合计</span><strong>{total.pending_label ? '待确认' : technicianPriceLabel(total.amount_cents)}</strong></div>
+    </div>}
+    {mode === 'unknown' && <p className="technician-order-pricing-hint">价格类型待确认，暂不展示单价与合计</p>}
+    {total.pending_label && <p className="technician-order-pricing-hint">{total.pending_label}</p>}
   </section>;
 }
 

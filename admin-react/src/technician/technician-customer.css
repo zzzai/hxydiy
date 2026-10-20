@@ -9,7 +9,8 @@
 .technician-my-service-item-name { min-width: 0; flex: 1; font-weight: 600; line-height: 1.45; }
 .technician-my-service-item-tail { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; color: #71837c; font-size: 12px; }
 .technician-my-service-item-count { color: #71837c; font-size: 12px; }
-.technician-my-service-item-price { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; color: #2d5a4b; font-size: 11px; font-weight: 650; white-space: nowrap; }
+.technician-my-service-item-price { color: #2d5a4b; font-size: 11px; font-weight: 650; white-space: nowrap; }
+.technician-my-service-item-pending { color: #a1660a; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .technician-my-service-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .technician-my-service-actions .ant-btn { min-height: 44px; flex: 1; }
 .technician-customer-panel { max-width: 640px; margin: 0 auto; }
