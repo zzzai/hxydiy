@@ -1,8 +1,11 @@
+import type { TechnicianOrderPricing } from './technician/technicianMobile';
+
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number };
 export type TechnicianCustomerTask = {
   occupancy_id: number; user_id: number | null; selection_session_id: string;
   occupancy_status: 'in_service' | 'post_service_present';
   room_id: number; room_name: string; items: { name?: string; quantity?: number; project_id?: number }[];
+  pricing?: TechnicianOrderPricing | null;
 };
 export type CustomerSummary = {
   occupancy_id: number; customer_id: number | null; customer_name: string | null;

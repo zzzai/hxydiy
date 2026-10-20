@@ -117,6 +117,8 @@ export type TechnicianPricingLine = {
   unit_member_price_cents?: number | null;
   store_line_total_cents?: number | null;
   member_line_total_cents?: number | null;
+  store_line_price_cents?: number | null;
+  member_line_price_cents?: number | null;
 };
 
 export type TechnicianOrderPricing = {
@@ -136,6 +138,57 @@ export function technicianPricingAppliedLabel(pricing: TechnicianOrderPricing | 
   if (pricing?.applied_price_type === 'store') return '本单按非会员价记录';
   if (pricing?.applied_price_type === 'group') return '本单按团购价记录';
   return '会员价 / 非会员价并列展示';
+}
+
+export type TechnicianPricedItemRow = {
+  key: string;
+  name: string;
+  quantity: number;
+  member_total_cents: number | null;
+  store_total_cents: number | null;
+};
+
+function technicianPositiveQuantity(value: unknown): number {
+  const quantity = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function technicianCentsOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : null;
+}
+
+/**
+ * 技师“我的服务”（GET /technician/my-tasks）的价格行映射。
+ * 有 pricing 时优先按 pricing.lines 展示逐项会员价/非会员价，并按 line_index 对齐任务项目；
+ * 没有价格快照时只返回项目名且价格为 null，展示层据此降级，绝不把缺失价格显示成 0。
+ */
+export function technicianPricedItemRows(
+  items: any[] | null | undefined,
+  pricing: TechnicianOrderPricing | null | undefined,
+): TechnicianPricedItemRow[] {
+  const sourceItems = Array.isArray(items) ? items : [];
+  const lines = technicianPricingLines(pricing);
+  if (lines.length) {
+    return lines.map((line, index) => {
+      const lineIndex = typeof line.line_index === 'number' ? line.line_index : index;
+      const original = sourceItems.find((item, itemIndex) => Number(item?.line_index ?? itemIndex) === Number(lineIndex)) || sourceItems[index];
+      const name = typeof line.name === 'string' && line.name.trim() ? line.name.trim() : technicianOrderItemLabel(original);
+      return {
+        key: `line-${lineIndex}-${index}`,
+        name,
+        quantity: technicianPositiveQuantity(line.quantity !== undefined ? line.quantity : original?.quantity),
+        member_total_cents: technicianCentsOrNull(line.member_line_total_cents ?? line.member_line_price_cents),
+        store_total_cents: technicianCentsOrNull(line.store_line_total_cents ?? line.store_line_price_cents),
+      };
+    });
+  }
+  return sourceItems.map((item, index) => ({
+    key: `item-${index}`,
+    name: technicianOrderItemLabel(item),
+    quantity: technicianPositiveQuantity(item?.quantity),
+    member_total_cents: null,
+    store_total_cents: null,
+  }));
 }
 
 export function createTechnicianIdempotencyKey(action: string, occupancyId: number): string {
