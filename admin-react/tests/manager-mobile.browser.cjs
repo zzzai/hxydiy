@@ -21,8 +21,19 @@ async function eventually(check, label) {
 }
 async function check(name, run) {
   phase = name;
-  await run();
-  report.cases.push({ name, passed: true });
+  try {
+    await run();
+    if (await page.locator('aside').count()) assert.match(await page.locator('aside').innerText(), /非白名单 0/);
+    report.cases.push({ name, passed: true });
+  } catch (error) {
+    const failure = { phase: name, type: error.name, message: error.message.slice(0, 700) };
+    report.cases.push({ name, passed: false, failure });
+    report.failure ||= failure;
+    await shot('failure-' + report.cases.length).catch(() => undefined);
+    if (report.unexpectedRequests.length) throw error;
+  } finally {
+    for (const peer of context.pages()) if (peer !== page) await peer.close();
+  }
 }
 async function shot(name) {
   const file = name + '.png';
@@ -100,7 +111,7 @@ async function main() {
       await start('empty'); await page.getByText('暂无待确认选单', { exact: true }).waitFor();
       assert.equal(await page.locator('.manager-changes').count(), 0); await noOverflow(); await shot('empty-375');
       await start('error'); await page.getByText('合成网络错误，请重试', { exact: true }).waitFor();
-      await page.getByRole('button', { name: '重试', exact: true }).click();
+      await page.getByRole('button', { name: /重\s*试/ }).click();
       assert.equal(await cards().count(), 0); await noOverflow(); await shot('load-error-375');
     });
     await check('confirm-and-cancel', async () => {
@@ -198,7 +209,9 @@ async function main() {
     await check('other-tab-switch-clears-open-detail', async () => {
       await start(); await loaded(); await cards().first().click(); await drawer().waitFor();
       const peer = await context.newPage();
+      await peer.addInitScript(() => { if (location.origin === 'http://127.0.0.1:18420') sessionStorage.setItem('manager-fixture-ready', '1'); });
       await peer.goto(origin + '/technician/store?scenario=normal', { waitUntil: 'domcontentloaded' });
+      assert.equal(await drawer().isVisible(), true, 'Peer setup must not clear the first tab before identity changes');
       await peer.getByRole('button', { name: '换店长（合成）', exact: true }).click();
       await page.getByText('另一位合成店长', { exact: true }).waitFor();
       await eventually(async () => !await drawer().isVisible(), 'Identity switch must discard the old detail');
@@ -225,7 +238,7 @@ async function main() {
     });
     assert.deepEqual(report.unexpectedRequests, [], 'Only loopback assets are permitted; no real API calls');
     assert.deepEqual(report.pageErrors, [], 'No browser runtime errors');
-    report.passed = true;
+    report.passed = report.cases.every(item => item.passed);
   } catch (error) {
     report.failure = { phase, type: error.name, message: error.message.slice(0, 700) };
     if (page && !page.isClosed()) await shot('failure').catch(() => undefined);
