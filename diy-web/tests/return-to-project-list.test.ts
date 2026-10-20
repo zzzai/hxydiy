@@ -67,6 +67,40 @@ test('确认原服务位已释放才创建新选购会话', async () => {
   assert.deepEqual(s.cleared, []);
 });
 
+test('无座菜单提交后返回列表会新建下一单，不锁在已提交选单', async () => {
+  const states: string[] = [];
+  const cleared: unknown[] = [];
+  let drafts = 0;
+  const privateSelection = { current: { sessionId: 'submitted' } };
+  const privateSave = { current: Promise.resolve() };
+  const deps = {
+    publicBrowsing: true,
+    serviceStatus: null,
+    occupancy: null,
+    session: { id: 'submitted' },
+    accessToken: 'token',
+    position: null,
+    positionCode: '',
+    query: { storeId: 1 },
+    localStorage: {},
+    privateSelection,
+    privateSave,
+    customerAuthRef: { current: null },
+    setBoot: (state: string) => states.push(state),
+    setBootMessage: () => {},
+    startFreshSelectionDraft: () => { drafts += 1; },
+    clearPrivateSelection: (...args: unknown[]) => cleared.push(args),
+    initializePrivateSelection: async () => { states.push('initialized'); },
+    persistCurrent: () => { throw new Error('不应沿用已提交选单'); },
+  };
+  await new AsyncFunction(...Object.keys(deps), body)(...Object.values(deps));
+  assert.equal(drafts, 1);
+  assert.deepEqual(states, ['loading', 'initialized']);
+  assert.equal(cleared.length, 1);
+  assert.equal(privateSelection.current, null);
+  assert.equal(privateSave.current, null);
+});
+
 test('未结束的已提交服务仍直接返回空白追加草稿', async () => {
   const s = scenario('waiting_service', async () => { throw new Error('must not query'); });
   await s.run();
