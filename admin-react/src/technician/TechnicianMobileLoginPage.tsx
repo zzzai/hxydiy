@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { App, Button, Form, Input, Typography } from 'antd';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { activateTechnician, login } from '../api';
+import { interpretStaffLogin } from '../workspaceLogin';
+import { isMobileManager } from './managerMobile';
 import { commitStaffSession, getSessionEpoch } from '../wecomSession';
 
 type LoginValues = { username?: string; password: string; token?: string; confirmPassword?: string };
 
-export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff: any) => void }) {
+export default function TechnicianMobileLoginPage({ onLogin, managerOnly = false }: { onLogin: (staff: any) => void; managerOnly?: boolean }) {
   const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'activate'>('login');
@@ -25,11 +27,12 @@ export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff
       }
       const response = await login(values.username || '', values.password);
       if (epoch !== getSessionEpoch()) return;
-      if (!['technician', 'manager'].includes(response.data.staff?.role)) {
+      const session = interpretStaffLogin({ ...response.data, workspaces: response.data.workspaces || [] });
+      if (session.kind !== 'ready' || (managerOnly ? !isMobileManager(session.staff) : session.staff.role !== 'technician' && !isMobileManager(session.staff))) {
         message.error('该账号没有移动端权限');
         return;
       }
-      if (response.data.token && response.data.staff && commitStaffSession({ token: response.data.token, staff: response.data.staff }, epoch)) onLogin(response.data.staff);
+      if (commitStaffSession({ token: session.token, staff: session.staff }, epoch)) onLogin(session.staff);
     } catch {
       // API interceptor displays the server error.
     } finally {
@@ -39,13 +42,13 @@ export default function TechnicianMobileLoginPage({ onLogin }: { onLogin: (staff
 
   return <main className="technician-login-page">
     <section className="technician-login-card">
-      <div className="technician-login-brand"><span>荷</span><div><Typography.Title level={2}>门店移动工作台</Typography.Title><Typography.Text>技师服务与服务记录</Typography.Text></div></div>
+      <div className="technician-login-brand"><span>荷</span><div><Typography.Title level={2}>门店移动工作台</Typography.Title><Typography.Text>{managerOnly ? '处理本店选单与加选' : '技师服务与服务记录'}</Typography.Text></div></div>
       <Form layout="vertical" size="large" onFinish={submit} preserve>
         {mode === 'login' ? <>
-          <Form.Item name="username" label="账号" rules={[{ required: true, message: '请输入账号' }]}><Input prefix={<UserOutlined />} placeholder="请输入技师或店长账号" autoComplete="username" /></Form.Item>
+          <Form.Item name="username" label="账号" rules={[{ required: true, message: '请输入账号' }]}><Input prefix={<UserOutlined />} placeholder={managerOnly ? '请输入店长账号' : '请输入技师或店长账号'} autoComplete="username" /></Form.Item>
           <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}><Input.Password prefix={<LockOutlined />} placeholder="请输入密码" autoComplete="current-password" /></Form.Item>
           <Button type="primary" htmlType="submit" block loading={loading} className="technician-primary-button">登录移动工作台</Button>
-          <Button type="link" block onClick={() => setMode('activate')}>首次激活 / 重置密码</Button>
+          {!managerOnly && <Button type="link" block onClick={() => setMode('activate')}>首次激活 / 重置密码</Button>}
         </> : <>
           <Form.Item name="token" label="激活凭证" rules={[{ required: true, message: '请输入店长提供的激活凭证' }]}><Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="粘贴店长提供的一次性凭证" /></Form.Item>
           <Form.Item name="password" label="新密码" rules={[{ required: true, min: 8, message: '密码至少 8 位' }]}><Input.Password prefix={<LockOutlined />} placeholder="设置新密码" autoComplete="new-password" /></Form.Item>

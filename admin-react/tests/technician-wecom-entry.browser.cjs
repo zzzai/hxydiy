@@ -29,6 +29,7 @@ async function verifyRoleHandoffs(browser, events, report, diagnostics) {
         requests.push(pathname);
         if (diagnostics.requests.length < 64) diagnostics.requests.push(pathname);
         const body = pathname.endsWith('/auth/wecom/exchange') ? response
+          : pathname.endsWith('/admin/v2/selection-sessions') ? { items: [], total: 0, page: 1, page_size: 20 }
           : pathname.endsWith('/technician/me') ? { staff: actor, technician: { id: 1, name: actor.name } } : { items: [] };
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
       });
@@ -47,7 +48,12 @@ async function verifyRoleHandoffs(browser, events, report, diagnostics) {
         if (response.status() >= 400 && diagnostics.httpErrors.length < 16) diagnostics.httpErrors.push({ path: new URL(response.url()).pathname, status: response.status() });
       });
       await rolePage.goto(origin + '/technician/wecom/complete', { waitUntil: 'commit' });
-      if (!manager) {
+      if (manager) {
+        await rolePage.waitForURL(origin + '/technician/store');
+        await rolePage.getByRole('heading', { name: '门店工作台', exact: true }).waitFor();
+        await rolePage.getByText('更多', { exact: true }).click();
+        await rolePage.getByRole('button', { name: '电脑后台', exact: true }).click();
+      } else {
         await rolePage.waitForURL(origin + '/technician/today');
         await rolePage.getByText('目前没有本人正在服务的顾客', { exact: true }).waitFor();
         assert.ok(requests.includes('/api/v1/technician/my-tasks'));
@@ -73,7 +79,7 @@ async function verifyRoleHandoffs(browser, events, report, diagnostics) {
         assert.equal(observed.roleMatchesManager && observed.storeMatches && observed.noTechnician, true);
         assert.equal(requests.some(pathname => pathname.startsWith('/api/v1/technician/')), false);
       }
-      report.cases.push({ name: manager ? 'manager keeps its scoped session across a real admin handoff without technician requests'
+      report.cases.push({ name: manager ? 'manager defaults to mobile and keeps its scoped session on explicit desktop handoff without technician requests'
         : 'technician still reaches its own tasks and clears its session on actual document departure', status: 'passed', actualPagehide: true });
     } finally { await guard.context.close(); }
   }

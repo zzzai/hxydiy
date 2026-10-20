@@ -1,0 +1,76 @@
+name: Manager mobile browser
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'admin-react/src/technician/**'
+      - 'admin-react/src/servicePositions.ts'
+      - 'admin-react/src/api.ts'
+      - 'admin-react/src/apiSession.ts'
+      - 'admin-react/src/auth.ts'
+      - 'admin-react/src/staffSession.ts'
+      - 'admin-react/src/wecomSession.ts'
+      - 'admin-react/src/workspaceLogin.ts'
+      - 'admin-react/tests/manager-mobile*'
+      - 'admin-react/tests/manager-positions*'
+      - 'admin-react/package*.json'
+      - '.github/workflows/manager-mobile-browser.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manager-mobile-browser-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: Manager mobile browser gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MANAGER_TEST_HEAD: ${{ github.event.pull_request.head.sha }}
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/output/browser-runtime/browsers
+      MANAGER_TEST_PLAYWRIGHT: ${{ github.workspace }}/output/browser-runtime/node_modules/playwright
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: admin-react/package-lock.json
+      - name: Install locked application and pinned browser runtime
+        run: |
+          npm ci --prefix admin-react
+          npm install --prefix output/browser-runtime --no-save --no-package-lock playwright@1.58.2
+          output/browser-runtime/node_modules/.bin/playwright install --with-deps chromium
+      - name: Verify isolated mobile flows
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output/playwright/manager-mobile/"$MANAGER_TEST_HEAD"
+          cd admin-react
+          node --max-old-space-size=512 node_modules/vite/bin/vite.js --config tests/manager-mobile.vite.ts --configLoader runner > ../output/playwright/manager-mobile/"$MANAGER_TEST_HEAD"/vite.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:18420/technician/store > /dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          if [[ "$ready" != true ]]; then echo "Isolated preview failed to start"; exit 1; fi
+          cd ..
+          timeout 300s node admin-react/tests/manager-mobile.browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manager-mobile-${{ github.event.pull_request.head.sha }}
+          path: |
+            output/playwright/manager-mobile/${{ github.event.pull_request.head.sha }}/report.json
+            output/playwright/manager-mobile/${{ github.event.pull_request.head.sha }}/*.png
+          if-no-files-found: error
+          retention-days: 7

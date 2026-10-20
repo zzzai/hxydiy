@@ -1,5 +1,7 @@
 import { getNavigationPaths, isNavigationPathAllowed } from './core/navigation/index.ts';
 
+import { isManagerMobilePath } from './staffSession.ts';
+
 export type StaffRole = 'admin' | 'manager' | 'staff' | 'technician';
 
 export type StaffContext = {
@@ -13,7 +15,8 @@ export function isTechnicianEntry(pathname: string = window.location.pathname): 
   return pathname === '/technician' || pathname.startsWith('/technician/');
 }
 
-export function getEntryLoginPath(technicianEntry: boolean): string {
+export function getEntryLoginPath(technicianEntry: boolean, pathname = ''): string {
+  if (technicianEntry && isManagerMobilePath(pathname)) return '/technician/store/login';
   return technicianEntry ? '/technician/login' : '/admin/#/login';
 }
 
@@ -24,6 +27,7 @@ export function getEntryHomePath(technicianEntry: boolean): string {
 export function getPostLoginRedirect(pathname: string, role?: string): string {
   const technicianEntry = isTechnicianEntry(pathname);
   if (role === 'technician') return '/technician/today';
+  if (technicianEntry && role === 'manager') return '/technician/store';
   return technicianEntry ? '/admin/#/today' : '/admin/#/';
 }
 export function getVisibleMenuPaths(role?: string, storeId?: number | null): string[] {

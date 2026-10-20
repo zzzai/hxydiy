@@ -24,6 +24,7 @@ export type PositionOccupancy = {
   room_id: number;
   selection_session_id: string;
   active_room_id: number | null;
+  active_session_id?: string | null;
   status: Exclude<OccupancyStatus, 'available' | 'unavailable'>;
   source: string;
   hold_expires_at: string | null;

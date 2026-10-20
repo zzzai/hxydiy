@@ -25,6 +25,10 @@ export function isTechnicianPath(pathname: string): boolean {
   return pathname === '/technician' || pathname.startsWith('/technician/');
 }
 
+export function isManagerMobilePath(pathname: string): boolean {
+  return pathname === '/technician/store' || pathname.startsWith('/technician/store/');
+}
+
 export function browserPathname(): string {
   try {
     return window.location?.pathname || '';
@@ -61,7 +65,7 @@ export function migrateLegacyTechnicianSession(storage: StorageLike): boolean {
 
 export function activeSessionSlot(storage: StorageLike, pathname: string): SessionSlot {
   migrateLegacyTechnicianSession(storage);
-  if (!isTechnicianPath(pathname)) return 'admin';
+  if (!isTechnicianPath(pathname) || isManagerMobilePath(pathname)) return 'admin';
   if (readStaff(storage, TECHNICIAN_STAFF_KEY)?.role === 'technician') return 'technician';
   const adminRole = readStaff(storage, ADMIN_STAFF_KEY)?.role;
   if (adminRole && adminRole !== 'technician') return 'admin';
