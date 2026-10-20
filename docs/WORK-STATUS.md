@@ -1,3 +1,13 @@
+# 2026-10-21 MANAGER-MOBILE-20261020 已生产发布
+
+- 业务 [PR #299](https://github.com/zzzai/hxydiy/pull/299)，候选 `646f50332ba49218051656c6806ce237e42f0a66`，合并/生产 `576bcc25982ad742d8767cb65beb1ec5c9d195e4`。精确主干 [CI 39468039639](https://github.com/zzzai/hxydiy/actions/runs/39468039639) 与唯一 [Deploy 39468665453](https://github.com/zzzai/hxydiy/actions/runs/39468665453) 成功；发布资格、备份、恢复演练、部署与校验job均success。没有第二次部署。
+- 店长默认进入 `/technician/store` 手机工作台，选单视图提供四种筛选、服务端分页、确认/取消/配位和加选批准/拒绝；座位视图读取全量真实服务位，按沙发/床位/房间分组，保留停用关联。详情只读，店/占位/活动选单精确关联后才展示项目与快照价格；双空关联不当作现场空闲，服务结束不因选单已确认而恢复，关联变化锁定提示。双身份隔离、原权限/API与价格规则保持，无新增数据库结构。
+- 最终候选 [Browser CI 39466253610](https://github.com/zzzai/hxydiy/actions/runs/39466253610) 22/22通过，含375/390px、25位全量地图、异常/停用/空关联、零价/缺价、换单、迟到读、换店、退出/pagehide和写后刷新；pageErrors/非白名单网络请求均0。原60项定向检查复用，新增7项投影测试与scoped TypeScript通过，后台只读复核无阻断；未重复执行整套本地测试。
+- 总控核验实际 current=`/root/hxy-diy-20260811/releases/github-576bcc25982a-39468665453`，479项MANIFEST全部sha256sum通过，MANIFEST SHA256=`86db141d77462ded8d1b5bb22b1ed2ec57a3dd347e881a7c9998dbd6aae513e2`。公网 `/technician/store`、`/technician/store/login` HTML及管理端JS/CSS与安装目录一致；顾客端 `/` HTML/JS/CSS也一致，health=`ok/production`。
+- 店长入口HTML SHA256=`2f427bb90bbd68f6b39dd611bfac9e033c21cdc367d1a64cf369de53372bd10d`；`/admin/assets/index-CQXV_lGG.js` SHA256=`3e03a4a00e2ef551f814517450d73323bfc3ee27a1641b1fa13a9d4a264f2ddf`；`/admin/assets/index-DqwOCEvj.css` SHA256=`1b6429328d91987104e77ec34d6bfd5fb9a2b33839f24daf74324ecc3b45c30d`。顾客端资源沿用前批已核验哈希，完整结果保留于下述JSON。
+- 核验业务写入0，未调用有惰性过期写入的seat-map；真实企微/手机/BFCache及门店现场未验，交人验收，不能用合成浏览器结果替代。预览服务已停止，未修改依赖或凭据。此文档收尾不再部署应用。
+- 脱敏证据：总控工作区 `output/manager-mobile-release-20261021/deployment.json`、`production-verification.json`；技师工作区 `output/manager-mobile-20261020/ci-646f5033/report.json` 与15张PNG。生产发布及核验由总控执行，技师窗口仅受托将结果写入上述共享事实文档。
+
 # 2026-10-20 CUSTOMER-SCALP-GROUP 已生产发布
 
 - 业务 [PR #297](https://github.com/zzzai/hxydiy/pull/297)，基线 `a6b7ecfd3856049f1b5238521bd10b49a8c3207c`、候选 `151de654e7f94e12c2c0c5fc61653eadf45cbd56`，合并/生产 `6bd164881a5291fbeb69f5426ba4e039ca90881d`。主干 [CI 39440984059](https://github.com/zzzai/hxydiy/actions/runs/39440984059) 与唯一正式 [Deploy 39441666460](https://github.com/zzzai/hxydiy/actions/runs/39441666460) 成功；发布资格、备份演练、部署与校验 job 均 success。

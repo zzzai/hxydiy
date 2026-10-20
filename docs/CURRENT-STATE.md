@@ -1,10 +1,16 @@
 # hxy-diy 当前状态
 
-更新时间：2026-10-20（Asia/Shanghai）
+更新时间：2026-10-21（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
+
+- `MANAGER-MOBILE-20261020` 已上线：[PR #299](https://github.com/zzzai/hxydiy/pull/299)，候选 `646f50332ba49218051656c6806ce237e42f0a66`，合并/生产 `576bcc25982ad742d8767cb65beb1ec5c9d195e4`；精确主干 [CI 39468039639](https://github.com/zzzai/hxydiy/actions/runs/39468039639) 与唯一 [Deploy 39468665453](https://github.com/zzzai/hxydiy/actions/runs/39468665453) 成功。实际 current=`github-576bcc25982a-39468665453`。
+- 店长默认进入手机“门店工作台”：选单筛选/分页、确认/取消/配位、加选审批及全店座位只读详情；座位关联异常不展示选单内容，换单后详情不静默切换。店长与技师会话隔离、既有权限和价格快照规则保持，不新增后端接口、权限或数据库结构。
+- 最终候选的22项浏览器合成验收通过；总控核验479项MANIFEST全部通过，店长入口与顾客端公网HTML/JS/CSS和安装目录一致，health=`ok/production`，核验业务写入0。未调用可能惰性清理占位的seat-map接口；真实企微、手机/BFCache和门店现场未验，交人验收。详细证据见 `WORK-STATUS.md` 顶部；本次文档收尾不再次部署。
+
+### 2026-10-20 顾客头疗分组既往发布（能力包含于当前版本）
 
 - `CUSTOMER-SCALP-GROUP` 已上线：[PR #297](https://github.com/zzzai/hxydiy/pull/297)，候选 `151de654e7f94e12c2c0c5fc61653eadf45cbd56`，合并/生产 `6bd164881a5291fbeb69f5426ba4e039ca90881d`；精确主干 [CI 39440984059](https://github.com/zzzai/hxydiy/actions/runs/39440984059) 与唯一 [Deploy 39441666460](https://github.com/zzzai/hxydiy/actions/runs/39441666460) 成功。实际 current=`github-6bd164881a52-39441666460`。
 - 仅将现煮草本泡的头疗从“再放松一会”移入“重点多按一会”，保留原 choice/direct linked project 路径，不计入局部部位优惠。其他项目、旧版头部放松、内容、价格、时长、API/迁移/权限与品牌素材不变；已合并的企微人员脚本随主干携带，本批不执行建号或改数据。
