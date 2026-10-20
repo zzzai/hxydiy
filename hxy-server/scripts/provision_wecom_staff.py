@@ -38,12 +38,15 @@ def _normalize(body):
         required = {'label', 'userid', 'username', 'name', 'role'}
         if item['role'] == 'technician':
             required |= {'phone', 'code'}
+            if 'expected_wecom_name' in item:
+                required.add('expected_wecom_name')
         if set(item) != required or any(not isinstance(item[key], str) for key in required):
             raise BindingRefused('INVALID_INPUT')
+        name_keys = ('username', 'name') + (('expected_wecom_name',) if 'expected_wecom_name' in item else ())
         if (not re.fullmatch(r'(manager|technician)_[1-3]', item['label'])
             or not item['label'].startswith(item['role'] + '_')
             or any(not 1 <= len(item[key]) <= 32 or item[key] != item[key].strip()
-                or any(ord(char) < 32 for char in item[key]) for key in ('username', 'name'))):
+                or any(ord(char) < 32 for char in item[key]) for key in name_keys)):
             raise BindingRefused('INVALID_INPUT')
         if item['role'] == 'technician' and (not re.fullmatch(r'1[0-9]{10}', item['phone'])
             or not re.fullmatch(r'[A-Za-z0-9_-]{1,32}', item['code'])):
@@ -69,7 +72,7 @@ def _inspect(db, body, provider, lock=False):
     # The store lock serializes this tool's same-store batches, including new rows.
     plans, approvals = [], []
     for item in body['members']:
-        provider.verify_member(item['userid'], expected_name=item['name'])
+        provider.verify_member(item['userid'], expected_name=item.get('expected_wecom_name', item['name']))
         identities = rows(select(StaffExternalIdentity).where(StaffExternalIdentity.provider == 'wecom',
             StaffExternalIdentity.corp_id == body['corp_id'], StaffExternalIdentity.userid == item['userid']))
         staff_matches = rows(select(Staff).where(or_(Staff.username == item['username'], Staff.name == item['name'])))
