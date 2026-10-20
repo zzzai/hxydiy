@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Spin } from 'antd';
 import { CalendarOutlined, ClockCircleOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getTechnicianMe } from '../api';
+import { getStaff, getTechnicianMe } from '../api';
 import { technicianMobileTabs, TECHNICIAN_MOBILE_TAB_PATHS } from './technicianMobile';
 
 const tabs = [
@@ -17,7 +17,7 @@ export default function TechnicianMobileShell({ children, onLogout }: { children
   const { message } = App.useApp();
   const [me, setMe] = useState<any>();
   useEffect(() => { void getTechnicianMe().then((res) => setMe(res.data)).catch(() => undefined); }, []);
-  const staff = me?.staff || me?.technician?.staff || JSON.parse(localStorage.getItem('hxy_admin_staff') || 'null');
+  const staff = me?.staff || me?.technician?.staff || getStaff();
   const visiblePaths = technicianMobileTabs(staff?.role);
   const visibleTabs = tabs.filter((tab) => visiblePaths.includes(tab.path));
   const logout = () => { onLogout(); message.success('已退出登录'); navigate('/login', { replace: true }); };

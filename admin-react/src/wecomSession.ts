@@ -1,14 +1,14 @@
 import { interpretStaffLogin, type StaffLoginResponse } from './workspaceLogin.ts';
+import { ADMIN_TOKEN_KEY, TECHNICIAN_TOKEN_KEY, clearActiveStaffSession, readActiveAuthMethod, readActiveToken, writeStaffSession } from './staffSession.ts';
 
 type StaffSessionResponse = { token: string; staff: object; auth_method?: 'wecom' };
 type PendingEntry = { entry_nonce: string; attempt_id?: string };
 const PENDING_KEY = 'hxy_wecom_pending';
-const METHOD_KEY = 'hxy_staff_auth_method';
 const listeners = new Set<() => void>();
 let epoch = 0;
 let observedToken: string | null | undefined;
 
-function token(): string | null { return localStorage.getItem('hxy_admin_token'); }
+function token(): string | null { return readActiveToken(localStorage); }
 function changed(): void {
   observedToken = token();
   epoch += 1;
@@ -31,7 +31,7 @@ export function isStaleSessionError(error: unknown): boolean {
   return error instanceof StaleSessionError;
 }
 export function isWecomSession(): boolean {
-  return Boolean(token()) && localStorage.getItem(METHOD_KEY) === 'wecom';
+  return Boolean(token()) && readActiveAuthMethod(localStorage) === 'wecom';
 }
 function pendingEntry(): PendingEntry | null {
   try {
@@ -41,19 +41,14 @@ function pendingEntry(): PendingEntry | null {
 }
 export function isWecomEntryPending(): boolean { return pendingEntry() !== null; }
 export function clearStaffSession(): void {
-  localStorage.removeItem('hxy_admin_token');
-  localStorage.removeItem('hxy_admin_staff');
-  localStorage.removeItem(METHOD_KEY);
+  clearActiveStaffSession(localStorage);
   sessionStorage.removeItem(PENDING_KEY);
   changed();
 }
 export function commitStaffSession(response: StaffSessionResponse, expectedEpoch: number): boolean {
   if (getSessionEpoch() !== expectedEpoch) return false;
   if (!response.token || !response.staff || typeof response.staff !== 'object') throw new Error('登录响应无效');
-  localStorage.setItem('hxy_admin_staff', JSON.stringify(response.staff));
-  localStorage.setItem('hxy_admin_token', response.token);
-  if (response.auth_method === 'wecom') localStorage.setItem(METHOD_KEY, 'wecom');
-  else localStorage.removeItem(METHOD_KEY);
+  writeStaffSession(localStorage, { token: response.token, staff: response.staff, authMethod: response.auth_method });
   sessionStorage.removeItem(PENDING_KEY);
   changed();
   return true;
@@ -123,6 +118,6 @@ export async function completeWecomEntry(): Promise<boolean> {
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event: StorageEvent) => {
-    if (event.key === 'hxy_admin_token' || event.key === null) getSessionEpoch();
+    if (event.key === ADMIN_TOKEN_KEY || event.key === TECHNICIAN_TOKEN_KEY || event.key === null) getSessionEpoch();
   });
 }

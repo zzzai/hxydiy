@@ -12,7 +12,7 @@ const storage = new MemoryStorage();
 const tabStorage = new MemoryStorage();
 Object.assign(globalThis, { localStorage: storage, sessionStorage: tabStorage });
 const navigations: string[] = [];
-Object.assign(globalThis, { window: { location: { origin: 'https://synthetic.invalid', assign: (url: string) => navigations.push(url) }, addEventListener: () => {} } });
+Object.assign(globalThis, { window: { location: { origin: 'https://synthetic.invalid', pathname: '/technician/today', assign: (url: string) => navigations.push(url) }, addEventListener: () => {} } });
 const t1 = { token: 'synthetic-t1', staff: { id: 1, name: 'T1', role: 'technician', store_id: 1, technician_id: 1 }, auth_method: 'wecom' as const };
 const t2 = { token: 'synthetic-t2', staff: { id: 2, name: 'T2', role: 'technician', store_id: 1, technician_id: 2 }, auth_method: 'wecom' as const };
 const reply = (data: object) => new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -54,7 +54,8 @@ test('late exchange cannot overwrite a newer password session', async () => {
   assert.equal(commitStaffSession({ ...t2, auth_method: undefined }, getSessionEpoch()), true);
   resolve(reply(t1));
   assert.equal(await complete, false);
-  assert.equal(storage.getItem('hxy_admin_token'), t2.token);
+  assert.equal(storage.getItem('hxy_technician_token'), t2.token);
+  assert.equal(storage.getItem('hxy_admin_token'), null);
   assert.equal(isWecomSession(), false);
 });
 test('current completion commits one identity and removes the pending attempt', async () => {
@@ -141,6 +142,7 @@ test('late manager exchange cannot replace a newer technician session', async ()
   commitStaffSession(t2, getSessionEpoch());
   resolve(reply(managerResponse));
   assert.equal(await completing, false);
-  assert.equal(storage.getItem('hxy_admin_token'), t2.token);
-  assert.equal(JSON.parse(storage.getItem('hxy_admin_staff')!).role, 'technician');
+  assert.equal(storage.getItem('hxy_technician_token'), t2.token);
+  assert.equal(JSON.parse(storage.getItem('hxy_technician_staff')!).role, 'technician');
+  assert.equal(storage.getItem('hxy_admin_token'), null);
 });

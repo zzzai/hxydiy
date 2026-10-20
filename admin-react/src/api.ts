@@ -5,6 +5,7 @@ import type { Page, TechnicianCustomerTask, CustomerSummary, CustomerHistoryItem
 import type { MembershipExplanation } from './memberCards';
 import type { LiveServicePositionMap, PositionOccupancy } from './servicePositions.ts';
 import { getEntryLoginPath, isTechnicianEntry } from './auth.ts';
+import { readActiveStaff, readActiveToken } from './staffSession.ts';
 import type { TechnicianServiceReferenceResponse } from './technician/serviceReference.ts';
 
 const API = '/api/v1/admin';
@@ -20,10 +21,8 @@ export function setApiErrorHandler(handler: (message: string) => void) {
 }
 
 // Token management
-const getToken = () => localStorage.getItem('hxy_admin_token') || '';
-const getStaff = () => {
-  try { return JSON.parse(localStorage.getItem('hxy_admin_staff') || 'null'); } catch { return null; }
-};
+const getToken = () => readActiveToken(localStorage);
+const getStaff = () => readActiveStaff(localStorage);
 
 client.interceptors.request.use((config) => {
   const token = getToken();

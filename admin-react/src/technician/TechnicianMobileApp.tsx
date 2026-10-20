@@ -23,7 +23,7 @@ function TechnicianSessionRoutes() {
   const [suspended, setSuspended] = useState(false);
   const [reverify, setReverify] = useState(false);
   const restoreIdentity = useRef(false);
-  const loggedIn = !!getToken() && ['technician', 'manager'].includes(getStaff()?.role);
+  const loggedIn = !!getToken() && ['technician', 'manager'].includes(getStaff()?.role || '');
   const logout = clearStaffSession;
   useEffect(() => {
     const hide = () => {
@@ -40,7 +40,7 @@ function TechnicianSessionRoutes() {
     window.addEventListener('pageshow', show);
     return () => { window.removeEventListener('pagehide', hide); window.removeEventListener('pageshow', show); };
   }, []);
-  useEffect(() => { if (getToken() && !['technician', 'manager'].includes(getStaff()?.role)) logout(); }, [epoch]);
+  useEffect(() => { if (getToken() && !['technician', 'manager'].includes(getStaff()?.role || '')) logout(); }, [epoch]);
   useEffect(() => { setReverify(false); }, [location.pathname]);
   const manager = getStaff()?.role === 'manager';
   const home = technicianMobileHome(getStaff()?.role);
