@@ -48,11 +48,12 @@ async function choosePosition() {
 async function noOverflow() {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Page must not overflow horizontally');
   if (await drawer().isVisible()) {
+    await footer().getByRole('button').first().click({ trial: true });
     const box = await drawer().boundingBox();
     assert.ok(box && box.x >= -1 && box.x + box.width <= page.viewportSize().width + 1, 'Drawer must fit the viewport');
     for (const button of await footer().getByRole('button').all()) {
       const bounds = await button.boundingBox();
-      assert.ok(bounds && bounds.height >= 44 && bounds.y >= 0 && bounds.y + bounds.height <= 813, 'Drawer action must be visible and touch-sized');
+      assert.ok(bounds && bounds.height >= 44 && bounds.y >= 0 && bounds.y + bounds.height <= 813, 'Drawer action must be visible and touch-sized: ' + JSON.stringify(bounds));
     }
   }
 }
