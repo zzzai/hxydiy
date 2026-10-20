@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { catalogChoicePriceCents, type CatalogOptionChoice } from '../../catalogOptions';
 import { customerOptionDescription } from '../../customerCopy';
 import { formatMoney, priceGuidanceForPrices, type Project } from '../../domain';
@@ -9,13 +10,14 @@ type Props = {
   projects: Project[];
   isMember: boolean;
   readOnly?: boolean;
+  children?: ReactNode;
 };
 
 function partOf(choice: CatalogOptionChoice) {
   return (choice.body_part || choice.bodyPart || choice.name).normalize('NFKC').trim();
 }
 
-export default function LocalStrengthGroup({ choice, parts, onToggle = () => undefined, projects, isMember, readOnly = false }: Props) {
+export default function LocalStrengthGroup({ choice, parts, onToggle = () => undefined, projects, isMember, readOnly = false, children }: Props) {
   const choices = Array.isArray(choice) ? choice : [choice];
   return (
     <section className="mini-config-card catalog-local-group" aria-label="重点多按一会">
@@ -35,6 +37,7 @@ export default function LocalStrengthGroup({ choice, parts, onToggle = () => und
             </button>
           </div>;
         })}
+        {children}
       </div>
     </section>
   );

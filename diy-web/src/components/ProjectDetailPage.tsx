@@ -141,6 +141,8 @@ export default function ProjectDetailPage({
   const attachableAddons = useMemo(() => project && !isDetailOnlyProject(project) ? fallbackAttachableAddons(addons, project.id) : [], [addons, project]);
   const localProject = useMemo(() => projects.find((item) => item.category === 'local-strength') || null, [projects]);
   const isFootBath = Boolean(project && isPrimaryFootBathDiy(project));
+  const scalpProjects = isFootBath ? relaxProjects.filter((item) => item.code === 'hxy-head-30') : [];
+  const lowerRelaxProjects = isFootBath ? relaxProjects.filter((item) => item.code !== 'hxy-head-30') : relaxProjects;
   const isCatalogOptions = Boolean(project && isCatalogOptionsProject(project));
   const isFootbathOptions = Boolean(project && isFootbathOptionsProject(project));
   const usesFrontendHerbalFormula = FRONTEND_HERBAL_FORMULA_CODES.has(project?.code || '') && !catalogPublished;
@@ -356,11 +358,13 @@ export default function ProjectDetailPage({
         ))}
 
         {hasAdditions && catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
-        {isFootbathOptions && catalogPublished && catalogLocalChoices.length > 0 && (
-          <LocalStrengthGroup choice={catalogLocalChoices} parts={draftLocalParts} onToggle={toggleCatalogLocal} projects={projects} isMember={isMember} readOnly={readOnly} />
+        {isFootbathOptions && catalogPublished && (catalogLocalChoices.length > 0 || scalpProjects.length > 0) && (
+          <LocalStrengthGroup choice={catalogLocalChoices} parts={draftLocalParts} onToggle={toggleCatalogLocal} projects={projects} isMember={isMember} readOnly={readOnly}>
+            {scalpProjects.length > 0 && <RelaxProjectGroup projects={scalpProjects} catalogChoices={catalogRelaxChoices} selectedChoiceIds={draftChoiceIds} selectedProjectIds={draftRelaxProjectIds} onToggleChoice={toggleChoice} onToggleProject={toggleRelaxProject} isMember={isMember} readOnly={readOnly} embedded />}
+          </LocalStrengthGroup>
         )}
-        {isCatalogOptions && catalogPublished && relaxProjects.length > 0 && (
-          <RelaxProjectGroup projects={relaxProjects} catalogChoices={catalogRelaxChoices} selectedChoiceIds={draftChoiceIds} selectedProjectIds={draftRelaxProjectIds} onToggleChoice={toggleChoice} onToggleProject={toggleRelaxProject} isMember={isMember} readOnly={readOnly} />
+        {isCatalogOptions && catalogPublished && lowerRelaxProjects.length > 0 && (
+          <RelaxProjectGroup projects={lowerRelaxProjects} catalogChoices={catalogRelaxChoices} selectedChoiceIds={draftChoiceIds} selectedProjectIds={draftRelaxProjectIds} onToggleChoice={toggleChoice} onToggleProject={toggleRelaxProject} isMember={isMember} readOnly={readOnly} />
         )}
 
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
