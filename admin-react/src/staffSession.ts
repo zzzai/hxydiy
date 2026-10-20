@@ -7,7 +7,14 @@ export const TECHNICIAN_AUTH_METHOD_KEY = 'hxy_technician_auth_method';
 
 export type SessionSlot = 'admin' | 'technician';
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
-type StaffRecord = { role?: string };
+export type StoredStaff = {
+  id?: number;
+  name?: string;
+  role?: string;
+  store_id?: number | null;
+  technician_id?: number | null;
+  store_name?: string;
+};
 
 const SLOT_KEYS = {
   admin: { token: ADMIN_TOKEN_KEY, staff: ADMIN_STAFF_KEY, method: ADMIN_AUTH_METHOD_KEY },
@@ -26,10 +33,10 @@ export function browserPathname(): string {
   }
 }
 
-function readStaff(storage: StorageLike, key: string): StaffRecord | null {
+function readStaff(storage: StorageLike, key: string): StoredStaff | null {
   try {
     const raw = storage.getItem(key);
-    return raw ? JSON.parse(raw) as StaffRecord : null;
+    return raw ? JSON.parse(raw) as StoredStaff : null;
   } catch {
     return null;
   }
@@ -66,9 +73,9 @@ export function readActiveToken(storage: StorageLike, pathname = browserPathname
   return storage.getItem(keys.token) || '';
 }
 
-export function readActiveStaff<T = StaffRecord>(storage: StorageLike, pathname = browserPathname()): T | null {
+export function readActiveStaff(storage: StorageLike, pathname = browserPathname()): StoredStaff | null {
   const keys = SLOT_KEYS[activeSessionSlot(storage, pathname)];
-  return readStaff(storage, keys.staff) as T | null;
+  return readStaff(storage, keys.staff);
 }
 
 export function readActiveAuthMethod(storage: StorageLike, pathname = browserPathname()): string | null {
@@ -77,7 +84,7 @@ export function readActiveAuthMethod(storage: StorageLike, pathname = browserPat
 }
 
 export function writeStaffSession(storage: StorageLike, session: { token: string; staff: object; authMethod?: string | null }): void {
-  const role = (session.staff as StaffRecord)?.role;
+  const role = (session.staff as StoredStaff)?.role;
   const keys = SLOT_KEYS[role === 'technician' ? 'technician' : 'admin'];
   storage.setItem(keys.token, session.token);
   storage.setItem(keys.staff, JSON.stringify(session.staff));
