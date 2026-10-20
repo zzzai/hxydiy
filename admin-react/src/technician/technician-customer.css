@@ -4,6 +4,10 @@
 .technician-customer-entry { margin: 14px 0; padding: 16px; border: 1px solid #dce9e2; border-radius: 12px; background: #fff; overflow-wrap: anywhere; }
 .technician-customer-entry h2, .technician-customer-entry h3 { margin: 0 0 12px; font-size: 18px; }
 .technician-customer-entry time { color: #61766d; font-size: 13px; }
+.technician-service-prices { margin: 8px 0 12px; }
+.technician-service-prices ul { margin: 0 0 8px; padding: 0; list-style: none; }
+.technician-service-prices li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid #edf2ef; color: #183c34; }
+.technician-service-prices li span:last-child { flex: 0 0 auto; color: #2d5a4b; font-size: 12px; font-weight: 650; text-align: right; }
 .technician-my-service-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .technician-my-service-actions .ant-btn { min-height: 44px; flex: 1; }
 .technician-customer-panel { max-width: 640px; margin: 0 auto; }

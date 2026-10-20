@@ -3,7 +3,8 @@ import { Alert, App, Button, Empty, Spin, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { finishTechnicianService, getTechnicianMyTasks } from '../api';
 import type { TechnicianCustomerTask } from '../technicianCustomer';
-import { createTechnicianActionRunner, technicianOrderItemLabel, technicianStatusLabel } from './technicianMobile';
+import TechnicianOrderPrices from './TechnicianOrderPrices';
+import { createTechnicianActionRunner, technicianOrderItemLabel, technicianOrderPriceView, technicianStatusLabel } from './technicianMobile';
 import TechnicianCustomerPanel from './TechnicianCustomerPanel';
 import TechnicianProfileSheet from './TechnicianProfileSheet';
 import { useTechnicianSession } from './useTechnicianSession';
@@ -60,7 +61,8 @@ export default function TechnicianMyServicesPage() {
     {error && <Alert type="error" message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     {loading ? <Spin /> : tasks.length ? tasks.map((task) => <article key={task.occupancy_id} className="technician-customer-entry">
       <h2>{task.room_name || '本次服务'} <Tag>{technicianStatusLabel(task.occupancy_status)}</Tag></h2>
-      <p>{task.items.map(technicianOrderItemLabel).filter(Boolean).join('、') || '未记录项目'}</p>
+      {technicianOrderPriceView(task.pricing, task.items)?.rows.length ? null : <p>{task.items.map(technicianOrderItemLabel).filter(Boolean).join('、') || '未记录项目'}</p>}
+      <TechnicianOrderPrices pricing={task.pricing} items={task.items} />
       <div className="technician-my-service-actions">
         <Button onClick={() => setCustomer(task.occupancy_id)}>查看顾客资料</Button>
         {task.occupancy_status === 'in_service' ? <Button type="primary" loading={acting === task.occupancy_id} onClick={() => void finish(task)}>服务结束</Button> : <Button disabled={!task.user_id} onClick={() => navigate('/history')}>查看服务记录</Button>}

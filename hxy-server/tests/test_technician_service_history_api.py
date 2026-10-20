@@ -191,8 +191,56 @@ class TestTechnicianServiceHistoryApi:
         )
         assert own.status_code == 200, own.text
         assert own.json()["total"] == 1
+        assert own.json()["items"][0]["pricing"] is None
+        assert "999999" not in own.text
+        assert "888888" not in own.text
         assert other.status_code == 200, other.text
         assert other.json()["total"] == 0
+
+    def test_history_exposes_member_and_store_prices_without_raw_snapshot(self):
+        with self.SessionLocal() as db:
+            session = db.get(SelectionSession, "history-session")
+            session.store_total_cents = 12900
+            session.member_total_cents = 8900
+            session.pricing_snapshot = {
+                "applied_price_type": "store",
+                "store_total_cents": 12900,
+                "member_total_cents": 8900,
+                "total_cents": 999999,
+                "customer_note": "不得返回的自由原话",
+                "lines": [{
+                    "line_index": 0,
+                    "name": "舒缓泡脚",
+                    "quantity": 1,
+                    "unit_store_price_cents": 12900,
+                    "unit_member_price_cents": 8900,
+                    "store_line_total_cents": 12900,
+                    "member_line_total_cents": 8900,
+                }],
+            }
+            db.commit()
+        confirmed = self.client.post(
+            f"/api/v1/technician/occupancies/{self.occupancy_id}/confirm",
+            json={"idempotency_key": "history-price-confirm"},
+            headers=self.tech_a_headers,
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        finished = self.client.post(
+            f"/api/v1/technician/occupancies/{self.occupancy_id}/finish",
+            json={"idempotency_key": "history-price-finish"},
+            headers=self.tech_a_headers,
+        )
+        assert finished.status_code == 200, finished.text
+        own = self.client.get("/api/v1/technician/service-history", headers=self.tech_a_headers)
+        assert own.status_code == 200, own.text
+        item = own.json()["items"][0]
+        assert item["projects"] == ["舒缓泡脚"]
+        assert item["pricing"]["applied_price_type"] == "store"
+        assert item["pricing"]["store_total_cents"] == 12900
+        assert item["pricing"]["member_total_cents"] == 8900
+        assert item["pricing"]["lines"][0]["unit_member_price_cents"] == 8900
+        assert "999999" not in own.text
+        assert "不得返回的自由原话" not in own.text
 
     def test_history_returns_only_unassigned_legacy_count_without_record_details(self):
         with self.SessionLocal() as db:

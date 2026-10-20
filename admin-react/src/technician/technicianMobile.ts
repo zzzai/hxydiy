@@ -138,6 +138,58 @@ export function technicianPricingAppliedLabel(pricing: TechnicianOrderPricing | 
   return '会员价 / 非会员价并列展示';
 }
 
+export type TechnicianOrderPriceRow = {
+  name: string;
+  quantity: number;
+  memberCents: number | null;
+  storeCents: number | null;
+};
+
+function priceCents(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export function technicianOrderPriceView(
+  pricing: TechnicianOrderPricing | null | undefined,
+  items?: { name?: unknown; quantity?: unknown; code?: unknown; diy_preferences?: unknown }[] | null,
+): {
+  rows: TechnicianOrderPriceRow[];
+  memberTotalCents: number | null;
+  storeTotalCents: number | null;
+  appliedLabel: string;
+} | null {
+  if (!pricing) return null;
+  const source = items || [];
+  const rows = technicianPricingLines(pricing).map((line, index) => {
+    const original = source.find((item, itemIndex) => Number((item as { line_index?: unknown }).line_index ?? itemIndex) === Number(line.line_index ?? index))
+      || source[index];
+    const memberCents = priceCents(line.member_line_total_cents ?? line.unit_member_price_cents);
+    const storeCents = priceCents(line.store_line_total_cents ?? line.unit_store_price_cents);
+    const quantity = priceCents(line.quantity) || priceCents(Number(original?.quantity)) || 1;
+    return {
+      name: technicianOrderItemLabel({
+        name: line.name || original?.name,
+        code: original?.code,
+        diy_preferences: original?.diy_preferences,
+      }),
+      quantity,
+      memberCents,
+      storeCents,
+    };
+  });
+  const memberTotalCents = priceCents(pricing.member_total_cents);
+  const storeTotalCents = priceCents(pricing.store_total_cents);
+  const hasLinePrice = rows.some((row) => row.memberCents !== null || row.storeCents !== null);
+  const hasTotal = (memberTotalCents !== null && memberTotalCents > 0) || (storeTotalCents !== null && storeTotalCents > 0);
+  if (!hasLinePrice && !hasTotal) return null;
+  return {
+    rows,
+    memberTotalCents,
+    storeTotalCents,
+    appliedLabel: technicianPricingAppliedLabel(pricing),
+  };
+}
+
 export function createTechnicianIdempotencyKey(action: string, occupancyId: number): string {
   const suffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()

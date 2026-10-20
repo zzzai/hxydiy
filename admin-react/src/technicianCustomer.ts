@@ -2,7 +2,21 @@ export type Page<T> = { items: T[]; total: number; page: number; page_size: numb
 export type TechnicianCustomerTask = {
   occupancy_id: number; user_id: number | null; selection_session_id: string;
   occupancy_status: 'in_service' | 'post_service_present';
-  room_id: number; room_name: string; items: { name?: string; quantity?: number; project_id?: number }[];
+  room_id: number; room_name: string; items: { name?: string; quantity?: number; project_id?: number; code?: string; diy_preferences?: unknown }[];
+  pricing?: {
+    store_total_cents?: number | null;
+    member_total_cents?: number | null;
+    applied_price_type?: 'store' | 'member' | 'group' | null;
+    lines?: {
+      line_index?: number;
+      name?: string;
+      quantity?: number;
+      unit_store_price_cents?: number | null;
+      unit_member_price_cents?: number | null;
+      store_line_total_cents?: number | null;
+      member_line_total_cents?: number | null;
+    }[];
+  } | null;
 };
 export type CustomerSummary = {
   occupancy_id: number; customer_id: number | null; customer_name: string | null;
