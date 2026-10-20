@@ -1,3 +1,12 @@
+# 2026-10-20 企微四名技师新增绑定完成（无应用部署）
+
+- [PR #295](https://github.com/zzzai/hxydiy/pull/295) 合并为 `8882140e2632ae84b74ce3234117a96fc246c92d`，主干 CI `39404387434` 成功；定向 SQLite 29 passed/1 PostgreSQL-only skip、独立有界 PostgreSQL 30 passed。审定 provision 脚本 SHA256 `0e3d7e31674f4150b009245ee29d038d3887fc81f84e6424dbe961a805fd526d`；旧批次摘要保持，未重放旧三人建号。
+- 依批准私有名单按 1+3 分批，仅新增 Staff 4 / Technician 4 / identity 4 / audit 4，共 16 行、0 授权；每事务保护 59 表所有旧行，两批原请求重放均 unchanged/零新增。累计七人官方在用、同应用可见及本地 store1 绑定核验通过；原店长仍为 manager、无 Technician 关联且只有一个有效同店店长授权，原两技师身份不变。
+- 两批写前备份 `wecom_add_20261020_single_101724.dump`、`wecom_add_20261020_aliases_101731.dump` 留存在生产 `backups/`，各自 checksum 与真实恢复通过。恢复仅在无网络、无宿主挂载、512MiB/0.5CPU/PID64 的独立 PG 容器执行，revision 与 60 张表复核通过；自有临时容器已清理，正式 PG 仅作只读备份。此前一次隔离恢复失败保留事实，修正最终 TCP 就绪探针并复审后完成，不记作首轮成功。
+- 本批操作时 current 为 `github-a70a668a56a8-39396569720`，完整 MANIFEST、203 个基线后端依赖和运行镜像门禁通过；最终受审 wrapper v4 SHA256 `bd3d73022cd2d7613df3b92c796d8b9e5fbd9512452a69f5132708afd018a96c`。本批未发布全站、重启、修改生产文件或企微配置，不代替其他窗口记录该 release 的发布过程。
+- 官方未返回手机号，不宣称完成官方手机号核验；真人首次登录仍交本人从既有企微应用入口验收，不用自动化或接口可用冒充真人首登。总控独立核验回执、备份 checksum、current/health 及无恢复容器残留通过；本文档合并不触发应用发布。
+- 受限证据：`/root/hxy-diy-development/wecom-staff-add-20261020/output/operations/` 下 `prepare-v1.json`、`{single,aliases}-{backup,apply,replay}-v1.json`、`final-verification-v1.json`；真实名单与逐行摘要仅在 `/root/hxy-wecom-private/staff-add-20261020/`，不进入 Git。
+
 # 2026-10-18 顾客报告中心入口独立上线
 
 - [PR #281](https://github.com/zzzai/hxydiy/pull/281) 候选 `91674d3700d1d8f71e26d2650788c0fb232e9343` 已合并为 `6c3179850f25907ac9081672c67329b5867959fd`；主干 CI `39126459099` 和唯一 Deploy `39136488194` 全部成功。只改变两份顾客业务源码及配套测试/文档，后台/技师/API/迁移与 #280 相同；没有重建三人账号或重放绑定事务。
