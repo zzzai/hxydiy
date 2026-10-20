@@ -1,3 +1,12 @@
+# 2026-10-20 CUSTOMER-SCALP-GROUP 已生产发布
+
+- 业务 [PR #297](https://github.com/zzzai/hxydiy/pull/297)，基线 `a6b7ecfd3856049f1b5238521bd10b49a8c3207c`、候选 `151de654e7f94e12c2c0c5fc61653eadf45cbd56`，合并/生产 `6bd164881a5291fbeb69f5426ba4e039ca90881d`。主干 [CI 39440984059](https://github.com/zzzai/hxydiy/actions/runs/39440984059) 与唯一正式 [Deploy 39441666460](https://github.com/zzzai/hxydiy/actions/runs/39441666460) 成功；发布资格、备份演练、部署与校验 job 均 success。
+- 改动仅为现煮草本泡的头疗显示分组，原选择/取消、金额、时长、载荷、优惠资格不变。13 项新增真实 React 用例修复前 7 fail/6 pass，修复后与原详情/目录/价格共 84 pass；TypeScript no-emit 与 diff 检查通过。375/390px 合成真实组件+CSS：上区五部位及头疗共6项、下区4项，无重复/溢出，优惠0/2；不以静态布局检查替代真实交互回归或现场验收。
+- 实际 current=`/root/hxy-diy-20260811/releases/github-6bd164881a52-39441666460`，完整479项MANIFEST通过，manifest SHA256=`881fc776f600f3991e05a5b7fcdc9ecdb4499f40056508c46d7dba1554cd02f1`。公网HTML SHA256=`4c1c72e107375989c898ab20e0e666da25902e066c951b243c0ee52b6dbebc92`；JS `index-CoJ-Gfvl.js` SHA256=`c9d5f66ad224283d9b753347be2a3241adf2e9a9ee0577f7d81f495352eace6d`；CSS `index-DBWyD2HB.css` SHA256=`0a1bddd4aaf22d6fbde252ababffe4f4c049df8dc23501dcd11ed4299b342a99`，均与安装目录一致。health=`ok/production`，验证前后current不变。
+- 相对前生产 `a70a668a56a8`，API运行代码、迁移文件与发布脚本无差异。本批未执行人员接入脚本、数据库结构迁移、凭据修改或生产顾客业务写入；未清理数据库、备份、运行版本或旧包。发布后可用6941556KiB，未降低容量门槛。
+- 上传耗时期间生产保持旧版；状态读取发生 IncompleteRead 后仅恢复对同一run的只读监控，无重复dispatch/构建/部署。临时静态服务自有PID25264已停止，总控关闭了合成预览任务标签，未启动新浏览器或触碰真实顾客会话。微信/门店真机交人验收，未测不记通过。
+- 证据：服务器 `/root/hxy-diy-development/customer-scalp-group-20261020/output/scalp-group/production-verification.json`，顾客窗口 `output/scalp-group-20261020/` 的 `focused.log`、`deployment-monitor.json`、`production-verification.json` 与 `mobile/layout-375-390-reviewed.png`。本次仅补共享事实，不触发新应用部署。
+
 # 2026-10-20 企微四名技师新增绑定完成（无应用部署）
 
 - [PR #295](https://github.com/zzzai/hxydiy/pull/295) 合并为 `8882140e2632ae84b74ce3234117a96fc246c92d`，主干 CI `39404387434` 成功；定向 SQLite 29 passed/1 PostgreSQL-only skip、独立有界 PostgreSQL 30 passed。审定 provision 脚本 SHA256 `0e3d7e31674f4150b009245ee29d038d3887fc81f84e6424dbe961a805fd526d`；旧批次摘要保持，未重放旧三人建号。
