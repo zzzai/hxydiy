@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Drawer, Input, Select, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getFeedback, updateFeedbackFollowUp } from '../api';
+import { getFeedback, getFeedbackDetail, updateFeedbackFollowUp } from '../api';
 
 type Review = {
   id: number;
@@ -25,7 +25,7 @@ function timeText(value: string | null) {
 }
 
 /** 店长查看本店评价并记录跟进；不能修改顾客原文。 */
-export default function ManagerReviewsView() {
+export default function ManagerReviewsView({ focus, onFocusConsumed }: { focus?: { type: 'service_review'; id: number } | null; onFocusConsumed?: () => void }) {
   const [rows, setRows] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,6 +53,15 @@ export default function ManagerReviewsView() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!focus) return;
+    let active = true;
+    void getFeedbackDetail(focus.type, focus.id)
+      .then(response => { if (active) setSelected(response.data); })
+      .catch(() => undefined)
+      .finally(() => { if (active) onFocusConsumed?.(); });
+    return () => { active = false; };
+  }, [focus?.id, focus?.type, onFocusConsumed]);
 
   const save = async () => {
     if (!selected || saving) return;

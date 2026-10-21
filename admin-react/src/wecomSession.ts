@@ -3,8 +3,10 @@ import { ADMIN_TOKEN_KEY, TECHNICIAN_TOKEN_KEY, clearActiveStaffSession, readAct
 
 type StaffSessionResponse = { token: string; staff: object; auth_method?: 'wecom' };
 type PendingEntry = { entry_nonce: string; attempt_id?: string; entry_path?: string };
+type PendingReview = { type: 'service_review'; id: number };
 const PENDING_KEY = 'hxy_wecom_pending';
 const MANAGER_ORDER_KEY = 'hxy_manager_pending_order';
+const MANAGER_REVIEW_KEY = 'hxy_manager_pending_review';
 const listeners = new Set<() => void>();
 let epoch = 0;
 let observedToken: string | null | undefined;
@@ -45,6 +47,21 @@ function rememberManagerOrder(): void {
     const order = new URLSearchParams(window.location.search).get('order');
     if (order && /^[A-Za-z0-9_-]{8,128}$/.test(order)) sessionStorage.setItem(MANAGER_ORDER_KEY, order);
   } catch { /* Ignore malformed deep links. */ }
+}
+function rememberManagerReview(): void {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('review');
+    const match = raw?.match(/^service_review:([1-9][0-9]{0,17})$/);
+    if (match) sessionStorage.setItem(MANAGER_REVIEW_KEY, JSON.stringify({ type: 'service_review', id: Number(match[1]) }));
+  } catch { /* Ignore malformed deep links. */ }
+}
+export function takeManagerPendingReview(): PendingReview | null {
+  try {
+    const stored = sessionStorage.getItem(MANAGER_REVIEW_KEY);
+    sessionStorage.removeItem(MANAGER_REVIEW_KEY);
+    const parsed = JSON.parse(stored || 'null') as PendingReview | null;
+    return parsed?.type === 'service_review' && Number.isInteger(parsed.id) && parsed.id > 0 ? parsed : null;
+  } catch { return null; }
 }
 export function takeManagerPendingOrder(): string | null {
   try {
@@ -97,6 +114,7 @@ async function post(path: string, body: object): Promise<Record<string, any>> {
 }
 export async function beginWecomEntry(): Promise<void> {
   rememberManagerOrder();
+  rememberManagerReview();
   const entry_path = browserPathname();
   clearStaffSession();
   const expectedEpoch = getSessionEpoch();

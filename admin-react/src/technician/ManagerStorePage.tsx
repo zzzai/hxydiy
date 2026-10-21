@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff } from '../api';
-import { takeManagerPendingOrder } from '../wecomSession';
+import { takeManagerPendingOrder, takeManagerPendingReview } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
 import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, managerPrice, managerSourceLabel, managerWorkflowColor, managerWorkflowLabel, readManagerPage, readManagerSelection } from './managerMobile';
@@ -38,6 +38,7 @@ export default function ManagerStorePage() {
   const [forbidden, setForbidden] = useState(false);
   const [detail, setDetail] = useState<ManagerSelection | null>(null);
   const [workbench, setWorkbench] = useState<{ summary?: Record<string, number>; attention?: Array<{ key: string; label: string; count: number }> }>();
+  const [reviewFocus, setReviewFocus] = useState<{ type: 'service_review'; id: number } | null>(null);
   const listVersion = useRef(0);
   const detailRef = useRef(detail);
   detailRef.current = detail;
@@ -86,6 +87,17 @@ export default function ManagerStorePage() {
   }, [load, view]);
   useEffect(() => {
     if (!current() || !isMobileManager(getStaff()) || !storeId) return;
+    const directReview = new URLSearchParams(window.location.search).get('review');
+    const directReviewMatch = directReview?.match(/^service_review:([1-9][0-9]{0,17})$/);
+    const review = directReviewMatch
+      ? { type: 'service_review' as const, id: Number(directReviewMatch[1]) }
+      : takeManagerPendingReview();
+    if (review) {
+      setDetail(null);
+      setReviewFocus(review);
+      setView('reviews');
+      return;
+    }
     const orderId = new URLSearchParams(window.location.search).get('order') || takeManagerPendingOrder();
     if (!orderId || !/^[A-Za-z0-9_-]{8,128}$/.test(orderId)) return;
     let cancelled = false;
@@ -144,7 +156,7 @@ export default function ManagerStorePage() {
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
     {view === 'tasks' ? <ManagerTasksView onChanged={() => void load(true, true)} onOpenReviews={() => setView('reviews')} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
-      : view === 'reviews' ? <ManagerReviewsView />
+      : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} />
         : <>
       {content()}
       {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份订单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); setDetail(null); }} /></div>}
