@@ -1,3 +1,5 @@
+import { hasCapability, type Capability } from '../auth/capabilities.ts';
+
 export type NavigationRole = 'admin' | 'manager' | 'staff' | 'technician';
 
 export type NavigationItem = {
@@ -5,6 +7,7 @@ export type NavigationItem = {
   label: string;
   icon: string;
   roles: readonly NavigationRole[];
+  capability?: Capability;
   requiresUnboundAdmin?: boolean;
   headquartersAccess?: boolean;
 };
@@ -25,7 +28,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '工作台',
     icon: 'dashboard',
     items: [
-      { path: '/today', label: '今日工作台', icon: 'ordered-list', roles: storeRoles },
+      { path: '/today', label: '今日工作台', icon: 'ordered-list', roles: storeRoles, capability: 'view_store_operations' },
     ],
   },
   {
@@ -33,12 +36,12 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '门店运营',
     icon: 'desktop',
     items: [
-      { path: '/selection-sessions', label: '到店选单', icon: 'project', roles: storeRoles },
-      { path: '/service-positions', label: '服务位', icon: 'environment', roles: storeRoles },
-      { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles },
-      { path: '/feedback', label: '顾客评价', icon: 'message', roles: managementRoles },
-      { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles },
-      { path: '/audit-logs', label: '审计日志', icon: 'file-search', roles: managementRoles, headquartersAccess: true },
+      { path: '/selection-sessions', label: '到店选单', icon: 'project', roles: storeRoles, capability: 'view_store_operations' },
+      { path: '/service-positions', label: '服务位', icon: 'environment', roles: storeRoles, capability: 'view_store_operations' },
+      { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles, capability: 'view_store_operations' },
+      { path: '/feedback', label: '顾客评价', icon: 'message', roles: managementRoles, capability: 'follow_up_reviews' },
+      { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles, capability: 'view_analytics' },
+      { path: '/audit-logs', label: '审计日志', icon: 'file-search', roles: managementRoles, capability: 'manage_store_resources', headquartersAccess: true },
     ],
   },
   {
@@ -46,9 +49,9 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '顾客与会员',
     icon: 'team',
     items: [
-      { path: '/users', label: '顾客列表', icon: 'team', roles: managementRoles },
-      { path: '/tags', label: '顾客标签', icon: 'tags', roles: managementRoles },
-      { path: '/segments', label: '顾客分群', icon: 'pie-chart', roles: managementRoles },
+      { path: '/users', label: '顾客列表', icon: 'team', roles: managementRoles, capability: 'manage_customer_tags' },
+      { path: '/tags', label: '顾客标签', icon: 'tags', roles: managementRoles, capability: 'manage_customer_tags' },
+      { path: '/segments', label: '顾客分群', icon: 'pie-chart', roles: managementRoles, capability: 'manage_customer_tags' },
     ],
   },
   {
@@ -56,10 +59,10 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '服务与商品',
     icon: 'appstore',
     items: [
-      { path: '/projects', label: '服务项目', icon: 'project', roles: managementRoles, headquartersAccess: true },
-      { path: '/addons', label: '项目加项', icon: 'tags', roles: managementRoles, headquartersAccess: true },
-      { path: '/products', label: '商城商品', icon: 'shopping', roles: managementRoles, headquartersAccess: true },
-      { path: '/page-content', label: '页面配置', icon: 'appstore', roles: managementRoles },
+      { path: '/projects', label: '服务项目', icon: 'project', roles: managementRoles, capability: 'toggle_catalog_publication', headquartersAccess: true },
+      { path: '/addons', label: '项目加项', icon: 'tags', roles: managementRoles, capability: 'toggle_catalog_publication', headquartersAccess: true },
+      { path: '/products', label: '商城商品', icon: 'shopping', roles: managementRoles, capability: 'toggle_catalog_publication', headquartersAccess: true },
+      { path: '/page-content', label: '页面配置', icon: 'appstore', roles: managementRoles, capability: 'manage_catalog_master' },
     ],
   },
   {
@@ -67,8 +70,8 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '人员与权限',
     icon: 'idcard',
     items: [
-      { path: '/techs', label: '技师管理', icon: 'idcard', roles: managementRoles },
-      { path: '/staff-accounts', label: '员工账号', icon: 'team', roles: ['admin'], requiresUnboundAdmin: true, headquartersAccess: true },
+      { path: '/techs', label: '技师管理', icon: 'idcard', roles: managementRoles, capability: 'manage_technicians' },
+      { path: '/staff-accounts', label: '员工账号', icon: 'team', roles: ['admin'], capability: 'manage_staff_accounts', requiresUnboundAdmin: true, headquartersAccess: true },
     ],
   },
   {
@@ -76,8 +79,8 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '门店与资源',
     icon: 'environment',
     items: [
-      { path: '/stores', label: '门店主数据', icon: 'environment', roles: ['admin'], requiresUnboundAdmin: true, headquartersAccess: true },
-      { path: '/rooms', label: '房间与服务位', icon: 'desktop', roles: managementRoles },
+      { path: '/stores', label: '门店主数据', icon: 'environment', roles: ['admin'], capability: 'manage_headquarters', requiresUnboundAdmin: true, headquartersAccess: true },
+      { path: '/rooms', label: '房间与服务位', icon: 'desktop', roles: managementRoles, capability: 'manage_store_resources' },
     ],
   },
   {
@@ -85,7 +88,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '营销与触达',
     icon: 'gift',
     items: [
-      { path: '/coupons', label: '优惠券', icon: 'gift', roles: managementRoles },
+      { path: '/coupons', label: '优惠券', icon: 'gift', roles: managementRoles, capability: 'manage_marketing' },
     ],
   },
   {
@@ -93,13 +96,14 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '系统',
     icon: 'thunderbolt',
     items: [
-      { path: '/automation', label: 'SCRM 规则', icon: 'robot', roles: managementRoles },
+      { path: '/automation', label: 'SCRM 规则', icon: 'robot', roles: managementRoles, capability: 'manage_automation' },
     ],
   },
 ];
 
 function isVisible(item: NavigationItem, role?: string, storeId?: number | null): boolean {
   if (!role || !item.roles.includes(role as NavigationRole)) return false;
+  if (item.capability && !hasCapability(role, item.capability, storeId)) return false;
   if (role === 'admin' && !storeId) return item.headquartersAccess === true;
   return !item.requiresUnboundAdmin;
 }

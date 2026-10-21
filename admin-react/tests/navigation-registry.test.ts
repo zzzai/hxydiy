@@ -43,4 +43,8 @@ test('总部管理员可见门店主数据，店长只看到当前门店资源',
   assert.equal(managerPaths.includes('/techs'), true);
   assert.equal(adminPaths.includes('/staff-accounts'), true);
   assert.equal(managerPaths.includes('/staff-accounts'), false);
+  assert.equal(managerPaths.includes('/projects'), true);
+  assert.equal(managerPaths.includes('/coupons'), false);
+  assert.equal(managerPaths.includes('/automation'), false);
+  assert.equal(managerPaths.includes('/page-content'), false);
 });
