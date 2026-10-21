@@ -96,3 +96,7 @@
 .manager-review-card p { margin: 10px 0; font-size: 15px; line-height: 1.55; font-weight: 600; overflow-wrap: anywhere; }
 .manager-review-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: #6b8077; font-size: 12px; }
 .manager-review-note { padding: 12px; border: 1px solid #edf2ef; border-radius: 10px; background: #f8fcfa; color: #183c34; font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.manager-workbench-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 12px; border: 1px solid #e3ebe5; border-radius: 14px; background: #fff; }
+.manager-workbench-summary span { display: flex; min-width: 0; flex-direction: column; gap: 2px; color: #6b8077; font-size: 11px; text-align: center; }
+.manager-workbench-summary strong { color: #183c34; font-size: 22px; line-height: 1.1; font-weight: 750; }
+.manager-workbench-summary span.has-attention strong { color: #b44230; }

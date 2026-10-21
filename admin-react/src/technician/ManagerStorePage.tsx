@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getSelectionSession, getSelectionSessions, getStaff } from '../api';
+import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff } from '../api';
 import { takeManagerPendingOrder } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
@@ -36,6 +36,7 @@ export default function ManagerStorePage() {
   const [listError, setListError] = useState('');
   const [forbidden, setForbidden] = useState(false);
   const [detail, setDetail] = useState<ManagerSelection | null>(null);
+  const [workbench, setWorkbench] = useState<{ summary?: Record<string, number>; attention?: Array<{ key: string; label: string; count: number }> }>();
   const listVersion = useRef(0);
   const detailRef = useRef(detail);
   detailRef.current = detail;
@@ -45,6 +46,7 @@ export default function ManagerStorePage() {
     const version = ++listVersion.current;
     if (!silent) setLoading(true);
     try {
+      void getManagerWorkbench().then(response => { if (current()) setWorkbench(response.data); }).catch(() => undefined);
       const query = managerListParams('all', page);
       const response = await getSelectionSessions(query.status, query.needs_position_assignment, { page: query.page, page_size: query.page_size }, true);
       if (!current() || version !== listVersion.current) return;
@@ -126,6 +128,12 @@ export default function ManagerStorePage() {
       </div>
       <Button aria-label={view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
     </header>
+    <div className="manager-workbench-summary" aria-label="今日门店概览">
+      <span><strong>{workbench?.summary?.today_orders ?? '—'}</strong>今日订单</span>
+      <span><strong>{workbench?.summary?.in_service ?? '—'}</strong>服务中</span>
+      <span><strong>{workbench?.summary?.pending_checkout ?? '—'}</strong>待结账</span>
+      <span className={workbench?.summary?.attention ? 'has-attention' : ''}><strong>{workbench?.summary?.attention ?? '—'}</strong>需处理</span>
+    </div>
     <nav className="manager-view-tabs" aria-label="工作台视图">
       <button type="button" aria-pressed={view === 'selections'} onClick={() => { setDetail(null); setView('selections'); }}>订单</button>
       <button type="button" aria-pressed={view === 'positions'} onClick={() => { setDetail(null); setView('positions'); }}>座位</button>

@@ -1063,6 +1063,58 @@ def list_selection_sessions(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
+@router.get("/manager/workbench")
+def manager_workbench(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    """店长工作台汇总：只返回需要关注的数量，不复制订单明细。"""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_orders = db.scalar(select(sa_func.count()).select_from(SelectionSession).where(
+        SelectionSession.store_id == store_id,
+        SelectionSession.status.in_(("submitted", "confirmed")),
+        SelectionSession.created_at >= day_start,
+    )) or 0
+    in_service = db.scalar(select(sa_func.count()).select_from(PositionOccupancy).where(
+        PositionOccupancy.store_id == store_id,
+        PositionOccupancy.status == "in_service",
+    )) or 0
+    pending_checkout = db.scalar(select(sa_func.count()).select_from(Order).where(
+        Order.store_id == store_id,
+        Order.status == "pending_checkout",
+    )) or 0
+    pending_changes = db.scalar(select(sa_func.count()).select_from(SelectionChangeRequest).join(
+        SelectionSession, SelectionSession.id == SelectionChangeRequest.selection_session_id,
+    ).where(
+        SelectionSession.store_id == store_id,
+        SelectionChangeRequest.state == "awaiting_staff_confirmation",
+    )) or 0
+    low_reviews = db.scalar(select(sa_func.count()).select_from(ServiceFeedback).where(
+        ServiceFeedback.store_id == store_id,
+        ServiceFeedback.rating <= 2,
+        ServiceFeedback.follow_up_status == "open",
+    )) or 0
+    attention = []
+    if pending_changes:
+        attention.append({"key": "addon", "label": "顾客加选待处理", "count": pending_changes})
+    if low_reviews:
+        attention.append({"key": "low_review", "label": "低分评价待跟进", "count": low_reviews})
+    return {
+        "store_id": store_id,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "summary": {
+            "today_orders": today_orders,
+            "in_service": in_service,
+            "pending_checkout": pending_checkout,
+            "attention": len(attention),
+        },
+        "attention": attention,
+    }
+
+
 @router.get("/selection-sessions/{session_id}")
 def get_manager_selection_session(
     session_id: str,

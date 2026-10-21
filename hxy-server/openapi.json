@@ -11607,6 +11607,58 @@
         ]
       }
     },
+    "/api/v1/admin/v2/manager/workbench": {
+      "get": {
+        "description": "店长工作台汇总：只返回需要关注的数量，不复制订单明细。",
+        "operationId": "manager_workbench_api_v1_admin_v2_manager_workbench_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Manager Workbench Api V1 Admin V2 Manager Workbench Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Manager Workbench",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/membership-cards/{card_id}/facts": {
       "post": {
         "description": "Preview or register checked source facts without creating wallet transactions.",
