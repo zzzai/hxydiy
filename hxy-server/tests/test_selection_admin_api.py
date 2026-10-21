@@ -106,6 +106,7 @@ class SelectionAdminApiTests(unittest.TestCase):
         assert detail.status_code == 200, detail.text
         assert detail.json()["workflow_state"] == "new"
         assert detail.json()["workflow_label"] == "新订单"
+        assert isinstance(detail.json()["timeline"], list)
 
     def test_manager_workbench_returns_store_summary_without_order_rows(self):
         response = self.client.get("/api/v1/admin/v2/manager/workbench", headers=self.headers)

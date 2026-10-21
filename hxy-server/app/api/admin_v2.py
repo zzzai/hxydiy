@@ -794,6 +794,27 @@ def _selection_workflow_state(session: SelectionSession, occupancy: PositionOccu
     return "new"
 
 
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _selection_timeline(session: SelectionSession, occupancy: PositionOccupancy | None = None) -> list[dict]:
+    events = [
+        ("submitted", "顾客提交", session.submitted_at),
+        ("confirmed", "门店接单", session.confirmed_at),
+        ("occupied", "安排座位", occupancy.created_at if occupancy else None),
+        ("started", "开始服务", occupancy.actual_start_at if occupancy else None),
+        ("ended", "服务结束", occupancy.actual_service_end_at if occupancy else None),
+        ("departed", "顾客离位", occupancy.departed_at if occupancy else None),
+        ("cancelled", "订单取消", session.cancelled_at),
+    ]
+    return [
+        {"key": key, "label": label, "at": _iso(at)}
+        for key, label, at in events
+        if at is not None
+    ]
+
+
 def _selection_view(session: SelectionSession, customer: User | None = None, feedback: ServiceFeedback | None = None) -> dict:
     return {
         "id": session.id,
@@ -1209,6 +1230,7 @@ def get_manager_selection_session(
     workflow_state = _selection_workflow_state(session, linked[0] if linked else None)
     item["workflow_state"] = workflow_state
     item["workflow_label"] = _WORKFLOW_LABELS[workflow_state]
+    item["timeline"] = _selection_timeline(session, linked[0] if linked else None)
     item["needs_position_assignment"] = (
         linked is None and session.status in {"submitted", "confirmed"} and session.fulfillment_order_id is None
     )
