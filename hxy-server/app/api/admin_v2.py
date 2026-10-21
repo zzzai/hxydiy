@@ -1166,7 +1166,7 @@ def manager_workbench(
             "today_orders": today_orders,
             "in_service": in_service,
             "pending_checkout": pending_checkout,
-            "attention": len(attention),
+            "attention": sum(int(item["count"]) for item in attention),
         },
         "attention": attention,
     }
