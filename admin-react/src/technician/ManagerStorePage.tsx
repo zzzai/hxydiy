@@ -142,7 +142,7 @@ export default function ManagerStorePage() {
       <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button>
     </nav>
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
-    {view === 'tasks' ? <ManagerTasksView onChanged={() => void load(true, true)} />
+    {view === 'tasks' ? <ManagerTasksView onChanged={() => void load(true, true)} onOpenReviews={() => setView('reviews')} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
       : view === 'reviews' ? <ManagerReviewsView />
         : <>

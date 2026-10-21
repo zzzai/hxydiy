@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Drawer, Input, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { approveSelectionChangeRequest, getSelectionChangeRequests, rejectSelectionChangeRequest } from '../api';
+import { getFeedback, getSelectionChangeRequests, approveSelectionChangeRequest, rejectSelectionChangeRequest } from '../api';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import type { ManagerChange } from './managerMobile';
 
@@ -11,8 +11,9 @@ function timeText(value?: string) {
 }
 
 /** 店长处理顾客加选；正常订单只在订单页查看，不进入待处理。 */
-export default function ManagerTasksView({ onChanged }: { onChanged?: () => void }) {
+export default function ManagerTasksView({ onChanged, onOpenReviews }: { onChanged?: () => void; onOpenReviews?: () => void }) {
   const [rows, setRows] = useState<ManagerChange[]>([]);
+  const [reviews, setReviews] = useState<Array<{ id: number; rating: number; note: string; created_at: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<ManagerChange | null>(null);
@@ -22,11 +23,15 @@ export default function ManagerTasksView({ onChanged }: { onChanged?: () => void
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await getSelectionChangeRequests();
-      setRows(Array.isArray(response.data?.items) ? response.data.items : []);
+      const [changesResponse, reviewsResponse] = await Promise.all([
+        getSelectionChangeRequests(),
+        getFeedback({ feedback_type: 'service_review', follow_up_status: 'open', page: 1, page_size: 20 }),
+      ]);
+      setRows(Array.isArray(changesResponse.data?.items) ? changesResponse.data.items : []);
+      setReviews(Array.isArray(reviewsResponse.data?.items) ? reviewsResponse.data.items.filter((item: { rating: number }) => item.rating <= 2) : []);
       setError('');
     } catch {
-      setError('待处理加选加载失败，请重试');
+      setError('待处理事项加载失败，请重试');
     } finally {
       setLoading(false);
     }
@@ -50,18 +55,27 @@ export default function ManagerTasksView({ onChanged }: { onChanged?: () => void
 
   return <section className="manager-tasks-view">
     <div className="manager-tasks-heading">
-      <div><h2>待处理 <span>{rows.length}</span></h2><p>只显示需要店长决定的顾客加选。</p></div>
+      <div><h2>待处理 <span>{rows.length + reviews.length}</span></h2><p>顾客加选和低分评价会进入这里。</p></div>
       <Button icon={<ReloadOutlined />} aria-label="刷新待处理" onClick={() => void load()} loading={loading} />
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
-    {loading && !rows.length ? <div className="manager-empty"><Spin size="small" /><span>正在加载待处理</span></div>
-      : !rows.length ? <div className="manager-empty"><strong>没有待处理</strong><span>顾客加选提交后会在这里出现</span></div>
-        : <div className="manager-task-list">{rows.map(row => <button type="button" className="manager-task-card" key={row.id} onClick={() => { setSelected(row); setReason(''); }}>
+    {loading && !rows.length && !reviews.length ? <div className="manager-empty"><Spin size="small" /><span>正在加载待处理</span></div>
+      : <>
+        {!rows.length && !reviews.length && <div className="manager-empty"><strong>没有待处理</strong><span>顾客加选和低分评价会在这里出现</span></div>}
+        {rows.length > 0 && <div className="manager-task-list">{rows.map(row => <button type="button" className="manager-task-card" key={row.id} onClick={() => { setSelected(row); setReason(''); }}>
           <div className="manager-task-top"><span>顾客加选</span><Tag color="gold">待确认</Tag></div>
           <strong>{row.revision.added_items.length ? selectionChangeItemSummary(row.revision.added_items[0]) : '新增项目'}</strong>
           <ul className="manager-task-items">{row.revision.added_items.map((item, index) => <li key={index}>{selectionChangeItemSummary(item)}</li>)}</ul>
           <div className="manager-task-meta"><span>订单 · {row.selection.id.slice(-8)}</span><time>{timeText(row.created_at)}</time></div>
         </button>)}</div>}
+        {reviews.length > 0 && <div className="manager-review-tasks">
+          <div className="manager-task-top"><span>低分评价待跟进</span><Tag color="red">{reviews.length}</Tag></div>
+          {reviews.map(review => <button type="button" className="manager-review-task-row" key={review.id} onClick={onOpenReviews}>
+            <span><strong>{review.rating} 星</strong> {review.note || '顾客未填写文字'}</span><time>{timeText(review.created_at || undefined)}</time>
+          </button>)}
+          <Button block onClick={onOpenReviews}>去处理评价</Button>
+        </div>}
+      </>}
     <Drawer title="处理顾客加选" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(selected)} onClose={() => setSelected(null)} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" disabled={busy} onClick={() => { setSelected(null); setReason(''); }}>关闭详情</Button><Button size="large" danger disabled={busy || !reason.trim()} loading={busy} onClick={() => void act('reject')}>拒绝加选</Button><Button size="large" type="primary" disabled={busy} loading={busy} onClick={() => void act('approve')}>确认加选</Button></div>}>
       {selected && <>
         <div className="manager-detail-intro"><span>顾客加选</span><Tag color="gold">待确认</Tag></div>
