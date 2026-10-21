@@ -764,6 +764,34 @@ def update_page_content(page_key: str = Query("diy-home"), body: PageContentIn =
 # 0. 到店服务选单：独立于订单的顾客 DIY 需求
 # ──────────────────────────────────────────────────────
 
+_WORKFLOW_LABELS = {
+    "new": "新订单",
+    "waiting_service": "待服务",
+    "in_service": "服务中",
+    "post_service": "待离位",
+    "completed": "已完成",
+    "cancelled": "已取消",
+}
+
+
+def _selection_workflow_state(session: SelectionSession, occupancy: PositionOccupancy | None = None) -> str:
+    """店长/技师看到的唯一订单工作状态，由选单和占用事实共同派生。"""
+    if session.status in {"cancelled", "expired"}:
+        return "cancelled"
+    if occupancy is not None:
+        if occupancy.status == "in_service":
+            return "in_service"
+        if occupancy.status == "post_service_present":
+            return "post_service"
+    if session.status == "submitted":
+        return "new"
+    if session.status == "confirmed":
+        return "waiting_service"
+    if session.status == "completed":
+        return "completed"
+    return "new"
+
+
 def _selection_view(session: SelectionSession, customer: User | None = None, feedback: ServiceFeedback | None = None) -> dict:
     return {
         "id": session.id,
@@ -1057,6 +1085,9 @@ def list_selection_sessions(
             "occupancy_id": linked[0].id, "room_id": linked[1].id,
             "name": linked[1].customer_label or linked[1].name, "status": linked[0].status,
         }
+        workflow_state = _selection_workflow_state(session, linked[0] if linked else None)
+        item["workflow_state"] = workflow_state
+        item["workflow_label"] = _WORKFLOW_LABELS[workflow_state]
         item["needs_position_assignment"] = (
             linked is None and session.status in {"submitted", "confirmed"} and session.fulfillment_order_id is None
         )
@@ -1143,6 +1174,9 @@ def get_manager_selection_session(
         "name": linked[1].customer_label or linked[1].name,
         "status": linked[0].status,
     }
+    workflow_state = _selection_workflow_state(session, linked[0] if linked else None)
+    item["workflow_state"] = workflow_state
+    item["workflow_label"] = _WORKFLOW_LABELS[workflow_state]
     item["needs_position_assignment"] = (
         linked is None and session.status in {"submitted", "confirmed"} and session.fulfillment_order_id is None
     )

@@ -5,7 +5,7 @@ import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaf
 import { takeManagerPendingOrder } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
-import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, managerOrderStatusLabel, managerPrice, managerSourceLabel, readManagerPage, readManagerSelection } from './managerMobile';
+import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, managerPrice, managerSourceLabel, managerWorkflowColor, managerWorkflowLabel, readManagerPage, readManagerSelection } from './managerMobile';
 import type { ManagerSelection, ManagerSelectionItem } from './managerMobile';
 import ManagerPositionView from './ManagerPositionView';
 import ManagerReviewsView from './ManagerReviewsView';
@@ -110,7 +110,7 @@ export default function ManagerStorePage() {
         return <button type="button" className="manager-selection-card" key={item.id} onClick={() => setDetail(item)}>
           <div className="manager-card-top">
             <span>{item.position?.name || (item.needs_position_assignment ? '现场安排' : '未安排座位')}</span>
-            <Tag color={item.status === 'submitted' ? 'gold' : item.status === 'confirmed' ? 'green' : undefined}>{managerOrderStatusLabel(item.status)}</Tag>
+            <Tag color={managerWorkflowColor(item)}>{managerWorkflowLabel(item)}</Tag>
           </div>
           <ItemList items={item.items} />
           <span className="manager-order-code">订单 · {item.id.slice(-8)}</span>
@@ -153,7 +153,7 @@ export default function ManagerStorePage() {
       {detail && <>
         <div className="manager-detail-intro">
           <span>{detail.position?.name || (detail.needs_position_assignment ? '现场安排' : '未安排座位')}</span>
-          <Tag>{managerOrderStatusLabel(detail.status)}</Tag>
+          <Tag color={managerWorkflowColor(detail)}>{managerWorkflowLabel(detail)}</Tag>
         </div>
         <span className="manager-order-code">订单 · {detail.id.slice(-8)}</span>
         <ItemList items={detail.items} />

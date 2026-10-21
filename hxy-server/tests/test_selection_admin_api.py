@@ -96,6 +96,17 @@ class SelectionAdminApiTests(unittest.TestCase):
             db.commit()
         return session_id
 
+    def test_selection_list_derives_one_workflow_state_for_manager_and_desktop(self):
+        response = self.client.get("/api/v1/admin/v2/selection-sessions", headers=self.headers)
+        assert response.status_code == 200, response.text
+        item = next(row for row in response.json()["items"] if row["id"] == "selection-admin-session")
+        assert item["workflow_state"] == "new"
+        assert item["workflow_label"] == "新订单"
+        detail = self.client.get("/api/v1/admin/v2/selection-sessions/selection-admin-session", headers=self.headers)
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["workflow_state"] == "new"
+        assert detail.json()["workflow_label"] == "新订单"
+
     def test_manager_workbench_returns_store_summary_without_order_rows(self):
         response = self.client.get("/api/v1/admin/v2/manager/workbench", headers=self.headers)
         assert response.status_code == 200, response.text
