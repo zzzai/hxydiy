@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     wecom_agent_id: str = ""
     wecom_agent_secret: str = ""
     wecom_callback_url: str = ""
+    # 可选：只向指定店长企微 UserID 推送订单/评价（逗号分隔）；为空时推给全部有效店长。
+    wecom_order_notify_userids: str = ""
 
     @property
     def wechat_official_enabled(self) -> bool:

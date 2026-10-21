@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getSelectionSessions, getStaff } from '../api';
+import { getSelectionSession, getSelectionSessions, getStaff } from '../api';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
-import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, managerOrderStatusLabel, managerPrice, managerSourceLabel, readManagerPage } from './managerMobile';
+import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, managerOrderStatusLabel, managerPrice, managerSourceLabel, readManagerPage, readManagerSelection } from './managerMobile';
 import type { ManagerSelection, ManagerSelectionItem } from './managerMobile';
 import ManagerPositionView from './ManagerPositionView';
 import './manager-mobile.css';
@@ -79,6 +79,21 @@ export default function ManagerStorePage() {
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [load, view]);
+  useEffect(() => {
+    if (!current() || !isMobileManager(getStaff()) || !storeId) return;
+    const orderId = new URLSearchParams(window.location.search).get('order');
+    if (!orderId || !/^[A-Za-z0-9_-]{8,128}$/.test(orderId)) return;
+    let cancelled = false;
+    void getSelectionSession(orderId).then(response => {
+      if (cancelled || !current()) return;
+      try {
+        setDetail(readManagerSelection(response.data, Number(storeId)));
+      } catch {
+        // Ignore malformed deep links; the normal workbench remains usable.
+      }
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [current, storeId]);
 
   const content = () => {
     if (listError) return <Alert type="error" showIcon message={listError} action={<Button onClick={() => void load()}>重试</Button>} />;

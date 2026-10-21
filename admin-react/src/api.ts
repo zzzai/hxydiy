@@ -131,6 +131,7 @@ export const settleService = (serviceOrderId: number, idempotencyKey: string) =>
 export const getOrders = (status?: string) => client.get('/admin/orders', { params: { status } });
 export const getSelectionSessions = (status?: string, needsPositionAssignment?: boolean, pagination?: { page: number; page_size: number }, activeOnly?: boolean) =>
   client.get('/admin/v2/selection-sessions', { params: { status, needs_position_assignment: needsPositionAssignment, active_only: activeOnly, ...pagination } });
+export const getSelectionSession = (sessionId: string) => client.get(`/admin/v2/selection-sessions/${sessionId}`);
 export const assignSelectionPosition = (sessionId: string, roomId: number) =>
   client.post<PositionOccupancy>(`/admin/v2/selection-sessions/${sessionId}/assign-position`, { room_id: roomId });
 export const getCustomerProfileRecords = (userId: number) => client.get(`/admin/v2/users/${userId}/customer-profile-records`);

@@ -1063,6 +1063,40 @@ def list_selection_sessions(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
+@router.get("/selection-sessions/{session_id}")
+def get_manager_selection_session(
+    session_id: str,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    """店长订单深链详情；只读，不引入新的状态或分配操作。"""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    session = _owned_selection(db, session_id, staff)
+    customer = db.get(User, session.customer_id) if session.customer_id else None
+    item = _selection_view(session, customer)
+    linked = db.execute(
+        select(PositionOccupancy, Room)
+        .join(Room, Room.id == PositionOccupancy.room_id)
+        .where(
+            PositionOccupancy.store_id == session.store_id,
+            PositionOccupancy.selection_session_id == session.id,
+        )
+        .order_by(PositionOccupancy.id.desc())
+        .limit(1)
+    ).first()
+    item["position"] = None if linked is None else {
+        "occupancy_id": linked[0].id,
+        "room_id": linked[1].id,
+        "name": linked[1].customer_label or linked[1].name,
+        "status": linked[0].status,
+    }
+    item["needs_position_assignment"] = (
+        linked is None and session.status in {"submitted", "confirmed"} and session.fulfillment_order_id is None
+    )
+    return item
+
+
 def _owned_selection(db: Session, session_id: str, staff: Staff) -> SelectionSession:
     session = db.get(SelectionSession, session_id)
     if not session or session.store_id != _staff_store_id(staff):

@@ -61,6 +61,10 @@ export function readManagerPage(value: unknown, storeId: number): ManagerPage {
   }
   return page;
 }
+/** 校验企微订单深链返回的单条订单。 */
+export function readManagerSelection(value: unknown, storeId: number): ManagerSelection {
+  return readManagerPage({ items: [value], total: 1, page: 1, page_size: 1 }, storeId).items[0];
+}
 export function managerError(error: unknown): { text: string; forbidden: boolean } {
   const response = (error as { response?: { status?: number; data?: { detail?: string | { message?: string } } } })?.response;
   const detail = response?.data?.detail;
