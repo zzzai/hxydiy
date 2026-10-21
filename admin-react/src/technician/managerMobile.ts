@@ -9,6 +9,7 @@ export type ManagerSelection = {
   needs_position_assignment: boolean;
   workflow_state?: 'new' | 'waiting_service' | 'in_service' | 'post_service' | 'completed' | 'cancelled';
   workflow_label?: string;
+  feedback?: { id: number; rating: number; tags?: string[]; note?: string } | null;
 };
 export type ManagerChange = {
   id: string; state: string; reason?: string; created_at?: string;

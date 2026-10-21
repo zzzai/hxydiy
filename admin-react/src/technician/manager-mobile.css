@@ -116,3 +116,6 @@
 .manager-review-task-row { display: flex; width: 100%; flex-direction: column; gap: 4px; padding: 8px 0; border: 0; border-bottom: 1px solid #f4e6e3; background: transparent; color: #183c34; font: inherit; text-align: left; }
 .manager-review-task-row span { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .manager-review-task-row time { color: #8b6f6b; font-size: 11px; }
+.manager-order-review { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid #e3ebe5; border-radius: 10px; background: #f8fcfa; }
+.manager-order-review > div { display: flex; align-items: flex-start; gap: 8px; color: #183c34; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.manager-order-review .ant-btn { min-height: 44px; }
