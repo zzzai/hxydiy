@@ -6,7 +6,7 @@ WeCom outage cannot break customer submission or feedback.
 """
 
 from datetime import datetime
-from urllib.parse import quote
+from urllib.parse import urlencode
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -79,7 +79,7 @@ def manager_userids(db: Session, store_id: int) -> list[str]:
     return [userid for userid in userids if not configured or userid in configured]
 
 
-def _send(store_id: int, title: str, description: str, order_id: str) -> None:
+def _send(store_id: int, title: str, description: str, query: str, button_label: str) -> None:
     db = SessionLocal()
     try:
         userids = manager_userids(db, store_id)
@@ -87,9 +87,9 @@ def _send(store_id: int, title: str, description: str, order_id: str) -> None:
         db.close()
     if not userids:
         return
-    url = settings.h5_public_base_url.rstrip("/") + "/technician/store/wecom?order=" + quote(order_id, safe="")
+    url = settings.h5_public_base_url.rstrip("/") + "/technician/store/wecom?" + query
     try:
-        get_wecom_provider().send_textcard(userids, title, description, url, "查看订单")
+        get_wecom_provider().send_textcard(userids, title, description, url, button_label)
     except WecomProviderError:
         # Best-effort only. The order/feedback remains authoritative.
         return
@@ -127,7 +127,7 @@ def notify_new_selection(session_id: str) -> None:
         db.commit()
     finally:
         db.close()
-    _send(store_id, "荷小悦 · 新订单", description, order_id)
+    _send(store_id, "荷小悦 · 新订单", description, urlencode({"order": order_id}), "查看订单")
 
 
 def notify_feedback(feedback_id: int) -> None:
@@ -141,7 +141,6 @@ def notify_feedback(feedback_id: int) -> None:
         if not feedback or not session or not store:
             return
         store_id = store.id
-        order_id = session.id
         tags = "、".join(str(tag) for tag in (feedback.tags or []) if tag)
         note = (feedback.note or "").strip()
         description = "\n".join([
@@ -163,4 +162,4 @@ def notify_feedback(feedback_id: int) -> None:
         db.commit()
     finally:
         db.close()
-    _send(store_id, "荷小悦 · 顾客评价", description, order_id)
+    _send(store_id, "荷小悦 · 顾客评价", description, urlencode({"review": f"service_review:{feedback.id}"}), "查看评价")
