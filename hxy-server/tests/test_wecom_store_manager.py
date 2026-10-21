@@ -11,6 +11,7 @@ from app.api.admin import require_manager, require_technician
 from app.core.config import settings
 from app.models import Staff, StaffScopeAssignment, Store, Technician
 from app.models.staff_external_identity import StaffExternalIdentity
+from app.services.wecom_notify import manager_userids
 from app.services.wecom_staff import WecomProviderError
 
 
@@ -88,6 +89,17 @@ def test_manager_with_technician_keeps_both_technician_and_manager_capabilities(
     headers = {'Authorization': 'Bearer ' + body['token']}
     assert manager.client.get('/manager-only', headers=headers).status_code == 200
     assert manager.client.get('/technician-only', headers=headers).status_code == 200
+
+
+def test_manager_with_technician_still_receives_store_notifications(manager):
+    with manager.sessions.begin() as db:
+        tech = Technician(store_id=manager.store_id, code='notify-manager-tech', name='Notify manager', status='available')
+        db.add(tech)
+        db.flush()
+        db.get(Staff, manager.manager_id).technician_id = tech.id
+        db.get(StaffExternalIdentity, manager.identity_id).technician_id = tech.id
+    with manager.sessions() as db:
+        assert manager_userids(db, manager.store_id) == ['user-1']
 
 
 @pytest.mark.parametrize('change', ['missing', 'other_store', 'multiple', 'brand', 'staff_role', 'staff_tech', 'disabled'])
