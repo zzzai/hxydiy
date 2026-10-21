@@ -1086,8 +1086,9 @@ def list_selection_sessions(
             "name": linked[1].customer_label or linked[1].name, "status": linked[0].status,
         }
         workflow_state = _selection_workflow_state(session, linked[0] if linked else None)
-        item["workflow_state"] = workflow_state
-        item["workflow_label"] = _WORKFLOW_LABELS[workflow_state]
+        if staff.role != "staff":
+            item["workflow_state"] = workflow_state
+            item["workflow_label"] = _WORKFLOW_LABELS[workflow_state]
         item["needs_position_assignment"] = (
             linked is None and session.status in {"submitted", "confirmed"} and session.fulfillment_order_id is None
         )
