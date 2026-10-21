@@ -156,7 +156,7 @@ export default function ManagerStorePage() {
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
     {view === 'tasks' ? <ManagerTasksView onChanged={() => void load(true, true)} onOpenReviews={() => setView('reviews')} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
-      : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} />
+      : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} />
         : <>
       {content()}
       {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份订单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); setDetail(null); }} /></div>}
