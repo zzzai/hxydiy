@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { beginWecomEntry, clearStaffSession, commitStaffSession, completeWecomEntry, getSessionEpoch, isWecomEntryPending, isWecomSession, subscribeSessionEpoch } from '../src/wecomSession.ts';
+import { beginWecomEntry, clearStaffSession, commitStaffSession, completeWecomEntry, getSessionEpoch, hasManagerPendingDeepLink, isWecomEntryPending, isWecomSession, subscribeSessionEpoch, takeManagerPendingOrder, takeManagerPendingReview } from '../src/wecomSession.ts';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -153,4 +153,15 @@ test('late manager exchange cannot replace a newer technician session', async ()
   assert.equal(storage.getItem('hxy_technician_token'), t2.token);
   assert.equal(JSON.parse(storage.getItem('hxy_technician_staff')!).role, 'technician');
   assert.equal(storage.getItem('hxy_admin_token'), null);
+});
+
+test('manager deep links survive OAuth and choose the store destination', async () => {
+  reset();
+  tabStorage.setItem('hxy_manager_pending_order', 'synthetic-order-1234');
+  assert.equal(hasManagerPendingDeepLink(), true);
+  assert.equal(takeManagerPendingOrder(), 'synthetic-order-1234');
+  assert.equal(hasManagerPendingDeepLink(), false);
+  tabStorage.setItem('hxy_manager_pending_review', JSON.stringify({ type: 'service_review', id: 9 }));
+  assert.equal(hasManagerPendingDeepLink(), true);
+  assert.deepEqual(takeManagerPendingReview(), { type: 'service_review', id: 9 });
 });

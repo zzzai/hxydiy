@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { technicianMobileHome } from './technicianMobile';
-import { beginWecomEntry, clearStaffSession, completeWecomEntry, wecomLoginPath } from '../wecomSession';
+import { beginWecomEntry, clearStaffSession, completeWecomEntry, hasManagerPendingDeepLink, wecomLoginPath } from '../wecomSession';
 
 export default function TechnicianWecomGate({ complete = false }: { complete?: boolean }) {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ export default function TechnicianWecomGate({ complete = false }: { complete?: b
           catch { return null; }
         })();
         const target = verifiedRole.current === 'manager'
-          ? technicianMobileHome('manager', managerStaff?.technician_id)
+          ? (hasManagerPendingDeepLink() ? '/store' : technicianMobileHome('manager', managerStaff?.technician_id))
           : '/today';
         navigate(target, { replace: true });
       }
