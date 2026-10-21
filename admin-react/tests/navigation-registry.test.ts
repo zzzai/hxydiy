@@ -7,9 +7,11 @@ import {
   getVisibleNavigationGroups,
 } from '../src/core/navigation/index.ts';
 
-test('导航注册表按运营、服务商品、人员顾客、门店资源和系统职责分组', () => {
+test('导航注册表按工作台、门店运营、顾客、服务商品、人员权限、门店资源和系统职责分组', () => {
   assert.deepEqual(adminNavigationGroups.map((group) => group.key), [
+    'workbench',
     'operations',
+    'customers',
     'catalog',
     'people',
     'store',

@@ -28,8 +28,11 @@ function TechnicianSessionRoutes() {
   const restoreIdentity = useRef(false);
   const restorePath = useRef('');
   const intentionalDesktop = useRef(false);
-  const manager = isMobileManager(getStaff());
-  const loggedIn = !!getToken() && (getStaff()?.role === 'technician' || manager);
+  const staff = getStaff();
+  const technicianId = staff?.technician_id;
+  const hasTechnician = Number.isInteger(technicianId) && Number(technicianId) > 0;
+  const manager = isMobileManager(staff);
+  const loggedIn = !!getToken() && (staff?.role === 'technician' || manager);
   const managerPath = location.pathname === '/store' || location.pathname.startsWith('/store/');
   const loginPath = managerPath ? '/store/login' : '/login';
   const logout = () => clearStaffSession();
@@ -62,19 +65,19 @@ function TechnicianSessionRoutes() {
   }, [navigate]);
   useEffect(() => { if (getToken() && !['technician', 'manager'].includes(getStaff()?.role || '')) logout(); }, [epoch]);
   useEffect(() => { setReverify(false); }, [location.pathname]);
-  const home = technicianMobileHome(getStaff()?.role);
+  const home = technicianMobileHome(staff?.role, technicianId);
   const path = location.pathname.replace(/\/$/, '');
   if (suspended) return <main className="technician-login-page"><Spin /><p>返回后重新验证身份</p></main>;
   if (path === '/wecom/complete') return <TechnicianWecomGate key="complete" complete />;
   if (path === '/wecom' || path === '/store/wecom' || reverify || isWecomEntryPending()) return <TechnicianWecomGate key="begin" />;
-  const onLogin = (staff: { role?: string }) => navigate(technicianMobileHome(staff.role), { replace: true });
+  const onLogin = (staff: { role?: string; technician_id?: number | null }) => navigate(technicianMobileHome(staff.role, staff.technician_id), { replace: true });
   const openDesktop = () => {
     if (!isMobileManager(getStaff())) return;
     intentionalDesktop.current = true;
     flushSync(() => setSuspended(true));
     window.location.assign('/admin/#/today');
   };
-  return <Routes><Route path="/store/login" element={loggedIn && manager ? <Navigate to="/store" replace /> : <TechnicianMobileLoginPage key={epoch} managerOnly onLogin={onLogin} />} /><Route path="/login" element={loggedIn ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} onLogin={onLogin} />} /><Route path="/*" element={loggedIn ? <TechnicianMobileShell key={epoch} onLogout={logout} onOpenDesktop={openDesktop}><Routes><Route path="store" element={manager ? <ManagerStorePage /> : <Navigate to="/store/login" replace />} />{!manager && <><Route path="today" element={<TechnicianMyServicesPage />} /><Route path="positions" element={<TechnicianTodayPage />} /><Route path="history" element={<TechnicianHistoryPage />} /><Route path="me" element={<TechnicianMePage />} /></>}<Route path="member-verify" element={manager ? <TechnicianMembershipPausedPage /> : <Navigate to="/today" replace />} /><Route path="*" element={<Navigate to={home} replace />} /></Routes></TechnicianMobileShell> : <Navigate to={loginPath} replace />} /></Routes>;
+  return <Routes><Route path="/store/login" element={loggedIn && manager ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} managerOnly onLogin={onLogin} />} /><Route path="/login" element={loggedIn ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} onLogin={onLogin} />} /><Route path="/*" element={loggedIn ? <TechnicianMobileShell key={epoch} onLogout={logout} onOpenDesktop={openDesktop}><Routes><Route path="store" element={manager ? <ManagerStorePage /> : <Navigate to="/store/login" replace />} />{(!manager || hasTechnician) && <><Route path="today" element={<TechnicianMyServicesPage />} /><Route path="positions" element={<TechnicianTodayPage />} /><Route path="history" element={<TechnicianHistoryPage />} /><Route path="me" element={<TechnicianMePage />} /></>}<Route path="member-verify" element={manager ? <TechnicianMembershipPausedPage /> : <Navigate to="/today" replace />} /><Route path="*" element={<Navigate to={home} replace />} /></Routes></TechnicianMobileShell> : <Navigate to={loginPath} replace />} /></Routes>;
 }
 
 export default function TechnicianMobileApp() {

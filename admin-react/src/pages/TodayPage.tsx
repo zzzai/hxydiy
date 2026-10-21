@@ -85,15 +85,15 @@ export default function TodayPage() {
     { title: '状态', dataIndex: 'status', width: 120 },
   ], []);
 
-  if (error) return <Result status="error" title="今日运营数据加载失败" subTitle={error} extra={<Button type="primary" icon={<ReloadOutlined />} onClick={() => void load()}>重试</Button>} />;
+  if (error) return <Result status="error" title="工作台数据加载失败" subTitle={error} extra={<Button type="primary" icon={<ReloadOutlined />} onClick={() => void load()}>重试</Button>} />;
 
   if (readOnly) return <Space direction="vertical" size={16} style={{ width: '100%' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>今日运营</Title><Text type="secondary">仅查看本店当日服务安排</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>工作台</Title><Text type="secondary">仅查看本店当日服务安排</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>今日预约</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table rowKey="id" columns={readOnlyColumns} dataSource={appointments} pagination={false} locale={{ emptyText: <Empty description="当前没有今日预约" /> }} />}</section>
   </Space>;
 
   return <Space direction="vertical" size={16} style={{ width: '100%' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>今日运营</Title><Text type="secondary">在店服务与结算实时状态</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>工作台</Title><Text type="secondary">在店服务与结算实时状态</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
     <Row gutter={[12, 12]}>{[['服务中', board.summary.in_service || 0], ['待结账', board.summary.pending_checkout || 0], ['今日实收', `¥${((stats.paid_amount_cents || 0) / 100).toFixed(0)}`]].map(([label, value]) => <Col xs={12} md={8} key={String(label)}><div style={{ ...sectionStyle, padding: '16px 18px' }}><Statistic title={label} value={value} /></div></Col>)}</Row>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>在店服务流</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table<LiveVisit> rowKey="id" columns={columns} dataSource={board.visits} pagination={false} locale={{ emptyText: <Empty description="当前没有在店服务" /> }} scroll={{ x: 760 }} />}</section>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>资源状态</Text><Row gutter={[12, 12]} style={{ marginTop: 12 }}><Col span={24}><Text type="secondary">技师</Text><div>{board.resources.technicians.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col><Col span={24}><Text type="secondary">房间 / 沙发</Text><div>{board.resources.rooms.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col></Row></section>

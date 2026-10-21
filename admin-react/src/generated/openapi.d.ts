@@ -882,6 +882,26 @@ export interface paths {
         patch: operations["update_feedback_follow_up_by_type_api_v1_admin_v2_feedback__feedback_type___feedback_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/workbench": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manager Workbench
+         * @description 店长工作台汇总：只返回需要关注的数量，不复制订单明细。
+         */
+        get: operations["manager_workbench_api_v1_admin_v2_manager_workbench_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/membership-cards/{card_id}/facts": {
         parameters: {
             query?: never;
@@ -8575,6 +8595,39 @@ export interface operations {
                 "application/json": components["schemas"]["FeedbackFollowUpIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manager_workbench_api_v1_admin_v2_manager_workbench_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

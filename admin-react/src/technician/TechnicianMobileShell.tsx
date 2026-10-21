@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { App, Button } from 'antd';
-import { CalendarOutlined, ClockCircleOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { CalendarOutlined, ClockCircleOutlined, LogoutOutlined, ShopOutlined, UserOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getStaff, getTechnicianMe } from '../api';
 import { isMobileManager } from './managerMobile';
@@ -10,6 +10,7 @@ const tabs = [
   { path: TECHNICIAN_MOBILE_TAB_PATHS[0], label: '今日服务', icon: <CalendarOutlined /> },
   { path: TECHNICIAN_MOBILE_TAB_PATHS[1], label: '服务记录', icon: <ClockCircleOutlined /> },
   { path: TECHNICIAN_MOBILE_TAB_PATHS[2], label: '我的', icon: <UserOutlined /> },
+  { path: '/store', label: '门店', icon: <ShopOutlined /> },
 ];
 
 export default function TechnicianMobileShell({ children, onLogout, onOpenDesktop }: { children: React.ReactNode; onLogout: () => void; onOpenDesktop?: () => void }) {
@@ -18,15 +19,16 @@ export default function TechnicianMobileShell({ children, onLogout, onOpenDeskto
   const { message } = App.useApp();
   const [me, setMe] = useState<any>();
   const manager = isMobileManager(getStaff());
+  const managerTechnician = manager && Boolean(getStaff()?.technician_id);
   useEffect(() => {
-    if (manager) return;
+    if (manager && !managerTechnician) return;
     let active = true;
     void getTechnicianMe().then((res) => { if (active) setMe(res.data); }).catch(() => undefined);
     return () => { active = false; };
-  }, [manager]);
+  }, [manager, managerTechnician]);
   const staff = me?.staff || me?.technician?.staff || getStaff();
-  const visiblePaths = technicianMobileTabs(staff?.role);
-  const visibleTabs = tabs.filter((tab) => visiblePaths.includes(tab.path));
+  const visiblePaths = technicianMobileTabs(staff?.role, staff?.technician_id);
+  const visibleTabs = tabs.filter((tab) => visiblePaths.includes(tab.path) || (manager && tab.path === '/store'));
   const logout = () => { onLogout(); message.success('已退出登录'); navigate(manager ? '/store/login' : '/login', { replace: true }); };
   return (
     <div className={'technician-mobile-app' + (manager ? ' manager-mobile-app' : '')}>

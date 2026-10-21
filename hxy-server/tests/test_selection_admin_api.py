@@ -96,6 +96,14 @@ class SelectionAdminApiTests(unittest.TestCase):
             db.commit()
         return session_id
 
+    def test_manager_workbench_returns_store_summary_without_order_rows(self):
+        response = self.client.get("/api/v1/admin/v2/manager/workbench", headers=self.headers)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["store_id"] == self.store_id
+        assert set(body["summary"]) == {"today_orders", "in_service", "pending_checkout", "attention"}
+        assert isinstance(body["attention"], list)
+
     def test_staff_can_list_and_confirm_selection(self):
         listed = self.client.get("/api/v1/admin/v2/selection-sessions", headers=self.headers)
         self.assertEqual(listed.status_code, 200)

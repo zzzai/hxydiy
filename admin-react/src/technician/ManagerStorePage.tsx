@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getSelectionSession, getSelectionSessions, getStaff } from '../api';
+import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff } from '../api';
 import { takeManagerPendingOrder } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
 import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, managerOrderStatusLabel, managerPrice, managerSourceLabel, readManagerPage, readManagerSelection } from './managerMobile';
 import type { ManagerSelection, ManagerSelectionItem } from './managerMobile';
 import ManagerPositionView from './ManagerPositionView';
+import ManagerReviewsView from './ManagerReviewsView';
+import ManagerTasksView from './ManagerTasksView';
 import './manager-mobile.css';
 
 function timeText(value?: string) {
@@ -26,7 +28,7 @@ function ItemList({ items }: { items: ManagerSelectionItem[] }) {
 export default function ManagerStorePage() {
   const current = useTechnicianSession();
   const storeId = getStaff()?.store_id;
-  const [view, setView] = useState<'selections' | 'positions'>('selections');
+  const [view, setView] = useState<'tasks' | 'selections' | 'positions' | 'reviews'>('selections');
   const [mapRefresh, setMapRefresh] = useState(0);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -35,6 +37,7 @@ export default function ManagerStorePage() {
   const [listError, setListError] = useState('');
   const [forbidden, setForbidden] = useState(false);
   const [detail, setDetail] = useState<ManagerSelection | null>(null);
+  const [workbench, setWorkbench] = useState<{ summary?: Record<string, number>; attention?: Array<{ key: string; label: string; count: number }> }>();
   const listVersion = useRef(0);
   const detailRef = useRef(detail);
   detailRef.current = detail;
@@ -44,6 +47,7 @@ export default function ManagerStorePage() {
     const version = ++listVersion.current;
     if (!silent) setLoading(true);
     try {
+      void getManagerWorkbench().then(response => { if (current()) setWorkbench(response.data); }).catch(() => undefined);
       const query = managerListParams('all', page);
       const response = await getSelectionSessions(query.status, query.needs_position_assignment, { page: query.page, page_size: query.page_size }, true);
       if (!current() || version !== listVersion.current) return;
@@ -121,16 +125,27 @@ export default function ManagerStorePage() {
     <header className="manager-page-heading">
       <div>
         <h1>门店工作台</h1>
-        <p>{view === 'selections' ? '查看当前门店订单，无需逐单处理' : '按沙发、床位查看当前订单'}</p>
+        <p>{view === 'tasks' ? '处理顾客加选与需要店长决定的事项' : view === 'selections' ? '查看当前门店订单，无需逐单处理' : view === 'positions' ? '按沙发、房间查看当前订单' : '查看本店评价并记录跟进'}</p>
       </div>
-      <Button aria-label={view === 'selections' ? '刷新门店订单' : '刷新门店座位'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else void load(true, true); }} />
+      <Button aria-label={view === 'tasks' ? '刷新待处理' : view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
     </header>
+    <div className="manager-workbench-summary" aria-label="今日门店概览">
+      <span><strong>{workbench?.summary?.today_orders ?? '—'}</strong>今日订单</span>
+      <span><strong>{workbench?.summary?.in_service ?? '—'}</strong>服务中</span>
+      <span><strong>{workbench?.summary?.pending_checkout ?? '—'}</strong>待结账</span>
+      <button type="button" className={workbench?.summary?.attention ? 'has-attention' : ''} onClick={() => setView('tasks')}><strong>{workbench?.summary?.attention ?? '—'}</strong>需处理</button>
+    </div>
     <nav className="manager-view-tabs" aria-label="工作台视图">
+      <button type="button" aria-pressed={view === 'tasks'} onClick={() => { setDetail(null); setView('tasks'); }}>待处理</button>
       <button type="button" aria-pressed={view === 'selections'} onClick={() => { setDetail(null); setView('selections'); }}>订单</button>
       <button type="button" aria-pressed={view === 'positions'} onClick={() => { setDetail(null); setView('positions'); }}>座位</button>
+      <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button>
     </nav>
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
-    {view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} /> : <>
+    {view === 'tasks' ? <ManagerTasksView onChanged={() => void load(true, true)} />
+      : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
+      : view === 'reviews' ? <ManagerReviewsView />
+        : <>
       {content()}
       {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份订单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); setDetail(null); }} /></div>}
     </>}

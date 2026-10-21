@@ -141,7 +141,11 @@ export async function completeWecomEntry(onAccepted?: (role: 'technician' | 'man
     return accepted;
   }
   const workspace = Array.isArray(data.workspaces) && data.workspaces.length === 1 ? data.workspaces[0] : null;
-  if (data.staff.role !== 'store_manager' || data.staff.id <= 0 || data.staff.technician_id !== null
+  const managerTechnicianId = data.staff.technician_id;
+  if (managerTechnicianId !== null && (!Number.isInteger(managerTechnicianId) || managerTechnicianId <= 0)) {
+    throw new Error('企业微信身份响应无效');
+  }
+  if (data.staff.role !== 'store_manager' || data.staff.id <= 0
       || data.selector_token !== null || !Number.isInteger(workspace?.assignment_id) || workspace.assignment_id <= 0
       || workspace.role !== 'store_manager' || workspace.scope_type !== 'store' || workspace.scope_id !== data.staff.store_id) {
     throw new Error('企业微信身份响应无效');

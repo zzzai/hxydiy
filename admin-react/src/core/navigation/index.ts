@@ -21,17 +21,34 @@ const storeRoles = ['admin', 'manager', 'staff'] as const;
 
 export const adminNavigationGroups: readonly NavigationGroup[] = [
   {
-    key: 'operations',
-    label: '今日运营',
+    key: 'workbench',
+    label: '工作台',
     icon: 'dashboard',
     items: [
-      { path: '/today', label: '今日运营', icon: 'ordered-list', roles: storeRoles },
-      { path: '/service-positions', label: '服务位看板', icon: 'environment', roles: storeRoles },
-      { path: '/selection-sessions', label: '到店服务选单', icon: 'project', roles: storeRoles },
+      { path: '/today', label: '今日工作台', icon: 'ordered-list', roles: storeRoles },
+    ],
+  },
+  {
+    key: 'operations',
+    label: '门店运营',
+    icon: 'desktop',
+    items: [
+      { path: '/selection-sessions', label: '到店选单', icon: 'project', roles: storeRoles },
+      { path: '/service-positions', label: '服务位', icon: 'environment', roles: storeRoles },
       { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles },
+      { path: '/feedback', label: '顾客评价', icon: 'message', roles: managementRoles },
       { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles },
       { path: '/audit-logs', label: '审计日志', icon: 'file-search', roles: managementRoles, headquartersAccess: true },
-      { path: '/feedback', label: '低分评价', icon: 'message', roles: managementRoles },
+    ],
+  },
+  {
+    key: 'customers',
+    label: '顾客与会员',
+    icon: 'team',
+    items: [
+      { path: '/users', label: '顾客列表', icon: 'team', roles: managementRoles },
+      { path: '/tags', label: '顾客标签', icon: 'tags', roles: managementRoles },
+      { path: '/segments', label: '顾客分群', icon: 'pie-chart', roles: managementRoles },
     ],
   },
   {
@@ -42,33 +59,30 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
       { path: '/projects', label: '服务项目', icon: 'project', roles: managementRoles, headquartersAccess: true },
       { path: '/addons', label: '项目加项', icon: 'tags', roles: managementRoles, headquartersAccess: true },
       { path: '/products', label: '商城商品', icon: 'shopping', roles: managementRoles, headquartersAccess: true },
-      { path: '/page-content', label: 'DIY 页面配置', icon: 'appstore', roles: managementRoles },
+      { path: '/page-content', label: '页面配置', icon: 'appstore', roles: managementRoles },
     ],
   },
   {
     key: 'people',
-    label: '人员与顾客',
-    icon: 'team',
+    label: '人员与权限',
+    icon: 'idcard',
     items: [
       { path: '/techs', label: '技师管理', icon: 'idcard', roles: managementRoles },
       { path: '/staff-accounts', label: '员工账号', icon: 'team', roles: ['admin'], requiresUnboundAdmin: true, headquartersAccess: true },
-      { path: '/users', label: '用户列表', icon: 'team', roles: managementRoles },
-      { path: '/tags', label: '标签管理', icon: 'tags', roles: managementRoles },
-      { path: '/segments', label: '用户分群', icon: 'pie-chart', roles: managementRoles },
     ],
   },
   {
     key: 'store',
     label: '门店与资源',
-    icon: 'desktop',
+    icon: 'environment',
     items: [
       { path: '/stores', label: '门店主数据', icon: 'environment', roles: ['admin'], requiresUnboundAdmin: true, headquartersAccess: true },
-      { path: '/rooms', label: '房间/床位', icon: 'environment', roles: managementRoles },
+      { path: '/rooms', label: '房间与服务位', icon: 'desktop', roles: managementRoles },
     ],
   },
   {
     key: 'marketing',
-    label: '营销',
+    label: '营销与触达',
     icon: 'gift',
     items: [
       { path: '/coupons', label: '优惠券', icon: 'gift', roles: managementRoles },

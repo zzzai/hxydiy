@@ -145,7 +145,8 @@ def require_manager(staff: Staff = Depends(current_store_context)) -> Staff:
 
 
 def require_technician(staff: Staff = Depends(current_store_context)) -> Staff:
-    if normalize_staff_role(staff.role, staff.technician_id) != "technician" or not staff.technician_id:
+    role = normalize_staff_role(staff.role, staff.technician_id)
+    if role not in {"technician", "manager"} or not staff.technician_id:
         raise HTTPException(status_code=403, detail={"code": "TECHNICIAN_REQUIRED", "message": "仅已绑定技师可执行此操作"})
     return staff
 

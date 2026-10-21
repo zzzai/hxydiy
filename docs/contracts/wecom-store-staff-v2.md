@@ -7,7 +7,8 @@
 仅支持明确本店的在职技师与店长；不支持总部、普通员工、未知角色或多工作区。企微 canonical UserID 必须经同一应用官方接口确认，登录不能按姓名或手机号猜绑定。正式建号输入只在仓库外的受限私有文件，个人数据不写本契约。
 
 - 技师：原 `Staff.role=technician`、同店 Technician、available/busy 和身份版本规则保持。
-- 店长：数据库 `Staff.role=manager`；Staff 与外部身份的 `technician_id` 必须均为 null；`store_id` 指向同一真实门店。必须恰好一条 active `StaffScopeAssignment`，且 role=`store_manager`、scope_type=`store`、scope_id=绑定门店。
+- 店长：数据库 `Staff.role=manager`；`store_id` 指向同一真实门店，必须恰好一条 active `StaffScopeAssignment`，且 role=`store_manager`、scope_type=`store`、scope_id=绑定门店。
+- 2026-10-21 增量：店长可绑定同店有效 Technician，`Staff.technician_id` 与企微身份 `technician_id` 必须一致且都为 null 或同一个有效技师；店长因此同时拥有技师任务能力和门店管理授权。旧的无技师档案店长保持兼容，但产品迁移要求所有店长补齐技师档案。
 - 缺授权、多授权、总部授权、其他门店、普通员工或角色错配均拒绝，不挑选第一项，也不借 legacy token 默选。
 
 ## OAuth 响应与每次请求

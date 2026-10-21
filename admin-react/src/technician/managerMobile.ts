@@ -20,7 +20,7 @@ export const MANAGER_FILTERS: { value: ManagerFilter; label: string }[] = [
   { value: 'confirmed', label: '已确认' }, { value: 'all', label: '全部' },
 ];
 export function isMobileManager(staff: { role?: string; store_id?: number | null; technician_id?: number | null } | null | undefined): boolean {
-  return staff?.role === 'manager' && staff.technician_id === null && Number.isInteger(staff.store_id) && Number(staff.store_id) > 0;
+  return staff?.role === 'manager' && Number.isInteger(staff.store_id) && Number(staff.store_id) > 0;
 }
 export function managerListParams(filter: ManagerFilter, page: number) {
   return { status: filter === 'all' || filter === 'unassigned' ? undefined : filter,
