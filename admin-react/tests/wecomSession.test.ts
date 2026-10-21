@@ -109,13 +109,21 @@ test('single-store manager preserves scoped token and uses the existing manager 
   assert.equal(isWecomSession(), true);
   assert.equal(isWecomEntryPending(), false);
 });
+test('manager with a technician profile keeps both identities', async () => {
+  await prepareExchange();
+  const response = { ...managerResponse, staff: { ...managerResponse.staff, technician_id: 12 } };
+  globalThis.fetch = async () => reply(response);
+  assert.equal(await completeWecomEntry(), true);
+  const stored = JSON.parse(storage.getItem('hxy_admin_staff')!);
+  assert.equal(stored.role, 'manager');
+  assert.equal(stored.technician_id, 12);
+});
 test('manager exchange rejects missing, ambiguous or inconsistent authorization instead of choosing a workspace', async () => {
   const grant = managerResponse.workspaces[0];
   const variants = [
     { staff: { ...managerResponse.staff, id: 0 } },
     { staff: { ...managerResponse.staff, store_id: 0 } },
     { staff: { ...managerResponse.staff, store_id: null } },
-    { staff: { ...managerResponse.staff, technician_id: 1 } },
     { staff: { ...managerResponse.staff, technician_id: undefined } },
     ...['manager', 'admin', 'brand_admin', 'hq_operator', 'store_staff', 'unknown'].map(role => ({ staff: { ...managerResponse.staff, role } })),
     { selector_token: 'synthetic-selector' }, { selector_token: undefined },

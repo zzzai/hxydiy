@@ -217,7 +217,14 @@ def local_binding(db: Session, identity: StaffExternalIdentity | None) -> Staff:
             or tech.status not in {"available", "busy"} or tech.store_id != identity.store_id):
             raise auth_error()
     elif staff.role == "manager":
-        if staff.technician_id is not None or identity.technician_id is not None or not db.get(Store, identity.store_id):
+        if not db.get(Store, identity.store_id):
+            raise auth_error()
+        if staff.technician_id is not None:
+            tech = db.get(Technician, staff.technician_id)
+            if (identity.technician_id != staff.technician_id or not tech
+                or tech.store_id != identity.store_id or tech.status not in {"available", "busy"}):
+                raise auth_error()
+        elif identity.technician_id is not None:
             raise auth_error()
         manager_workspace(db, staff, identity.store_id)
     else:

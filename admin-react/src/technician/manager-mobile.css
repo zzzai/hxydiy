@@ -83,3 +83,16 @@
 .manager-position-card-footer .ant-btn { min-height: 44px; padding-inline: 10px; color: #164f3c; }
 .manager-position-disabled { border-top: 1px solid #e3ebe5; padding-top: 8px; margin-top: 20px; }
 .manager-position-disabled summary { min-height: 44px; align-content: center; font-size: 13px; color: #526b61; cursor: pointer; }
+.manager-reviews-view { display: flex; flex-direction: column; gap: 12px; }
+.manager-reviews-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.manager-reviews-heading h2 { margin: 0; font-size: 18px; }
+.manager-reviews-heading h2 span { color: #6b8077; font-size: 13px; font-weight: 400; }
+.manager-reviews-heading p { margin: 4px 0 0; color: #6b8077; font-size: 12px; line-height: 1.5; }
+.manager-reviews-heading > .ant-btn { min-height: 44px; min-width: 44px; background: #fff; }
+.manager-review-list { display: flex; flex-direction: column; gap: 10px; }
+.manager-review-card { display: block; width: 100%; padding: 14px; border: 1px solid #e3ebe5; border-radius: 14px; background: #fff; color: #183c34; font: inherit; text-align: left; cursor: pointer; }
+.manager-review-card:active { background: #f8fcfa; }
+.manager-review-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+.manager-review-card p { margin: 10px 0; font-size: 15px; line-height: 1.55; font-weight: 600; overflow-wrap: anywhere; }
+.manager-review-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: #6b8077; font-size: 12px; }
+.manager-review-note { padding: 12px; border: 1px solid #edf2ef; border-radius: 10px; background: #f8fcfa; color: #183c34; font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }

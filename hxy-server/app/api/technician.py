@@ -81,8 +81,9 @@ def invite_expiry() -> datetime:
 
 def current_technician(authorization: str | None, db: Session) -> tuple[Staff, Technician]:
     staff = _current_staff(authorization, db)
-    if normalize_staff_role(staff.role, staff.technician_id) != "technician" or not staff.technician_id:
-        raise HTTPException(status_code=403, detail="当前账号不是技师账号")
+    role = normalize_staff_role(staff.role, staff.technician_id)
+    if role not in {"technician", "manager"} or not staff.technician_id:
+        raise HTTPException(status_code=403, detail="当前账号未绑定技师档案")
     technician = db.get(Technician, staff.technician_id)
     if not technician or technician.store_id != staff.store_id or technician.status not in {"available", "busy"}:
         raise HTTPException(status_code=401, detail={"code": "TECHNICIAN_ACCOUNT_UNAVAILABLE", "message": "技师当前不在岗或账号不可用"})

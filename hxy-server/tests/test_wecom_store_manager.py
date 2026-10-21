@@ -9,7 +9,7 @@ from sqlalchemy import select
 import test_wecom_staff_auth as auth_harness
 from app.api.admin import require_manager, require_technician
 from app.core.config import settings
-from app.models import Staff, StaffScopeAssignment, Store
+from app.models import Staff, StaffScopeAssignment, Store, Technician
 from app.models.staff_external_identity import StaffExternalIdentity
 from app.services.wecom_staff import WecomProviderError
 
@@ -66,6 +66,28 @@ def test_manager_exchange_uses_exact_store_scope_and_never_technician(manager):
     assert manager.client.get('/manager-only', headers=headers).json() == {
         'staff_id': manager.manager_id, 'store_id': manager.store_id, 'role': 'manager'}
     assert manager.client.get('/technician-only', headers=headers).status_code == 403
+
+
+def test_manager_with_technician_keeps_both_technician_and_manager_capabilities(manager):
+    with manager.sessions.begin() as db:
+        tech = Technician(store_id=manager.store_id, code='manager-tech', name='Manager tech', status='available')
+        db.add(tech)
+        db.flush()
+        staff = db.get(Staff, manager.manager_id)
+        staff.technician_id = tech.id
+        db.get(StaffExternalIdentity, manager.identity_id).technician_id = tech.id
+    manager.tech_id = tech.id
+    attempt, state = manager.authorize()
+    assert manager.callback(state).status_code == 303
+    response = manager.exchange(attempt)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body['staff']['role'] == 'store_manager'
+    assert body['staff']['technician_id'] == manager.tech_id
+    assert len(body['workspaces']) == 1
+    headers = {'Authorization': 'Bearer ' + body['token']}
+    assert manager.client.get('/manager-only', headers=headers).status_code == 200
+    assert manager.client.get('/technician-only', headers=headers).status_code == 200
 
 
 @pytest.mark.parametrize('change', ['missing', 'other_store', 'multiple', 'brand', 'staff_role', 'staff_tech', 'disabled'])
