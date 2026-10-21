@@ -1033,6 +1033,7 @@ def list_selection_sessions(
     status: str | None = Query(None),
     needs_position_assignment: bool | None = Query(None),
     active_only: bool = Query(False),
+    stale_only: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -1043,6 +1044,11 @@ def list_selection_sessions(
     q = select(SelectionSession).where(SelectionSession.store_id == store_id)
     if active_only:
         q = q.where(SelectionSession.status.in_(("submitted", "confirmed")))
+    if stale_only:
+        q = q.where(
+            SelectionSession.status.in_(("submitted", "confirmed")),
+            SelectionSession.created_at < datetime.now(UTC) - timedelta(minutes=30),
+        )
     if staff.role == "staff":
         q = q.where(SelectionSession.status == "submitted")
     elif status:

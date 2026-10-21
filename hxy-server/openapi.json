@@ -14216,6 +14216,16 @@
           },
           {
             "in": "query",
+            "name": "stale_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Stale Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
             "name": "page",
             "required": false,
             "schema": {

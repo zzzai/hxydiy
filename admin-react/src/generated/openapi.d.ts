@@ -10083,6 +10083,7 @@ export interface operations {
                 status?: string | null;
                 needs_position_assignment?: boolean | null;
                 active_only?: boolean;
+                stale_only?: boolean;
                 page?: number;
                 page_size?: number;
             };
