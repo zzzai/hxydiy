@@ -70,7 +70,6 @@ def manager_userids(db: Session, store_id: int) -> list[str]:
             Staff.store_id == store_id,
             Staff.status == "active",
             Staff.role == "manager",
-            Staff.technician_id.is_(None),
             active_grant,
         )
         .order_by(StaffExternalIdentity.userid)
