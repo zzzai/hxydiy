@@ -8,7 +8,7 @@ import type { ManagerPositionCard, ManagerPositionDetail, ManagerPositionMap } f
 import { useTechnicianSession } from './useTechnicianSession';
 
 type DetailKey = Pick<ManagerPositionDetail, 'positionId' | 'occupancyId' | 'selectionId'>;
-const groups = [{ type: 'sofa', name: '沙发' }, { type: 'bed', name: '床位' }, { type: 'room', name: '房间' }] as const;
+const groups = [{ types: ['sofa'], name: '沙发' }, { types: ['bed', 'room'], name: '房间' }] as const;
 export default function ManagerPositionView({ storeId, refreshKey }: { storeId: number; refreshKey: number }) {
   const current = useTechnicianSession();
   const [map, setMap] = useState<ManagerPositionMap | null>(null);
@@ -84,8 +84,8 @@ export default function ManagerPositionView({ storeId, refreshKey }: { storeId: 
     {loading && !visibleMap && !error && <div className="manager-empty"><Spin size="small" /><span>正在加载座位</span></div>}
     {!error && visibleMap && !cards.length && <div className="manager-empty"><strong>尚未配置服务位</strong></div>}
     {groups.map(group => {
-      const members = cards.filter(card => card.enabled && card.type === group.type);
-      return members.length > 0 && <section className="manager-position-group" key={group.type} aria-label={group.name}>
+      const members = cards.filter(card => card.enabled && group.types.some(type => type === card.type));
+      return members.length > 0 && <section className="manager-position-group" key={group.name} aria-label={group.name}>
         <h2>{group.name}<span>{members.length}</span></h2><div className="manager-position-grid">{members.map(renderCard)}</div>
       </section>;
     })}

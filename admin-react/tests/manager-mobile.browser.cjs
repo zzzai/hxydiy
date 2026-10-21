@@ -208,7 +208,7 @@ async function main() {
     for (const width of [375, 390]) await check('positions-layout-and-readonly-' + width, async () => {
       await start('positions', width); await loaded(); await positionView();
       assert.equal(await positionCards().count(), 25, 'Full map must not inherit selection pagination');
-      for (const group of ['沙发', '床位', '房间']) assert.equal(await page.getByRole('region', { name: group, exact: true }).count(), 1);
+      for (const group of ['沙发', '房间']) assert.equal(await page.getByRole('region', { name: group, exact: true }).count(), 1);
       assert.match(await positionCard('1号沙发').innerText(), /暂无当前选单/);
       assert.doesNotMatch(await page.locator('.manager-position-view').innerText(), /空闲|不应展示的错误关联项目/);
       assert.match(await positionCard('4号床位').innerText(), /已结束服务 · 待离位确认/);
