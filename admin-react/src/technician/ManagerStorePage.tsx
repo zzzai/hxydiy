@@ -39,6 +39,7 @@ export default function ManagerStorePage() {
   const [detail, setDetail] = useState<ManagerSelection | null>(null);
   const [workbench, setWorkbench] = useState<{ summary?: Record<string, number>; attention?: Array<{ key: string; label: string; count: number }> }>();
   const [reviewFocus, setReviewFocus] = useState<{ type: 'service_review'; id: number } | null>(null);
+  const [deepLinkError, setDeepLinkError] = useState('');
   const listVersion = useRef(0);
   const detailRef = useRef(detail);
   detailRef.current = detail;
@@ -87,6 +88,7 @@ export default function ManagerStorePage() {
   }, [load, view]);
   useEffect(() => {
     if (!current() || !isMobileManager(getStaff()) || !storeId) return;
+    setDeepLinkError('');
     const directReview = new URLSearchParams(window.location.search).get('review');
     const directReviewMatch = directReview?.match(/^service_review:([1-9][0-9]{0,17})$/);
     const review = directReviewMatch
@@ -108,7 +110,7 @@ export default function ManagerStorePage() {
       } catch {
         // Ignore malformed deep links; the normal workbench remains usable.
       }
-    }).catch(() => undefined);
+    }).catch(() => { if (!cancelled) setDeepLinkError('订单链接已失效或无权查看，已返回门店列表。'); });
     return () => { cancelled = true; };
   }, [current, storeId]);
 
@@ -141,6 +143,7 @@ export default function ManagerStorePage() {
       </div>
       <Button aria-label={view === 'tasks' ? '刷新待处理' : view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
     </header>
+    {deepLinkError && <Alert type="warning" showIcon closable message={deepLinkError} onClose={() => setDeepLinkError('')} />}
     <div className="manager-workbench-summary" aria-label="今日门店概览">
       <span><strong>{workbench?.summary?.today_orders ?? '—'}</strong>今日订单</span>
       <span><strong>{workbench?.summary?.in_service ?? '—'}</strong>服务中</span>
@@ -156,7 +159,7 @@ export default function ManagerStorePage() {
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
     {view === 'tasks' ? <ManagerTasksView onChanged={() => void load(true, true)} onOpenReviews={() => setView('reviews')} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
-      : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} />
+      : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} onFocusError={() => setDeepLinkError('评价链接已失效或无权查看，已返回评价列表。')} />
         : <>
       {content()}
       {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份订单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); setDetail(null); }} /></div>}
