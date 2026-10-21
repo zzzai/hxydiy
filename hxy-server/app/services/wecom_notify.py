@@ -88,7 +88,7 @@ def _send(store_id: int, title: str, description: str, order_id: str) -> None:
         db.close()
     if not userids:
         return
-    url = settings.h5_public_base_url.rstrip("/") + "/technician/store?order=" + quote(order_id, safe="")
+    url = settings.h5_public_base_url.rstrip("/") + "/technician/store/wecom?order=" + quote(order_id, safe="")
     try:
         get_wecom_provider().send_textcard(userids, title, description, url, "查看订单")
     except WecomProviderError:
