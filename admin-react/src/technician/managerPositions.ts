@@ -16,6 +16,19 @@ const occupancyLabels: Record<string, string> = {
   held: '选购中', waiting_service: '待服务', in_service: '服务中',
   post_service_present: '已结束服务 · 待离位确认', cleaning: '已结束服务 · 清洁中',
 };
+const positionTypeOrder: Record<ManagerPositionCard['type'], number> = { sofa: 0, bed: 1, room: 2 };
+function naturalPositionKey(card: ManagerPositionCard): [number, number, string] {
+  const number = Number(card.name.match(/\d+/)?.[0]);
+  return [positionTypeOrder[card.type], Number.isFinite(number) ? number : Number.MAX_SAFE_INTEGER, card.name];
+}
+/** 店长座位图按自然编号显示，避免后台 sort_order 与现场编号错位。 */
+export function sortManagerPositions(positions: ManagerPositionCard[]): ManagerPositionCard[] {
+  return [...positions].sort((left, right) => {
+    const [leftType, leftNumber, leftName] = naturalPositionKey(left);
+    const [rightType, rightNumber, rightName] = naturalPositionKey(right);
+    return leftType - rightType || leftNumber - rightNumber || leftName.localeCompare(rightName, 'zh-CN');
+  });
+}
 function object(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
@@ -71,7 +84,7 @@ export function projectManagerPositions(value: unknown, storeId: number): Manage
       },
     };
   });
-  return { storeId, positions };
+  return { storeId, positions: sortManagerPositions(positions) };
 }
 export function positionDetailMatches(card: ManagerPositionCard | undefined, identity: Pick<ManagerPositionDetail, 'positionId' | 'occupancyId' | 'selectionId'>): boolean {
   return Boolean(card?.detail && card.id === identity.positionId

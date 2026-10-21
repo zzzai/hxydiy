@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createManagerActionRunner, isMobileManager, managerListParams, managerPrice, managerSelectionActions, managerSourceLabel, readManagerPage } from '../src/technician/managerMobile.ts';
+import { createManagerActionRunner, isMobileManager, managerListParams, managerOrderStatusLabel, managerPrice, managerSelectionActions, managerSourceLabel, readManagerPage } from '../src/technician/managerMobile.ts';
 
 test('unassigned requests both submitted and confirmed with server pagination', () => {
   assert.deepEqual(managerListParams('unassigned', 3), { status: undefined, needs_position_assignment: true, page: 3, page_size: 20 });
@@ -48,4 +48,11 @@ test('duplicate actions share one request, and failure allows deliberate retry',
   await assert.rejects(first);
   await runner.run('selection:synthetic', async () => { count++; });
   assert.equal(count, 2);
+});
+
+test('店长只读订单状态不再使用待确认操作文案', () => {
+  assert.equal(managerOrderStatusLabel('submitted'), '新订单');
+  assert.equal(managerOrderStatusLabel('confirmed'), '已确认');
+  assert.equal(managerOrderStatusLabel('cancelled'), '已取消');
+  assert.equal(managerOrderStatusLabel('unknown'), '状态待核实');
 });

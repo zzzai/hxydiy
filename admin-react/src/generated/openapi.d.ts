@@ -9956,6 +9956,7 @@ export interface operations {
             query?: {
                 status?: string | null;
                 needs_position_assignment?: boolean | null;
+                active_only?: boolean;
                 page?: number;
                 page_size?: number;
             };

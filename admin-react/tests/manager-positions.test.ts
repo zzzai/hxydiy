@@ -1,7 +1,8 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { projectManagerPositions, positionDetailMatches } from '../src/technician/managerPositions.ts';
+import { projectManagerPositions, positionDetailMatches, sortManagerPositions } from '../src/technician/managerPositions.ts';
+import type { ManagerPositionCard } from '../src/technician/managerPositions.ts';
 
 function position(id = 1, status = 'in_service') {
   const selectionId = 'synthetic-selection-' + id;
@@ -72,4 +73,19 @@ test('detail identity requires the same position, occupancy and selection after 
   changedSelection.selection.id = changedSelection.occupancy.selection_session_id = changedSelection.occupancy.active_session_id = 'new-selection';
   assert.equal(positionDetailMatches(projectManagerPositions(map([changedSelection]), 1).positions[0], key), false);
   assert.equal(positionDetailMatches(undefined, key), false);
+});
+
+test('店长座位图按现场编号自然排序，不跟随错乱的 sort_order', () => {
+  const cards = [
+    ['sofa', '5号沙发'], ['sofa', '3号沙发'], ['sofa', '2号沙发'], ['sofa', '1号沙发'],
+    ['sofa', '9号沙发'], ['sofa', '8号沙发'], ['sofa', '7号沙发'], ['sofa', '6号沙发'],
+    ['bed', '2号房间 A 床'], ['bed', '1号房间 B 床'], ['bed', '1号房间 A 床'],
+  ].map(([type, name], index): ManagerPositionCard => ({
+    id: index + 1, name, type: type as ManagerPositionCard['type'], enabled: true,
+    association: 'none', statusLabel: '暂无当前选单',
+  }));
+  assert.deepEqual(sortManagerPositions(cards).map(card => card.name), [
+    '1号沙发', '2号沙发', '3号沙发', '5号沙发', '6号沙发', '7号沙发', '8号沙发', '9号沙发',
+    '1号房间 A 床', '1号房间 B 床', '2号房间 A 床',
+  ]);
 });

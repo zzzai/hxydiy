@@ -35,6 +35,10 @@ export function managerSourceLabel(source?: string): string {
 export function managerStatusLabel(status?: string): string {
   return ({ submitted: '待确认', confirmed: '已确认', cancelled: '已取消', expired: '已过期' } as Record<string, string>)[status || ''] || '状态待核实';
 }
+/** 店长只读订单视图：提交后由系统归单，不再要求店长确认。 */
+export function managerOrderStatusLabel(status?: string): string {
+  return ({ submitted: '新订单', confirmed: '已确认', cancelled: '已取消', expired: '已过期' } as Record<string, string>)[status || ''] || '状态待核实';
+}
 export function managerPrice(selection: Pick<ManagerSelection, 'status' | 'pricing_snapshot'>) {
   const snapshot = selection.pricing_snapshot;
   const cents = snapshot?.payable_total_cents;
