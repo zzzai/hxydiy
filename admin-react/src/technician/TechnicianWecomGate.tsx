@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { getStaff } from '../api';
 import { technicianMobileHome } from './technicianMobile';
 import { beginWecomEntry, clearStaffSession, completeWecomEntry, wecomLoginPath } from '../wecomSession';
 
@@ -18,7 +17,14 @@ export default function TechnicianWecomGate({ complete = false }: { complete?: b
     void pending.current.then((accepted) => {
       if (!active || !complete) return;
       if (accepted && verifiedRole.current) {
-        navigate(technicianMobileHome(verifiedRole.current, getStaff()?.technician_id), { replace: true });
+        const managerStaff = (() => {
+          try { return JSON.parse(localStorage.getItem('hxy_admin_staff') || 'null') as { technician_id?: number | null } | null; }
+          catch { return null; }
+        })();
+        const target = verifiedRole.current === 'manager'
+          ? technicianMobileHome('manager', managerStaff?.technician_id)
+          : '/today';
+        navigate(target, { replace: true });
       }
       else setError('本次登录已失效，请重新进入企业微信工作台。');
     }).catch(() => {
