@@ -122,3 +122,6 @@
 .manager-order-review { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid #e3ebe5; border-radius: 10px; background: #f8fcfa; }
 .manager-order-review > div { display: flex; align-items: flex-start; gap: 8px; color: #183c34; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .manager-order-review .ant-btn { min-height: 44px; }
+.manager-order-timeline { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; padding-left: 18px; color: #183c34; font-size: 13px; }
+.manager-order-timeline li { display: flex; justify-content: space-between; gap: 12px; line-height: 1.5; }
+.manager-order-timeline time { color: #6b8077; font-size: 12px; white-space: nowrap; }

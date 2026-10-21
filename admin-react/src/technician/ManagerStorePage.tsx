@@ -180,6 +180,7 @@ export default function ManagerStorePage() {
           <div><dt>来源</dt><dd>{managerSourceLabel(detail.source)}</dd></div>
           <div><dt>提交时间</dt><dd>{timeText(detail.submitted_at || detail.created_at)}</dd></div>
         </dl>
+        {Boolean(detail.timeline?.length) && <ol className="manager-order-timeline">{(detail.timeline || []).map(event => <li key={event.key}><span>{event.label}</span><time>{timeText(event.at)}</time></li>)}</ol>}
         {detail.feedback && <div className="manager-order-review"><div><Tag color={detail.feedback.rating <= 2 ? 'red' : 'gold'}>{detail.feedback.rating} 星</Tag><span>{detail.feedback.note || (detail.feedback.tags || []).join('、') || '顾客已评价'}</span></div><Button onClick={() => { setDetail(null); setReviewFocus({ type: 'service_review', id: detail.feedback!.id }); setView('reviews'); }}>查看评价详情</Button></div>}
         <p className="manager-detail-note">订单仅供查看；无需店长确认或分配座位。</p>
         <Typography.Text type="secondary">如需取消或调整，请联系门店负责人。</Typography.Text>
