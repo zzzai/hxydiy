@@ -6,7 +6,7 @@ import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,6 +25,7 @@ from app.domain.selection_options import (
 )
 from app.domain.selection_collaboration_tokens import BROWSER_COOKIE, resolve_collaboration_token
 from app.models import Addon, CouponTemplate, PositionOccupancy, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
+from app.services.wecom_notify import notify_feedback, notify_new_selection
 from app.schemas.selection import (
     MySelectionRecordOut,
     MySelectionSessionsOut,
@@ -195,7 +196,7 @@ def _customer_owned_session(db: Session, session_id: str, authorization: str | N
 
 
 @router.post("/{session_id}/feedback")
-def submit_feedback(session_id: str, body: FeedbackIn, x_selection_token: str | None = Header(default=None), authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
+def submit_feedback(session_id: str, body: FeedbackIn, background_tasks: BackgroundTasks, x_selection_token: str | None = Header(default=None), authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> dict:
     session = _get_session(db, session_id, x_selection_token) if x_selection_token else _customer_owned_session(db, session_id, authorization)
     occupancy = _latest_service_occupancy(db, session.id)
     if not occupancy or not occupancy.actual_service_end_at:
@@ -215,6 +216,7 @@ def submit_feedback(session_id: str, body: FeedbackIn, x_selection_token: str | 
     db.add(feedback)
     db.commit()
     db.refresh(feedback)
+    background_tasks.add_task(notify_feedback, feedback.id)
     return {"id": feedback.id, "rating": feedback.rating, "tags": feedback.tags or [], "note": feedback.note, "submitted": True}
 
 
@@ -794,6 +796,7 @@ def save_selection_session(
 @router.post("/{session_id}/submit", response_model=SelectionSessionOut)
 def submit_selection_session(
     session_id: str,
+    background_tasks: BackgroundTasks,
     body: SelectionSaveIn | None = None,
     x_selection_token: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -824,4 +827,5 @@ def submit_selection_session(
         occupancy.version += 1
     db.commit()
     db.refresh(session)
+    background_tasks.add_task(notify_new_selection, session.id)
     return session

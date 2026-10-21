@@ -69,6 +69,22 @@ class WecomProvider:
             # Never propagate upstream URLs, tokens, codes, bodies or errmsg.
             raise WecomProviderError() from None
 
+    def _post(self, endpoint: str, params: dict, body: dict) -> dict:
+        try:
+            request = Request(
+                "https://qyapi.weixin.qq.com/cgi-bin/" + endpoint + "?" + urlencode(params),
+                data=json.dumps(body).encode(),
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request, timeout=5) as response:
+                payload = json.loads(response.read(1024 * 1024))
+            if not isinstance(payload, dict) or payload.get("errcode", 0) != 0:
+                raise WecomProviderError()
+            return payload
+        except Exception:
+            raise WecomProviderError() from None
+
     def _access_token(self) -> str:
         key = (settings.wecom_corp_id, settings.wecom_agent_secret)
         with self._token_lock:
@@ -100,6 +116,24 @@ class WecomProvider:
         application = self._request("agent/get", {"access_token": token, "agentid": settings.wecom_agent_id})
         if str(application.get("agentid")) != settings.wecom_agent_id or application.get("close") != 0:
             raise WecomProviderError()
+
+    def send_text(self, userids: list[str], content: str) -> None:
+        targets = sorted({canonical_userid(userid) for userid in userids})
+        if not targets or not content.strip():
+            raise WecomProviderError()
+        if not settings.wecom_staff_enabled or not settings.wecom_agent_id:
+            raise WecomProviderError()
+        try:
+            agentid = int(settings.wecom_agent_id)
+        except ValueError:
+            raise WecomProviderError() from None
+        self._post("message/send", {"access_token": self._access_token()}, {
+            "touser": "|".join(targets),
+            "msgtype": "text",
+            "agentid": agentid,
+            "text": {"content": content.strip()[:1800]},
+            "safe": 0,
+        })
 
 
 _provider = WecomProvider()
