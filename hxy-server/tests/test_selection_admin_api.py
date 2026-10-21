@@ -113,6 +113,7 @@ class SelectionAdminApiTests(unittest.TestCase):
         body = response.json()
         assert body["store_id"] == self.store_id
         assert set(body["summary"]) == {"today_orders", "in_service", "pending_checkout", "attention"}
+        assert body["summary"]["attention"] == sum(item["count"] for item in body["attention"])
         assert isinstance(body["attention"], list)
 
     def test_staff_can_list_and_confirm_selection(self):
