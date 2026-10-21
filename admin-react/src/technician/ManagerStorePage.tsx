@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getSelectionSession, getSelectionSessions, getStaff } from '../api';
+import { takeManagerPendingOrder } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
 import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, managerOrderStatusLabel, managerPrice, managerSourceLabel, readManagerPage, readManagerSelection } from './managerMobile';
@@ -81,7 +82,7 @@ export default function ManagerStorePage() {
   }, [load, view]);
   useEffect(() => {
     if (!current() || !isMobileManager(getStaff()) || !storeId) return;
-    const orderId = new URLSearchParams(window.location.search).get('order');
+    const orderId = new URLSearchParams(window.location.search).get('order') || takeManagerPendingOrder();
     if (!orderId || !/^[A-Za-z0-9_-]{8,128}$/.test(orderId)) return;
     let cancelled = false;
     void getSelectionSession(orderId).then(response => {
