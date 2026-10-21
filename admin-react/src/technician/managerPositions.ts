@@ -29,6 +29,45 @@ export function sortManagerPositions(positions: ManagerPositionCard[]): ManagerP
     return leftType - rightType || leftNumber - rightNumber || leftName.localeCompare(rightName, 'zh-CN');
   });
 }
+
+/** 床位只按房间号展示，不把 A/B 床拆成两张店长卡片。 */
+export function bedRoomLabel(name: string): string {
+  const match = name.match(/^(.*?号房间)\s+[AB]\s*床/);
+  return match ? match[1] : name;
+}
+
+export function groupManagerPositionCards(positions: ManagerPositionCard[]): ManagerPositionCard[] {
+  const result: ManagerPositionCard[] = [];
+  const bedRooms = new Map<string, ManagerPositionCard>();
+  for (const card of positions) {
+    if (card.type !== 'bed') {
+      result.push(card);
+      continue;
+    }
+    const name = bedRoomLabel(card.name);
+    const existing = bedRooms.get(name);
+    if (!existing) {
+      const grouped = { ...card, name };
+      bedRooms.set(name, grouped);
+      result.push(grouped);
+      continue;
+    }
+    const linked = [existing, card].find(item => item.detail);
+    const candidate = linked
+      || (existing.association === 'unverified' || card.association === 'unverified' ? card : existing);
+    const merged: ManagerPositionCard = {
+      ...candidate,
+      name,
+      enabled: existing.enabled || card.enabled,
+      association: linked ? 'linked' : existing.association === 'unverified' || card.association === 'unverified' ? 'unverified' : 'none',
+      statusLabel: linked ? candidate.statusLabel : existing.association === 'unverified' || card.association === 'unverified' ? '关联待核实' : '暂无当前选单',
+    };
+    bedRooms.set(name, merged);
+    const index = result.findIndex(item => item === existing);
+    result[index] = merged;
+  }
+  return result;
+}
 function object(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }

@@ -3,7 +3,7 @@ import { Alert, Button, Drawer, Spin, Typography } from 'antd';
 import { getLiveServicePositionMap, getStaff } from '../api';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { isMobileManager, managerError } from './managerMobile';
-import { positionDetailMatches, projectManagerPositions } from './managerPositions';
+import { groupManagerPositionCards, positionDetailMatches, projectManagerPositions } from './managerPositions';
 import type { ManagerPositionCard, ManagerPositionDetail, ManagerPositionMap } from './managerPositions';
 import { useTechnicianSession } from './useTechnicianSession';
 
@@ -65,7 +65,7 @@ export default function ManagerPositionView({ storeId, refreshKey }: { storeId: 
     };
   }, [load]);
   const visibleMap = allowed() && map?.storeId === storeId ? map : null;
-  const cards = visibleMap?.positions || [];
+  const cards = groupManagerPositionCards(visibleMap?.positions || []);
   const activeCard = identity ? cards.find(item => item.id === identity.positionId) : undefined;
   const detail = identity && !changed && positionDetailMatches(activeCard, identity) ? activeCard?.detail : undefined;
   const close = () => { setIdentity(null); setChanged(false); };
