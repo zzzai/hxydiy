@@ -7,6 +7,8 @@ export type ManagerSelection = {
   pricing_snapshot?: { payable_total_cents?: unknown; applied_price_type?: unknown } | null;
   position?: { occupancy_id: number; room_id: number; name: string; status: string } | null;
   needs_position_assignment: boolean;
+  workflow_state?: 'new' | 'waiting_service' | 'in_service' | 'post_service' | 'completed' | 'cancelled';
+  workflow_label?: string;
 };
 export type ManagerChange = {
   id: string; state: string; reason?: string; created_at?: string;
@@ -38,6 +40,16 @@ export function managerStatusLabel(status?: string): string {
 /** 店长只读订单视图：提交后由系统归单，不再要求店长确认。 */
 export function managerOrderStatusLabel(status?: string): string {
   return ({ submitted: '新订单', confirmed: '已确认', cancelled: '已取消', expired: '已过期' } as Record<string, string>)[status || ''] || '状态待核实';
+}
+export function managerWorkflowLabel(selection: Pick<ManagerSelection, 'status' | 'workflow_label'>): string {
+  return selection.workflow_label || managerOrderStatusLabel(selection.status);
+}
+export function managerWorkflowColor(selection: Pick<ManagerSelection, 'status' | 'workflow_state'>): string | undefined {
+  if (selection.workflow_state === 'in_service') return 'green';
+  if (selection.workflow_state === 'post_service') return 'blue';
+  if (selection.workflow_state === 'new' || selection.status === 'submitted') return 'gold';
+  if (selection.workflow_state === 'cancelled') return 'default';
+  return undefined;
 }
 export function managerPrice(selection: Pick<ManagerSelection, 'status' | 'pricing_snapshot'>) {
   const snapshot = selection.pricing_snapshot;
