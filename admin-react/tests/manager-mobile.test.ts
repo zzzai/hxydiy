@@ -19,9 +19,10 @@ test('terminal selections never expose confirmation, cancellation or assignment'
   assert.deepEqual(managerSelectionActions({ status: 'confirmed', needs_position_assignment: true }), { confirm: false, cancel: true, assign: true });
   for (const status of ['cancelled', 'expired', 'unknown']) assert.deepEqual(managerSelectionActions({ status, needs_position_assignment: true }), { confirm: false, cancel: false, assign: false });
 });
-test('manager view refuses technical identity or missing store binding', () => {
+test('manager view allows a bound technician identity but requires a store', () => {
   assert.equal(isMobileManager({ role: 'manager', technician_id: null, store_id: 1 }), true);
-  for (const staff of [null, { role: 'manager', technician_id: 2, store_id: 1 }, { role: 'technician', technician_id: 2, store_id: 1 }, { role: 'manager', technician_id: null, store_id: 0 }, { role: 'store_manager', technician_id: null, store_id: 1 }]) assert.equal(isMobileManager(staff), false);
+  assert.equal(isMobileManager({ role: 'manager', technician_id: 2, store_id: 1 }), true);
+  for (const staff of [null, { role: 'technician', technician_id: 2, store_id: 1 }, { role: 'manager', technician_id: null, store_id: 0 }, { role: 'store_manager', technician_id: null, store_id: 1 }]) assert.equal(isMobileManager(staff), false);
 });
 test('unknown sources never leak internal source codes', () => {
   assert.equal(managerSourceLabel('in_store'), '到店选单');
