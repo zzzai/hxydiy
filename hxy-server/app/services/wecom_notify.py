@@ -6,6 +6,7 @@ WeCom outage cannot break customer submission or feedback.
 """
 
 from datetime import datetime
+from urllib.parse import quote
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -74,10 +75,12 @@ def manager_userids(db: Session, store_id: int) -> list[str]:
         )
         .order_by(StaffExternalIdentity.userid)
     ).scalars().all()
-    return sorted({str(userid) for userid in rows if userid})
+    userids = sorted({str(userid).lower() for userid in rows if userid})
+    configured = [value.strip().lower() for value in settings.wecom_order_notify_userids.split(",") if value.strip()]
+    return [userid for userid in userids if not configured or userid in configured]
 
 
-def _send(store_id: int, content: str) -> None:
+def _send(store_id: int, title: str, description: str, order_id: str) -> None:
     db = SessionLocal()
     try:
         userids = manager_userids(db, store_id)
@@ -85,8 +88,9 @@ def _send(store_id: int, content: str) -> None:
         db.close()
     if not userids:
         return
+    url = settings.h5_public_base_url.rstrip("/") + "/technician/store?order=" + quote(order_id, safe="")
     try:
-        get_wecom_provider().send_text(userids, content)
+        get_wecom_provider().send_textcard(userids, title, description, url, "查看订单")
     except WecomProviderError:
         # Best-effort only. The order/feedback remains authoritative.
         return
@@ -102,9 +106,9 @@ def notify_new_selection(session_id: str) -> None:
         if not session or not store or session.status not in {"submitted", "confirmed"}:
             return
         store_id = store.id
+        order_id = session.id
         pricing = session.pricing_snapshot if isinstance(session.pricing_snapshot, dict) else {}
-        content = "\n".join([
-            "【荷小悦 · 新订单】",
+        description = "\n".join([
             f"门店：{store.name}",
             f"项目：{_items_text(session.items)}",
             f"金额：{_money(pricing.get('payable_total_cents'))}",
@@ -119,12 +123,12 @@ def notify_new_selection(session_id: str) -> None:
             entity_type="selection_session",
             entity_id=session.id,
             store_id=session.store_id,
-            detail={"kind": "new_order", "targets": 0},
+            detail={"kind": "new_order"},
         ))
         db.commit()
     finally:
         db.close()
-    _send(store_id, content)
+    _send(store_id, "荷小悦 · 新订单", description, order_id)
 
 
 def notify_feedback(feedback_id: int) -> None:
@@ -138,10 +142,10 @@ def notify_feedback(feedback_id: int) -> None:
         if not feedback or not session or not store:
             return
         store_id = store.id
+        order_id = session.id
         tags = "、".join(str(tag) for tag in (feedback.tags or []) if tag)
         note = (feedback.note or "").strip()
-        content = "\n".join([
-            "【荷小悦 · 顾客评价】",
+        description = "\n".join([
             f"门店：{store.name}",
             f"评分：{feedback.rating} 星",
             f"标签：{tags or '未选择'}",
@@ -155,9 +159,9 @@ def notify_feedback(feedback_id: int) -> None:
             entity_type="service_feedback",
             entity_id=str(feedback.id),
             store_id=feedback.store_id,
-            detail={"kind": "feedback", "targets": 0},
+            detail={"kind": "feedback"},
         ))
         db.commit()
     finally:
         db.close()
-    _send(store_id, content)
+    _send(store_id, "荷小悦 · 顾客评价", description, order_id)

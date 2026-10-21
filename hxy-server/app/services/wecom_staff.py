@@ -135,6 +135,29 @@ class WecomProvider:
             "safe": 0,
         })
 
+    def send_textcard(self, userids: list[str], title: str, description: str, url: str, button: str = "查看订单") -> None:
+        targets = sorted({canonical_userid(userid) for userid in userids})
+        if not targets or not title.strip() or not description.strip() or not url.startswith("https://"):
+            raise WecomProviderError()
+        if not settings.wecom_staff_enabled or not settings.wecom_agent_id:
+            raise WecomProviderError()
+        try:
+            agentid = int(settings.wecom_agent_id)
+        except ValueError:
+            raise WecomProviderError() from None
+        self._post("message/send", {"access_token": self._access_token()}, {
+            "touser": "|".join(targets),
+            "msgtype": "textcard",
+            "agentid": agentid,
+            "textcard": {
+                "title": title.strip()[:64],
+                "description": description.strip()[:512],
+                "url": url,
+                "btntxt": button[:8],
+            },
+            "safe": 0,
+        })
+
 
 _provider = WecomProvider()
 

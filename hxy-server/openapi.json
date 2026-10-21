@@ -14180,6 +14180,67 @@
         ]
       }
     },
+    "/api/v1/admin/v2/selection-sessions/{session_id}": {
+      "get": {
+        "description": "店长订单深链详情；只读，不引入新的状态或分配操作。",
+        "operationId": "get_manager_selection_session_api_v1_admin_v2_selection_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Manager Selection Session Api V1 Admin V2 Selection Sessions  Session Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Manager Selection Session",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/selection-sessions/{session_id}/annual-gift/redeem": {
       "post": {
         "operationId": "redeem_annual_gift_api_v1_admin_v2_selection_sessions__session_id__annual_gift_redeem_post",
