@@ -25,7 +25,7 @@ function timeText(value: string | null) {
 }
 
 /** 店长查看本店评价并记录跟进；不能修改顾客原文。 */
-export default function ManagerReviewsView({ focus, onFocusConsumed }: { focus?: { type: 'service_review'; id: number } | null; onFocusConsumed?: () => void }) {
+export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged }: { focus?: { type: 'service_review'; id: number } | null; onFocusConsumed?: () => void; onChanged?: () => void }) {
   const [rows, setRows] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -73,6 +73,7 @@ export default function ManagerReviewsView({ focus, onFocusConsumed }: { focus?:
       });
       setSelected(response.data);
       await load();
+      onChanged?.();
     } finally {
       setSaving(false);
     }
