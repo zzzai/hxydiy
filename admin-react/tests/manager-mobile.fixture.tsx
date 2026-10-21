@@ -88,6 +88,12 @@ client.defaults.adapter = async config => {
   }
   if (path === '/admin/login') return ok({ token: 'synthetic-manager', staff: { ...manager, role: 'store_manager' }, workspaces: [], selector_token: null });
   if (scenario === 'expired') return fail(401, '合成会话已失效');
+  if (method === 'get' && path === '/admin/v2/manager/workbench') return ok({
+    store_id: 1,
+    generated_at: '2026-10-21T00:00:00Z',
+    summary: { today_orders: scenario === 'empty' ? 0 : 3, in_service: scenario === 'empty' ? 0 : 1, pending_checkout: scenario === 'empty' ? 0 : 1, attention: scenario === 'empty' ? 0 : 1 },
+    attention: scenario === 'empty' ? [] : [{ key: 'addon', label: '顾客加选待处理', count: 1 }],
+  });
   if (method === 'get' && path === '/admin/v2/selection-sessions') {
     ++stats.reads;
     if (scenario === 'error') return fail(503, '合成网络错误，请重试');
