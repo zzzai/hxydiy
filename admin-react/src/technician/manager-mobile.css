@@ -97,6 +97,18 @@
 .manager-review-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: #6b8077; font-size: 12px; }
 .manager-review-note { padding: 12px; border: 1px solid #edf2ef; border-radius: 10px; background: #f8fcfa; color: #183c34; font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
 .manager-workbench-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 12px; border: 1px solid #e3ebe5; border-radius: 14px; background: #fff; }
-.manager-workbench-summary span { display: flex; min-width: 0; flex-direction: column; gap: 2px; color: #6b8077; font-size: 11px; text-align: center; }
+.manager-workbench-summary span, .manager-workbench-summary button { display: flex; min-width: 0; flex-direction: column; gap: 2px; color: #6b8077; font: inherit; font-size: 11px; text-align: center; background: transparent; border: 0; padding: 0; }
 .manager-workbench-summary strong { color: #183c34; font-size: 22px; line-height: 1.1; font-weight: 750; }
-.manager-workbench-summary span.has-attention strong { color: #b44230; }
+.manager-workbench-summary span.has-attention strong, .manager-workbench-summary button.has-attention strong { color: #b44230; }
+.manager-tasks-view { display: flex; flex-direction: column; gap: 12px; }
+.manager-tasks-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.manager-tasks-heading h2 { margin: 0; font-size: 18px; }
+.manager-tasks-heading h2 span { color: #6b8077; font-size: 13px; font-weight: 400; }
+.manager-tasks-heading p { margin: 4px 0 0; color: #6b8077; font-size: 12px; }
+.manager-tasks-heading > .ant-btn { min-height: 44px; min-width: 44px; background: #fff; }
+.manager-task-list { display: flex; flex-direction: column; gap: 10px; }
+.manager-task-card { display: block; width: 100%; padding: 14px; border: 1px solid #e9dcc0; border-radius: 14px; background: #fffcf5; color: #183c34; font: inherit; text-align: left; cursor: pointer; }
+.manager-task-card > strong { display: block; margin-top: 8px; font-size: 16px; }
+.manager-task-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #70541f; font-size: 13px; }
+.manager-task-items { margin: 8px 0; padding-left: 20px; font-size: 14px; line-height: 1.6; }
+.manager-task-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: #6b8077; font-size: 12px; }
