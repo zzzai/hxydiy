@@ -39,6 +39,7 @@ from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_
 from app.domain.membership_pricing import price_book_snapshot
 from app.domain.customer_operational_tags import customer_tag_ids, tagged_user_ids
 from app.domain.occupancy import audit_occupancy, occupancy_view, release_occupancy
+from app.domain.staff_capabilities import staff_capabilities
 from app.services.customer_profile_projection import rebuild_customer_profile_current
 from app.models.operations import Room, Technician
 from app.models.customer_tag_contribution import CustomerTagContribution
@@ -1094,6 +1095,21 @@ def list_selection_sessions(
             linked is None and session.status in {"submitted", "confirmed"} and session.fulfillment_order_id is None
         )
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/access")
+def get_staff_access(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> dict:
+    """Expose the same capability matrix the API uses, for UI affordances/tests."""
+    staff = _current_staff(authorization, db)
+    return {
+        "role": staff.role,
+        "store_id": staff.store_id,
+        "technician_id": staff.technician_id,
+        "capabilities": staff_capabilities(staff.role, staff.store_id, staff.technician_id),
+    }
 
 
 @router.get("/manager/workbench")
