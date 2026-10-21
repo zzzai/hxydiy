@@ -117,81 +117,36 @@ async function main() {
       await cards().first().click(); await drawer().waitFor(); await noOverflow(); await shot('detail-' + width);
       await page.getByRole('button', { name: 'Close', exact: true }).click();
       await page.locator('.ant-pagination-next button').click();
-      await eventually(async () => await cards().count() === 7, 'Second server page must contain the remaining 7 selections');
+      await eventually(async () => await cards().count() === 16, 'Second server page must contain the remaining 16 selections');
       assert.match(await cards().first().innerText(), /0021/);
     });
     await check('empty-and-load-error', async () => {
-      await start('empty'); await page.getByText('暂无待确认选单', { exact: true }).waitFor();
+      await start('empty'); await page.getByText('暂无订单', { exact: true }).waitFor();
       assert.equal(await page.locator('.manager-changes').count(), 0); await noOverflow(); await shot('empty-375');
       await start('error'); await page.getByText('合成网络错误，请重试', { exact: true }).waitFor();
       await page.getByRole('button', { name: /重\s*试/ }).click();
       assert.equal(await cards().count(), 0); await noOverflow(); await shot('load-error-375');
     });
-    await check('confirm-and-cancel', async () => {
-      for (const label of ['确认选单', '取消选单']) {
-        await start(); await loaded(); await cards().first().click(); await action(label);
-        if (label === '确认选单') await footer().getByRole('button', { name: label, exact: true }).dblclick();
-        else await action(label);
-        await closed();
-        await page.getByText('共 26 份选单', { exact: true }).waitFor();
-        assert.equal(await cards().filter({ hasText: 'ion-0001' }).count(), 0);
-        assert.match(await page.locator('aside').innerText(), /操作 1/);
-      }
-    });
-    await check('assign-only-available-position', async () => {
-      await start(); await loaded(); await cards().first().click(); await action('安排座位');
-      await page.getByRole('combobox', { name: '安排服务位' }).click();
-      assert.equal(await page.locator('.ant-select-item-option').filter({ hasText: '2号沙发' }).count(), 0);
-      await page.locator('.ant-select-item-option').filter({ hasText: '1号沙发' }).click();
-      await action('安排座位'); await closed();
-      await eventually(async () => /1号沙发/.test(await cards().first().innerText()), 'Assigned position must survive the post-action list reload');
-    });
-    await check('addon-identity-approve-reject', async () => {
+    await check('readonly-detail-and-no-pending-actions', async () => {
       await start(); await loaded();
-      const rows = page.locator('.manager-change-row');
-      assert.equal(await rows.count(), 2);
-      assert.match(await rows.nth(0).innerText(), /0029/); assert.match(await rows.nth(1).innerText(), /0030/);
-      await rows.first().click(); await drawer().waitFor(); await noOverflow(); await shot('addon-375');
-      await action('确认加选'); await action('确认加选'); await closed();
-      await eventually(async () => await rows.count() === 1, 'Approved add-on must leave pending list');
-      assert.match(await rows.first().innerText(), /0030/);
-      await rows.first().click(); await action('拒绝加选'); await action('拒绝加选');
-      await page.getByText('请填写拒绝原因', { exact: true }).waitFor();
-      await page.getByRole('textbox', { name: '拒绝原因' }).fill('合成验收：顾客取消加选');
-      await action('拒绝加选'); await closed();
-      await eventually(async () => await page.locator('.manager-changes').count() === 0, 'No empty add-on card after all requests are handled');
+      assert.equal(await page.locator('.manager-changes').count(), 0, 'Add-on approval is no longer a manager action');
+      assert.equal(await page.locator('.manager-filter-row').count(), 0, 'Pending/assignment filters are removed');
+      assert.match(await cards().first().innerText(), /新订单|已确认/);
+      await cards().first().click(); await drawer().waitFor(); await noOverflow(); await shot('readonly-detail-375');
+      for (const name of ['确认选单', '取消选单', '安排座位', '确认加选', '拒绝加选']) {
+        assert.equal(await drawer().getByRole('button', { name, exact: true }).count(), 0);
+      }
+      await page.getByRole('button', { name: '关闭详情', exact: true }).click();
     });
-    await check('conflict-preserves-position-and-reason', async () => {
-      await start('conflict'); await loaded(); await cards().first().click(); await action('安排座位'); await choosePosition(); await action('安排座位');
-      await page.getByText('合成冲突：服务状态已变化，请核对后重试', { exact: true }).waitFor();
-      assert.match(await drawer().innerText(), /1号沙发/); await shot('conflict-375');
-      await page.getByRole('button', { name: 'Close', exact: true }).click();
-      await page.locator('.manager-change-row').first().click(); await action('拒绝加选');
-      await page.getByRole('textbox', { name: '拒绝原因' }).fill('合成保留原因');
-      await action('拒绝加选');
-      await page.getByText('合成冲突：服务状态已变化，请核对后重试', { exact: true }).waitFor();
-      assert.equal(await page.getByRole('textbox', { name: '拒绝原因' }).inputValue(), '合成保留原因');
-    });
-    await check('forbidden-disables-and-expired-clears', async () => {
-      await start('forbidden'); await loaded(); await cards().first().click(); await action('确认选单'); await action('确认选单');
-      await page.getByText('合成权限拒绝', { exact: true }).waitFor();
-      assert.equal(await footer().getByRole('button', { name: '确认选单', exact: true }).isDisabled(), true);
+    await check('forbidden-and-expired', async () => {
+      await start('forbidden'); await loaded();
+      assert.equal(await page.locator('.manager-filter-row').count(), 0);
+      assert.equal(await page.locator('.manager-changes').count(), 0);
       await start('expired');
       await page.waitForURL('**/technician/store/login');
       await page.getByRole('button', { name: '登录移动工作台', exact: true }).waitFor();
       assert.deepEqual({ manager: (await slots()).manager, technician: (await slots()).technician }, { manager: false, technician: true });
       assert.equal(await page.locator('.manager-store-page').count(), 0);
-    });
-    await check('write-invalidates-delayed-old-read', async () => {
-      await start('race'); await loaded();
-      await page.getByRole('button', { name: '挂起下次列表读取（合成）', exact: true }).click();
-      await page.getByRole('button', { name: '刷新门店选单', exact: true }).click();
-      await cards().first().click(); await action('确认选单'); await action('确认选单');
-      await closed(); await page.getByText('共 26 份选单', { exact: true }).waitFor();
-      await eventually(async () => /旧读释放 true/.test(await page.locator('aside').innerText()), 'Delayed pre-write response must be released');
-      assert.equal(await cards().filter({ hasText: 'ion-0001' }).count(), 0);
-      assert.equal(await page.getByText('共 26 份选单', { exact: true }).count(), 1);
-      await shot('post-write-race-375');
     });
     await check('manager-callback-retains-technician', async () => {
       await start('callback', 375, '/technician/wecom/complete');
@@ -335,17 +290,12 @@ async function main() {
       await eventually(async () => await page.locator('.technician-login-page').count() === 1, 'Return must not resurrect an invalid WeCom map');
       assert.equal(await positionCards().count(), 0);
     });
-    await check('selection-write-refreshes-position-association', async () => {
+    await check('selection-view-remains-readonly-after-position-view', async () => {
       await start('positions'); await loaded(); await positionView();
-      assert.match(await positionCard('1号沙发').innerText(), /暂无当前选单/);
-      await page.getByRole('button', { name: '选单', exact: true }).click(); await loaded();
-      await cards().first().click(); await action('安排座位');
-      await page.getByRole('combobox', { name: '安排服务位' }).click();
-      await page.locator('.ant-select-item-option').filter({ hasText: /^1号沙发$/ }).click();
-      await action('安排座位'); await closed(); await positionView();
-      assert.match(await positionCard('1号沙发').innerText(), /待服务|招牌草本泡/);
-      await page.getByRole('button', { name: '查看1号沙发详情', exact: true }).click();
-      await drawer().getByText('选单 · ion-0001', { exact: true }).waitFor();
+      await page.getByRole('button', { name: '订单', exact: true }).click(); await loaded();
+      await cards().first().click(); await drawer().waitFor();
+      for (const name of ['确认选单', '取消选单', '安排座位']) assert.equal(await drawer().getByRole('button', { name, exact: true }).count(), 0);
+      await page.getByRole('button', { name: '关闭详情', exact: true }).click();
     });
 
     assert.deepEqual(report.unexpectedRequests, [], 'Only loopback assets are permitted; no real API calls');

@@ -92,7 +92,7 @@ client.defaults.adapter = async config => {
     ++stats.reads;
     if (scenario === 'error') return fail(503, '合成网络错误，请重试');
     const query = config.params || {}, page = Number(query.page || 1), page_size = Number(query.page_size || 20);
-    const filtered = scenario === 'empty' ? [] : entries.filter(item => (!query.status || item.status === query.status) && (!query.needs_position_assignment || item.needs_position_assignment));
+    const filtered = scenario === 'empty' ? [] : entries.filter(item => (!query.status || item.status === query.status) && (!query.needs_position_assignment || item.needs_position_assignment) && (!query.active_only || ['submitted', 'confirmed'].includes(item.status)));
     const response = ok({ items: filtered.slice((page - 1) * page_size, page * page_size).map(item => ({ ...item, store_id: getStaff()?.store_id || 1 })), total: filtered.length, page, page_size });
     if (scenario === 'race' && holdNextRead) {
       holdNextRead = false;
