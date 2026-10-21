@@ -37,9 +37,9 @@ const none = Object.fromEntries(CAPABILITY_KEYS.map(key => [key, false])) as Rec
 
 export function capabilitiesFor(role?: string, storeId?: number | null, technicianId?: number | null): Record<Capability, boolean> {
   if (role === 'admin' && !storeId) return { ...all, self_service: false };
-  if ((role === 'admin' || role === 'manager') && storeId) return { ...manager };
+  if (role === 'admin' || role === 'manager') return { ...manager };
   if (role === 'technician' && storeId && technicianId) return { ...none, self_service: true };
-  if (role === 'staff' && storeId) return { ...none, view_store_operations: true };
+  if (role === 'staff') return { ...none, view_store_operations: true };
   return { ...none };
 }
 

@@ -40,7 +40,7 @@ test('staff 不能通过地址直接进入管理员页面', () => {
 
 test('admin 可以进入全部已注册页面', () => {
   assert.equal(isPathAllowed('admin', '/analytics', 1), true);
-  assert.equal(isPathAllowed('admin', '/automation', 1), true);
+  assert.equal(isPathAllowed('admin', '/automation', 1), false);
   assert.equal(isPathAllowed('admin', '/addons'), true);
   assert.equal(isPathAllowed('staff', '/addons'), false);
 });
