@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { App, Button, Col, Empty, Popconfirm, Result, Row, Space, Spin, Statistic, Table, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { finishService, getManagerWorkbench, getStaff, getTodayAppointments, getTodayStats, readyService } from '../api';
@@ -21,6 +22,7 @@ function boardFromResponse(value: unknown): LiveBoard {
 
 export default function TodayPage() {
   const { message } = App.useApp();
+  const navigate = useNavigate();
   const readOnly = canViewReadOnlyOperations(getStaff()?.role);
   const [stats, setStats] = useState<Record<string, number>>({});
   const [board, setBoard] = useState<LiveBoard>(emptyBoard);
@@ -98,7 +100,7 @@ export default function TodayPage() {
   return <Space direction="vertical" size={16} style={{ width: '100%' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>工作台</Title><Text type="secondary">在店服务与结算实时状态</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
     <Row gutter={[12, 12]}>{[['今日订单', workbench?.summary?.today_orders || 0], ['服务中', workbench?.summary?.in_service ?? board.summary.in_service ?? 0], ['待结账', workbench?.summary?.pending_checkout ?? board.summary.pending_checkout ?? 0], ['需处理', workbench?.summary?.attention || 0]].map(([label, value]) => <Col xs={12} md={6} key={String(label)}><div style={{ ...sectionStyle, padding: '16px 18px' }}><Statistic title={label} value={value} /></div></Col>)}</Row>
-    {Boolean(workbench?.attention?.length) && <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>待处理</Text><div style={{ marginTop: 10 }}>{workbench?.attention?.map((item) => <Tag key={item.key} color={item.key === 'low_review' ? 'red' : 'gold'}>{item.label} {item.count}</Tag>)}</div></section>}
+    {Boolean(workbench?.attention?.length) && <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>待处理</Text><div style={{ marginTop: 10 }}>{workbench?.attention?.map((item) => <Button key={item.key} type="link" danger={item.key === 'low_review'} style={{ paddingInline: 0, minHeight: 44 }} onClick={() => navigate(item.key === 'low_review' ? '/feedback' : '/selection-sessions')}>{item.label} {item.count}</Button>)}</div></section>}
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>在店服务流</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table<LiveVisit> rowKey="id" columns={columns} dataSource={board.visits} pagination={false} locale={{ emptyText: <Empty description="当前没有在店服务" /> }} scroll={{ x: 760 }} />}</section>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>资源状态</Text><Row gutter={[12, 12]} style={{ marginTop: 12 }}><Col span={24}><Text type="secondary">技师</Text><div>{board.resources.technicians.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col><Col span={24}><Text type="secondary">房间 / 沙发</Text><div>{board.resources.rooms.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col></Row></section>
   </Space>;
