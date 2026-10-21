@@ -4,6 +4,7 @@ import { ADMIN_TOKEN_KEY, TECHNICIAN_TOKEN_KEY, clearActiveStaffSession, readAct
 type StaffSessionResponse = { token: string; staff: object; auth_method?: 'wecom' };
 type PendingEntry = { entry_nonce: string; attempt_id?: string; entry_path?: string };
 const PENDING_KEY = 'hxy_wecom_pending';
+const MANAGER_ORDER_KEY = 'hxy_manager_pending_order';
 const listeners = new Set<() => void>();
 let epoch = 0;
 let observedToken: string | null | undefined;
@@ -37,6 +38,19 @@ function pendingEntry(): PendingEntry | null {
   try {
     const pending = JSON.parse(sessionStorage.getItem(PENDING_KEY) || 'null');
     return typeof pending?.entry_nonce === 'string' ? pending : null;
+  } catch { return null; }
+}
+function rememberManagerOrder(): void {
+  try {
+    const order = new URLSearchParams(window.location.search).get('order');
+    if (order && /^[A-Za-z0-9_-]{8,128}$/.test(order)) sessionStorage.setItem(MANAGER_ORDER_KEY, order);
+  } catch { /* Ignore malformed deep links. */ }
+}
+export function takeManagerPendingOrder(): string | null {
+  try {
+    const order = sessionStorage.getItem(MANAGER_ORDER_KEY);
+    sessionStorage.removeItem(MANAGER_ORDER_KEY);
+    return order && /^[A-Za-z0-9_-]{8,128}$/.test(order) ? order : null;
   } catch { return null; }
 }
 export function isWecomEntryPending(): boolean { return pendingEntry() !== null; }
@@ -82,6 +96,7 @@ async function post(path: string, body: object): Promise<Record<string, any>> {
   return data;
 }
 export async function beginWecomEntry(): Promise<void> {
+  rememberManagerOrder();
   const entry_path = browserPathname();
   clearStaffSession();
   const expectedEpoch = getSessionEpoch();
