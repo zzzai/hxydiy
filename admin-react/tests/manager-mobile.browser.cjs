@@ -116,6 +116,7 @@ async function main() {
       await noOverflow(); await shot('store-' + width);
       await cards().first().click(); await drawer().waitFor(); await noOverflow(); await shot('detail-' + width);
       await page.getByRole('button', { name: 'Close', exact: true }).click();
+      await page.locator('.manager-detail-drawer:visible').waitFor({ state: 'hidden' });
       await page.locator('.ant-pagination-next button').click();
       await eventually(async () => await cards().count() === 16, 'Second server page must contain the remaining 16 selections');
       assert.match(await cards().first().innerText(), /0021/);
