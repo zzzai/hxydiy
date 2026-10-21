@@ -10205,6 +10205,58 @@
         ]
       }
     },
+    "/api/v1/admin/v2/access": {
+      "get": {
+        "description": "Expose the same capability matrix the API uses, for UI affordances/tests.",
+        "operationId": "get_staff_access_api_v1_admin_v2_access_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Staff Access Api V1 Admin V2 Access Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Staff Access",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/addons": {
       "get": {
         "operationId": "list_addons_admin_api_v1_admin_v2_addons_get",
