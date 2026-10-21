@@ -70,6 +70,10 @@ export function takeManagerPendingOrder(): string | null {
     return order && /^[A-Za-z0-9_-]{8,128}$/.test(order) ? order : null;
   } catch { return null; }
 }
+export function hasManagerPendingDeepLink(): boolean {
+  try { return Boolean(sessionStorage.getItem(MANAGER_ORDER_KEY) || sessionStorage.getItem(MANAGER_REVIEW_KEY)); }
+  catch { return false; }
+}
 export function isWecomEntryPending(): boolean { return pendingEntry() !== null; }
 export function wecomSessionPath(): string {
   return isManagerMobilePath(pendingEntry()?.entry_path || '') ? '/technician/store' : browserPathname();
