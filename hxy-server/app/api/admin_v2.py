@@ -4,6 +4,7 @@
 """
 
 from datetime import UTC, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from copy import deepcopy
 import hashlib
 import hmac
@@ -1104,7 +1105,8 @@ def manager_workbench(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     store_id = _staff_store_id(staff)
-    day_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    local_now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
     today_orders = db.scalar(select(sa_func.count()).select_from(SelectionSession).where(
         SelectionSession.store_id == store_id,
         SelectionSession.status.in_(("submitted", "confirmed")),
