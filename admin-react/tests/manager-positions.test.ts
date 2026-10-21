@@ -1,7 +1,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { projectManagerPositions, positionDetailMatches, sortManagerPositions } from '../src/technician/managerPositions.ts';
+import { groupManagerPositionCards, projectManagerPositions, positionDetailMatches, sortManagerPositions } from '../src/technician/managerPositions.ts';
 import type { ManagerPositionCard } from '../src/technician/managerPositions.ts';
 
 function position(id = 1, status = 'in_service') {
@@ -87,5 +87,18 @@ test('店长座位图按现场编号自然排序，不跟随错乱的 sort_order
   assert.deepEqual(sortManagerPositions(cards).map(card => card.name), [
     '1号沙发', '2号沙发', '3号沙发', '5号沙发', '6号沙发', '7号沙发', '8号沙发', '9号沙发',
     '1号房间 A 床', '1号房间 B 床', '2号房间 A 床',
+  ]);
+});
+
+test('床位按房间号合并展示，不出现 A/B 床卡片', () => {
+  const cards = [
+    ['bed', '1号房间 A 床', 'none'], ['bed', '1号房间 B 床', 'none'],
+    ['bed', '2号房间 A 床', 'unverified'], ['sofa', '1号沙发', 'none'],
+  ].map(([type, name, association], index): ManagerPositionCard => ({
+    id: index + 1, name, type: type as ManagerPositionCard['type'], enabled: true,
+    association: association as ManagerPositionCard['association'], statusLabel: '暂无当前选单',
+  }));
+  assert.deepEqual(groupManagerPositionCards(cards).map(card => card.name), [
+    '1号房间', '2号房间', '1号沙发',
   ]);
 });
