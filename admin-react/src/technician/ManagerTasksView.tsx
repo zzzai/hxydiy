@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Drawer, Input, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getFeedback, getSelectionChangeRequests, approveSelectionChangeRequest, rejectSelectionChangeRequest } from '../api';
+import { getFeedback, getManagerWorkbench, getSelectionChangeRequests, approveSelectionChangeRequest, rejectSelectionChangeRequest } from '../api';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import type { ManagerChange } from './managerMobile';
 
@@ -11,9 +11,10 @@ function timeText(value?: string) {
 }
 
 /** 店长处理顾客加选；正常订单只在订单页查看，不进入待处理。 */
-export default function ManagerTasksView({ onChanged, onOpenReviews }: { onChanged?: () => void; onOpenReviews?: () => void }) {
+export default function ManagerTasksView({ onChanged, onOpenReviews, onOpenOrders }: { onChanged?: () => void; onOpenReviews?: () => void; onOpenOrders?: () => void }) {
   const [rows, setRows] = useState<ManagerChange[]>([]);
   const [reviews, setReviews] = useState<Array<{ id: number; rating: number; note: string; created_at: string | null }>>([]);
+  const [staleOrders, setStaleOrders] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<ManagerChange | null>(null);
@@ -23,12 +24,14 @@ export default function ManagerTasksView({ onChanged, onOpenReviews }: { onChang
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [changesResponse, reviewsResponse] = await Promise.all([
+      const [changesResponse, reviewsResponse, workbenchResponse] = await Promise.all([
         getSelectionChangeRequests(),
         getFeedback({ feedback_type: 'service_review', follow_up_status: 'open', page: 1, page_size: 20 }),
+        getManagerWorkbench(),
       ]);
       setRows(Array.isArray(changesResponse.data?.items) ? changesResponse.data.items : []);
       setReviews(Array.isArray(reviewsResponse.data?.items) ? reviewsResponse.data.items.filter((item: { rating: number }) => item.rating <= 2) : []);
+      setStaleOrders(Number(workbenchResponse.data?.attention?.find((item: { key: string }) => item.key === 'stale_order')?.count) || 0);
       setError('');
     } catch {
       setError('待处理事项加载失败，请重试');
@@ -55,13 +58,18 @@ export default function ManagerTasksView({ onChanged, onOpenReviews }: { onChang
 
   return <section className="manager-tasks-view">
     <div className="manager-tasks-heading">
-      <div><h2>待处理 <span>{rows.length + reviews.length}</span></h2><p>顾客加选和低分评价会进入这里。</p></div>
+      <div><h2>待处理 <span>{rows.length + reviews.length + staleOrders}</span></h2><p>超时订单、顾客加选和低分评价会进入这里。</p></div>
       <Button icon={<ReloadOutlined />} aria-label="刷新待处理" onClick={() => void load()} loading={loading} />
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
-    {loading && !rows.length && !reviews.length ? <div className="manager-empty"><Spin size="small" /><span>正在加载待处理</span></div>
+    {loading && !rows.length && !reviews.length && !staleOrders ? <div className="manager-empty"><Spin size="small" /><span>正在加载待处理</span></div>
       : <>
-        {!rows.length && !reviews.length && <div className="manager-empty"><strong>没有待处理</strong><span>顾客加选和低分评价会在这里出现</span></div>}
+        {!rows.length && !reviews.length && !staleOrders && <div className="manager-empty"><strong>没有待处理</strong><span>超时订单、顾客加选和低分评价会在这里出现</span></div>}
+        {staleOrders > 0 && <div className="manager-task-stale">
+          <div className="manager-task-top"><span>超过 30 分钟未开始</span><Tag color="red">{staleOrders}</Tag></div>
+          <p>请核实现场是否已接待，必要时在订单页查看详情。</p>
+          <Button block onClick={onOpenOrders}>去查看订单</Button>
+        </div>}
         {rows.length > 0 && <div className="manager-task-list">{rows.map(row => <button type="button" className="manager-task-card" key={row.id} onClick={() => { setSelected(row); setReason(''); }}>
           <div className="manager-task-top"><span>顾客加选</span><Tag color="gold">待确认</Tag></div>
           <strong>{row.revision.added_items.length ? selectionChangeItemSummary(row.revision.added_items[0]) : '新增项目'}</strong>

@@ -1132,6 +1132,11 @@ def manager_workbench(
         PositionOccupancy.store_id == store_id,
         PositionOccupancy.status == "in_service",
     )) or 0
+    stale_orders = db.scalar(select(sa_func.count()).select_from(SelectionSession).where(
+        SelectionSession.store_id == store_id,
+        SelectionSession.status.in_(("submitted", "confirmed")),
+        SelectionSession.created_at < datetime.now(UTC) - timedelta(minutes=30),
+    )) or 0
     pending_checkout = db.scalar(select(sa_func.count()).select_from(Order).where(
         Order.store_id == store_id,
         Order.status == "pending_checkout",
@@ -1148,6 +1153,8 @@ def manager_workbench(
         ServiceFeedback.follow_up_status == "open",
     )) or 0
     attention = []
+    if stale_orders:
+        attention.append({"key": "stale_order", "label": "订单超过30分钟未开始", "count": stale_orders})
     if pending_changes:
         attention.append({"key": "addon", "label": "顾客加选待处理", "count": pending_changes})
     if low_reviews:
