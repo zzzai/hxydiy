@@ -27,6 +27,7 @@ from app.models import (
     EventLog,
     Order,
     OrderEvent,
+    OperationalException,
     PositionOccupancy,
     Room,
     ServiceFeedback,
@@ -799,20 +800,7 @@ def admin_orders(
     }
 
 
-@router.get("/order-reconciliation")
-def order_reconciliation(
-    days: int = 30,
-    authorization: str | None = Header(default=None),
-    db: Session = Depends(get_db),
-) -> dict:
-    """Detect mismatches between DIY selection sessions and service orders.
-
-    This endpoint is read-only. It turns dual-fact drift into an explicit
-    exception list instead of silently choosing one source of truth.
-    """
-    staff = _current_staff(authorization, db)
-    _require_manager_staff(staff)
-    store_id = _staff_store_id(staff)
+def _order_reconciliation_result(db: Session, store_id: int, days: int) -> dict:
     days = max(1, min(days, 90))
     since = datetime.now(timezone.utc) - timedelta(days=days)
     orders = list(db.scalars(select(Order).where(
@@ -823,7 +811,6 @@ def order_reconciliation(
         SelectionSession.store_id == store_id,
         SelectionSession.created_at >= since,
     ).order_by(SelectionSession.created_at.desc()).limit(1000)))
-    order_by_id = {order.id: order for order in orders}
     session_by_order = {
         session.fulfillment_order_id: session
         for session in sessions
@@ -903,7 +890,146 @@ def order_reconciliation(
             "by_type": counts,
         },
         "items": anomalies[:200],
+        "counts": counts,
     }
+
+
+def _exception_dedupe_key(anomaly: dict) -> tuple[str, str, str]:
+    exception_type = str(anomaly.get("type") or "unknown")
+    if anomaly.get("order_id"):
+        entity_type, entity_id = "order", str(anomaly["order_id"])
+    elif anomaly.get("selection_session_id"):
+        entity_type, entity_id = "selection_session", str(anomaly["selection_session_id"])
+    else:
+        entity_type, entity_id = "reconciliation", str(anomaly.get("order_no") or anomaly.get("message") or "")
+    return f"{exception_type}:{entity_type}:{entity_id}", entity_type, entity_id
+
+
+@router.get("/order-reconciliation")
+def order_reconciliation(
+    days: int = 30,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Detect mismatches between DIY selection sessions and service orders."""
+    staff = _current_staff(authorization, db)
+    _require_manager_staff(staff)
+    return _order_reconciliation_result(db, _staff_store_id(staff), days)
+
+
+@router.post("/order-reconciliation/sync")
+def sync_order_reconciliation(
+    days: int = 30,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Materialise current reconciliation anomalies into the exception queue."""
+    staff = _current_staff(authorization, db)
+    _require_manager_staff(staff)
+    store_id = _staff_store_id(staff)
+    result = _order_reconciliation_result(db, store_id, days)
+    existing = list(db.scalars(select(OperationalException).where(
+        OperationalException.store_id == store_id,
+        OperationalException.status.in_(("open", "acknowledged")),
+    )))
+    by_key = {row.dedupe_key: row for row in existing}
+    created = 0
+    updated = 0
+    for anomaly in result["items"]:
+        dedupe_key, entity_type, entity_id = _exception_dedupe_key(anomaly)
+        row = by_key.get(dedupe_key)
+        if row:
+            row.title = str(anomaly.get("message") or "对账异常")[:160]
+            row.detail = anomaly
+            row.severity = "warning"
+            updated += 1
+        else:
+            db.add(OperationalException(
+                store_id=store_id,
+                exception_type=str(anomaly.get("type") or "unknown"),
+                severity="warning",
+                status="open",
+                dedupe_key=dedupe_key,
+                title=str(anomaly.get("message") or "对账异常")[:160],
+                detail=anomaly,
+                entity_type=entity_type,
+                entity_id=entity_id,
+            ))
+            created += 1
+    db.add(AuditLog(
+        actor_type="staff", actor_id=str(staff.id), store_id=store_id,
+        action="sync_order_reconciliation", entity_type="exception_queue", entity_id=str(store_id),
+        detail={"days": result["days"], "created": created, "updated": updated, "anomaly_count": result["summary"]["anomaly_count"]},
+    ))
+    db.commit()
+    return {
+        "date": datetime.now(timezone.utc).date().isoformat(),
+        "created": created,
+        "updated": updated,
+        "anomaly_count": result["summary"]["anomaly_count"],
+        "by_type": result["counts"],
+    }
+
+
+@router.get("/exceptions")
+def list_operational_exceptions(
+    status: str | None = "open",
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_manager_staff(staff)
+    store_id = _staff_store_id(staff)
+    query = select(OperationalException).where(OperationalException.store_id == store_id)
+    if status:
+        query = query.where(OperationalException.status == status)
+    rows = list(db.scalars(query.order_by(OperationalException.id.desc()).limit(200)))
+    return {
+        "items": [{
+            "id": row.id,
+            "exception_type": row.exception_type,
+            "severity": row.severity,
+            "status": row.status,
+            "title": row.title,
+            "detail": row.detail,
+            "entity_type": row.entity_type,
+            "entity_id": row.entity_id,
+            "resolution_note": row.resolution_note,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
+        } for row in rows],
+        "total": len(rows),
+    }
+
+
+@router.post("/exceptions/{exception_id}/resolve")
+def resolve_operational_exception(
+    exception_id: int,
+    body: dict | None = None,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_manager_staff(staff)
+    store_id = _staff_store_id(staff)
+    row = db.get(OperationalException, exception_id)
+    if not row or row.store_id != store_id:
+        raise HTTPException(status_code=404, detail="异常记录不存在")
+    if row.status == "resolved":
+        raise HTTPException(status_code=409, detail="异常已处理")
+    note = str((body or {}).get("resolution_note") or "").strip()[:500]
+    if len(note) < 2:
+        raise HTTPException(status_code=400, detail="请填写至少 2 个字的处理说明")
+    row.status = "resolved"
+    row.resolution_note = note
+    row.resolved_at = datetime.now(timezone.utc)
+    db.add(AuditLog(
+        actor_type="staff", actor_id=str(staff.id), store_id=store_id,
+        action="resolve_operational_exception", entity_type="operational_exception", entity_id=str(row.id),
+        detail={"exception_type": row.exception_type, "resolution_note": note},
+    ))
+    db.commit()
+    return {"id": row.id, "status": row.status, "resolved_at": row.resolved_at.isoformat()}
 
 
 @router.get("/analytics")

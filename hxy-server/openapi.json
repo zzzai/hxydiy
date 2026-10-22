@@ -8320,6 +8320,152 @@
         ]
       }
     },
+    "/api/v1/admin/exceptions": {
+      "get": {
+        "operationId": "list_operational_exceptions_api_v1_admin_exceptions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Operational Exceptions Api V1 Admin Exceptions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Operational Exceptions",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/exceptions/{exception_id}/resolve": {
+      "post": {
+        "operationId": "resolve_operational_exception_api_v1_admin_exceptions__exception_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "exception_id",
+            "required": true,
+            "schema": {
+              "title": "Exception Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Resolve Operational Exception Api V1 Admin Exceptions  Exception Id  Resolve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Operational Exception",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/kiosk-sessions": {
       "post": {
         "operationId": "create_kiosk_session_api_v1_admin_kiosk_sessions_post",
@@ -9554,7 +9700,7 @@
     },
     "/api/v1/admin/order-reconciliation": {
       "get": {
-        "description": "Detect mismatches between DIY selection sessions and service orders.\n\nThis endpoint is read-only. It turns dual-fact drift into an explicit\nexception list instead of silently choosing one source of truth.",
+        "description": "Detect mismatches between DIY selection sessions and service orders.",
         "operationId": "order_reconciliation_api_v1_admin_order_reconciliation_get",
         "parameters": [
           {
@@ -9609,6 +9755,68 @@
           }
         },
         "summary": "Order Reconciliation",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/order-reconciliation/sync": {
+      "post": {
+        "description": "Materialise current reconciliation anomalies into the exception queue.",
+        "operationId": "sync_order_reconciliation_api_v1_admin_order_reconciliation_sync_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sync Order Reconciliation Api V1 Admin Order Reconciliation Sync Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Order Reconciliation",
         "tags": [
           "admin"
         ]

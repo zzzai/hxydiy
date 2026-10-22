@@ -24,6 +24,7 @@ from app.models.media import MediaAsset
 from app.models.staff_access import StaffScopeAssignment
 from app.models.staff_external_identity import StaffExternalIdentity, StaffOAuthAttempt
 from app.models.customer_tag_contribution import CustomerTagContribution
+from app.models.exception_queue import OperationalException
 from app.models.catalog_options import (
     CHARGE_MODES,
     CHOICE_TYPES,
@@ -47,6 +48,7 @@ __all__ = [
     "MediaAsset",
     "StaffScopeAssignment",
     "StaffExternalIdentity", "StaffOAuthAttempt", "CustomerTagContribution",
+    "OperationalException",
     "CHARGE_MODES", "CHOICE_TYPES", "OptionChoicePrice", "ProjectCatalogVersion",
     "ProjectOptionChoice", "ProjectOptionGroup",
 ]

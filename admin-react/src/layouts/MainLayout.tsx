@@ -6,7 +6,7 @@ import {
   AppstoreOutlined, GiftOutlined, TeamOutlined, ThunderboltOutlined, LogoutOutlined,
   UserOutlined, MenuFoldOutlined, MenuUnfoldOutlined, MenuOutlined, EnvironmentOutlined,
   IdcardOutlined, ProjectOutlined, ShoppingOutlined, TagsOutlined, PieChartOutlined,
-  RobotOutlined, FileSearchOutlined, MessageOutlined,
+  RobotOutlined, FileSearchOutlined, MessageOutlined, WarningOutlined,
 } from '@ant-design/icons';
 import { getStaff } from '../api';
 import { getDefaultPath, getVisibleMenuPaths, isPathAllowed } from '../auth';
@@ -20,6 +20,7 @@ const OrdersPage = lazy(() => import('../pages/OrdersPage'));
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const AuditLogsPage = lazy(() => import('../pages/AuditLogsPage'));
 const FeedbackPage = lazy(() => import('../pages/FeedbackPage'));
+const ExceptionsPage = lazy(() => import('../pages/ExceptionsPage'));
 const RoomsPage = lazy(() => import('../pages/RoomsPage'));
 const TechsPage = lazy(() => import('../pages/TechsPage'));
 const StaffAccountsPage = lazy(() => import('../pages/StaffAccountsPage'));
@@ -51,7 +52,7 @@ const icons: Record<string, ReactNode> = {
   desktop: <DesktopOutlined />, appstore: <AppstoreOutlined />, gift: <GiftOutlined />, team: <TeamOutlined />,
   thunderbolt: <ThunderboltOutlined />, environment: <EnvironmentOutlined />, idcard: <IdcardOutlined />,
   project: <ProjectOutlined />, shopping: <ShoppingOutlined />, tags: <TagsOutlined />, 'pie-chart': <PieChartOutlined />,
-  robot: <RobotOutlined />, 'file-search': <FileSearchOutlined />, message: <MessageOutlined />,
+  robot: <RobotOutlined />, 'file-search': <FileSearchOutlined />, message: <MessageOutlined />, warning: <WarningOutlined />,
 };
 
 export default function MainLayout({ onLogout }: { onLogout: () => void }) {
@@ -137,6 +138,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
                 <Route path="/selection-sessions" element={page('/selection-sessions', <SelectionSessionsPage />)} />
                 <Route path="/orders" element={page('/orders', <OrdersPage />)} />
                 <Route path="/analytics" element={page('/analytics', <AnalyticsPage />)} />
+                <Route path="/exceptions" element={page('/exceptions', <ExceptionsPage />)} />
                 <Route path="/audit-logs" element={page('/audit-logs', <AuditLogsPage />)} />
                 <Route path="/feedback" element={page('/feedback', <FeedbackPage />)} />
                 <Route path="/rooms/*" element={page('/rooms', <RoomsPage />)} />
