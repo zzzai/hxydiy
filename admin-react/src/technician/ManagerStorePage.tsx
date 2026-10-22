@@ -140,7 +140,7 @@ export default function ManagerStorePage() {
     <header className="manager-page-heading">
       <div>
         <h1>门店工作台</h1>
-        <p>{view === 'tasks' ? '处理顾客加选与需要店长决定的事项' : view === 'selections' ? '查看当前门店订单，无需逐单处理' : view === 'positions' ? '按沙发、房间查看当前订单' : '查看本店评价并记录跟进'}</p>
+        <p>{view === 'tasks' ? '超时提醒与低分评价，订单由系统处理' : view === 'selections' ? '订单只读，确认与超时由系统处理' : view === 'positions' ? '按沙发、房间查看当前订单' : '查看本店评价并记录跟进'}</p>
       </div>
       <Button aria-label={view === 'tasks' ? '刷新待处理' : view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
     </header>

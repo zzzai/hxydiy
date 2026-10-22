@@ -71,7 +71,7 @@ export default function TechnicianMyServicesPage() {
           {total.pending_label && <p className="technician-order-pricing-hint">{total.pending_label}</p>}
         </section>}
         <div className="technician-my-service-actions">
-          <Button onClick={() => setCustomer(task.occupancy_id)}>查看顾客资料</Button>
+          <Button onClick={() => setCustomer(task.occupancy_id)}>顾客标签与资料</Button>
           <Button disabled={!task.user_id} onClick={() => navigate('/history')}>查看服务记录</Button>
         </div>
         {!task.user_id && <p>匿名服务可正常完成，暂未关联顾客资料。</p>}
