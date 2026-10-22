@@ -771,7 +771,16 @@ def admin_orders(
     if date:
         stmt = stmt.where(Order.booking_date == date)
     orders = list(db.scalars(stmt))
-    return {"items": [_order_summary(o) for o in orders], "total": len(orders)}
+    sessions = list(db.scalars(
+        select(SelectionSession).where(
+            SelectionSession.fulfillment_order_id.in_([order.id for order in orders])
+        )
+    )) if orders else []
+    session_by_order = {session.fulfillment_order_id: session for session in sessions}
+    return {
+        "items": [_order_summary(order, session_by_order.get(order.id)) for order in orders],
+        "total": len(orders),
+    }
 
 
 @router.get("/analytics")
@@ -982,7 +991,16 @@ def admin_update_coupon(
     return {"code": 0, "data": _coupon_out(tpl)}
 
 
-def _order_summary(o: Order) -> dict:
+def _order_summary(o: Order, session: SelectionSession | None = None) -> dict:
+    selection_total_cents = 0
+    if session:
+        snapshot = session.pricing_snapshot if isinstance(session.pricing_snapshot, dict) else {}
+        selection_total_cents = int(
+            snapshot.get("payable_total_cents")
+            or session.member_total_cents
+            or session.store_total_cents
+            or 0
+        )
     return {
         "id": o.id,
         "order_no": o.order_no,
@@ -995,4 +1013,12 @@ def _order_summary(o: Order) -> dict:
         "booking_date": o.booking_date,
         "booking_time": o.booking_time,
         "created_at": o.created_at.isoformat() if o.created_at else None,
+        "selection_session_id": session.id if session else None,
+        "selection_status": session.status if session else None,
+        "selection_total_cents": selection_total_cents,
+        "link_status": (
+            "linked" if session else
+            "missing" if o.order_type == "service" else
+            "not_applicable"
+        ),
     }
