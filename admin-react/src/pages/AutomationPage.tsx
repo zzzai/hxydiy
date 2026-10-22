@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { App, Button, Card, Table, Tag, Space, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { getAutomations, createAutomation, updateAutomation, deleteAutomationRule } from '../api';
+import StoreScopeSelect from '../components/StoreScopeSelect';
 
 const TRIGGER_MAP: Record<string, string> = {
   new_user: '新用户注册', first_order: '首单完成', order_completed: '服务完成',
@@ -11,16 +12,17 @@ const TRIGGER_MAP: Record<string, string> = {
 export default function AutomationPage() {
   const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
+  const [storeId, setStoreId] = useState<number>();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
 
-  const load = async () => { try { const r = await getAutomations(); setData(r.data || []); } catch {} };
-  useEffect(() => { load(); }, []);
+  const load = async () => { try { const r = await getAutomations(storeId); setData(r.data || []); } catch {} };
+  useEffect(() => { load(); }, [storeId]);
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <span style={{ fontWeight: 600 }}>SCRM 自动化规则</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Space size={12} wrap><span style={{ fontWeight: 600 }}>SCRM 自动化规则</span><StoreScopeSelect value={storeId} onChange={setStoreId} /></Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建规则</Button>
       </div>
       <Table dataSource={data} rowKey="id" size="small" pagination={false}
@@ -30,15 +32,15 @@ export default function AutomationPage() {
           { title: '动作', render: (_: any, r: any) => (r.actions || []).map((a: any, i: number) => <Tag key={i} color="green">{a.type}</Tag>) },
           { title: '冷却', dataIndex: 'cooldown_days', width: 60, render: (v: number) => v ? `${v}天` : '-' },
           { title: '触发次数', dataIndex: 'trigger_count', width: 80 },
-          { title: '状态', dataIndex: 'is_enabled', width: 80, render: (v: boolean, r: any) => <Switch checked={v} onChange={async (c) => { await updateAutomation(r.id, { is_enabled: c }); load(); }} /> },
-          { title: '操作', width: 80, render: (_: any, r: any) => <Popconfirm title="确认删除？" onConfirm={async () => { await deleteAutomationRule(r.id); load(); }}><Button size="small" danger type="link">删除</Button></Popconfirm> },
+          { title: '状态', dataIndex: 'is_enabled', width: 80, render: (v: boolean, r: any) => <Switch checked={v} onChange={async (c) => { await updateAutomation(r.id, { is_enabled: c }, storeId); load(); }} /> },
+          { title: '操作', width: 80, render: (_: any, r: any) => <Popconfirm title="确认删除？" onConfirm={async () => { await deleteAutomationRule(r.id, storeId); load(); }}><Button size="small" danger type="link">删除</Button></Popconfirm> },
         ]}
       />
       <Modal open={open} onCancel={() => setOpen(false)} title="新建自动化规则" footer={null} width={500}>
         <Form form={form} onFinish={async (v) => {
           let actions = [];
           try { if (v.actions_text) actions = JSON.parse(`[${v.actions_text}]`); } catch { message.error('动作JSON格式错误'); return; }
-          await createAutomation({ name: v.name, description: v.description, trigger_event: v.trigger_event, actions, is_enabled: v.is_enabled !== false, cooldown_days: v.cooldown_days || 0 });
+          await createAutomation({ name: v.name, description: v.description, trigger_event: v.trigger_event, actions, is_enabled: v.is_enabled !== false, cooldown_days: v.cooldown_days || 0 }, storeId);
           message.success('已创建'); setOpen(false); form.resetFields(); load();
         }} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
