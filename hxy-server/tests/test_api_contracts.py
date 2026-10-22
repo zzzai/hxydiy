@@ -1274,6 +1274,23 @@ class AdminV2ContractTests(unittest.TestCase):
                 db.query(User).filter(User.id == user_id).delete()
                 db.commit()
 
+    def test_customer_export_is_masked_and_audited(self):
+        response = self.client.get("/api/v1/admin/v2/customers/export")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn("text/csv", response.headers["content-type"])
+        self.assertIn("顾客ID", response.text)
+        self.assertIn("手机号(脱敏)", response.text)
+        with self.SessionLocal() as db:
+            audit = db.scalar(select(AuditLog).where(
+                AuditLog.action == "export_customer_list",
+                AuditLog.entity_type == "customer_export",
+            ))
+            self.assertIsNotNone(audit)
+            self.assertEqual(audit.detail.get("phone_mode"), "masked")
+        with self.SessionLocal() as db:
+            db.query(AuditLog).filter(AuditLog.action == "export_customer_list").delete()
+            db.commit()
+
     def test_order_reconciliation_surfaces_missing_selection(self):
         response = self.client.get("/api/v1/admin/order-reconciliation?days=30", headers=self.auth_headers)
         self.assertEqual(response.status_code, 200, response.text)

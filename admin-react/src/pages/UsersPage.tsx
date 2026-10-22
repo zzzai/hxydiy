@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox, Dropdown, Space } from 'antd';
 import { MoreOutlined, SearchOutlined } from '@ant-design/icons';
-import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer } from '../api';
+import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer, exportCustomers } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 import { getMembershipEntitlements } from '../api';
@@ -12,6 +12,7 @@ export default function UsersPage() {
   const [data, setData] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState<number | undefined>();
   const [memberFilter, setMemberFilter] = useState<string>('');
@@ -48,6 +49,25 @@ export default function UsersPage() {
     if (tagFilter) params.tag_id = tagFilter;
     if (memberFilter) params.is_member = memberFilter;
     try { const r = await getUsers(params); setData(r.data?.items || []); setTotal(r.data?.total || 0); } catch {} finally { setLoading(false); }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params: any = {};
+      if (search) params.search = search;
+      if (tagFilter) params.tag_id = tagFilter;
+      if (memberFilter !== '') params.is_member = memberFilter === '1';
+      const response = await exportCustomers(params);
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      message.success('顾客列表已导出，手机号已脱敏');
+    } catch { message.error('导出失败，请稍后重试'); }
+    finally { setExporting(false); }
   };
 
   useEffect(() => { load(); }, [tagFilter, memberFilter]);
@@ -137,6 +157,7 @@ export default function UsersPage() {
           <h2>顾客列表</h2>
           <div className="page-kicker">查找顾客、维护运营标签与会员权益；敏感操作会记录审计</div>
         </div>
+        <Button loading={exporting} onClick={() => void handleExport()}>导出顾客（脱敏）</Button>
       </div>
       <div className="users-filter-row">
         <Input aria-label="搜索昵称或手机号" prefix={<SearchOutlined />} placeholder="搜索昵称或手机号" value={search} onChange={e => setSearch(e.target.value)} onPressEnter={() => load()} style={{ width: 220 }} />
