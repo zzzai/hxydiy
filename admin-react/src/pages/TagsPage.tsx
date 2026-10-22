@@ -30,7 +30,7 @@ export default function TagsPage() {
       <Modal open={open} onCancel={() => setOpen(false)} title="新建标签" footer={null}>
         <Form form={form} onFinish={async (v) => { await createTag(v); message.success('已创建'); setOpen(false); form.resetFields(); load(); }} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="color" label="颜色" initialValue="#1f8f75"><Input type="color" /></Form.Item>
+          <Form.Item name="color" label="颜色" initialValue="#197A3B"><Input type="color" /></Form.Item>
           <Form.Item name="tag_type" label="类型" initialValue="manual"><Select options={[{ value: 'manual', label: '手动' }, { value: 'auto', label: '自动' }]} /></Form.Item>
           <Form.Item name="description" label="描述"><Input /></Form.Item>
           <Button type="primary" htmlType="submit" block>保存</Button>

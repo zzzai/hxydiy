@@ -26,3 +26,6 @@
 .project-record-actions .ant-btn-primary { flex:1; background:#193e33; }
 .project-record-actions .ant-btn-primary:disabled { background:#eef0ee; border-color:#dbe4de; color:#657269; }
 .project-record-actions .ant-btn { height:auto; min-height:44px; }
+
+/* Brand v1.0 */
+.project-record-content button { color: var(--hxy-text); border-color: var(--hxy-border-control); }

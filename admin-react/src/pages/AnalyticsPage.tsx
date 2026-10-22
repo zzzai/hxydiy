@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Spin, Empty, Button, Progress, DatePicker, Row, Col, Statistic, Table, Tag, Space } from 'antd';
+import { Card, Spin, Empty, Button, Progress, DatePicker, Row, Col, Statistic, Table, Tag, Space, Result } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -23,9 +23,11 @@ export default function AnalyticsPage() {
   const [serviceReference, setServiceReference] = useState<any>(null);
   const [range, setRange] = useState<[Dayjs, Dayjs]>([dayjs().subtract(6, 'day'), dayjs()]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const load = async (selectedRange = range) => {
     setLoading(true);
+    setError('');
     try {
       const start = selectedRange[0].format('YYYY-MM-DD');
       const end = selectedRange[1].format('YYYY-MM-DD');
@@ -37,12 +39,17 @@ export default function AnalyticsPage() {
       setBehavior(behaviorResponse.data);
       setSummary(summaryResponse.data);
       setServiceReference(serviceReferenceResponse.data);
-    } catch {} finally { setLoading(false); }
+    } catch {
+      setError('经营数据加载失败，可能是统计服务暂时不可用。请稍后重试。');
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); }, []);
 
   if (loading && !summary) return <Spin style={{ display: 'block', margin: '40px auto' }} />;
-  if (!summary || !behavior) return <Empty description="暂无数据" />;
+  if (error) return <Result status="error" title="经营数据加载失败" subTitle={error} extra={<Button type="primary" icon={<ReloadOutlined />} onClick={() => void load()}>重试</Button>} />;
+  if (!summary || !behavior) return <Empty description="所选日期暂无经营数据" />;
 
   const maxFunnel = Math.max(...funnelKeys.map(k => behavior.funnel?.[k] || 0), 1);
   const transaction = summary.transactions || {};
@@ -97,7 +104,7 @@ export default function AnalyticsPage() {
             <Row gutter={[8, 18]}>
               <Col span={8}><Statistic title="评价数" value={feedback.count || 0} /></Col>
               <Col span={8}><Statistic title="平均分" value={feedback.average_rating ?? '-'} precision={2} /></Col>
-              <Col span={8}><Button type="link" onClick={() => navigate('/feedback')} style={{ padding: 0, height: 'auto', textAlign: 'left' }}><Statistic title="低分待跟进" value={feedback.low_rating_count || 0} valueStyle={{ color: feedback.low_rating_count ? '#c0392b' : undefined }} /></Button></Col>
+              <Col span={8}><Button type="link" onClick={() => navigate('/feedback')} style={{ padding: 0, height: 'auto', textAlign: 'left' }}><Statistic title="低分待跟进" value={feedback.low_rating_count || 0} valueStyle={{ color: feedback.low_rating_count ? 'var(--hxy-error)' : undefined }} /></Button></Col>
             </Row>
           </Card>
         </Col>
@@ -123,7 +130,7 @@ export default function AnalyticsPage() {
               <Col span={12}><Statistic title="服务位利用率" value={operations.utilization_percent || 0} suffix="%" /></Col>
               <Col span={12}><Statistic title="异常结束" value={operations.exception_release_count || 0} /></Col>
             </Row>
-            <div style={{ color: '#7f8c8d', fontSize: 12, marginBottom: 12 }}>清洁耗时：当前数据未记录清洁开始时间，暂不计算</div>
+            <div style={{ color: 'var(--hxy-text-muted)', fontSize: 12, marginBottom: 12 }}>清洁耗时：当前数据未记录清洁开始时间，暂不计算</div>
             <Table
               size="small"
               pagination={false}
@@ -140,9 +147,9 @@ export default function AnalyticsPage() {
             {funnelKeys.map(k => (
               <div key={k} style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
                 <span style={{ width: 76, flex: '0 0 auto', fontSize: 13 }}>{funnelText[k]}</span>
-                <Progress percent={Math.round((summary.funnel?.[k] || 0) / maxFunnel * 100)} size="small" style={{ flex: 1, margin: '0 12px' }} strokeColor={k === 'selection_submit_success' ? '#e67e22' : '#1f8f75'} showInfo={false} />
+                <Progress percent={Math.round((summary.funnel?.[k] || 0) / maxFunnel * 100)} size="small" style={{ flex: 1, margin: '0 12px' }} strokeColor={k === 'selection_submit_success' ? 'var(--hxy-warning)' : 'var(--hxy-primary)'} showInfo={false} />
                 <span style={{ width: 90, textAlign: 'right', fontWeight: 600 }}>
-                  {summary.funnel?.[k] || 0}{funnelRateKeys[k] && <span style={{ display: 'block', color: '#7f8c8d', fontSize: 11 }}>{summary.funnel_rates?.[funnelRateKeys[k]] ?? 0}% 到下一阶段</span>}
+                  {summary.funnel?.[k] || 0}{funnelRateKeys[k] && <span style={{ display: 'block', color: 'var(--hxy-text-muted)', fontSize: 11 }}>{summary.funnel_rates?.[funnelRateKeys[k]] ?? 0}% 到下一阶段</span>}
                 </span>
               </div>
             ))}

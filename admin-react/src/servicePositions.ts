@@ -162,14 +162,14 @@ export type BulkReleaseResult = {
 };
 
 const STATUS_META: Record<OccupancyStatus, OccupancyStatusMeta> = {
-  available: { label: '可用', color: '#2f8b69', tone: 'available', description: '可接待新顾客' },
-  held: { label: '临时占用', color: '#c78b2d', tone: 'pending', description: '顾客正在选择项目' },
-  waiting_service: { label: '待服务', color: '#3178c6', tone: 'pending', description: '选单已提交，等待开始' },
-  in_service: { label: '服务中', color: '#1f6f5b', tone: 'active', description: '顾客正在接受服务' },
-  post_service_present: { label: '服务完成·仍在位', color: '#ad5b34', tone: 'attention', description: '服务已结束，顾客尚未离位' },
-  cleaning: { label: '待清洁', color: '#7256a8', tone: 'cleaning', description: '顾客已离位，完成清洁后释放' },
-  released: { label: '已释放', color: '#84928e', tone: 'muted', description: '本次占用已结束' },
-  unavailable: { label: '暂不可用', color: '#84928e', tone: 'muted', description: '维修或停用中' },
+  available: { label: '可用', color: 'var(--hxy-success)', tone: 'available', description: '可接待新顾客' },
+  held: { label: '临时占用', color: 'var(--hxy-warning)', tone: 'pending', description: '顾客正在选择项目' },
+  waiting_service: { label: '待服务', color: 'var(--hxy-info)', tone: 'pending', description: '选单已提交，等待开始' },
+  in_service: { label: '服务中', color: 'var(--hxy-info)', tone: 'active', description: '顾客正在接受服务' },
+  post_service_present: { label: '服务完成·仍在位', color: 'var(--hxy-warning)', tone: 'attention', description: '服务已结束，顾客尚未离位' },
+  cleaning: { label: '待清洁', color: 'var(--hxy-info)', tone: 'cleaning', description: '顾客已离位，完成清洁后释放' },
+  released: { label: '已释放', color: 'var(--hxy-text-muted)', tone: 'muted', description: '本次占用已结束' },
+  unavailable: { label: '暂不可用', color: 'var(--hxy-text-muted)', tone: 'muted', description: '维修或停用中' },
 };
 
 const STAFF_ACTIONS: Partial<Record<OccupancyStatus, PositionAction[]>> = {
@@ -183,7 +183,7 @@ const STAFF_ACTIONS: Partial<Record<OccupancyStatus, PositionAction[]>> = {
 export function occupancyStatusMeta(status: OccupancyStatus | string): OccupancyStatusMeta {
   return STATUS_META[status as OccupancyStatus] ?? {
     label: status || '未知',
-    color: '#84928e',
+    color: 'var(--hxy-text-muted)',
     tone: 'muted',
     description: '状态信息待刷新',
   };

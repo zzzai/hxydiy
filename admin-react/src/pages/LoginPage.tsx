@@ -60,10 +60,10 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1f8f75, #0f4f43)' }}>
-      <Card style={{ width: 380, maxWidth: 'calc(100vw - 32px)', borderRadius: 16, boxShadow: '0 12px 40px rgba(0,0,0,.15)' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--hxy-canvas)' }}>
+      <Card style={{ width: 380, maxWidth: 'calc(100vw - 32px)', borderRadius: 16, border: '1px solid var(--hxy-border-subtle)', boxShadow: '0 12px 40px rgba(32,42,35,.10)' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <Title level={2} style={{ color: '#1f8f75', marginBottom: 4 }}>荷小悦</Title>
+          <Title level={2} style={{ color: 'var(--hxy-primary)', marginBottom: 4 }}>荷小悦</Title>
           <Text type="secondary">{selection ? '请选择进入的工作区' : '门店管理中台'}</Text>
         </div>
         {selection ? <div style={{ display: 'grid', gap: 12 }}>

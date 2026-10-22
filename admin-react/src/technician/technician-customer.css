@@ -23,3 +23,10 @@
 .technician-customer-tags .technician-customer-entry > p { margin: 0 0 8px; color: var(--mobile-muted, #647a71); font-size: 12px; }
 .technician-customer-tags .ant-btn { min-height: 44px; }
 .technician-customer-tags > .ant-btn { min-height: 46px; }
+
+/* Brand v1.0 shared colors for customer panel. */
+.technician-my-services h1, .technician-customer-entry h2, .technician-customer-entry h3 { color: var(--hxy-text); }
+.technician-my-services > header p, .technician-customer-panel header p, .technician-customer-entry time { color: var(--hxy-text-secondary); }
+.technician-customer-entry { border-color: var(--hxy-border-subtle); background: var(--hxy-surface); }
+.technician-customer-hint { color: var(--hxy-text-secondary) !important; }
+.technician-customer-tags .technician-customer-entry > p { color: var(--hxy-text-secondary); }

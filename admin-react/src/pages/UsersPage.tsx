@@ -26,6 +26,8 @@ export default function UsersPage() {
   const rightsRequest = useRef(0);
   const [membershipCustomer, setMembershipCustomer] = useState<any>();
   const [membershipMode, setMembershipMode] = useState<'enroll' | 'renew' | 'cancel' | 'recover'>('enroll');
+  const [tagCustomer, setTagCustomer] = useState<any>();
+  const [tagToAdd, setTagToAdd] = useState<number>();
   const [membershipForm] = Form.useForm();
   const canCreateProfile = getStaff()?.role === 'manager' || getStaff()?.role === 'admin';
   const canManageDevice = getStaff()?.role === 'manager';
@@ -43,11 +45,15 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, [tagFilter, memberFilter]);
 
-  const doAddTag = async (userId: number) => {
-    const tagId = prompt('输入标签 ID: ' + tags.map((t: any) => `[${t.id}] ${t.name}`).join(', '));
-    if (!tagId) return;
-    await addUserTag(userId, Number(tagId));
-    message.success('已打标'); load();
+  const openTag = (user: any) => { setTagCustomer(user); setTagToAdd(undefined); };
+  const submitTag = async () => {
+    if (!tagCustomer || !tagToAdd) return;
+    try {
+      await addUserTag(tagCustomer.id, tagToAdd);
+      message.success('标签已添加');
+      setTagCustomer(undefined); setTagToAdd(undefined);
+      void load(page);
+    } catch { message.error('标签添加失败，请确认顾客和标签仍有效'); }
   };
 
   const openMembership = (user: any, mode: 'enroll' | 'renew' | 'cancel' | 'recover') => {
@@ -87,13 +93,19 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <Input prefix={<SearchOutlined />} placeholder="搜索昵称或手机号" value={search} onChange={e => setSearch(e.target.value)} onPressEnter={() => load()} style={{ width: 200 }} />
-        <Select placeholder="全部标签" allowClear value={tagFilter} onChange={setTagFilter} style={{ width: 160 }} options={tags.map((t: any) => ({ value: t.id, label: t.name }))} />
-        <Select placeholder="全部DIY标记" allowClear value={memberFilter} onChange={setMemberFilter} style={{ width: 180 }} options={[{ value: '1', label: '有DIY会员标记' }, { value: '0', label: '无DIY会员标记' }]} />
+      <div className="page-heading">
+        <div>
+          <h2>顾客列表</h2>
+          <div className="page-kicker">查找顾客、维护运营标签与会员权益；敏感操作会记录审计</div>
+        </div>
+      </div>
+      <div className="users-filter-row">
+        <Input aria-label="搜索昵称或手机号" prefix={<SearchOutlined />} placeholder="搜索昵称或手机号" value={search} onChange={e => setSearch(e.target.value)} onPressEnter={() => load()} style={{ width: 220 }} />
+        <Select aria-label="按标签筛选" placeholder="全部标签" allowClear value={tagFilter} onChange={setTagFilter} style={{ width: 160 }} options={tags.map((t: any) => ({ value: t.id, label: t.name }))} />
+        <Select aria-label="按会员标记筛选" placeholder="全部DIY标记" allowClear value={memberFilter} onChange={setMemberFilter} style={{ width: 180 }} options={[{ value: '1', label: '有DIY会员标记' }, { value: '0', label: '无DIY会员标记' }]} />
         <Button type="primary" onClick={() => load()}>搜索</Button>
       </div>
-      <Table dataSource={data} loading={loading} rowKey="id" size="small"
+      <Table dataSource={data} loading={loading} rowKey="id" size="small" scroll={{ x: 1050 }}
         pagination={{ current: page, total, pageSize: 30, onChange: (p) => { setPage(p); load(p); } }}
         columns={[
           { title: '用户', dataIndex: 'nickname', render: (v: string, r: any) => <>{v} {r.has_store_membership && <Tag color="gold">本店权益有效</Tag>}</> },
@@ -104,7 +116,7 @@ export default function UsersPage() {
             title: '操作', width: 170,
             render: (_: any, r: any) => (
               <>
-                <Button size="small" onClick={() => doAddTag(r.id)}>打标</Button>
+                <Button size="small" onClick={() => openTag(r)}>添加标签</Button>
                 <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openRights(r)}>权益说明</Button>
                 {canCreateProfile && <Button size="small" style={{ marginLeft: 6 }} onClick={() => setProfileCustomerId(r.id)}>画像记录</Button>}
                 {r.has_store_membership && canManageDevice && <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openDevice(r)}>可信设备</Button>}
@@ -154,6 +166,11 @@ export default function UsersPage() {
           {membershipMode === 'recover' && <Form.Item name="idempotency_key" label="异常恢复编号" rules={[{ required: true, min: 1, message: '请填写可追溯编号' }]}><Input maxLength={64} placeholder="例如：recover-20260910-001" /></Form.Item>}
         </Form>
         <p>日常会员核验请使用技师端扫码；电脑后台不能通过手机号直接给予会员价。</p>
+      </Modal>
+      <Modal title="添加运营标签" open={Boolean(tagCustomer)} onCancel={() => setTagCustomer(undefined)} onOk={() => void submitTag()} okText="添加标签" cancelText="取消" okButtonProps={{ disabled: !tagToAdd }}>
+        <p style={{ marginTop: 0 }}>为 {tagCustomer?.nickname || tagCustomer?.phone_masked || '该顾客'} 添加标签：</p>
+        <Select aria-label="选择要添加的标签" style={{ width: '100%' }} placeholder="选择一个门店运营标签" value={tagToAdd} onChange={setTagToAdd} options={tags.map((t: any) => ({ value: t.id, label: t.name }))} />
+        <p style={{ color: 'var(--hxy-text-secondary)', fontSize: 12, marginBottom: 0 }}>标签用于门店运营，不等同于顾客服务记录。</p>
       </Modal>
       <Modal title="会员可信设备" open={Boolean(deviceCustomer)} onCancel={() => { setDeviceCustomer(undefined); setDeviceState(undefined); }} footer={deviceState?.bound ? <Popconfirm title="确认已核实顾客换机申请？撤销后旧设备和旧会员码立即失效。" onConfirm={() => void revokeDevice()}><Button danger>撤销旧设备</Button></Popconfirm> : null}><Descriptions column={1} items={[{ label: '会员', children: deviceCustomer?.nickname || deviceCustomer?.phone_masked || '-' }, { label: '设备状态', children: deviceState?.bound ? <Tag color="green">已绑定</Tag> : <Tag>未绑定</Tag> }, { label: '绑定时间', children: deviceState?.created_at?.slice(0, 19) || '-' }, { label: '最近使用', children: deviceState?.last_seen_at?.slice(0, 19) || '-' }]} /><p>管理后台只处理受控换绑与审计，日常会员核验请使用技师端扫码。</p></Modal>
     </div>

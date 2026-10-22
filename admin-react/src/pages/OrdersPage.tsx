@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button, Card, Empty, Input, InputNumber, Modal, Select, Spin, Tag, message } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import { getOrders, getStaff, registerRefundNote } from '../api';
 import { buildRefundNotePayload, makeIdempotencyKey } from '../operations';
 
@@ -63,18 +64,30 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <Select
-        value={filter} onChange={setFilter}
-        style={{ width: 160, marginBottom: 16 }}
-        options={[
-          { value: '', label: '全部记录' },
-          { value: 'pending_payment', label: '待门店确认' },
-          { value: 'paid', label: '待核销' },
-          { value: 'completed', label: '已完成' },
-        ]}
-      />
+      <div className="page-heading">
+        <div>
+          <h2>结算记录</h2>
+          <div className="page-kicker">查看本店结算状态并登记已完成的线下退款，不会自动退回资金</div>
+        </div>
+        <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>
+      </div>
+      <div className="orders-filter-row">
+        <span>记录状态</span>
+        <Select
+          aria-label="筛选结算记录状态"
+          value={filter} onChange={setFilter}
+          style={{ width: 170 }}
+          options={[
+            { value: '', label: '全部记录' },
+            { value: 'pending_payment', label: '待门店确认' },
+            { value: 'paid', label: '待核销' },
+            { value: 'completed', label: '已完成' },
+          ]}
+        />
+        <span className="orders-count">共 {items.length} 条</span>
+      </div>
       {loading ? <Spin style={{ display: 'block', margin: '40px auto' }} /> :
-       items.length === 0 ? <Empty description="暂无此类订单" /> :
+       items.length === 0 ? <Empty description={filter ? '当前筛选下没有结算记录，可切换到全部记录查看' : '本店还没有结算记录'} /> :
        items.map((o: any) => (
         <Card key={o.id} size="small" style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>

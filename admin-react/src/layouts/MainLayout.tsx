@@ -40,7 +40,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: Er
   state = { error: null as Error | null };
   static getDerivedStateFromError(e: Error) { return { error: e }; }
   render() {
-    if (this.state.error) return <div style={{ padding: 40, color: '#c0392b' }}><h3>页面出错</h3><pre>{this.state.error.message}</pre></div>;
+    if (this.state.error) return <div style={{ padding: 40, color: 'var(--hxy-error)' }}><h3>页面出错</h3><pre>{this.state.error.message}</pre></div>;
     return this.props.children;
   }
 }
@@ -79,7 +79,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
         {(!collapsed || isMobile) && <span className="brand-name">荷小悦门店中台</span>}
       </div>
       <Menu
-        theme="dark"
+        theme="light"
         mode="inline"
         selectedKeys={selectedKeys}
         defaultOpenKeys={openKeys}
@@ -99,8 +99,8 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
     <ErrorBoundary>
       <Layout className="app-shell">
         <a className="skip-link" href="#main-content">跳到主要内容</a>
-        {!isMobile && <Sider trigger={null} collapsible collapsed={collapsed} width={240} className="desktop-sider" theme="dark">{navigation}</Sider>}
-        <Drawer open={isMobile && mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} placement="left" width={288} closable={false} styles={{ body: { padding: 0, background: '#0d2f29' } }}>
+        {!isMobile && <Sider trigger={null} collapsible collapsed={collapsed} width={240} className="desktop-sider" theme="light">{navigation}</Sider>}
+        <Drawer open={isMobile && mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} placement="left" width={288} closable={false} styles={{ body: { padding: 0, background: '#FFFFFF' } }}>
           {navigation}
         </Drawer>
         <Layout>
@@ -114,7 +114,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
               />
               {!isMobile && <div className="topbar-context" aria-label="当前位置">
                 {currentGroup && <span>{currentGroup.label}</span>}
-                <strong>{currentItem?.label || '门店中台'}</strong>
+                <h1 className="topbar-page-title">{currentItem?.label || '门店中台'}</h1>
               </div>}
             </div>
             <div className="topbar-actions">
