@@ -6741,7 +6741,9 @@ export interface operations {
     };
     admin_coupons_api_v1_admin_coupons_get: {
         parameters: {
-            query?: never;
+            query?: {
+                store_id?: number | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -6774,7 +6776,9 @@ export interface operations {
     };
     admin_create_coupon_api_v1_admin_coupons_post: {
         parameters: {
-            query?: never;
+            query?: {
+                store_id?: number | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -6811,7 +6815,9 @@ export interface operations {
     };
     admin_update_coupon_api_v1_admin_coupons__tpl_id__post: {
         parameters: {
-            query?: never;
+            query?: {
+                store_id?: number | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -8284,7 +8290,9 @@ export interface operations {
     };
     list_automations_api_v1_admin_v2_automations_get: {
         parameters: {
-            query?: never;
+            query?: {
+                store_id?: number | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -8315,7 +8323,9 @@ export interface operations {
     };
     create_automation_api_v1_admin_v2_automations_post: {
         parameters: {
-            query?: never;
+            query?: {
+                store_id?: number | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -8350,7 +8360,9 @@ export interface operations {
     };
     list_trigger_events_api_v1_admin_v2_automations_trigger_events_get: {
         parameters: {
-            query?: never;
+            query?: {
+                store_id?: number | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -8381,7 +8393,9 @@ export interface operations {
     };
     update_automation_api_v1_admin_v2_automations__rule_id__post: {
         parameters: {
-            query?: never;
+            query?: {
+                store_id?: number | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -8420,7 +8434,9 @@ export interface operations {
     };
     delete_automation_api_v1_admin_v2_automations__rule_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                store_id?: number | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -8822,6 +8838,7 @@ export interface operations {
         parameters: {
             query?: {
                 page_key?: string;
+                store_id?: number | null;
             };
             header?: {
                 authorization?: string | null;
@@ -8855,6 +8872,7 @@ export interface operations {
         parameters: {
             query?: {
                 page_key?: string;
+                store_id?: number | null;
             };
             header?: {
                 authorization?: string | null;

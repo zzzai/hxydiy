@@ -127,6 +127,27 @@ def _is_headquarters_admin(staff: Staff) -> bool:
     return getattr(staff, "role", None) == "admin" and getattr(staff, "store_id", None) is None
 
 
+def _resolve_target_store_id(db: Session, staff: Staff, requested_store_id: int | None) -> int:
+    """Resolve the store a content/marketing endpoint may act on.
+
+    Store-scoped users are pinned to their own store. An unbound headquarters
+    admin may select a store explicitly; without a selection the first store is
+    used as the deterministic default.
+    """
+    if staff.store_id is not None:
+        if requested_store_id not in (None, staff.store_id):
+            raise HTTPException(status_code=403, detail={"code": "STORE_SCOPE_DENIED", "message": "不能操作其他门店"})
+        return staff.store_id
+    if staff.role != "admin":
+        raise HTTPException(status_code=403, detail={"code": "STORE_SCOPE_REQUIRED", "message": "当前账号未绑定门店"})
+    target = requested_store_id or db.scalar(select(Store.id).order_by(Store.id).limit(1))
+    if target is None:
+        raise HTTPException(status_code=400, detail={"code": "STORE_REQUIRED", "message": "请先创建门店"})
+    if not db.get(Store, target):
+        raise HTTPException(status_code=404, detail="门店不存在")
+    return target
+
+
 def _require_catalog_master_admin(staff: Staff) -> None:
     """目录/商品主数据只能由总部管理员维护。"""
     _require_headquarters_admin(staff)
@@ -866,12 +887,17 @@ def _page_content_view(content: PageContent) -> dict:
 
 
 @router.get("/page-content")
-def get_page_content_admin(page_key: str = Query("diy-home"), db: Session = Depends(get_db), authorization: str | None = Header(None)):
+def get_page_content_admin(
+    page_key: str = Query("diy-home"),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
     staff = _current_staff(authorization, db)
-    store_id = _staff_store_id(staff)
-    content = db.scalar(select(PageContent).where(PageContent.store_id == store_id, PageContent.page_key == page_key))
+    action_store_id = _resolve_target_store_id(db, staff, store_id)
+    content = db.scalar(select(PageContent).where(PageContent.store_id == action_store_id, PageContent.page_key == page_key))
     if not content:
-        content = PageContent(store_id=store_id, page_key=page_key)
+        content = PageContent(store_id=action_store_id, page_key=page_key)
         db.add(content)
         db.commit()
         db.refresh(content)
@@ -879,17 +905,23 @@ def get_page_content_admin(page_key: str = Query("diy-home"), db: Session = Depe
 
 
 @router.put("/page-content")
-def update_page_content(page_key: str = Query("diy-home"), body: PageContentIn = ..., db: Session = Depends(get_db), authorization: str | None = Header(None)):
+def update_page_content(
+    page_key: str = Query("diy-home"),
+    store_id: int | None = Query(None),
+    body: PageContentIn = ...,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
     staff = _current_staff(authorization, db)
     _require_admin(staff)
-    store_id = _staff_store_id(staff)
-    content = db.scalar(select(PageContent).where(PageContent.store_id == store_id, PageContent.page_key == page_key))
+    action_store_id = _resolve_target_store_id(db, staff, store_id)
+    content = db.scalar(select(PageContent).where(PageContent.store_id == action_store_id, PageContent.page_key == page_key))
     if not content:
-        content = PageContent(store_id=store_id, page_key=page_key)
+        content = PageContent(store_id=action_store_id, page_key=page_key)
         db.add(content)
     for key, value in body.model_dump().items():
         setattr(content, key, value)
-    _audit(db, staff, "update_page_content", "page_content", f"{store_id}:{page_key}", {"store_id": store_id})
+    _audit(db, staff, "update_page_content", "page_content", f"{action_store_id}:{page_key}", {"store_id": action_store_id})
     db.commit()
     db.refresh(content)
     return _page_content_view(content)
@@ -5091,12 +5123,15 @@ def recount_segment(seg_id: int, db: Session = Depends(get_db),
 # ──────────────────────────────────────────────────────
 
 @router.get("/automations")
-def list_automations(db: Session = Depends(get_db),
-                     authorization: str | None = Header(None)) -> list:
+def list_automations(
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+) -> list:
     staff = _current_staff(authorization, db)
-    store_id = _staff_store_id(staff)
+    action_store_id = _resolve_target_store_id(db, staff, store_id)
     rules = db.execute(select(AutomationRule).where(
-        AutomationRule.store_id == store_id,
+        AutomationRule.store_id == action_store_id,
     ).order_by(AutomationRule.id)).scalars().all()
     return [{
         "id": r.id, "name": r.name, "description": r.description,
@@ -5129,33 +5164,47 @@ TRIGGER_EVENTS = [
 
 
 @router.get("/automations/trigger-events")
-def list_trigger_events(db: Session = Depends(get_db),
-                        authorization: str | None = Header(None)):
+def list_trigger_events(
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
     staff = _current_staff(authorization, db)
-    _staff_store_id(staff)
+    _resolve_target_store_id(db, staff, store_id)
     return TRIGGER_EVENTS
 
 
 @router.post("/automations")
-def create_automation(body: AutomationIn, db: Session = Depends(get_db),
-                      authorization: str | None = Header(None)):
+def create_automation(
+    body: AutomationIn,
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
     s = _current_staff(authorization, db)
     _require_admin(s)
-    r = AutomationRule(store_id=_staff_store_id(s), **body.model_dump())
+    action_store_id = _resolve_target_store_id(db, s, store_id)
+    r = AutomationRule(store_id=action_store_id, **body.model_dump())
     db.add(r)
-    _audit(db, s, "create_automation", "automation", body.name)
+    _audit(db, s, "create_automation", "automation", body.name, store_id=action_store_id)
     db.commit()
     return {"id": r.id}
 
 
 @router.post("/automations/{rule_id}")
-def update_automation(rule_id: int, body: dict, db: Session = Depends(get_db),
-                      authorization: str | None = Header(None)):
+def update_automation(
+    rule_id: int,
+    body: dict,
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
     s = _current_staff(authorization, db)
     _require_admin(s)
+    action_store_id = _resolve_target_store_id(db, s, store_id)
     r = db.scalar(select(AutomationRule).where(
         AutomationRule.id == rule_id,
-        AutomationRule.store_id == _staff_store_id(s),
+        AutomationRule.store_id == action_store_id,
     ))
     if not r:
         raise HTTPException(404)
@@ -5167,13 +5216,18 @@ def update_automation(rule_id: int, body: dict, db: Session = Depends(get_db),
 
 
 @router.delete("/automations/{rule_id}")
-def delete_automation(rule_id: int, db: Session = Depends(get_db),
-                      authorization: str | None = Header(None)):
+def delete_automation(
+    rule_id: int,
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
     s = _current_staff(authorization, db)
     _require_admin(s)
+    action_store_id = _resolve_target_store_id(db, s, store_id)
     r = db.scalar(select(AutomationRule).where(
         AutomationRule.id == rule_id,
-        AutomationRule.store_id == _staff_store_id(s),
+        AutomationRule.store_id == action_store_id,
     ))
     if not r:
         raise HTTPException(404)

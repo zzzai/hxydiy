@@ -12,7 +12,7 @@ import time
 from collections import Counter, defaultdict
 from datetime import date as date_type, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from jose import jwt
 from pydantic import BaseModel
@@ -155,6 +155,21 @@ def _staff_store_id(staff: Staff) -> int:
     if not staff.store_id:
         raise HTTPException(status_code=403, detail="当前账号未绑定门店")
     return staff.store_id
+
+
+def _resolve_marketing_store_id(db: Session, staff: Staff, requested_store_id: int | None) -> int:
+    if staff.store_id is not None:
+        if requested_store_id not in (None, staff.store_id):
+            raise HTTPException(status_code=403, detail={"code": "STORE_SCOPE_DENIED", "message": "不能操作其他门店"})
+        return staff.store_id
+    if staff.role != "admin":
+        raise HTTPException(status_code=403, detail={"code": "STORE_SCOPE_REQUIRED", "message": "当前账号未绑定门店"})
+    target = requested_store_id or db.scalar(select(Store.id).order_by(Store.id).limit(1))
+    if target is None:
+        raise HTTPException(status_code=400, detail={"code": "STORE_REQUIRED", "message": "请先创建门店"})
+    if not db.get(Store, target):
+        raise HTTPException(status_code=404, detail="门店不存在")
+    return target
 
 
 def _owned_order(db: Session, order_id: int, staff: Staff) -> Order:
@@ -933,31 +948,33 @@ def _coupon_out(t: CouponTemplate) -> dict:
 
 @router.get("/coupons")
 def admin_coupons(
+    store_id: int | None = Query(None),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     """券模板列表（营销配置）。"""
     staff = _require_admin(authorization, db)
-    store_id = _staff_store_id(staff)
-    tpls = list(db.scalars(select(CouponTemplate).where(CouponTemplate.store_id == store_id).order_by(CouponTemplate.id)))
+    action_store_id = _resolve_marketing_store_id(db, staff, store_id)
+    tpls = list(db.scalars(select(CouponTemplate).where(CouponTemplate.store_id == action_store_id).order_by(CouponTemplate.id)))
     return {"items": [_coupon_out(t) for t in tpls], "total": len(tpls)}
 
 
 @router.post("/coupons")
 def admin_create_coupon(
     body: CouponTemplateIn,
+    store_id: int | None = Query(None),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     """新建券模板。"""
     staff = _require_admin(authorization, db)
-    store_id = _staff_store_id(staff)
+    action_store_id = _resolve_marketing_store_id(db, staff, store_id)
     code = (body.code or "").strip()
     if not code:
         raise HTTPException(status_code=400, detail="请填写券编码")
-    if db.scalar(select(CouponTemplate).where(CouponTemplate.store_id == store_id, CouponTemplate.code == code)):
+    if db.scalar(select(CouponTemplate).where(CouponTemplate.store_id == action_store_id, CouponTemplate.code == code)):
         raise HTTPException(status_code=400, detail="券编码已存在")
-    tpl = CouponTemplate(**body.model_dump(exclude={"code"}), code=code, store_id=store_id)
+    tpl = CouponTemplate(**body.model_dump(exclude={"code"}), code=code, store_id=action_store_id)
     db.add(tpl)
     db.commit()
     db.refresh(tpl)
@@ -968,13 +985,14 @@ def admin_create_coupon(
 def admin_update_coupon(
     tpl_id: int,
     body: CouponTemplateUpdate,
+    store_id: int | None = Query(None),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     """更新券模板（含上下架：status 置 published/draft/archived）。"""
     staff = _require_admin(authorization, db)
-    store_id = _staff_store_id(staff)
-    tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.id == tpl_id, CouponTemplate.store_id == store_id))
+    action_store_id = _resolve_marketing_store_id(db, staff, store_id)
+    tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.id == tpl_id, CouponTemplate.store_id == action_store_id))
     if not tpl:
         raise HTTPException(status_code=404, detail="券不存在")
     data = body.model_dump(exclude_unset=True)
@@ -982,7 +1000,7 @@ def admin_update_coupon(
         raise HTTPException(status_code=400, detail="没有可更新的字段")
     if body.code and body.code != tpl.code:
         if db.scalar(select(CouponTemplate).where(
-                CouponTemplate.store_id == store_id,
+                CouponTemplate.store_id == action_store_id,
                 CouponTemplate.code == body.code, CouponTemplate.id != tpl_id)):
             raise HTTPException(status_code=400, detail="券编码已存在")
     for k, v in data.items():
