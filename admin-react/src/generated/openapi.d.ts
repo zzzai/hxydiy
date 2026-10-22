@@ -799,6 +799,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/automations/{rule_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Automation Logs */
+        get: operations["list_automation_logs_api_v1_admin_v2_automations__rule_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/brand/overview": {
         parameters: {
             query?: never;
@@ -8456,6 +8473,43 @@ export interface operations {
         parameters: {
             query?: {
                 store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_automation_logs_api_v1_admin_v2_automations__rule_id__logs_get: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+                page?: number;
+                page_size?: number;
             };
             header?: {
                 authorization?: string | null;
