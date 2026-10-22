@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { App, Button, Card, Input, Modal, Space, Table, Tag } from 'antd';
 import { ReloadOutlined, SyncOutlined } from '@ant-design/icons';
-import { getOperationalExceptions, resolveOperationalException, syncOrderReconciliation } from '../api';
+import { acknowledgeOperationalException, assignOperationalException, getOperationalExceptions, resolveOperationalException, syncOrderReconciliation } from '../api';
 
 const TYPE_LABELS: Record<string, string> = {
   missing_selection: '服务订单缺选单',
@@ -38,6 +38,22 @@ export default function ExceptionsPage() {
       await load();
     } catch { message.error('对账同步失败，请稍后重试'); }
     finally { setSyncing(false); }
+  };
+
+  const assignToMe = async (row: any) => {
+    try {
+      await assignOperationalException(row.id);
+      message.success('已指派给自己');
+      await load();
+    } catch { message.error('指派失败，请稍后重试'); }
+  };
+
+  const acknowledge = async (row: any) => {
+    try {
+      await acknowledgeOperationalException(row.id);
+      message.success('已确认处理该异常');
+      await load();
+    } catch { message.error('确认失败，请稍后重试'); }
   };
 
   const resolve = async () => {
@@ -79,9 +95,14 @@ export default function ExceptionsPage() {
               {row.entity_type === 'order' ? '订单' : row.entity_type === 'selection_session' ? '选单' : '对账'} #{row.entity_id}
             </span>,
           },
-          { title: '状态', dataIndex: 'status', width: 90, render: () => <Tag color="gold">待处理</Tag> },
+          { title: '状态', dataIndex: 'status', width: 100, render: (value: string) => <Tag color={value === 'acknowledged' ? 'blue' : 'gold'}>{value === 'acknowledged' ? '处理中' : '待处理'}</Tag> },
+          { title: '责任人', width: 110, render: (_: any, row: any) => row.assigned_to || <Button size="small" type="link" onClick={() => void assignToMe(row)}>指派给我</Button> },
+          { title: '截止', width: 160, render: (_: any, row: any) => <span style={{ color: row.overdue ? 'var(--hxy-error)' : undefined }}>{row.due_at?.slice(0, 16).replace('T', ' ') || '-'}{row.overdue ? ' · 已逾期' : ''}</span> },
           { title: '发现时间', dataIndex: 'created_at', width: 170, render: (value: string) => value?.slice(0, 19).replace('T', ' ') || '-' },
-          { title: '操作', width: 90, render: (_: any, row: any) => <Button size="small" type="link" onClick={() => { setResolving(row); setNote(''); }}>处理</Button> },
+          { title: '操作', width: 150, render: (_: any, row: any) => <Space size={0}>
+            {row.status !== 'acknowledged' && <Button size="small" type="link" onClick={() => void acknowledge(row)}>确认</Button>}
+            <Button size="small" type="link" onClick={() => { setResolving(row); setNote(''); }}>处理</Button>
+          </Space> },
         ]}
       />
     </Card>

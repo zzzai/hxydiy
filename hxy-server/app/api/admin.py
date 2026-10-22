@@ -974,6 +974,7 @@ def sync_order_reconciliation(
     by_key = {row.dedupe_key: row for row in existing}
     created = 0
     updated = 0
+    due_at = datetime.now(timezone.utc) + timedelta(days=2)
     for anomaly in result["items"]:
         dedupe_key, entity_type, entity_id = _exception_dedupe_key(anomaly)
         row = by_key.get(dedupe_key)
@@ -981,6 +982,8 @@ def sync_order_reconciliation(
             row.title = str(anomaly.get("message") or "对账异常")[:160]
             row.detail = anomaly
             row.severity = "warning"
+            if row.due_at is None:
+                row.due_at = due_at
             updated += 1
         else:
             db.add(OperationalException(
@@ -993,6 +996,7 @@ def sync_order_reconciliation(
                 detail=anomaly,
                 entity_type=entity_type,
                 entity_id=entity_id,
+                due_at=due_at,
             ))
             created += 1
     db.add(AuditLog(
@@ -1023,6 +1027,12 @@ def list_operational_exceptions(
     if status:
         query = query.where(OperationalException.status == status)
     rows = list(db.scalars(query.order_by(OperationalException.id.desc()).limit(200)))
+    staff_ids = {row.assigned_staff_id for row in rows if row.assigned_staff_id}
+    staff_names = {
+        member.id: member.name
+        for member in db.scalars(select(Staff).where(Staff.id.in_(staff_ids)))
+    } if staff_ids else {}
+    now = datetime.now(timezone.utc)
     return {
         "items": [{
             "id": row.id,
@@ -1034,11 +1044,74 @@ def list_operational_exceptions(
             "entity_type": row.entity_type,
             "entity_id": row.entity_id,
             "resolution_note": row.resolution_note,
+            "assigned_staff_id": row.assigned_staff_id,
+            "assigned_to": staff_names.get(row.assigned_staff_id),
+            "due_at": row.due_at.isoformat() if row.due_at else None,
+            "overdue": bool(row.due_at and _summary_utc(row.due_at) < now and row.status != "resolved"),
+            "acknowledged_at": row.acknowledged_at.isoformat() if row.acknowledged_at else None,
             "created_at": row.created_at.isoformat() if row.created_at else None,
             "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
         } for row in rows],
         "total": len(rows),
     }
+
+
+@router.post("/exceptions/{exception_id}/assign")
+def assign_operational_exception(
+    exception_id: int,
+    body: dict | None = None,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_manager_staff(staff)
+    store_id = _staff_store_id(staff)
+    row = db.get(OperationalException, exception_id)
+    if not row or row.store_id != store_id:
+        raise HTTPException(status_code=404, detail="异常记录不存在")
+    target_staff_id = (body or {}).get("staff_id") or staff.id
+    try:
+        target_staff_id = int(target_staff_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="指派人无效")
+    target = db.get(Staff, target_staff_id)
+    if not target or target.store_id != store_id or target.status != "active":
+        raise HTTPException(status_code=400, detail="只能指派给本店在职员工")
+    row.assigned_staff_id = target.id
+    db.add(AuditLog(
+        actor_type="staff", actor_id=str(staff.id), store_id=store_id,
+        action="assign_operational_exception", entity_type="operational_exception", entity_id=str(row.id),
+        detail={"assigned_staff_id": target.id, "exception_type": row.exception_type},
+    ))
+    db.commit()
+    return {"id": row.id, "assigned_staff_id": row.assigned_staff_id, "assigned_to": target.name}
+
+
+@router.post("/exceptions/{exception_id}/acknowledge")
+def acknowledge_operational_exception(
+    exception_id: int,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    staff = _current_staff(authorization, db)
+    _require_manager_staff(staff)
+    store_id = _staff_store_id(staff)
+    row = db.get(OperationalException, exception_id)
+    if not row or row.store_id != store_id:
+        raise HTTPException(status_code=404, detail="异常记录不存在")
+    if row.status == "resolved":
+        raise HTTPException(status_code=409, detail="异常已处理")
+    row.status = "acknowledged"
+    row.acknowledged_at = datetime.now(timezone.utc)
+    if row.assigned_staff_id is None:
+        row.assigned_staff_id = staff.id
+    db.add(AuditLog(
+        actor_type="staff", actor_id=str(staff.id), store_id=store_id,
+        action="acknowledge_operational_exception", entity_type="operational_exception", entity_id=str(row.id),
+        detail={"exception_type": row.exception_type},
+    ))
+    db.commit()
+    return {"id": row.id, "status": row.status, "acknowledged_at": row.acknowledged_at.isoformat()}
 
 
 @router.post("/exceptions/{exception_id}/resolve")

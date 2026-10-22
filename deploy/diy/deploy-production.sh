@@ -172,6 +172,7 @@ approved_migrations=(
   '20261023_page_content_versions.py'
   '20261023_operational_exceptions.py'
   '20261024_technician_shifts.py'
+  '20261025_exception_owner.py'
 )
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \
