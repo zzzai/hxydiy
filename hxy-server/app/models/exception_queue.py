@@ -31,6 +31,9 @@ class OperationalException(Base):
     entity_type: Mapped[str] = mapped_column(String(32), default="")
     entity_id: Mapped[str] = mapped_column(String(64), default="")
     resolution_note: Mapped[str] = mapped_column(String(500), default="")
+    assigned_staff_id: Mapped[int | None] = mapped_column(ForeignKey("staff.id"), nullable=True, index=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

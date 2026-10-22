@@ -1419,6 +1419,21 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertTrue(items)
         exception_id = items[0]["id"]
 
+        assigned = self.client.post(
+            f"/api/v1/admin/exceptions/{exception_id}/assign",
+            headers=self.auth_headers,
+            json={"staff_id": self.staff_id},
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.text)
+        self.assertEqual(assigned.json()["assigned_staff_id"], self.staff_id)
+
+        acknowledged = self.client.post(
+            f"/api/v1/admin/exceptions/{exception_id}/acknowledge",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(acknowledged.status_code, 200, acknowledged.text)
+        self.assertEqual(acknowledged.json()["status"], "acknowledged")
+
         resolved = self.client.post(
             f"/api/v1/admin/exceptions/{exception_id}/resolve",
             headers=self.auth_headers,
@@ -1431,7 +1446,7 @@ class AdminV2ContractTests(unittest.TestCase):
             self.assertEqual(row.status, "resolved")
             self.assertEqual(row.resolution_note, "已人工核对并修正关联")
             db.query(OperationalException).filter(OperationalException.store_id == row.store_id).delete()
-            db.query(AuditLog).filter(AuditLog.action.in_(["sync_order_reconciliation", "resolve_operational_exception"])).delete()
+            db.query(AuditLog).filter(AuditLog.action.in_(["sync_order_reconciliation", "resolve_operational_exception", "assign_operational_exception", "acknowledge_operational_exception"])).delete()
             db.commit()
 
     def test_store_staff_cannot_check_in_another_store_order(self):
