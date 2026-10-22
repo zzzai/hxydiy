@@ -25,3 +25,12 @@ test('headquarters admin gets all capabilities except self service', () => {
   assert.equal(capabilities.manage_catalog_master, true);
   assert.equal(capabilities.self_service, false);
 });
+
+test('store-scoped admin keeps brand content management within its scope', () => {
+  const capabilities = capabilitiesFor('admin', 1);
+  assert.equal(capabilities.manage_catalog_master, true);
+  assert.equal(capabilities.manage_marketing, true);
+  assert.equal(capabilities.manage_automation, true);
+  assert.equal(capabilities.manage_headquarters, false);
+  assert.equal(capabilities.self_service, false);
+});

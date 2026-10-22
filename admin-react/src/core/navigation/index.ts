@@ -62,7 +62,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
       { path: '/projects', label: '服务项目', icon: 'project', roles: managementRoles, capability: 'toggle_catalog_publication', headquartersAccess: true },
       { path: '/addons', label: '项目加项', icon: 'tags', roles: managementRoles, capability: 'toggle_catalog_publication', headquartersAccess: true },
       { path: '/products', label: '商城商品', icon: 'shopping', roles: managementRoles, capability: 'toggle_catalog_publication', headquartersAccess: true },
-      { path: '/page-content', label: '页面配置', icon: 'appstore', roles: managementRoles, capability: 'manage_catalog_master' },
+      { path: '/page-content', label: '页面配置', icon: 'appstore', roles: managementRoles, capability: 'manage_catalog_master', headquartersAccess: true },
     ],
   },
   {
@@ -88,7 +88,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '营销与触达',
     icon: 'gift',
     items: [
-      { path: '/coupons', label: '优惠券', icon: 'gift', roles: managementRoles, capability: 'manage_marketing' },
+      { path: '/coupons', label: '优惠券', icon: 'gift', roles: managementRoles, capability: 'manage_marketing', headquartersAccess: true },
     ],
   },
   {
@@ -96,7 +96,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '系统',
     icon: 'thunderbolt',
     items: [
-      { path: '/automation', label: 'SCRM 规则', icon: 'robot', roles: managementRoles, capability: 'manage_automation' },
+      { path: '/automation', label: 'SCRM 规则', icon: 'robot', roles: managementRoles, capability: 'manage_automation', headquartersAccess: true },
     ],
   },
 ];

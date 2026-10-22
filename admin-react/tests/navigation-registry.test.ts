@@ -47,4 +47,15 @@ test('总部管理员可见门店主数据，店长只看到当前门店资源',
   assert.equal(managerPaths.includes('/coupons'), false);
   assert.equal(managerPaths.includes('/automation'), false);
   assert.equal(managerPaths.includes('/page-content'), false);
+  assert.equal(adminPaths.includes('/coupons'), true);
+  assert.equal(adminPaths.includes('/automation'), true);
+  assert.equal(adminPaths.includes('/page-content'), true);
+});
+
+test('品牌范围管理员可进入页面、优惠券和自动化，不再出现不可达业务页', () => {
+  const scopedAdminPaths = getVisibleNavigationGroups('admin', 12)
+    .flatMap((group) => group.items.map((item) => item.path));
+  assert.equal(scopedAdminPaths.includes('/coupons'), true);
+  assert.equal(scopedAdminPaths.includes('/automation'), true);
+  assert.equal(scopedAdminPaths.includes('/page-content'), true);
 });
