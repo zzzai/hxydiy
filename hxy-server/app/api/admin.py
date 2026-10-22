@@ -586,6 +586,28 @@ def operations_summary(
         )[:5]
     ]
 
+    service_order_ids = [order.id for order in orders if order.order_type == "service"]
+    linked_order_ids = set(db.scalars(select(SelectionSession.fulfillment_order_id).where(
+        SelectionSession.store_id == selected_store_id,
+        SelectionSession.fulfillment_order_id.in_(service_order_ids),
+    ))) if service_order_ids and selected_store_id is not None else set()
+    orders_without_selection = len([order_id for order_id in service_order_ids if order_id not in linked_order_ids])
+    open_exception_count = int(db.scalar(select(func.count()).select_from(OperationalException).where(
+        OperationalException.store_id == selected_store_id,
+        OperationalException.status == "open",
+    )) or 0) if selected_store_id is not None else 0
+    event_days = {_summary_utc(event.created_at).date() for event in scoped_events if event.created_at}
+    period_days = (end - start).days + 1
+    event_coverage_percent = round(len(event_days) / period_days * 100, 2) if period_days else 0
+    data_warnings = []
+    if orders_without_selection:
+        data_warnings.append(f"有 {orders_without_selection} 笔服务订单未关联选单")
+    if open_exception_count:
+        data_warnings.append(f"有 {open_exception_count} 条待处理异常")
+    if event_coverage_percent < 50:
+        data_warnings.append("埋点覆盖天数不足 50%，行为漏斗仅供参考")
+    aov_cents = round(sum(order.pay_amount_cents for order in orders) / len(orders)) if orders else 0
+
     return {
         "period": {"start_date": start.isoformat(), "end_date": end.isoformat(), "store_id": selected_store_id},
         "transactions": {
@@ -595,6 +617,7 @@ def operations_summary(
             "paid_amount_cents": sum(order.pay_amount_cents for order in orders),
             "discount_cents": sum(order.discount_cents for order in orders),
             "member_discount_cents": sum(order.member_discount_cents for order in orders),
+            "average_order_value_cents": aov_cents,
         },
         "customers": {
             "new_count": sum(1 for user in customer_users if user.id in customer_user_ids and start_at <= _summary_utc(user.created_at) < end_at),
@@ -625,6 +648,22 @@ def operations_summary(
             "low_rating_count": sum(1 for rating in ratings if rating <= 2),
         },
         "project_sales": project_sales,
+        "data_quality": {
+            "orders_without_selection": orders_without_selection,
+            "open_exception_count": open_exception_count,
+            "event_coverage_percent": event_coverage_percent,
+            "period_days": period_days,
+            "event_days": len(event_days),
+            "warnings": data_warnings,
+            "is_complete": not data_warnings,
+        },
+        "definitions": {
+            "paid_revenue": "所选自然日内已支付且未取消/退款订单的实付金额合计",
+            "average_order_value": "实付金额合计 / 有效订单数，四舍五入到分",
+            "repeat_customers": "所选周期有有效订单、且此前也有有效订单的登录顾客数",
+            "utilization": "已完成服务占用分钟 / 服务位理论可用分钟",
+            "data_quality": "订单/选单关联、异常队列和埋点覆盖检查；不修改原始经营事实",
+        },
     }
 
 
