@@ -1916,6 +1916,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/technician-leave-requests/{request_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Leave Request */
+        post: operations["reject_leave_request_api_v1_admin_v2_technician_leave_requests__request_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/technicians": {
         parameters: {
             query?: never;
@@ -11439,6 +11456,47 @@ export interface operations {
         };
     };
     approve_leave_request_api_v1_admin_v2_technician_leave_requests__request_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                } | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_leave_request_api_v1_admin_v2_technician_leave_requests__request_id__reject_post: {
         parameters: {
             query?: never;
             header?: {

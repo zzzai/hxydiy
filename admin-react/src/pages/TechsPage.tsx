@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { App, Button, Dropdown, Modal, Space, Tag, Tooltip } from 'antd';
+import { useEffect, useState } from 'react';
+import { App, Button, Card, Dropdown, Input, Modal, Space, Table, Tag, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 import { CheckCircleOutlined, KeyOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, StopOutlined, UserSwitchOutlined } from '@ant-design/icons';
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
-import { createTechnician, disableTechnicianLogin, getStaff, inviteTechnician, rehireTechnician, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin } from '../api';
+import { approveTechnicianLeave, createTechnician, disableTechnicianLogin, getStaff, getTechnicianLeaveRequests, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin } from '../api';
 import { canManageConfiguration, getStoreId } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
@@ -21,6 +21,41 @@ export default function TechsPage() {
   const canManage = canManageConfiguration(staff?.role);
   const [actionRef] = useState<React.MutableRefObject<ActionType | undefined>>({ current: undefined });
   const [open, setOpen] = useState(false);
+  const [leaveRows, setLeaveRows] = useState<any[]>([]);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [rejecting, setRejecting] = useState<any>();
+  const [rejectNote, setRejectNote] = useState('');
+
+  const loadLeaves = async () => {
+    setLeaveLoading(true);
+    try {
+      const response = await getTechnicianLeaveRequests('submitted');
+      setLeaveRows(response.data?.items || []);
+    } catch { /* API interceptor already presents the server error. */ }
+    finally { setLeaveLoading(false); }
+  };
+
+  useEffect(() => { if (canManage) void loadLeaves(); }, [canManage]);
+
+  const approveLeave = async (row: any) => {
+    try {
+      await approveTechnicianLeave(row.id);
+      message.success('请假申请已批准，技师状态已调整');
+      await loadLeaves();
+      actionRef.current?.reload();
+    } catch { /* API interceptor already presents the server error. */ }
+  };
+
+  const rejectLeave = async () => {
+    if (!rejecting) return;
+    if (rejectNote.trim().length < 2) { message.error('请填写至少 2 个字的驳回原因'); return; }
+    try {
+      await rejectTechnicianLeave(rejecting.id, rejectNote.trim());
+      message.success('请假申请已驳回');
+      setRejecting(undefined); setRejectNote('');
+      await loadLeaves();
+    } catch { /* API interceptor already presents the server error. */ }
+  };
 
   const showCredential = (result: CredentialResult) => Modal.info({
     title: '登录凭证已生成',
@@ -68,6 +103,26 @@ export default function TechsPage() {
       const result = await refineDataProvider.getList({ resource: resources.technicians, pagination: { currentPage: params.current, pageSize: params.pageSize, mode: 'server' }, filters: [{ field: 'status', operator: 'eq' as const, value: params.status }, { field: 'level', operator: 'eq' as const, value: params.level }], sorters: [] });
       return { success: true, data: result.data, total: result.total };
     }} options={{ density: true, fullScreen: true, reload: true, setting: true }} scroll={{ x: 780 }} />
+    {canManage && <Card title="待审批请假" style={{ marginTop: 16 }} extra={<Button size="small" onClick={() => void loadLeaves()} loading={leaveLoading}>刷新</Button>}>
+      <Table
+        rowKey="id"
+        size="small"
+        loading={leaveLoading}
+        dataSource={leaveRows}
+        pagination={false}
+        locale={{ emptyText: '没有待审批的请假申请' }}
+        columns={[
+          { title: '技师', dataIndex: 'technician_name', width: 120 },
+          { title: '请假日期', width: 200, render: (_: any, row: any) => `${row.start_date} 至 ${row.end_date}` },
+          { title: '原因', dataIndex: 'reason', ellipsis: true },
+          { title: '状态', dataIndex: 'status', width: 90, render: () => <Tag color="gold">待审批</Tag> },
+          { title: '操作', width: 160, render: (_: any, row: any) => <Space size={4}>
+            <Button size="small" type="primary" onClick={() => void approveLeave(row)}>批准</Button>
+            <Button size="small" danger onClick={() => { setRejecting(row); setRejectNote(''); }}>驳回</Button>
+          </Space> },
+        ]}
+      />
+    </Card>}
     <ModalForm title="新建技师档案" open={open} width={560} modalProps={{ destroyOnClose: true }} onOpenChange={setOpen} onFinish={async (values) => { await createTechnician({ ...values, store_id: getStoreId(staff) }); message.success('已创建技师档案'); actionRef.current?.reload(); return true; }}>
       <ProFormText name="code" label="编码" rules={[{ required: true, message: '请输入编码' }]} />
       <ProFormText name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]} />
@@ -76,5 +131,9 @@ export default function TechsPage() {
       <ProFormSelect name="level" label="等级" initialValue="初级" options={levelOptions} />
       <ProFormDigit name="default_commission_rate" label="提成比例" initialValue={0.3} min={0} max={1} fieldProps={{ step: 0.05 }} />
     </ModalForm>
+    <Modal title="驳回请假申请" open={Boolean(rejecting)} onCancel={() => setRejecting(undefined)} onOk={() => void rejectLeave()} okText="确认驳回" okButtonProps={{ danger: true, disabled: rejectNote.trim().length < 2 }}>
+      <p style={{ marginTop: 0 }}>{rejecting?.technician_name} · {rejecting?.start_date} 至 {rejecting?.end_date}</p>
+      <Input.TextArea rows={3} maxLength={200} showCount value={rejectNote} onChange={(event) => setRejectNote(event.target.value)} placeholder="填写驳回原因，技师端会看到" />
+    </Modal>
   </PageContainer>;
 }

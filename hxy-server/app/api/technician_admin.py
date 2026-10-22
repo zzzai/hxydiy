@@ -233,6 +233,26 @@ def approve_leave_request(request_id: int, body: dict | None = None, authorizati
     return {"id": request.id, "status": request.status, "technician_status": technician.status}
 
 
+@router.post("/technician-leave-requests/{request_id}/reject")
+def reject_leave_request(request_id: int, body: dict | None = None, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
+    admin = require_admin(authorization, db)
+    request = db.get(TechnicianLeaveRequest, request_id)
+    if not request or request.store_id != admin.store_id:
+        raise HTTPException(status_code=404, detail="请假申请不存在")
+    if request.status != "submitted":
+        raise HTTPException(status_code=409, detail="请假申请状态已变更")
+    review_note = str((body or {}).get("review_note") or "").strip()[:500]
+    if len(review_note) < 2:
+        raise HTTPException(status_code=400, detail="请填写至少 2 个字的驳回原因")
+    request.status = "rejected"
+    request.reviewed_by_staff_id = admin.id
+    request.reviewed_at = datetime.now(timezone.utc)
+    request.review_note = review_note
+    audit(db, admin, "reject_technician_leave", request.technician_id, {"request_id": request.id, "review_note": review_note})
+    db.commit()
+    return {"id": request.id, "status": request.status}
+
+
 @router.post("/technicians/{tech_id}/resign")
 def resign_technician(tech_id: int, body: dict | None = None, authorization: str | None = Header(None), idempotency_key: str | None = Header(None, alias="Idempotency-Key"), db: Session = Depends(get_db)) -> dict:
     admin = require_admin(authorization, db)

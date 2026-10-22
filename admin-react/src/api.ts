@@ -309,6 +309,7 @@ export const resignTechnician = (id: number, reason: string, idempotencyKey?: st
   client.post(`/admin/v2/technicians/${id}/resign`, { reason }, lifecycleRequestConfig('resign', id, idempotencyKey));
 export const getTechnicianLeaveRequests = (status?: string) => client.get('/admin/v2/technician-leave-requests', { params: { status } });
 export const approveTechnicianLeave = (id: number, review_note = '') => client.post(`/admin/v2/technician-leave-requests/${id}/approve`, { review_note });
+export const rejectTechnicianLeave = (id: number, review_note: string) => client.post(`/admin/v2/technician-leave-requests/${id}/reject`, { review_note });
 
 // Projects
 export const getProjectsAdmin = () => client.get('/admin/v2/projects');
