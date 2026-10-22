@@ -418,6 +418,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/order-reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Order Reconciliation
+         * @description Detect mismatches between DIY selection sessions and service orders.
+         *
+         *     This endpoint is read-only. It turns dual-fact drift into an explicit
+         *     exception list instead of silently choosing one source of truth.
+         */
+        get: operations["order_reconciliation_api_v1_admin_order_reconciliation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/orders": {
         parameters: {
             query?: never;
@@ -7564,6 +7587,41 @@ export interface operations {
                 start_date?: string | null;
                 end_date?: string | null;
                 store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_reconciliation_api_v1_admin_order_reconciliation_get: {
+        parameters: {
+            query?: {
+                days?: number;
             };
             header?: {
                 authorization?: string | null;

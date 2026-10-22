@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Button, Card, Empty, Input, InputNumber, Modal, Select, Space, Spin, Tag, message } from 'antd';
+import { Alert, Button, Card, Empty, Input, InputNumber, List, Modal, Select, Space, Spin, Tag, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getOrders, getStaff, registerRefundNote } from '../api';
+import { getOrderReconciliation, getOrders, getStaff, registerRefundNote } from '../api';
 import { buildRefundNotePayload, makeIdempotencyKey } from '../operations';
 
 const STATUS_MAP: Record<string, { color: string; text: string }> = {
@@ -24,7 +24,17 @@ export default function OrdersPage() {
   const [refundReference, setRefundReference] = useState('');
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
+  const [reconOpen, setReconOpen] = useState(false);
+  const [reconLoading, setReconLoading] = useState(false);
+  const [recon, setRecon] = useState<any>();
   const staff = getStaff();
+
+  const openReconciliation = async () => {
+    setReconOpen(true); setRecon(undefined); setReconLoading(true);
+    try { const response = await getOrderReconciliation(30); setRecon(response.data); }
+    catch { message.error('对账检查失败，请稍后重试'); }
+    finally { setReconLoading(false); }
+  };
 
   useEffect(() => { load(); }, [filter]);
 
@@ -69,7 +79,10 @@ export default function OrdersPage() {
           <h2>结算记录</h2>
           <div className="page-kicker">查看本店结算状态并登记已完成的线下退款，不会自动退回资金</div>
         </div>
-        <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>
+        <Space>
+          <Button onClick={() => void openReconciliation()}>对账检查</Button>
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>
+        </Space>
       </div>
       <div className="orders-filter-row">
         <span>记录状态</span>
@@ -132,6 +145,28 @@ export default function OrdersPage() {
         ]} />
         <Input value={refundReference} onChange={(event) => setRefundReference(event.target.value)} maxLength={64} placeholder="退款流水号或第三方凭证" style={{ marginBottom: 12 }} />
         <Input.TextArea value={refundReason} onChange={(event) => setRefundReason(event.target.value)} rows={3} maxLength={200} showCount placeholder="填写退款原因和现场处理" />
+      </Modal>
+      <Modal title="选单与订单对账" open={reconOpen} onCancel={() => setReconOpen(false)} footer={<Button onClick={() => setReconOpen(false)}>关闭</Button>} width={760} loading={reconLoading}>
+        {recon && <>
+          <Alert
+            type={recon.summary?.anomaly_count ? 'warning' : 'success'}
+            showIcon
+            message={recon.summary?.anomaly_count ? `发现 ${recon.summary.anomaly_count} 条待核对记录` : '近 30 天选单与订单未发现异常'}
+            description={`检查订单 ${recon.summary?.orders_checked || 0} 条，选单 ${recon.summary?.selections_checked || 0} 条`}
+            style={{ marginBottom: 12 }}
+          />
+          {recon.summary?.anomaly_count > 0 && <List
+            size="small"
+            dataSource={recon.items || []}
+            renderItem={(item: any) => <List.Item>
+              <Space direction="vertical" size={0}>
+                <Space><Tag color={item.type === 'amount_mismatch' ? 'orange' : 'red'}>{item.type}</Tag><strong>{item.order_no || item.selection_session_id?.slice(0, 8)}</strong></Space>
+                <span style={{ color: 'var(--hxy-text-secondary)' }}>{item.message}</span>
+                {(item.order_id || item.selection_session_id) && <span style={{ color: 'var(--hxy-text-muted)', fontSize: 12 }}>订单 {item.order_id || '-'} · 选单 {item.selection_session_id || '-'}</span>}
+              </Space>
+            </List.Item>}
+          />}
+        </>}
       </Modal>
     </div>
   );

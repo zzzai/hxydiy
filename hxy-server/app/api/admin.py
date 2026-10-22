@@ -798,6 +798,113 @@ def admin_orders(
     }
 
 
+@router.get("/order-reconciliation")
+def order_reconciliation(
+    days: int = 30,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Detect mismatches between DIY selection sessions and service orders.
+
+    This endpoint is read-only. It turns dual-fact drift into an explicit
+    exception list instead of silently choosing one source of truth.
+    """
+    staff = _current_staff(authorization, db)
+    _require_manager_staff(staff)
+    store_id = _staff_store_id(staff)
+    days = max(1, min(days, 90))
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    orders = list(db.scalars(select(Order).where(
+        Order.store_id == store_id,
+        Order.created_at >= since,
+    ).order_by(Order.id.desc()).limit(1000)))
+    sessions = list(db.scalars(select(SelectionSession).where(
+        SelectionSession.store_id == store_id,
+        SelectionSession.created_at >= since,
+    ).order_by(SelectionSession.created_at.desc()).limit(1000)))
+    order_by_id = {order.id: order for order in orders}
+    session_by_order = {
+        session.fulfillment_order_id: session
+        for session in sessions
+        if session.fulfillment_order_id
+    }
+    expected_order_status = {
+        "confirmed": {"paid", "confirmed", "checked_in", "in_service", "completed"},
+        "in_service": {"checked_in", "in_service", "completed"},
+        "completed": {"completed"},
+    }
+    anomalies: list[dict] = []
+
+    for order in orders:
+        session = session_by_order.get(order.id)
+        if order.order_type == "service" and session is None:
+            anomalies.append({
+                "type": "missing_selection",
+                "order_id": order.id,
+                "order_no": order.order_no,
+                "message": "服务订单没有关联选单",
+                "order_status": order.status,
+            })
+            continue
+        if session is None:
+            continue
+        expected = expected_order_status.get(session.status)
+        if expected and order.status not in expected:
+            anomalies.append({
+                "type": "status_mismatch",
+                "order_id": order.id,
+                "order_no": order.order_no,
+                "selection_session_id": session.id,
+                "message": f"选单状态为 {session.status}，订单状态为 {order.status}",
+                "selection_status": session.status,
+                "order_status": order.status,
+            })
+        if order.refund_status:
+            continue
+        snapshot = session.pricing_snapshot if isinstance(session.pricing_snapshot, dict) else {}
+        selection_total = int(
+            snapshot.get("payable_total_cents")
+            or session.member_total_cents
+            or session.store_total_cents
+            or 0
+        )
+        if selection_total and order.pay_amount_cents != selection_total:
+            anomalies.append({
+                "type": "amount_mismatch",
+                "order_id": order.id,
+                "order_no": order.order_no,
+                "selection_session_id": session.id,
+                "message": f"选单金额 {selection_total} 分，订单实付 {order.pay_amount_cents} 分",
+                "selection_total_cents": selection_total,
+                "order_pay_amount_cents": order.pay_amount_cents,
+            })
+
+    for session in sessions:
+        if session.status in expected_order_status and session.fulfillment_order_id is None:
+            anomalies.append({
+                "type": "missing_order",
+                "selection_session_id": session.id,
+                "message": f"选单状态为 {session.status}，但没有关联履约订单",
+                "selection_status": session.status,
+            })
+
+    counts: dict[str, int] = {}
+    for item in anomalies:
+        counts[item["type"]] = counts.get(item["type"], 0) + 1
+    return {
+        "store_id": store_id,
+        "days": days,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "orders_checked": len(orders),
+            "selections_checked": len(sessions),
+            "anomaly_count": len(anomalies),
+            "by_type": counts,
+        },
+        "items": anomalies[:200],
+    }
+
+
 @router.get("/analytics")
 def admin_analytics(
     days: int = 7,

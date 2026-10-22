@@ -1204,6 +1204,13 @@ class AdminV2ContractTests(unittest.TestCase):
                 db.query(User).filter(User.id == user_id).delete()
                 db.commit()
 
+    def test_order_reconciliation_surfaces_missing_selection(self):
+        response = self.client.get("/api/v1/admin/order-reconciliation?days=30", headers=self.auth_headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertGreater(body["summary"]["orders_checked"], 0)
+        self.assertIn("missing_selection", body["summary"]["by_type"])
+
     def test_store_staff_cannot_check_in_another_store_order(self):
         with self.SessionLocal() as db:
             other_order = db.scalar(select(Order).where(Order.order_no == "OTHER-PAID"))
