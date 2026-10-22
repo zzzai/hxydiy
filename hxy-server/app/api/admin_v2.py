@@ -3,7 +3,7 @@
 权限：admin 可读写，staff 只读。所有写操作记录 AuditLog。
 """
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from copy import deepcopy
 import hashlib
@@ -373,6 +373,110 @@ def update_store_master_data(
     db.commit()
     db.refresh(store)
     return _store_master_view(store)
+
+
+@router.get("/brand/overview")
+def brand_overview(
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Cross-store operating overview for an unbound headquarters admin."""
+    staff = _current_staff(authorization, db)
+    _require_headquarters_admin(staff)
+
+    local_tz = ZoneInfo("Asia/Shanghai")
+    today = datetime.now(local_tz).date()
+    try:
+        period_start = date.fromisoformat(start_date) if start_date else today - timedelta(days=6)
+        period_end = date.fromisoformat(end_date) if end_date else today
+    except ValueError:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_DATE", "message": "日期必须为 YYYY-MM-DD"})
+    if period_end < period_start:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_DATE_RANGE", "message": "结束日期不能早于开始日期"})
+    start_at = datetime.combine(period_start, datetime.min.time(), tzinfo=local_tz).astimezone(UTC)
+    end_at = datetime.combine(period_end + timedelta(days=1), datetime.min.time(), tzinfo=local_tz).astimezone(UTC)
+
+    stores = list(db.scalars(select(Store).order_by(Store.id)))
+    store_ids = [store.id for store in stores]
+    orders = list(db.scalars(select(Order).where(
+        Order.store_id.in_(store_ids),
+        Order.created_at >= start_at,
+        Order.created_at < end_at,
+        Order.pay_status == "paid",
+        Order.status.not_in(("cancelled", "expired", "refunded", "refund_rejected")),
+    ))) if store_ids else []
+    feedback = list(db.scalars(select(ServiceFeedback).where(
+        ServiceFeedback.store_id.in_(store_ids),
+        ServiceFeedback.created_at >= start_at,
+        ServiceFeedback.created_at < end_at,
+    ))) if store_ids else []
+
+    rows = {
+        store.id: {
+            "store_id": store.id,
+            "store_code": store.store_code,
+            "name": store.name,
+            "city": store.city,
+            "status": store.status,
+            "paid_order_count": 0,
+            "paid_amount_cents": 0,
+            "customer_count": 0,
+            "review_count": 0,
+            "average_rating": None,
+            "low_rating_count": 0,
+            "_customer_ids": set(),
+            "_rating_sum": 0,
+        }
+        for store in stores
+    }
+    for order in orders:
+        row = rows.get(order.store_id)
+        if row is None:
+            continue
+        row["paid_order_count"] += 1
+        row["paid_amount_cents"] += order.pay_amount_cents or 0
+        if order.user_id:
+            row["_customer_ids"].add(order.user_id)
+    for item in feedback:
+        row = rows.get(item.store_id)
+        if row is None:
+            continue
+        row["review_count"] += 1
+        row["_rating_sum"] += item.rating
+        if item.rating <= 2:
+            row["low_rating_count"] += 1
+    for row in rows.values():
+        row["customer_count"] = len(row.pop("_customer_ids"))
+        rating_sum = row.pop("_rating_sum")
+        if row["review_count"]:
+            row["average_rating"] = round(rating_sum / row["review_count"], 2)
+
+    total_reviews = sum(row["review_count"] for row in rows.values())
+    total_rating = sum(item.rating for item in feedback)
+    paid_order_count = sum(row["paid_order_count"] for row in rows.values())
+    paid_amount_cents = sum(row["paid_amount_cents"] for row in rows.values())
+    return {
+        "scope": "brand",
+        "period": {
+            "start_date": period_start.isoformat(),
+            "end_date": period_end.isoformat(),
+            "timezone": "Asia/Shanghai",
+        },
+        "summary": {
+            "store_count": len(stores),
+            "open_store_count": sum(1 for store in stores if store.status in {"open", "trial_open"}),
+            "paid_order_count": paid_order_count,
+            "paid_amount_cents": paid_amount_cents,
+            "average_order_value_cents": round(paid_amount_cents / paid_order_count) if paid_order_count else None,
+            "review_count": total_reviews,
+            "average_rating": round(total_rating / total_reviews, 2) if total_reviews else None,
+            "low_rating_count": sum(row["low_rating_count"] for row in rows.values()),
+        },
+        "stores": sorted(rows.values(), key=lambda row: row["store_id"]),
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
 
 
 StaffManagedRole = Literal["manager", "staff"]

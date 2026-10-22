@@ -15,6 +15,7 @@ import { getVisibleNavigationGroups } from '../core/navigation/index.ts';
 
 const PageContentPage = lazy(() => import('../pages/PageContentPage'));
 const TodayPage = lazy(() => import('../pages/TodayPage'));
+const BrandOverviewPage = lazy(() => import('../pages/BrandOverviewPage'));
 const OrdersPage = lazy(() => import('../pages/OrdersPage'));
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const AuditLogsPage = lazy(() => import('../pages/AuditLogsPage'));
@@ -130,6 +131,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
             <Suspense fallback={<div className="page-loading" aria-live="polite">页面加载中...</div>}>
               <Routes>
                 <Route path="/" element={<Navigate to={getDefaultPath(role, staff?.store_id)} replace />} />
+                <Route path="/brand-overview" element={page('/brand-overview', <BrandOverviewPage />)} />
                 <Route path="/today" element={page('/today', <TodayPage />)} />
                 <Route path="/service-positions" element={page('/service-positions', <ServicePositionsPage />)} />
                 <Route path="/selection-sessions" element={page('/selection-sessions', <SelectionSessionsPage />)} />

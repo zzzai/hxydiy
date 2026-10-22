@@ -28,6 +28,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '工作台',
     icon: 'dashboard',
     items: [
+      { path: '/brand-overview', label: '品牌总览', icon: 'bar-chart', roles: ['admin'], capability: 'manage_headquarters', requiresUnboundAdmin: true, headquartersAccess: true },
       { path: '/today', label: '今日工作台', icon: 'ordered-list', roles: storeRoles, capability: 'view_store_operations' },
     ],
   },

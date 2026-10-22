@@ -233,6 +233,8 @@ export const finishPositionService = (occupancyId: number) =>
 
 // Analytics
 export const getAnalytics = (days = 7) => client.get('/admin/analytics', { params: { days } });
+export const getBrandOverview = (startDate: string, endDate: string) =>
+  client.get('/admin/v2/brand/overview', { params: { start_date: startDate, end_date: endDate } });
 export const getOperationsSummary = (startDate: string, endDate: string) =>
   client.get('/admin/operations-summary', { params: { start_date: startDate, end_date: endDate } });
 export type ServiceReferenceSummary = {
