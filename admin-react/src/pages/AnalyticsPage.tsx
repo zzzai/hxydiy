@@ -84,9 +84,16 @@ export default function AnalyticsPage() {
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={12} md={6}><Card><Statistic title="实收金额" value={formatYuan(transaction.paid_amount_cents)} /></Card></Col>
         <Col xs={12} md={6}><Card><Statistic title="订单数" value={transaction.orders_count || 0} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="客单价" value={formatYuan(transaction.average_order_value_cents)} /></Card></Col>
         <Col xs={12} md={6}><Card><Statistic title="优惠金额" value={formatYuan(transaction.discount_cents)} /></Card></Col>
         <Col xs={12} md={6}><Card><Statistic title="服务位" value={positions.total_count || 0} suffix={`活跃 ${positions.active_count || 0}`} /></Card></Col>
       </Row>
+      <Card title="数据质量" style={{ marginBottom: 16 }}>
+        {summary.data_quality?.warnings?.length ? <Space direction="vertical" size={6}>
+          {(summary.data_quality.warnings || []).map((warning: string) => <Tag key={warning} color="warning">{warning}</Tag>)}
+          <span style={{ color: 'var(--hxy-text-secondary)', fontSize: 12 }}>异常队列可从「异常处理」进入处理；数据质量问题不会自动改写经营事实。</span>
+        </Space> : <Space><Tag color="green">所选周期数据关联完整</Tag><span style={{ color: 'var(--hxy-text-secondary)', fontSize: 12 }}>埋点覆盖 {summary.data_quality?.event_coverage_percent ?? 0}% · 有效天数 {summary.data_quality?.event_days ?? 0}/{summary.data_quality?.period_days ?? 0}</span></Space>}
+      </Card>
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} lg={12}>
