@@ -16,7 +16,7 @@ const projectLabel = (items: { name: string; quantity: number }[]) => items.map(
 export default function TechnicianCustomerPanel({ occupancyId, onClose }: { occupancyId: number; onClose: () => void }) {
   const current = useTechnicianSession();
   const [summary, setSummary] = useState<CustomerSummary>();
-  const [section, setSection] = useState<Section>('history');
+  const [section, setSection] = useState<Section>('tags');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [history, setHistory] = useState<CustomerHistoryItem[]>([]);

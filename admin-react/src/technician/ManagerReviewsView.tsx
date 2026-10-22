@@ -14,6 +14,7 @@ type Review = {
   follow_up_note: string;
   followed_up_at: string | null;
   created_at: string | null;
+  customer_phone?: string | null;
 };
 
 const statusText: Record<string, string> = { open: '待跟进', in_progress: '处理中', resolved: '已解决', dismissed: '已忽略' };
@@ -90,7 +91,7 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
         : <div className="manager-review-list">{rows.map(row => <button type="button" className="manager-review-card" key={row.id} onClick={() => setSelected(row)}>
           <div className="manager-review-top"><Tag color={row.rating <= 2 ? 'red' : 'gold'}>{row.rating} 星</Tag><Tag color={statusColor[row.follow_up_status]}>{statusText[row.follow_up_status] || row.follow_up_status}</Tag></div>
           <p>{row.note || row.tags.join('、') || '顾客未填写文字'}</p>
-          <div className="manager-review-meta"><span>{row.tags.join('、') || '未选择标签'}</span><time>{timeText(row.created_at)}</time></div>
+          <div className="manager-review-meta"><span>{row.tags.join('、') || '未选择标签'}{row.customer_phone ? ' · ' + row.customer_phone : ''}</span><time>{timeText(row.created_at)}</time></div>
         </button>)}</div>}
     <Drawer title="评价详情" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(selected)} onClose={() => setSelected(null)} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" onClick={() => setSelected(null)}>关闭详情</Button><Button size="large" type="primary" loading={saving} onClick={() => void save()}>保存跟进</Button></div>}>
       {selected && <>
@@ -98,6 +99,7 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
         <p className="manager-review-note">{selected.note || '顾客未填写文字评价'}</p>
         <dl className="manager-detail-meta">
           <div><dt>标签</dt><dd>{selected.tags.join('、') || '未选择标签'}</dd></div>
+          <div><dt>手机号</dt><dd>{selected.customer_phone || '未手机号登录'}</dd></div>
           <div><dt>时间</dt><dd>{timeText(selected.created_at)}</dd></div>
           <div><dt>订单</dt><dd>{selected.selection_session_id ? selected.selection_session_id.slice(-8) : '未关联服务单'}</dd></div>
         </dl>

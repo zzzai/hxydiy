@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Drawer, Empty, List, Spin, Tag, Typography } from 'antd';
-import { CheckCircleOutlined, EyeOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import { confirmTechnicianService, finishTechnicianService, getTechnicianMe, getTechnicianTasks } from '../api';
+import { Alert, Button, Drawer, Empty, List, Spin, Tag, Typography } from 'antd';
+import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { getTechnicianMe, getTechnicianTasks } from '../api';
 import {
-  createTechnicianActionRunner,
   technicianBoardGroups,
   technicianOrderItemLabel,
   technicianPositionTone,
@@ -17,7 +16,6 @@ import {
   technicianStatusLabel,
 } from './technicianMobile';
 import TechnicianProfileSheet from './TechnicianProfileSheet';
-import TechnicianServiceReferenceDrawer from './TechnicianServiceReferenceDrawer';
 
 function orderSummary(order: any): string {
   return (order.items || []).map(technicianOrderItemLabel).filter(Boolean).join('、') || '顾客暂未填写项目';
@@ -110,18 +108,15 @@ function OrderPricingBlock({ pricing }: { pricing: any }) {
 }
 
 export default function TechnicianTodayPage() {
-  const { message } = App.useApp();
   const [me, setMe] = useState<any>();
   const [tasks, setTasks] = useState<any[]>([]);
   const [unassignedTasks, setUnassignedTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [acting, setActing] = useState<number | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>();
   const [profileOrder, setProfileOrder] = useState<any>();
   const [error, setError] = useState('');
   const activeLoads = useRef(0);
   const latestLoadRequest = useRef(0);
-  const actionRunner = useRef(createTechnicianActionRunner()).current;
 
   const load = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (background && activeLoads.current > 0) return;
@@ -162,33 +157,6 @@ export default function TechnicianTodayPage() {
       window.removeEventListener('focus', refresh);
     };
   }, [load]);
-
-  const act = async (order: any, action: 'confirm' | 'finish') => {
-    const occupancyId = typeof order.occupancy_id === 'number' ? order.occupancy_id : null;
-    if (!occupancyId) return;
-    if (actionRunner.isRunning(action, occupancyId)) return;
-    setActing(occupancyId);
-    try {
-      await actionRunner.run(action, occupancyId, (id, key) => action === 'confirm'
-        ? confirmTechnicianService(id, key)
-        : finishTechnicianService(id, key));
-      message.success(action === 'confirm' ? '服务已开始' : '服务已结束，请填写服务记录');
-      if (action === 'finish' && order.customer?.id && order.selection_session_id) {
-        setProfileOrder({ ...order, status: 'completed', completed_by_me: true });
-      }
-      setSelectedOrder(undefined);
-      await load();
-    } catch {
-      // API 拦截器负责展示服务端错误。
-    } finally {
-      setActing(null);
-    }
-  };
-
-  const selectedOccupancyId = selectedOrder && typeof selectedOrder.occupancy_id === 'number' ? selectedOrder.occupancy_id : null;
-  const selectedActions = selectedOccupancyId
-    ? (selectedOrder.status === 'in_service' ? ['finish'] : selectedOrder.status === 'ready' ? ['confirm'] : [])
-    : [];
 
   const groups = technicianBoardGroups(tasks);
   const boardCounts = tasks.reduce((counts, task) => {
@@ -264,7 +232,7 @@ export default function TechnicianTodayPage() {
     </section>}
     <Drawer title={selectedOrder ? (selectedOrder.conflict ? `${selectedOrder.room_name || '服务位'}待核对` : selectedOrder.status === 'waiting_assignment' ? '未排座' : '顾客服务单') : '顾客服务单'} placement="bottom" height="min(78vh, 620px)" open={!!selectedOrder} onClose={() => setSelectedOrder(undefined)}>
       {selectedOrder && <div className="technician-order-drawer">
-        {selectedOrder.conflict ? <Alert type="warning" showIcon message="服务位记录待核对" description={`该房间存在 ${selectedOrder.conflict_count || 2} 条活动占用记录。为避免误操作，当前不展示顾客选单，也不能确认或结束服务；请联系店长核对现场服务位。`} /> : selectedOrder.status === 'waiting_assignment' ? <>
+        {selectedOrder.conflict ? <Alert type="warning" showIcon message="服务位记录待核对" description={`该房间存在 ${selectedOrder.conflict_count || 2} 条活动占用记录。当前仅展示服务位状态，请联系店长核对现场。`} /> : selectedOrder.status === 'waiting_assignment' ? <>
         <div className="technician-order-drawer-head"><div><span className="technician-eyebrow">未排座</span><h2>未排座</h2></div><Tag>未排座</Tag></div>
         <Typography.Paragraph type="secondary">{selectedOrder.submitted_at ? new Date(selectedOrder.submitted_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '刚刚'} 提交</Typography.Paragraph>
         <OrderItems order={selectedOrder} />
@@ -275,13 +243,9 @@ export default function TechnicianTodayPage() {
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
         <OrderItems order={selectedOrder} />
         <OrderPricingBlock pricing={selectedOrder.pricing} />
-        {selectedActions.length > 0 && selectedOrder.customer?.id && <TechnicianServiceReferenceDrawer inline occupancyId={selectedOccupancyId} open onClose={()=>{}} />}
         <div className="technician-task-card-foot">
-          {selectedActions.includes('confirm') && <Button type="primary" block size="large" icon={<PlayCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'confirm')}>开始服务</Button>}
-          {selectedActions.includes('finish') && <Button type="primary" block size="large" icon={<CheckCircleOutlined />} loading={acting === selectedOccupancyId} onClick={() => void act(selectedOrder, 'finish')}>服务结束</Button>}
-          {selectedOccupancyId === null && <Typography.Text type="secondary">当前服务单接口未提供服务位占用凭证，仅支持查看。</Typography.Text>}
+          <Typography.Text type="secondary">订单确认、开始和结束由系统自动处理，技师端仅查看。</Typography.Text>
           {selectedOrder.completed_by_me && selectedOrder.customer?.id && selectedOrder.selection_session_id && <Button block size="large" onClick={() => { setProfileOrder(selectedOrder); setSelectedOrder(undefined); }}>填写服务参考</Button>}
-          {selectedOrder.status === 'completed' && <Typography.Text type="secondary">服务记录完成后，服务位由前台按离店流程释放。</Typography.Text>}
         </div>
         </>}
       </div>}
