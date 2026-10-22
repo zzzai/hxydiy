@@ -10,7 +10,7 @@ import { getNextOperation, getOperationConfirmation, getResourceStatus, type Liv
 
 const { Text, Title } = Typography;
 const emptyBoard: LiveBoard = { summary: {}, visits: [], resources: { technicians: [], rooms: [] } };
-const sectionStyle: React.CSSProperties = { background: '#fff', border: '1px solid #edf0ee', borderRadius: 6, padding: 20 };
+const sectionStyle: React.CSSProperties = { background: 'var(--hxy-surface)', border: '1px solid var(--hxy-border-subtle)', borderRadius: 12, padding: 20 };
 const itemNames = (items: LiveVisit['items']) => items.map((item) => `${item.name || '服务项目'}${item.quantity ? ` ×${item.quantity}` : ''}`).join('、');
 
 function boardFromResponse(value: unknown): LiveBoard {
@@ -93,13 +93,14 @@ export default function TodayPage() {
   if (error) return <Result status="error" title="工作台数据加载失败" subTitle={error} extra={<Button type="primary" icon={<ReloadOutlined />} onClick={() => void load()}>重试</Button>} />;
 
   if (readOnly) return <Space direction="vertical" size={16} style={{ width: '100%' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>工作台</Title><Text type="secondary">仅查看本店当日服务安排</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={2} style={{ margin: 0 }}>工作台</Title><Text type="secondary">仅查看本店当日服务安排</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>今日预约</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table rowKey="id" columns={readOnlyColumns} dataSource={appointments} pagination={false} locale={{ emptyText: <Empty description="当前没有今日预约" /> }} />}</section>
   </Space>;
 
   return <Space direction="vertical" size={16} style={{ width: '100%' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={3} style={{ margin: 0 }}>工作台</Title><Text type="secondary">在店服务与结算实时状态</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
-    <Row gutter={[12, 12]}>{[['今日订单', workbench?.summary?.today_orders || 0], ['服务中', workbench?.summary?.in_service ?? board.summary.in_service ?? 0], ['待结账', workbench?.summary?.pending_checkout ?? board.summary.pending_checkout ?? 0], ['需处理', workbench?.summary?.attention || 0]].map(([label, value]) => <Col xs={12} md={6} key={String(label)}><div style={{ ...sectionStyle, padding: '16px 18px' }}><Statistic title={label} value={value} /></div></Col>)}</Row>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={2} style={{ margin: 0 }}>工作台</Title><Text type="secondary">在店服务与结算状态 · “今日”按上海自然日计算</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
+    <Row gutter={[12, 12]}>{[['今日新订单', workbench?.summary?.today_orders || 0], ['服务中', workbench?.summary?.in_service ?? board.summary.in_service ?? 0], ['待结账', workbench?.summary?.pending_checkout ?? board.summary.pending_checkout ?? 0], ['需处理', workbench?.summary?.attention || 0]].map(([label, value]) => <Col xs={12} md={6} key={String(label)}><div style={{ ...sectionStyle, padding: '16px 18px' }}><Statistic title={label} value={value} valueStyle={label === '需处理' && Number(value) > 0 ? { color: 'var(--hxy-warning)' } : undefined} /></div></Col>)}</Row>
+    {Number(workbench?.summary?.attention || 0) > 0 && <Text type="secondary" style={{ marginTop: -8, display: 'block' }}>需处理可能包含历史未完成事项，请按列表逐项核实。</Text>}
     {Boolean(workbench?.attention?.length) && <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>待处理</Text><div style={{ marginTop: 10 }}>{workbench?.attention?.map((item) => <Button key={item.key} type="link" danger={item.key === 'low_review'} style={{ paddingInline: 0, minHeight: 44 }} onClick={() => navigate(item.key === 'low_review' ? '/feedback' : '/selection-sessions')}>{item.label} {item.count}</Button>)}</div></section>}
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>在店服务流</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table<LiveVisit> rowKey="id" columns={columns} dataSource={board.visits} pagination={false} locale={{ emptyText: <Empty description="当前没有在店服务" /> }} scroll={{ x: 760 }} />}</section>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>资源状态</Text><Row gutter={[12, 12]} style={{ marginTop: 12 }}><Col span={24}><Text type="secondary">技师</Text><div>{board.resources.technicians.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col><Col span={24}><Text type="secondary">房间 / 沙发</Text><div>{board.resources.rooms.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col></Row></section>

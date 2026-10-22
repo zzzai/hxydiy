@@ -29,18 +29,18 @@ type Room = {
 };
 
 const STATUS_META: Record<string, { label: string; color: string; tag: string }> = {
-  available: { label: '空闲', color: '#2f7d5c', tag: 'green' },
-  occupied: { label: '已入座', color: '#d08a28', tag: 'gold' },
-  in_service: { label: '服务中', color: '#1677ff', tag: 'blue' },
-  pending_checkout: { label: '待结账', color: '#d46b08', tag: 'orange' },
-  cleaning: { label: '清洁中', color: '#13a8a8', tag: 'cyan' },
-  reserved: { label: '已预留', color: '#722ed1', tag: 'purple' },
-  inspection: { label: '待检查', color: '#eb2f96', tag: 'magenta' },
-  maintenance: { label: '维护中', color: '#cf1322', tag: 'red' },
-  resting: { label: '暂停使用', color: '#7f8c8d', tag: 'default' },
-  overtime_rest: { label: '超时休息', color: '#7f8c8d', tag: 'default' },
-  off_duty: { label: '停用', color: '#7f8c8d', tag: 'default' },
-  booked: { label: '已预约', color: '#722ed1', tag: 'purple' },
+  available: { label: '空闲', color: 'var(--hxy-success)', tag: 'green' },
+  occupied: { label: '已入座', color: 'var(--hxy-warning)', tag: 'gold' },
+  in_service: { label: '服务中', color: 'var(--hxy-info)', tag: 'blue' },
+  pending_checkout: { label: '待结账', color: 'var(--hxy-warning)', tag: 'orange' },
+  cleaning: { label: '清洁中', color: 'var(--hxy-info)', tag: 'cyan' },
+  reserved: { label: '已预留', color: 'var(--hxy-info)', tag: 'purple' },
+  inspection: { label: '待检查', color: 'var(--hxy-warning)', tag: 'magenta' },
+  maintenance: { label: '维护中', color: 'var(--hxy-error)', tag: 'red' },
+  resting: { label: '暂停使用', color: 'var(--hxy-text-muted)', tag: 'default' },
+  overtime_rest: { label: '超时休息', color: 'var(--hxy-text-muted)', tag: 'default' },
+  off_duty: { label: '停用', color: 'var(--hxy-text-muted)', tag: 'default' },
+  booked: { label: '已预约', color: 'var(--hxy-info)', tag: 'purple' },
 };
 
 const GROUP_META = [
@@ -122,7 +122,7 @@ function RoomList() {
           <div className="room-section-title"><h3>{group.label}</h3><span>{group.rooms.length} 个房位</span></div>
           <div className="room-grid">
             {group.rooms.map(room => {
-              const status = STATUS_META[room.status] || { label: room.status, color: '#7f8c8d', tag: 'default' };
+              const status = STATUS_META[room.status] || { label: room.status, color: 'var(--hxy-text-muted)', tag: 'default' };
               return (
                 <article
                   key={room.id}
@@ -277,7 +277,7 @@ function RoomConfiguration({ roomId, roomSummary, onChanged }: { roomId: number;
         </div>
         {canManage && <Space>
           <RoomOperationalToggle room={room} onChanged={onChanged} />
-          <span style={{ color: '#84938f', fontSize: 12 }}>仅用于查看和房态配置</span>
+          <span style={{ color: 'var(--hxy-text-muted)', fontSize: 12 }}>仅用于查看和房态配置</span>
         </Space>}
       </div>
       <div className="room-configuration-section">房态信息</div>

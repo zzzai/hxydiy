@@ -1,14 +1,14 @@
-.technician-mobile-app { --mobile-bg: #f3f7f4; --mobile-surface: #ffffff; --mobile-ink: #132a24; --mobile-muted: #647a71; --mobile-line: #dee9e3; --mobile-brand: #145545; min-height: 100vh; background: var(--mobile-bg); color: var(--mobile-ink); padding-bottom: calc(76px + env(safe-area-inset-bottom)); -webkit-tap-highlight-color: transparent; }
-.technician-mobile-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; min-height: calc(60px + env(safe-area-inset-top)); padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: #0b2822; color: #fff; box-shadow: 0 2px 10px rgba(11,40,34,.18); }
+.technician-mobile-app { --mobile-bg: #F6F8F6; --mobile-surface: #FFFFFF; --mobile-ink: #202A23; --mobile-muted: #536158; --mobile-line: #DCE4DC; --mobile-brand: #197A3B; --mobile-selected: #E3EFE7; min-height: 100vh; background: var(--mobile-bg); color: var(--mobile-ink); padding-bottom: calc(76px + env(safe-area-inset-bottom)); -webkit-tap-highlight-color: transparent; }
+.technician-mobile-header { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; min-height: calc(60px + env(safe-area-inset-top)); padding: calc(10px + env(safe-area-inset-top)) 16px 10px; background: var(--mobile-surface); color: var(--mobile-ink); border-bottom: 1px solid var(--mobile-line); box-shadow: none; }
 .technician-mobile-header div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.technician-mobile-header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; letter-spacing: .01em; }
-.technician-mobile-header span { color: #b9d3c8; font-size: 12px; }
-.technician-mobile-header .ant-btn { color: #dcebdd; min-width: 44px; min-height: 44px; }
+.technician-mobile-header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mobile-ink); font-size: 15px; letter-spacing: .01em; }
+.technician-mobile-header span { color: var(--mobile-muted); font-size: 12px; }
+.technician-mobile-header .ant-btn { color: var(--mobile-brand); min-width: 44px; min-height: 44px; }
 .technician-mobile-content { width: min(100%, 560px); margin: 0 auto; padding: 20px 16px calc(96px + env(safe-area-inset-bottom)); }
-.technician-mobile-tabbar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: grid; gap: 4px; padding: 7px 8px calc(7px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.98); border-top: 1px solid var(--mobile-line); box-shadow: 0 -4px 18px rgba(20,60,49,.08); }
-.technician-mobile-tabbar button { min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; border-radius: 10px; background: transparent; color: #7b8f88; font: inherit; font-size: 11px; touch-action: manipulation; transition: background-color .16s ease, color .16s ease; }
+.technician-mobile-tabbar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: grid; gap: 4px; padding: 7px 8px calc(7px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.98); border-top: 1px solid var(--mobile-line); box-shadow: 0 -4px 18px rgba(32,42,35,.08); }
+.technician-mobile-tabbar button { min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; border-radius: 10px; background: transparent; color: #536158; font: inherit; font-size: 11px; touch-action: manipulation; transition: background-color .16s ease, color .16s ease; }
 .technician-mobile-tabbar button .anticon { font-size: 20px; }
-.technician-mobile-tabbar button.active { color: var(--mobile-brand); background: #e6f2ec; font-weight: 650; }
+.technician-mobile-tabbar button.active { color: var(--mobile-brand); background: var(--mobile-selected); font-weight: 650; }
 .technician-page-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
 .technician-page-title h1 { margin: 2px 0 3px; color: var(--mobile-ink); font-size: 25px; line-height: 1.25; letter-spacing: -.02em; }
 .technician-page-title p, .technician-page-title .technician-eyebrow { margin: 0; color: var(--mobile-muted); font-size: 13px; line-height: 1.5; }
@@ -16,7 +16,7 @@
 .technician-section-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 2px 10px; }
 .technician-section-heading h2 { margin: 0; font-size: 16px; }
 .technician-section-heading h3 { margin: 0; font-size: 14px; }
-.technician-section-heading span { color: #84958e; font-size: 12px; font-variant-numeric: tabular-nums; }
+.technician-section-heading span { color: var(--mobile-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .technician-position-group + .technician-position-group { margin-top: 16px; }
 .technician-position-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .technician-unassigned-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
@@ -130,3 +130,26 @@
 
 .technician-member-paused { display: grid; gap: 16px; padding: 20px 0; }
 .technician-member-paused h1 { margin: 0; color: #0d2f29; font-size: 22px; }
+
+/* Brand v1.0 shared colors for technician mobile. */
+.technician-unassigned-row, .technician-position-tile, .technician-customer-entry { color: var(--hxy-text); border-color: var(--hxy-border-subtle); background: var(--hxy-surface); }
+.technician-position-tile.tone-waiting { border-color: #F0D9AE; background: var(--hxy-warning-bg); box-shadow: none; }
+.technician-position-tile.tone-serving { border-color: var(--hxy-selected); background: var(--hxy-success-bg); box-shadow: none; }
+.technician-position-tile.tone-finished { border-color: #C9DFF0; background: var(--hxy-info-bg); box-shadow: none; }
+.technician-position-tile.tone-conflict { border-color: #F2C9C5; background: var(--hxy-error-bg); box-shadow: none; }
+.technician-position-tile.tone-waiting .technician-position-count, .technician-position-tile.tone-waiting .technician-position-tile-action { color: var(--hxy-warning); }
+.technician-position-tile.tone-serving .technician-position-count, .technician-position-tile.tone-serving .technician-position-tile-action { color: var(--hxy-success); }
+.technician-position-tile.tone-finished .technician-position-count, .technician-position-tile.tone-finished .technician-position-tile-action { color: var(--hxy-info); }
+.technician-position-tile.tone-conflict .technician-position-count, .technician-position-tile.tone-conflict .technician-position-tile-action { color: var(--hxy-error); }
+.technician-position-count, .technician-position-tile-action, .technician-unassigned-time { color: var(--hxy-primary); }
+.technician-unassigned-tag { color: var(--hxy-text-secondary); background: var(--hxy-neutral-bg); }
+.technician-order-pricing { border-color: var(--hxy-border-subtle); background: var(--hxy-brand-soft); }
+.technician-order-pricing-head, .technician-order-item-tail, .technician-order-line-price { color: var(--hxy-text-secondary); }
+.technician-order-line-pending { color: var(--hxy-warning); }
+.technician-customer-panel > .ant-btn, .technician-my-service-actions .ant-btn { border-color: var(--hxy-border-control); }
+
+.technician-profile-hero { background: var(--hxy-brand-soft); color: var(--hxy-text); border: 1px solid var(--hxy-border-subtle); }
+.technician-login-page { background: var(--hxy-canvas); }
+.technician-login-brand > span { color: var(--hxy-text); background: var(--hxy-brand-leaf); }
+.technician-login-brand h2, .technician-member-paused h1 { color: var(--hxy-text); }
+.technician-position-count, .technician-position-tile-action { color: var(--hxy-primary); }

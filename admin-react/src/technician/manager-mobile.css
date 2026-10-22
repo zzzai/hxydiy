@@ -134,3 +134,31 @@
 .manager-task-stale { border-color: #ead9bd; background: #fffbf3; }
 .manager-task-stale .manager-task-top { color: #7a5415; }
 .manager-empty { border: 1px dashed #dce7e1; }
+
+/* Brand v1.0 shared colors for manager mobile. */
+.technician-mobile-app.manager-mobile-app { --mobile-bg: #F6F8F6; --mobile-surface: #FFFFFF; --mobile-ink: #202A23; --mobile-muted: #536158; --mobile-line: #DCE4DC; --mobile-brand: #197A3B; --mobile-selected: #E3EFE7; }
+.manager-page-heading h1 { color: var(--hxy-text); }
+.manager-page-heading p { color: var(--hxy-text-secondary); }
+.manager-filter-row { background: var(--hxy-brand-soft); }
+.manager-filter-row button { color: var(--hxy-text-secondary); }
+.manager-filter-row button[aria-pressed="true"] { color: var(--hxy-primary); background: var(--hxy-selected); box-shadow: none; }
+.manager-selection-card, .manager-review-card { border-color: var(--hxy-border-subtle); color: var(--hxy-text); }
+.manager-card-top, .manager-card-meta, .manager-card-bottom, .manager-review-meta { color: var(--hxy-text-secondary); }
+.manager-card-bottom strong, .manager-workbench-summary strong { color: var(--hxy-text); }
+.manager-workbench-summary span, .manager-workbench-summary button { color: var(--hxy-text-secondary); }
+.manager-workbench-summary span.has-attention strong, .manager-workbench-summary button.has-attention strong { color: var(--hxy-warning); }
+.manager-tasks-heading h2, .manager-reviews-heading h2 { color: var(--hxy-text); }
+.manager-tasks-heading p, .manager-reviews-heading p { color: var(--hxy-text-secondary); }
+.manager-task-stale { border-color: var(--hxy-border-subtle); background: var(--hxy-warning-bg); }
+.manager-task-stale .manager-task-top { color: var(--hxy-warning); }
+.manager-review-tasks { border-color: var(--hxy-border-subtle); background: var(--hxy-error-bg); }
+.manager-review-task-row { color: var(--hxy-text); border-bottom-color: var(--hxy-border-subtle); }
+.manager-empty { background: var(--hxy-surface); border-color: var(--hxy-border-subtle); }
+.manager-mobile-more summary { color: var(--hxy-primary); }
+.manager-mobile-more > div { background: var(--hxy-surface); border-color: var(--hxy-border-subtle); }
+.manager-mobile-more > div button { background: var(--hxy-surface); color: var(--hxy-text); }
+.manager-mobile-more > div button:last-child { color: var(--hxy-error); }
+
+.manager-filter-row button[aria-pressed="true"], .manager-view-tabs button[aria-pressed="true"] { color: var(--hxy-primary); background: var(--hxy-selected); }
+.manager-selection-card:focus-visible, .manager-filter-row button:focus-visible, .manager-change-row:focus-visible, .manager-review-card:focus-visible, .manager-review-task-row:focus-visible { outline-color: var(--hxy-primary); }
+.manager-position-state, .manager-position-card-footer .ant-btn { color: var(--hxy-primary); }

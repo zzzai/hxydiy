@@ -32,3 +32,8 @@
 .handoff-actions .ant-btn { min-height: 46px; height: auto; }
 .handoff-actions .ant-btn-primary { flex: 1; background: #183c34; box-shadow: none; }
 @media (max-width: 420px) { .handoff-actions { flex-direction: column-reverse; } .handoff-actions .ant-btn { width: 100%; } }
+
+/* Brand v1.0 */
+.handoff-heading h2, .handoff-preview p, .handoff-content { color: var(--hxy-text); }
+.handoff-choices button[aria-pressed=true] { border-color: var(--hxy-primary); background: var(--hxy-primary); color: #fff; }
+.handoff-actions .ant-btn-primary { background: var(--hxy-primary); }
