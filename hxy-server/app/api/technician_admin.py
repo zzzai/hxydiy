@@ -1,4 +1,4 @@
-from datetime import date as date_type, datetime, timezone
+from datetime import date as date_type, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.models import AuditLog, Order, PositionOccupancy, Staff
 from app.models.operations import Technician
 from app.models.service import ServiceAssignment, ServiceOrder
-from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
+from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest, TechnicianShift
 from app.api.technician import invite_expiry, make_invite_token, token_hash
 
 router = APIRouter(prefix="/admin/v2", tags=["technician-lifecycle"])
@@ -307,6 +307,151 @@ def technician_board(
         },
         "items": items,
     }
+
+
+@router.get("/technician-shifts")
+def list_technician_shifts(
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    admin = require_admin(authorization, db)
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    try:
+        range_start = date_type.fromisoformat(start_date) if start_date else today - timedelta(days=today.weekday())
+        range_end = date_type.fromisoformat(end_date) if end_date else range_start + timedelta(days=6)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="日期格式应为 YYYY-MM-DD")
+    if range_end < range_start or (range_end - range_start).days > 62:
+        raise HTTPException(status_code=400, detail="排班日期范围不合法")
+    rows = list(db.scalars(select(TechnicianShift).where(
+        TechnicianShift.store_id == admin.store_id,
+        TechnicianShift.work_date >= range_start,
+        TechnicianShift.work_date <= range_end,
+    ).order_by(TechnicianShift.work_date, TechnicianShift.technician_id)))
+    return {
+        "start_date": range_start.isoformat(),
+        "end_date": range_end.isoformat(),
+        "items": [{
+            "id": row.id,
+            "technician_id": row.technician_id,
+            "work_date": row.work_date.isoformat(),
+            "shift_type": row.shift_type,
+            "start_time": row.start_time,
+            "end_time": row.end_time,
+            "note": row.note,
+        } for row in rows],
+    }
+
+
+@router.put("/technician-shifts")
+def upsert_technician_shift(
+    body: dict | None = None,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    admin = require_admin(authorization, db)
+    payload = body or {}
+    technician_id = payload.get("technician_id")
+    try:
+        technician_id = int(technician_id)
+        work_date = date_type.fromisoformat(str(payload.get("work_date") or ""))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="技师和日期必填")
+    technician = db.get(Technician, technician_id)
+    if not technician or technician.store_id != admin.store_id:
+        raise HTTPException(status_code=404, detail="技师不存在")
+    shift_type = str(payload.get("shift_type") or "full")
+    allowed_types = {"off", "full", "morning", "afternoon", "evening", "custom"}
+    if shift_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="班次类型不合法")
+    start_time = str(payload.get("start_time") or "").strip()[:5]
+    end_time = str(payload.get("end_time") or "").strip()[:5]
+    if shift_type == "custom" and (not start_time or not end_time):
+        raise HTTPException(status_code=400, detail="自定义班次需要开始和结束时间")
+    if shift_type in ("morning", "afternoon", "evening"):
+        start_time, end_time = {"morning": ("09:00", "13:00"), "afternoon": ("13:00", "18:00"), "evening": ("18:00", "22:00")}[shift_type]
+    if shift_type == "full":
+        start_time, end_time = "09:00", "22:00"
+    if shift_type == "off":
+        start_time, end_time = "", ""
+
+    leave = db.scalar(select(TechnicianLeaveRequest).where(
+        TechnicianLeaveRequest.store_id == admin.store_id,
+        TechnicianLeaveRequest.technician_id == technician_id,
+        TechnicianLeaveRequest.status == "approved",
+        TechnicianLeaveRequest.start_date <= work_date,
+        TechnicianLeaveRequest.end_date >= work_date,
+    ))
+    if leave and shift_type != "off":
+        raise HTTPException(status_code=409, detail={"code": "SHIFT_LEAVE_CONFLICT", "message": "该日期已有已批准的请假，不能排班"})
+    if shift_type == "off":
+        booking_count = db.scalar(
+            select(func.count()).select_from(ServiceAssignment)
+            .join(ServiceOrder, ServiceOrder.id == ServiceAssignment.service_order_id)
+            .join(Order, Order.id == ServiceOrder.order_id)
+            .where(
+                ServiceAssignment.store_id == admin.store_id,
+                ServiceAssignment.technician_id == technician_id,
+                ServiceAssignment.status.in_(("assigned", "ready", "in_service")),
+                Order.booking_date == work_date.isoformat(),
+            )
+        ) or 0
+        if booking_count:
+            raise HTTPException(status_code=409, detail={"code": "SHIFT_BOOKING_CONFLICT", "message": f"该日期仍有 {booking_count} 个已排服务，不能排休息"})
+
+    row = db.scalar(select(TechnicianShift).where(
+        TechnicianShift.technician_id == technician_id,
+        TechnicianShift.work_date == work_date,
+    ))
+    if row is None:
+        row = TechnicianShift(
+            store_id=admin.store_id,
+            technician_id=technician_id,
+            work_date=work_date,
+            created_by_staff_id=admin.id,
+        )
+        db.add(row)
+    row.shift_type = shift_type
+    row.start_time = start_time
+    row.end_time = end_time
+    row.note = str(payload.get("note") or "").strip()[:200]
+    db.flush()
+    audit(db, admin, "upsert_technician_shift", technician_id, {
+        "shift_id": row.id,
+        "work_date": work_date.isoformat(),
+        "shift_type": shift_type,
+    })
+    db.commit()
+    return {
+        "id": row.id,
+        "technician_id": technician_id,
+        "work_date": work_date.isoformat(),
+        "shift_type": shift_type,
+        "start_time": start_time,
+        "end_time": end_time,
+        "note": row.note,
+    }
+
+
+@router.delete("/technician-shifts/{shift_id}")
+def delete_technician_shift(
+    shift_id: int,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    admin = require_admin(authorization, db)
+    row = db.get(TechnicianShift, shift_id)
+    if not row or row.store_id != admin.store_id:
+        raise HTTPException(status_code=404, detail="排班记录不存在")
+    audit(db, admin, "delete_technician_shift", row.technician_id, {
+        "shift_id": row.id,
+        "work_date": row.work_date.isoformat(),
+    })
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/technician-leave-requests/{request_id}/approve")

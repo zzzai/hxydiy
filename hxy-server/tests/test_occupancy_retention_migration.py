@@ -26,6 +26,7 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                 "staff_external_identities", "staff_oauth_attempts", "customer_tag_contributions",
                 "page_content_versions",
                 "operational_exceptions",
+                "technician_shifts",
             }:
                 continue
             copied = table.to_metadata(previous_metadata)

@@ -171,6 +171,7 @@ approved_migrations=(
   '20261018_wecom_store_manager.py'
   '20261023_page_content_versions.py'
   '20261023_operational_exceptions.py'
+  '20261024_technician_shifts.py'
 )
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \

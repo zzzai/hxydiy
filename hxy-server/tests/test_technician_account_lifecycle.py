@@ -550,3 +550,48 @@ class TestTechnicianAccountLifecycle:
         )
         assert blocked.status_code == 403, blocked.text
         assert blocked.json()["detail"]["code"] == "SELF_APPROVAL_FORBIDDEN"
+
+    def test_manager_can_upsert_and_list_weekly_shift(self):
+        today = datetime.now(timezone.utc).date()
+        response = self.client.put(
+            "/api/v1/admin/v2/technician-shifts",
+            headers=self.manager_headers,
+            json={"technician_id": self.technician_id, "work_date": today.isoformat(), "shift_type": "full"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["shift_type"] == "full"
+        listing = self.client.get(
+            "/api/v1/admin/v2/technician-shifts",
+            headers=self.manager_headers,
+            params={"start_date": today.isoformat(), "end_date": today.isoformat()},
+        )
+        assert listing.status_code == 200, listing.text
+        assert listing.json()["items"][0]["technician_id"] == self.technician_id
+        assert listing.json()["items"][0]["start_time"] == "09:00"
+
+    def test_shift_cannot_override_approved_leave(self):
+        today = datetime.now(timezone.utc).date()
+        with self.SessionLocal() as db:
+            db.add(TechnicianLeaveRequest(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                start_date=today,
+                end_date=today,
+                reason="休息",
+                status="approved",
+            ))
+            db.commit()
+        blocked = self.client.put(
+            "/api/v1/admin/v2/technician-shifts",
+            headers=self.manager_headers,
+            json={"technician_id": self.technician_id, "work_date": today.isoformat(), "shift_type": "full"},
+        )
+        assert blocked.status_code == 409, blocked.text
+        assert blocked.json()["detail"]["code"] == "SHIFT_LEAVE_CONFLICT"
+        allowed = self.client.put(
+            "/api/v1/admin/v2/technician-shifts",
+            headers=self.manager_headers,
+            json={"technician_id": self.technician_id, "work_date": today.isoformat(), "shift_type": "off"},
+        )
+        assert allowed.status_code == 200, allowed.text
+        assert allowed.json()["shift_type"] == "off"

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -38,3 +38,26 @@ class TechnicianLeaveRequest(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TechnicianShift(Base):
+    """One technician's shift for one calendar day."""
+
+    __tablename__ = "technician_shifts"
+    __table_args__ = (
+        UniqueConstraint("technician_id", "work_date", name="uq_technician_shifts_technician_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
+    technician_id: Mapped[int] = mapped_column(ForeignKey("technicians.id"), index=True)
+    work_date: Mapped[date] = mapped_column(Date, index=True)
+    shift_type: Mapped[str] = mapped_column(String(16), default="full")
+    start_time: Mapped[str] = mapped_column(String(5), default="")
+    end_time: Mapped[str] = mapped_column(String(5), default="")
+    note: Mapped[str] = mapped_column(String(200), default="")
+    created_by_staff_id: Mapped[int | None] = mapped_column(ForeignKey("staff.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
