@@ -893,6 +893,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/customers/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Customers
+         * @description Export the current store's customer list as masked CSV.
+         *
+         *     Full phone numbers are deliberately excluded from bulk export. Every export
+         *     is audited with the filter set and row count.
+         */
+        get: operations["export_customers_api_v1_admin_v2_customers_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/customers/{customer_id}/profile-records": {
         parameters: {
             query?: never;
@@ -8709,6 +8732,41 @@ export interface operations {
                 "application/json": components["schemas"]["CustomerProfileRecordIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_customers_api_v1_admin_v2_customers_export_get: {
+        parameters: {
+            query?: {
+                tag_id?: number | null;
+                search?: string | null;
+                is_member?: boolean | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

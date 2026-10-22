@@ -6,8 +6,10 @@
 from datetime import UTC, date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from copy import deepcopy
+import csv
 import hashlib
 import hmac
+import io
 import json
 import re
 import unicodedata
@@ -15,6 +17,7 @@ import uuid
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, field_validator, model_validator
 from sqlalchemy import delete, select, func as sa_func, and_, literal, or_, union, union_all
 from sqlalchemy.exc import IntegrityError
@@ -4655,6 +4658,73 @@ def list_users(
             "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
         })
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/customers/export")
+def export_customers(
+    tag_id: int | None = Query(None),
+    search: str | None = Query(None),
+    is_member: bool | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Export the current store's customer list as masked CSV.
+
+    Full phone numbers are deliberately excluded from bulk export. Every export
+    is audited with the filter set and row count.
+    """
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    q = select(User).where(User.id.in_(_store_user_ids(store_id)))
+    if tag_id:
+        q = q.where(User.id.in_(tagged_user_ids(store_id, [tag_id])))
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        q = q.where(or_(User.nickname.ilike(term), User.phone.ilike(term)))
+    if is_member is not None:
+        q = q.where(User.is_member == is_member)
+    users = list(db.scalars(q.order_by(User.id.desc()).limit(5000)))
+    user_ids = [user.id for user in users]
+    tags_by_user: dict[int, list[str]] = {}
+    if user_ids:
+        rows = db.execute(
+            select(CustomerTagRelation.user_id, CustomerTag.name)
+            .join(CustomerTag, CustomerTag.id == CustomerTagRelation.tag_id)
+            .where(CustomerTag.store_id == store_id, CustomerTagRelation.user_id.in_(user_ids))
+        ).all()
+        for user_id, tag_name in rows:
+            tags_by_user.setdefault(user_id, []).append(tag_name)
+
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(["顾客ID", "昵称", "手机号(脱敏)", "会员", "会员类型", "标签", "注册时间"])
+    for user in users:
+        writer.writerow([
+            user.id,
+            _customer_display_name(user),
+            _masked_phone(user.phone),
+            "是" if user.is_member else "否",
+            user.member_type or "",
+            "|".join(tags_by_user.get(user.id, [])),
+            user.created_at.isoformat() if user.created_at else "",
+        ])
+    _audit(db, staff, "export_customer_list", "customer_export", str(store_id), {
+        "store_id": store_id,
+        "tag_id": tag_id,
+        "search": bool(search),
+        "is_member": is_member,
+        "row_count": len(users),
+        "phone_mode": "masked",
+    })
+    db.commit()
+    filename = f"customers-{store_id}-{datetime.now(UTC).strftime('%Y%m%d%H%M')}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 class MembershipUpdateIn(BaseModel):
