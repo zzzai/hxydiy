@@ -36,7 +36,7 @@ from app.models import (
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
     CustomerProfileCurrent, CustomerProfileRecord,
     ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup,
-    TechnicianInvite,
+    TechnicianInvite, OperationalException,
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.membership_pricing import price_book_snapshot
@@ -1423,6 +1423,50 @@ def update_feedback_follow_up(
         "follow_up_staff_id": feedback.follow_up_staff_id,
         "follow_up_note": feedback.follow_up_note,
         "followed_up_at": feedback.followed_up_at.isoformat() if feedback.followed_up_at else None,
+    }
+
+
+@router.get("/brand/exceptions")
+def brand_exceptions(
+    status: str | None = "open",
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Cross-store exception queue for headquarters operations."""
+    staff = _current_staff(authorization, db)
+    _require_headquarters_admin(staff)
+    query = select(OperationalException, Store).join(Store, Store.id == OperationalException.store_id)
+    if status:
+        query = query.where(OperationalException.status == status)
+    rows = db.execute(query.order_by(OperationalException.id.desc()).limit(300)).all()
+    store_counts: dict[int, dict] = {}
+    type_counts: dict[str, int] = {}
+    items = []
+    for exception, store in rows:
+        store_counts.setdefault(store.id, {"store_id": store.id, "store_name": store.name, "store_code": store.store_code, "count": 0})
+        store_counts[store.id]["count"] += 1
+        type_counts[exception.exception_type] = type_counts.get(exception.exception_type, 0) + 1
+        items.append({
+            "id": exception.id,
+            "store_id": store.id,
+            "store_name": store.name,
+            "store_code": store.store_code,
+            "exception_type": exception.exception_type,
+            "severity": exception.severity,
+            "status": exception.status,
+            "title": exception.title,
+            "detail": exception.detail,
+            "entity_type": exception.entity_type,
+            "entity_id": exception.entity_id,
+            "created_at": exception.created_at.isoformat() if exception.created_at else None,
+        })
+    return {
+        "items": items,
+        "total": len(items),
+        "summary": {
+            "by_type": type_counts,
+            "by_store": sorted(store_counts.values(), key=lambda row: row["count"], reverse=True),
+        },
     }
 
 

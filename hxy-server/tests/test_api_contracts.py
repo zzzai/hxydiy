@@ -789,6 +789,49 @@ class AdminV2ContractTests(unittest.TestCase):
         finally:
             self.__class__.current_staff_id = self.staff_id
 
+    def test_headquarters_admin_can_view_cross_store_exception_queue(self):
+        with self.SessionLocal() as db:
+            store_id = db.get(Staff, self.staff_id).store_id
+            db.add_all([
+                OperationalException(
+                    store_id=store_id,
+                    exception_type="missing_selection",
+                    severity="warning",
+                    status="open",
+                    dedupe_key="hq-test-main",
+                    title="主店对账异常",
+                    detail={},
+                    entity_type="order",
+                    entity_id="1",
+                ),
+                OperationalException(
+                    store_id=self.other_store_id,
+                    exception_type="amount_mismatch",
+                    severity="warning",
+                    status="open",
+                    dedupe_key="hq-test-other",
+                    title="其他门店对账异常",
+                    detail={},
+                    entity_type="order",
+                    entity_id="2",
+                ),
+            ])
+            db.commit()
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        headers = {"Authorization": f"Bearer {create_staff_token(self.headquarters_admin_id, 'admin')}"}
+        try:
+            response = self.client.get("/api/v1/admin/v2/brand/exceptions", headers=headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            body = response.json()
+            self.assertEqual(body["total"], 2)
+            self.assertEqual({row["store_id"] for row in body["items"]}, {store_id, self.other_store_id})
+            self.assertEqual(len(body["summary"]["by_store"]), 2)
+        finally:
+            self.__class__.current_staff_id = self.staff_id
+            with self.SessionLocal() as db:
+                db.query(OperationalException).filter(OperationalException.dedupe_key.in_(["hq-test-main", "hq-test-other"])).delete()
+                db.commit()
+
     def test_automation_rule_logs_are_visible_and_scoped(self):
         with self.SessionLocal() as db:
             staff = db.get(Staff, self.staff_id)
