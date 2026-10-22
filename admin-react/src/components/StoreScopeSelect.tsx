@@ -9,6 +9,20 @@ type Props = {
 
 type StoreOption = { id: number; name: string; store_code: string; status: string };
 
+const STORE_SCOPE_STORAGE_KEY = 'hxy:admin:store-scope';
+
+function readSavedStoreId(): number | undefined {
+  try {
+    const raw = window.localStorage.getItem(STORE_SCOPE_STORAGE_KEY);
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+  } catch { return undefined; }
+}
+
+function persistStoreId(storeId: number) {
+  try { window.localStorage.setItem(STORE_SCOPE_STORAGE_KEY, String(storeId)); } catch { /* storage may be disabled */ }
+}
+
 export default function StoreScopeSelect({ value, onChange }: Props) {
   const staff = getStaff();
   const headquarters = staff?.role === 'admin' && !staff.store_id;
@@ -24,11 +38,20 @@ export default function StoreScopeSelect({ value, onChange }: Props) {
         if (!active) return;
         const items: StoreOption[] = response.data?.items || [];
         setStores(items);
-        if (!value && items[0]) onChange(items[0].id);
+        if (!value) {
+          const saved = readSavedStoreId();
+          const next = items.find((store) => store.id === saved)?.id ?? items[0]?.id;
+          if (next) onChange(next);
+        }
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [headquarters]);
+
+  const handleChange = (storeId: number) => {
+    persistStoreId(storeId);
+    onChange(storeId);
+  };
 
   if (!headquarters) return null;
 
@@ -41,7 +64,7 @@ export default function StoreScopeSelect({ value, onChange }: Props) {
         loading={loading}
         value={value}
         placeholder={stores.length ? '选择门店' : '暂无门店'}
-        onChange={onChange}
+        onChange={handleChange}
         options={stores.map((store) => ({
           value: store.id,
           label: `${store.name}${store.status === 'open' ? '' : `（${store.status}）`}`,
