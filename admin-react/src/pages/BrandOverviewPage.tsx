@@ -3,7 +3,7 @@ import { PageContainer } from '@ant-design/pro-components';
 import { Alert, Button, Card, Col, DatePicker, Empty, Row, Space, Statistic, Table, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
-import { getBrandOverview } from '../api';
+import { getBrandExceptions, getBrandOverview } from '../api';
 
 type StoreOverview = {
   store_id: number;
@@ -63,6 +63,7 @@ function ratio(value?: number | null) {
 export default function BrandOverviewPage() {
   const [range, setRange] = useState<[Dayjs, Dayjs]>([dayjs().subtract(6, 'day'), dayjs()]);
   const [data, setData] = useState<Overview>();
+  const [exceptions, setExceptions] = useState<{ items: any[]; total: number; summary?: { by_store?: any[] } }>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -70,8 +71,12 @@ export default function BrandOverviewPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await getBrandOverview(next[0].format('YYYY-MM-DD'), next[1].format('YYYY-MM-DD'));
+      const [response, exceptionResponse] = await Promise.all([
+        getBrandOverview(next[0].format('YYYY-MM-DD'), next[1].format('YYYY-MM-DD')),
+        getBrandExceptions('open').catch(() => ({ data: { items: [], total: 0 } })),
+      ]);
       setData(response.data);
+      setExceptions(exceptionResponse.data);
     } catch {
       setData(undefined);
       setError('品牌经营数据加载失败，请稍后重试。');
@@ -137,6 +142,21 @@ export default function BrandOverviewPage() {
               { title: '评价数', dataIndex: 'review_count', width: 90, align: 'right' },
               { title: '均分', dataIndex: 'average_rating', width: 80, align: 'right', render: (value) => ratio(value) },
               { title: '低分', dataIndex: 'low_rating_count', width: 80, align: 'right', render: (value) => <span style={{ color: value > 0 ? 'var(--hxy-warning)' : undefined }}>{value}</span> },
+            ]}
+          />
+        </Card>
+        <Card style={{ marginTop: 16 }} title="跨店异常" extra={<Typography.Text type="secondary">待处理 {exceptions?.total || 0} 条</Typography.Text>}>
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={exceptions?.items || []}
+            pagination={false}
+            locale={{ emptyText: <Empty description="当前没有跨店待处理异常" /> }}
+            columns={[
+              { title: '门店', width: 180, render: (_: any, row: any) => <Space direction="vertical" size={0}><Typography.Text strong>{row.store_name}</Typography.Text><Typography.Text type="secondary">{row.store_code}</Typography.Text></Space> },
+              { title: '类型', dataIndex: 'exception_type', width: 140, render: (value: string) => <Tag color="orange">{value}</Tag> },
+              { title: '问题', dataIndex: 'title', ellipsis: true },
+              { title: '发现时间', dataIndex: 'created_at', width: 170, render: (value: string) => value?.slice(0, 19).replace('T', ' ') || '-' },
             ]}
           />
         </Card>
