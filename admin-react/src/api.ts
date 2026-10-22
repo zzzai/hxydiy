@@ -371,6 +371,7 @@ export const deleteTag = (id: number) => client.delete(`/admin/v2/tags/${id}`);
 export const getUsers = (params?: any) => client.get('/admin/v2/users', { params });
 export const getMembershipEntitlements = (userId: number, storeId?: number) => client.get<MembershipExplanation>(`/admin/v2/users/${userId}/membership-entitlements`, { params: { store_id: storeId } });
 export const getCustomerTrustedDevice = (userId: number) => client.get(`/admin/v2/users/${userId}/trusted-device`);
+export const getCustomerPhone = (userId: number) => client.get(`/admin/v2/users/${userId}/phone`);
 export const revokeCustomerTrustedDevice = (userId: number, reason: string) => client.post(`/admin/v2/users/${userId}/trusted-device/revoke`, { reason });
 export const addUserTag = (userId: number, tagId: number) =>
   client.post(`/admin/v2/users/${userId}/tags`, { tag_id: tagId });

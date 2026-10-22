@@ -2099,6 +2099,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/users/{user_id}/phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reveal Customer Phone
+         * @description Reveal a customer's full phone; every read is written to the audit log.
+         */
+        get: operations["reveal_customer_phone_api_v1_admin_v2_users__user_id__phone_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/users/{user_id}/tags": {
         parameters: {
             query?: never;
@@ -11805,6 +11825,41 @@ export interface operations {
                 "application/json": components["schemas"]["MembershipPaymentIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reveal_customer_phone_api_v1_admin_v2_users__user_id__phone_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

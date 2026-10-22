@@ -17651,6 +17651,67 @@
         ]
       }
     },
+    "/api/v1/admin/v2/users/{user_id}/phone": {
+      "get": {
+        "description": "Reveal a customer's full phone; every read is written to the audit log.",
+        "operationId": "reveal_customer_phone_api_v1_admin_v2_users__user_id__phone_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Reveal Customer Phone Api V1 Admin V2 Users  User Id  Phone Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reveal Customer Phone",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/users/{user_id}/tags": {
       "post": {
         "description": "手动打标：body = {\"tag_id\": 3}",

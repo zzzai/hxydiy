@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox, Dropdown, Space } from 'antd';
 import { MoreOutlined, SearchOutlined } from '@ant-design/icons';
-import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice } from '../api';
+import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 import { getMembershipEntitlements } from '../api';
@@ -28,6 +28,9 @@ export default function UsersPage() {
   const [membershipMode, setMembershipMode] = useState<'enroll' | 'renew' | 'cancel' | 'recover'>('enroll');
   const [tagCustomer, setTagCustomer] = useState<any>();
   const [tagToAdd, setTagToAdd] = useState<number>();
+  const [phoneCustomer, setPhoneCustomer] = useState<any>();
+  const [phoneValue, setPhoneValue] = useState('');
+  const [phoneLoading, setPhoneLoading] = useState(false);
   const [membershipForm] = Form.useForm();
   const canCreateProfile = getStaff()?.role === 'manager' || getStaff()?.role === 'admin';
   const canManageDevice = getStaff()?.role === 'manager';
@@ -54,6 +57,17 @@ export default function UsersPage() {
       setTagCustomer(undefined); setTagToAdd(undefined);
       void load(page);
     } catch { message.error('标签添加失败，请确认顾客和标签仍有效'); }
+  };
+
+  const openPhone = async (user: any) => {
+    setPhoneCustomer(user); setPhoneValue(''); setPhoneLoading(true);
+    try {
+      const response = await getCustomerPhone(user.id);
+      setPhoneValue(response.data?.phone || '');
+    } catch {
+      setPhoneCustomer(undefined);
+      message.error('手机号查看失败，可能无权查看该顾客');
+    } finally { setPhoneLoading(false); }
   };
 
   const openMembership = (user: any, mode: 'enroll' | 'renew' | 'cancel' | 'recover') => {
@@ -120,6 +134,7 @@ export default function UsersPage() {
                 <Button size="small" onClick={() => void openRights(r)}>权益</Button>
                 {!r.is_member && <Button size="small" type="primary" onClick={() => openMembership(r, 'enroll')}>办理会员</Button>}
                 <Dropdown trigger={['click']} menu={{ items: [
+                  ...(r.phone_masked ? [{ key: 'phone', label: '查看手机号', onClick: () => void openPhone(r) }] : []),
                   { key: 'profile', label: '画像记录', disabled: !canCreateProfile, onClick: () => setProfileCustomerId(r.id) },
                   ...(r.has_store_membership && canManageDevice ? [{ key: 'device', label: '可信设备', onClick: () => void openDevice(r) }] : []),
                   ...(r.is_member ? [
@@ -175,6 +190,11 @@ export default function UsersPage() {
         <p style={{ color: 'var(--hxy-text-secondary)', fontSize: 12, marginBottom: 0 }}>标签用于门店运营，不等同于顾客服务记录。</p>
       </Modal>
       <Modal title="会员可信设备" open={Boolean(deviceCustomer)} onCancel={() => { setDeviceCustomer(undefined); setDeviceState(undefined); }} footer={deviceState?.bound ? <Popconfirm title="确认已核实顾客换机申请？撤销后旧设备和旧会员码立即失效。" onConfirm={() => void revokeDevice()}><Button danger>撤销旧设备</Button></Popconfirm> : null}><Descriptions column={1} items={[{ label: '会员', children: deviceCustomer?.nickname || deviceCustomer?.phone_masked || '-' }, { label: '设备状态', children: deviceState?.bound ? <Tag color="green">已绑定</Tag> : <Tag>未绑定</Tag> }, { label: '绑定时间', children: deviceState?.created_at?.slice(0, 19) || '-' }, { label: '最近使用', children: deviceState?.last_seen_at?.slice(0, 19) || '-' }]} /><p>管理后台只处理受控换绑与审计，日常会员核验请使用技师端扫码。</p></Modal>
+      <Modal title="查看完整手机号" open={Boolean(phoneCustomer)} onCancel={() => setPhoneCustomer(undefined)} footer={<Button onClick={() => setPhoneCustomer(undefined)}>关闭</Button>} loading={phoneLoading}>
+        <p style={{ marginTop: 0 }}>顾客：{phoneCustomer?.nickname || phoneCustomer?.phone_masked || '-'}</p>
+        <p style={{ fontSize: 22, fontWeight: 700, letterSpacing: 1 }}>{phoneValue || '—'}</p>
+        <p style={{ color: 'var(--hxy-text-secondary)', fontSize: 12, marginBottom: 0 }}>查看完整手机号会写入审计日志，请仅在顾客服务所需范围内使用。</p>
+      </Modal>
     </div>
   );
 }
