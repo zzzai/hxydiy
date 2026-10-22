@@ -41,6 +41,7 @@ export default function ManagerStorePage() {
   const [reviewFocus, setReviewFocus] = useState<{ type: 'service_review'; id: number } | null>(null);
   const [deepLinkError, setDeepLinkError] = useState('');
   const [staleOnly, setStaleOnly] = useState(false);
+  const [period, setPeriod] = useState<'all' | 'today' | '7d'>('all');
   const listVersion = useRef(0);
   const detailRef = useRef(detail);
   detailRef.current = detail;
@@ -52,7 +53,7 @@ export default function ManagerStorePage() {
     try {
       void getManagerWorkbench().then(response => { if (current()) setWorkbench(response.data); }).catch(() => undefined);
       const query = managerListParams('all', page);
-      const response = await getSelectionSessions(query.status, query.needs_position_assignment, { page: query.page, page_size: query.page_size }, true, staleOnly);
+      const response = await getSelectionSessions(query.status, query.needs_position_assignment, { page: query.page, page_size: query.page_size }, true, staleOnly, period);
       if (!current() || version !== listVersion.current) return;
       const data = readManagerPage(response.data, Number(storeId));
       const lastPage = Math.max(1, Math.ceil(data.total / MANAGER_PAGE_SIZE));
@@ -69,7 +70,7 @@ export default function ManagerStorePage() {
     } finally {
       if (current() && version === listVersion.current) setLoading(false);
     }
-  }, [current, page, storeId, staleOnly]);
+  }, [current, page, storeId, staleOnly, period]);
 
   useEffect(() => { if (view === 'selections') void load(); return () => { ++listVersion.current; }; }, [load, view]);
   useEffect(() => {
@@ -158,10 +159,13 @@ export default function ManagerStorePage() {
       <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button>
     </nav>
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
-    {view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenOrders={() => { setStaleOnly(true); setView('selections'); }} />
+    {view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenOrders={() => { setStaleOnly(true); setPeriod('all'); setView('selections'); }} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
       : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} onFocusError={() => setDeepLinkError('评价链接已失效或无权查看，已返回评价列表。')} />
         : <>
+      {!staleOnly && <div className="manager-order-period" role="group" aria-label="订单时间范围">
+        {([['today', '今天'], ['7d', '近 7 天'], ['all', '全部']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={period === value} onClick={() => { setPage(1); setItems([]); setPeriod(value); }}>{label}</button>)}
+      </div>}
       {staleOnly && <Alert type="warning" showIcon message="只显示超过 30 分钟仍未开始的订单" action={<Button size="small" onClick={() => setStaleOnly(false)}>查看全部订单</Button>} />}
       {content()}
       {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份订单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); setDetail(null); }} /></div>}
