@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { App, Button, Col, Empty, Popconfirm, Result, Row, Space, Spin, Statistic, Table, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { finishService, getManagerWorkbench, getStaff, getTodayAppointments, getTodayStats, readyService } from '../api';
+import { finishService, getManagerWorkbench, getOrderReconciliation, getStaff, getTodayAppointments, getTodayStats, readyService } from '../api';
 import { canViewReadOnlyOperations } from '../auth';
 import { dataProvider } from '../core/dataProvider';
 import { resources } from '../core/resources';
@@ -27,6 +27,7 @@ export default function TodayPage() {
   const [stats, setStats] = useState<Record<string, number>>({});
   const [board, setBoard] = useState<LiveBoard>(emptyBoard);
   const [workbench, setWorkbench] = useState<{ summary?: Record<string, number>; attention?: Array<{ key: string; label: string; count: number }> }>();
+  const [reconciliation, setReconciliation] = useState<{ summary?: { anomaly_count?: number; orders_checked?: number; selections_checked?: number } }>();
   const [appointments, setAppointments] = useState<Array<{ id: number; order_no: string; status: string; booking_time?: string; items?: Array<{ name?: string; quantity?: number }> }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,14 +43,16 @@ export default function TodayPage() {
         return;
       }
       dataProvider.invalidate(resources.serviceOrders);
-      const [statsResponse, boardResponse, workbenchResponse] = await Promise.all([
+      const [statsResponse, boardResponse, workbenchResponse, reconciliationResponse] = await Promise.all([
         getTodayStats(),
         dataProvider.getList<unknown>(resources.serviceOrders),
         getManagerWorkbench().catch(() => ({ data: {} })),
+        getOrderReconciliation(30).catch(() => ({ data: {} })),
       ]);
       setStats(statsResponse.data || {});
       setBoard(boardFromResponse(boardResponse));
       setWorkbench(workbenchResponse.data || {});
+      setReconciliation(reconciliationResponse.data || {});
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '请稍后重试');
     } finally {
@@ -102,6 +105,14 @@ export default function TodayPage() {
     <Row gutter={[12, 12]}>{[['今日新订单', workbench?.summary?.today_orders || 0], ['服务中', workbench?.summary?.in_service ?? board.summary.in_service ?? 0], ['待结账', workbench?.summary?.pending_checkout ?? board.summary.pending_checkout ?? 0], ['需处理', workbench?.summary?.attention || 0]].map(([label, value]) => <Col xs={12} md={6} key={String(label)}><div style={{ ...sectionStyle, padding: '16px 18px' }}><Statistic title={label} value={value} valueStyle={label === '需处理' && Number(value) > 0 ? { color: 'var(--hxy-warning)' } : undefined} /></div></Col>)}</Row>
     {Number(workbench?.summary?.attention || 0) > 0 && <Text type="secondary" style={{ marginTop: -8, display: 'block' }}>需处理可能包含历史未完成事项，请按列表逐项核实。</Text>}
     {Boolean(workbench?.attention?.length) && <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>待处理</Text><div style={{ marginTop: 10 }}>{workbench?.attention?.map((item) => <Button key={item.key} type="link" danger={item.key === 'low_review'} style={{ paddingInline: 0, minHeight: 44 }} onClick={() => navigate(item.key === 'low_review' ? '/feedback' : '/selection-sessions')}>{item.label} {item.count}</Button>)}</div></section>}
+    <section style={sectionStyle}>
+      <Space size={10} wrap>
+        <Text strong style={{ fontSize: 16 }}>选单/订单对账</Text>
+        {Number(reconciliation?.summary?.anomaly_count || 0) > 0 ? <Tag color="warning">{reconciliation?.summary?.anomaly_count} 条待核对</Tag> : <Tag color="green">近 30 天无异常</Tag>}
+        <Text type="secondary">检查订单 {reconciliation?.summary?.orders_checked ?? 0} 条、选单 {reconciliation?.summary?.selections_checked ?? 0} 条</Text>
+        <Button type="link" style={{ paddingInline: 0 }} onClick={() => navigate('/orders')}>去结算页核对</Button>
+      </Space>
+    </section>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>在店服务流</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table<LiveVisit> rowKey="id" columns={columns} dataSource={board.visits} pagination={false} locale={{ emptyText: <Empty description="当前没有在店服务" /> }} scroll={{ x: 760 }} />}</section>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>资源状态</Text><Row gutter={[12, 12]} style={{ marginTop: 12 }}><Col span={24}><Text type="secondary">技师</Text><div>{board.resources.technicians.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col><Col span={24}><Text type="secondary">房间 / 沙发</Text><div>{board.resources.rooms.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col></Row></section>
   </Space>;
