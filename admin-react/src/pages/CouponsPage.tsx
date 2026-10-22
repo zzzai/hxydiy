@@ -47,6 +47,9 @@ export default function CouponsPage() {
           { title: '发放', width: 180, render: (_: any, r: any) => (
             <Space size={2} wrap>{r.auto_grant_new_user && <Tag color="blue">新客</Tag>}{r.is_claimable && <Tag color="green">可领</Tag>}{r.daily_claimable && <Tag color="orange">每日</Tag>}{r.auto_apply && <Tag color="purple">满减</Tag>}</Space>
           )},
+          { title: '已发/已用', width: 100, render: (_: any, r: any) => `${r.issued_count || 0} / ${r.used_count || 0}` },
+          { title: '未用', width: 70, render: (_: any, r: any) => r.unused_count || 0 },
+          { title: '使用率', width: 90, render: (_: any, r: any) => r.usage_rate_percent === null || r.usage_rate_percent === undefined ? '—' : `${r.usage_rate_percent}%` },
           { title: '状态', dataIndex: 'status', width: 80, render: (v: string) => <Tag color={v === 'published' ? 'green' : 'default'}>{v === 'published' ? '已上架' : '未上架'}</Tag> },
           { title: '操作', width: 80, render: (_: any, r: any) => <Button size="small" onClick={() => toggle(r.id, r.status)}>{r.status === 'published' ? '下架' : '上架'}</Button> },
         ]}

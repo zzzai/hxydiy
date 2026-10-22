@@ -1252,6 +1252,13 @@ class AdminV2ContractTests(unittest.TestCase):
                 ))
                 self.assertIsNotNone(audit)
 
+            listing = self.client.get("/api/v1/admin/coupons", headers=self.auth_headers)
+            self.assertEqual(listing.status_code, 200, listing.text)
+            listed = next(item for item in listing.json()["items"] if item["id"] == template_id)
+            self.assertEqual(listed["issued_count"], 1)
+            self.assertEqual(listed["unused_count"], 1)
+            self.assertEqual(listed["usage_rate_percent"], 0.0)
+
             duplicate = self.client.post(
                 f"/api/v1/admin/v2/coupons/{template_id}/issue",
                 json={"user_id": user_id},

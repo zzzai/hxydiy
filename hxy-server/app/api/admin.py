@@ -35,6 +35,7 @@ from app.models import (
     StaffScopeAssignment,
     Store,
     User,
+    UserCoupon,
 )
 from app.domain.staff_workspaces import (
     StaffContext,
@@ -1034,7 +1035,10 @@ def _require_manager_staff(staff: Staff) -> Staff:
     return staff
 
 
-def _coupon_out(t: CouponTemplate) -> dict:
+def _coupon_out(t: CouponTemplate, stats: dict | None = None) -> dict:
+    stats = stats or {}
+    issued = int(stats.get("total", 0))
+    used = int(stats.get("used", 0))
     return {
         "id": t.id,
         "code": t.code,
@@ -1050,6 +1054,11 @@ def _coupon_out(t: CouponTemplate) -> dict:
         "daily_claimable": t.daily_claimable,
         "auto_apply": t.auto_apply,
         "status": t.status,
+        "issued_count": issued,
+        "unused_count": int(stats.get("unused", 0)),
+        "used_count": used,
+        "expired_count": int(stats.get("expired", 0)),
+        "usage_rate_percent": round(used / issued * 100, 2) if issued else None,
     }
 
 
@@ -1063,7 +1072,19 @@ def admin_coupons(
     staff = _require_admin(authorization, db)
     action_store_id = _resolve_marketing_store_id(db, staff, store_id)
     tpls = list(db.scalars(select(CouponTemplate).where(CouponTemplate.store_id == action_store_id).order_by(CouponTemplate.id)))
-    return {"items": [_coupon_out(t) for t in tpls], "total": len(tpls)}
+    stats: dict[int, dict[str, int]] = {}
+    if tpls:
+        from sqlalchemy import func
+        rows = db.execute(
+            select(UserCoupon.template_id, UserCoupon.status, func.count())
+            .where(UserCoupon.template_id.in_([template.id for template in tpls]))
+            .group_by(UserCoupon.template_id, UserCoupon.status)
+        ).all()
+        for template_id, status, count in rows:
+            bucket = stats.setdefault(template_id, {"total": 0})
+            bucket["total"] += count
+            bucket[status] = bucket.get(status, 0) + count
+    return {"items": [_coupon_out(t, stats.get(t.id)) for t in tpls], "total": len(tpls)}
 
 
 @router.post("/coupons")
