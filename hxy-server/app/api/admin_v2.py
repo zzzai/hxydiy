@@ -77,6 +77,26 @@ def get_customer_trusted_device(user_id: int, authorization: str | None = Header
     return {"bound": bool(device), "created_at": device.created_at if device else None, "last_seen_at": device.last_seen_at if device else None}
 
 
+@router.get("/users/{user_id}/phone")
+def reveal_customer_phone(
+    user_id: int,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Reveal a customer's full phone; every read is written to the audit log."""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    user = _require_store_user(db, user_id, staff)
+    viewed_at = datetime.now(UTC)
+    _audit(db, staff, "view_customer_phone", "user", str(user_id), {
+        "store_id": staff.store_id,
+        "phone_present": bool(user.phone),
+        "viewed_at": viewed_at.isoformat(),
+    })
+    db.commit()
+    return {"user_id": user.id, "phone": user.phone or "", "viewed_at": viewed_at.isoformat()}
+
+
 @router.post("/users/{user_id}/trusted-device/revoke")
 def revoke_customer_trusted_device(user_id: int, body: TrustedDeviceRevokeIn, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
     staff = _current_staff(authorization, db); _require_admin(staff); user = _require_store_user(db, user_id, staff)

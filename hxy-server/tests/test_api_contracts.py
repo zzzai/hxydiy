@@ -1140,6 +1140,42 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertNotIn("OTHER-PENDING", order_numbers)
         self.assertNotIn("OTHER-PAID", order_numbers)
 
+    def test_customer_phone_reveal_is_store_scoped_and_audited(self):
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, self.staff_id)
+            user = User(openid="phone-audit-user", phone="13912345678")
+            db.add(user)
+            db.flush()
+            db.add(Order(
+                store_id=staff.store_id,
+                user_id=user.id,
+                order_no="PHONE-AUDIT-1",
+                order_type="service",
+                status="paid",
+                pay_status="paid",
+                pay_amount_cents=9900,
+            ))
+            db.commit()
+            user_id = user.id
+
+        try:
+            response = self.client.get(f"/api/v1/admin/v2/users/{user_id}/phone")
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["phone"], "13912345678")
+            with self.SessionLocal() as db:
+                audit = db.scalar(select(AuditLog).where(
+                    AuditLog.action == "view_customer_phone",
+                    AuditLog.entity_id == str(user_id),
+                ))
+                self.assertIsNotNone(audit)
+                self.assertEqual(audit.store_id, staff.store_id)
+        finally:
+            with self.SessionLocal() as db:
+                db.query(Order).filter(Order.order_no == "PHONE-AUDIT-1").delete()
+                db.query(AuditLog).filter(AuditLog.action == "view_customer_phone").delete()
+                db.query(User).filter(User.id == user_id).delete()
+                db.commit()
+
     def test_store_staff_cannot_check_in_another_store_order(self):
         with self.SessionLocal() as db:
             other_order = db.scalar(select(Order).where(Order.order_no == "OTHER-PAID"))
