@@ -41,6 +41,7 @@ from app.domain.customer_operational_tags import customer_tag_ids, tagged_user_i
 from app.domain.occupancy import audit_occupancy, occupancy_view, release_occupancy
 from app.domain.staff_capabilities import staff_capabilities
 from app.services.customer_profile_projection import rebuild_customer_profile_current
+from app.services.store_lifecycle import validate_store_can_close, validate_store_transition
 from app.models.operations import Room, Technician
 from app.models.customer_tag_contribution import CustomerTagContribution
 from app.models.room_assign import RoomAssignment
@@ -298,6 +299,7 @@ class StoreMasterPatch(BaseModel):
     phone: str | None = None
     business_hours: str | None = None
     status: Literal["preparing", "trial_open", "open", "suspended", "closed"] | None = None
+    reason: str | None = Field(None, max_length=200)
 
 
 def _store_master_view(store: Store) -> dict:
@@ -365,11 +367,19 @@ def update_store_master_data(
     store = db.get(Store, store_id)
     if not store:
         raise HTTPException(status_code=404, detail="门店不存在")
-    changes = body.model_dump(exclude_unset=True)
+    changes = body.model_dump(exclude_unset=True, exclude={"reason"})
+    if "status" in changes and changes["status"] != store.status:
+        validate_store_transition(store.status, changes["status"])
+        if changes["status"] == "closed":
+            validate_store_can_close(db, store.id)
     before = {field: getattr(store, field) for field in changes}
     for field, value in changes.items():
         setattr(store, field, value)
-    _audit(db, staff, "update_store", "store", str(store.id), {"before": before, "after": changes})
+    _audit(db, staff, "update_store", "store", str(store.id), {
+        "before": before,
+        "after": changes,
+        "reason": body.reason or "",
+    })
     db.commit()
     db.refresh(store)
     return _store_master_view(store)
