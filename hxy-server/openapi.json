@@ -9539,6 +9539,68 @@
         ]
       }
     },
+    "/api/v1/admin/order-reconciliation": {
+      "get": {
+        "description": "Detect mismatches between DIY selection sessions and service orders.\n\nThis endpoint is read-only. It turns dual-fact drift into an explicit\nexception list instead of silently choosing one source of truth.",
+        "operationId": "order_reconciliation_api_v1_admin_order_reconciliation_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Order Reconciliation Api V1 Admin Order Reconciliation Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Order Reconciliation",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/orders": {
       "get": {
         "description": "订单查询（可按状态/日期过滤）。",

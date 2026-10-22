@@ -129,6 +129,7 @@ export const settleService = (serviceOrderId: number, idempotencyKey: string) =>
 
 // Orders
 export const getOrders = (status?: string) => client.get('/admin/orders', { params: { status } });
+export const getOrderReconciliation = (days = 30) => client.get('/admin/order-reconciliation', { params: { days } });
 export const getSelectionSessions = (status?: string, needsPositionAssignment?: boolean, pagination?: { page: number; page_size: number }, activeOnly?: boolean, staleOnly?: boolean, period?: 'all' | 'today' | '7d') =>
   client.get('/admin/v2/selection-sessions', { params: { status, needs_position_assignment: needsPositionAssignment, active_only: activeOnly, stale_only: staleOnly, period, ...pagination } });
 export const getSelectionSession = (sessionId: string) => client.get(`/admin/v2/selection-sessions/${sessionId}`);
