@@ -9,7 +9,7 @@ from app.models.selection import SelectionChangeRequest, SelectionRevision, Sele
 from app.models.occupancy import PositionOccupancy
 from app.models.scrm import AutomationLog, AutomationRule, CustomerSegment, CustomerTag, CustomerTagRelation
 from app.models.identity import CustomerVerificationCode
-from app.models.content import PageContent
+from app.models.content import PageContent, PageContentVersion
 from app.models.browser import BrowserInstance
 from app.models.feedback import ServiceFeedback, VisitFeedback
 from app.models.external_identity import CustomerExternalIdentity
@@ -40,7 +40,7 @@ __all__ = [
     "User", "UserCoupon",    "AutomationLog", "AutomationRule", "CustomerSegment", "CustomerTag",
     "CustomerTagRelation", "Room", "RoomAssignment", "ServiceAssignment", "ServiceOrder",
     "StateTransition", "Technician", "Visit", "SelectionSession", "SelectionRevision", "SelectionChangeRequest", "ServiceLine", "PositionOccupancy",
-    "CustomerVerificationCode", "PageContent", "BrowserInstance", "ServiceFeedback", "VisitFeedback", "CustomerExternalIdentity",
+    "CustomerVerificationCode", "PageContent", "PageContentVersion", "BrowserInstance", "ServiceFeedback", "VisitFeedback", "CustomerExternalIdentity",
     "MembershipBenefitGrant", "MembershipCard", "CustomerTrustedDevice", "MembershipCode", "SettlementAdjustment", "ServicePositionQr",
     "CustomerProfileRecord", "CustomerProfileConsent", "CustomerProfileCurrent",
     "TechnicianInvite", "TechnicianLeaveRequest",

@@ -31,7 +31,7 @@ from app.api.admin import _current_staff, hash_password, normalize_staff_role
 from app.db.session import get_db
 from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
-    Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, VisitFeedback, ServiceLine, PageContent,
+    Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, VisitFeedback, ServiceLine, PageContent, PageContentVersion,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, StaffScopeAssignment, PositionOccupancy,
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
     CustomerProfileCurrent, CustomerProfileRecord,
@@ -909,6 +909,34 @@ def _page_content_view(content: PageContent) -> dict:
     )}
 
 
+PAGE_CONTENT_SNAPSHOT_FIELDS = (
+    "title", "subtitle", "promo_banners", "tea_options",
+    "coupon_prompt", "brand_story", "published",
+)
+
+
+def _page_content_snapshot(content: PageContent) -> dict:
+    return {key: deepcopy(getattr(content, key)) for key in PAGE_CONTENT_SNAPSHOT_FIELDS}
+
+
+def _create_page_content_version(db: Session, content: PageContent, staff: Staff) -> PageContentVersion:
+    current_max = db.scalar(
+        select(sa_func.max(PageContentVersion.version_no)).where(
+            PageContentVersion.store_id == content.store_id,
+            PageContentVersion.page_key == content.page_key,
+        )
+    ) or 0
+    version = PageContentVersion(
+        store_id=content.store_id,
+        page_key=content.page_key,
+        version_no=int(current_max) + 1,
+        snapshot=_page_content_snapshot(content),
+        created_by_staff_id=staff.id,
+    )
+    db.add(version)
+    return version
+
+
 @router.get("/page-content")
 def get_page_content_admin(
     page_key: str = Query("diy-home"),
@@ -944,7 +972,90 @@ def update_page_content(
         db.add(content)
     for key, value in body.model_dump().items():
         setattr(content, key, value)
-    _audit(db, staff, "update_page_content", "page_content", f"{action_store_id}:{page_key}", {"store_id": action_store_id})
+    version = _create_page_content_version(db, content, staff) if content.published else None
+    _audit(db, staff, "update_page_content", "page_content", f"{action_store_id}:{page_key}", {
+        "store_id": action_store_id,
+        "published": content.published,
+        "version_no": version.version_no if version else None,
+    })
+    db.commit()
+    db.refresh(content)
+    return _page_content_view(content)
+
+
+@router.get("/page-content/versions")
+def list_page_content_versions(
+    page_key: str = Query("diy-home"),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    action_store_id = _resolve_target_store_id(db, staff, store_id)
+    versions = list(db.scalars(
+        select(PageContentVersion)
+        .where(
+            PageContentVersion.store_id == action_store_id,
+            PageContentVersion.page_key == page_key,
+        )
+        .order_by(PageContentVersion.version_no.desc())
+        .limit(50)
+    ))
+    staff_ids = {version.created_by_staff_id for version in versions if version.created_by_staff_id}
+    staff_names = {
+        member.id: member.name
+        for member in db.scalars(select(Staff).where(Staff.id.in_(staff_ids)))
+    } if staff_ids else {}
+    return {
+        "items": [{
+            "id": version.id,
+            "version_no": version.version_no,
+            "title": version.snapshot.get("title") if isinstance(version.snapshot, dict) else None,
+            "subtitle": version.snapshot.get("subtitle") if isinstance(version.snapshot, dict) else None,
+            "created_by": staff_names.get(version.created_by_staff_id),
+            "created_at": version.created_at.isoformat() if version.created_at else None,
+        } for version in versions],
+        "total": len(versions),
+    }
+
+
+@router.post("/page-content/versions/{version_id}/rollback")
+def rollback_page_content_version(
+    version_id: int,
+    page_key: str = Query("diy-home"),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    action_store_id = _resolve_target_store_id(db, staff, store_id)
+    version = db.scalar(select(PageContentVersion).where(
+        PageContentVersion.id == version_id,
+        PageContentVersion.store_id == action_store_id,
+        PageContentVersion.page_key == page_key,
+    ))
+    if not version:
+        raise HTTPException(status_code=404, detail="版本不存在")
+    snapshot = version.snapshot if isinstance(version.snapshot, dict) else {}
+    content = db.scalar(select(PageContent).where(
+        PageContent.store_id == action_store_id,
+        PageContent.page_key == page_key,
+    ))
+    if not content:
+        content = PageContent(store_id=action_store_id, page_key=page_key)
+        db.add(content)
+    for key in PAGE_CONTENT_SNAPSHOT_FIELDS:
+        if key in snapshot:
+            setattr(content, key, deepcopy(snapshot[key]))
+    content.published = True
+    new_version = _create_page_content_version(db, content, staff)
+    _audit(db, staff, "rollback_page_content", "page_content", f"{action_store_id}:{page_key}", {
+        "store_id": action_store_id,
+        "from_version_id": version.id,
+        "from_version_no": version.version_no,
+        "new_version_no": new_version.version_no,
+    })
     db.commit()
     db.refresh(content)
     return _page_content_view(content)

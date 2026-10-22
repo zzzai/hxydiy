@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -23,3 +23,20 @@ class PageContent(Base):
     brand_story: Mapped[dict] = mapped_column(JSON, default=dict)
     published: Mapped[bool] = mapped_column(default=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PageContentVersion(Base):
+    """Immutable snapshot created whenever a page configuration is published."""
+
+    __tablename__ = "page_content_versions"
+    __table_args__ = (
+        UniqueConstraint("store_id", "page_key", "version_no", name="uq_page_content_versions_store_key_version"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
+    page_key: Mapped[str] = mapped_column(String(64), index=True)
+    version_no: Mapped[int] = mapped_column(Integer)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by_staff_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

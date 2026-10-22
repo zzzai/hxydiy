@@ -1060,6 +1060,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/page-content/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Page Content Versions */
+        get: operations["list_page_content_versions_api_v1_admin_v2_page_content_versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/page-content/versions/{version_id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback Page Content Version */
+        post: operations["rollback_page_content_version_api_v1_admin_v2_page_content_versions__version_id__rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/products": {
         parameters: {
             query?: never;
@@ -9136,6 +9170,76 @@ export interface operations {
                 "application/json": components["schemas"]["PageContentIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_page_content_versions_api_v1_admin_v2_page_content_versions_get: {
+        parameters: {
+            query?: {
+                page_key?: string;
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_page_content_version_api_v1_admin_v2_page_content_versions__version_id__rollback_post: {
+        parameters: {
+            query?: {
+                page_key?: string;
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                version_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
