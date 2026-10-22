@@ -26,6 +26,7 @@ from app.domain.selection_options import (
 from app.domain.selection_collaboration_tokens import BROWSER_COOKIE, resolve_collaboration_token
 from app.models import Addon, CouponTemplate, PositionOccupancy, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, Store, User
 from app.services.wecom_notify import notify_feedback, notify_new_selection
+from app.services.store_lifecycle import require_store_open
 from app.schemas.selection import (
     MySelectionRecordOut,
     MySelectionSessionsOut,
@@ -651,8 +652,8 @@ def create_selection_session(body: SelectionCreateIn, request: Request, response
     # Share the existing anonymous-browser repair rules with seated entry.
     from app.api.occupancies import ANONYMOUS_COOKIE, _browser_customer
 
-    if not db.get(Store, body.store_id):
-        raise HTTPException(status_code=404, detail="门店不存在")
+    store = db.get(Store, body.store_id)
+    require_store_open(store, "到店选单")
     anonymous_customer_id, browser_token, _ = _browser_customer(db, request)
     token = secrets.token_urlsafe(32)
     session = SelectionSession(

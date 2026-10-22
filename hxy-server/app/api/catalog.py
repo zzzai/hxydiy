@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.domain.catalog_options import CatalogDomainError, verify_published_catalog_hash
+from app.services.store_lifecycle import OPEN_STORE_STATUSES
 from app.models import Addon, OptionChoicePrice, PageContent, PriceBook, Product, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, Store
 from app.schemas.catalog import ProductDetailModule, ProjectListResponse, ProjectOut, StoreOut
 
@@ -270,7 +271,9 @@ def _project_to_out(db: Session, p: Project) -> ProjectOut:
 
 @router.get("/stores", response_model=list[StoreOut])
 def list_stores(db: Session = Depends(get_db)) -> list[Store]:
-    return list(db.scalars(select(Store).order_by(Store.id)))
+    return list(db.scalars(
+        select(Store).where(Store.status.in_(OPEN_STORE_STATUSES)).order_by(Store.id)
+    ))
 
 
 @router.get("/stores/{store_id}", response_model=StoreOut)

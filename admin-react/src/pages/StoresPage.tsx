@@ -10,7 +10,9 @@ import { getStoreStatusMeta, normalizeStoreList, type Store, type StoreStatus } 
 
 const statusOptions = [
   { value: 'preparing', label: '筹备中' },
+  { value: 'trial_open', label: '试营业' },
   { value: 'open', label: '营业中' },
+  { value: 'suspended', label: '暂停营业' },
   { value: 'closed', label: '已停业' },
 ];
 

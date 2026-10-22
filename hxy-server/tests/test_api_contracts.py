@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api import admin_v2
 from app.api.admin import create_staff_token, hash_password, staff_snapshot
+from app.core.security import create_access_token
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import (
@@ -71,7 +72,7 @@ class AdminV2ContractTests(unittest.TestCase):
                 name="测试门店",
                 city="安阳",
                 address="测试地址",
-                status="preparing",
+                status="open",
             )
             db.add(store)
             db.flush()
@@ -318,7 +319,64 @@ class AdminV2ContractTests(unittest.TestCase):
     def test_public_store_endpoint_serializes_store_status(self):
         response = self.client.get("/api/v1/stores")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()[0]["status"], "preparing")
+        self.assertEqual(response.json()[0]["status"], "open")
+
+    def test_public_store_list_hides_non_open_stores(self):
+        with self.SessionLocal() as db:
+            store = Store(
+                store_code="hidden-preparing-store",
+                name="筹备门店",
+                city="安阳",
+                address="筹备地址",
+                status="preparing",
+            )
+            db.add(store)
+            db.commit()
+        response = self.client.get("/api/v1/stores")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("hidden-preparing-store", [item["store_code"] for item in response.json()])
+
+    def test_closed_store_rejects_new_selection_session(self):
+        with self.SessionLocal() as db:
+            store = Store(
+                store_code="closed-selection-store",
+                name="停业门店",
+                city="安阳",
+                address="停业地址",
+                status="closed",
+            )
+            db.add(store)
+            db.commit()
+            store_id = store.id
+        response = self.client.post(
+            "/api/v1/selection-sessions",
+            json={"store_id": store_id, "source": "in_store"},
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "STORE_NOT_OPEN")
+
+    def test_closed_store_rejects_new_order(self):
+        with self.SessionLocal() as db:
+            store = Store(
+                store_code="closed-order-store",
+                name="停业下单门店",
+                city="安阳",
+                address="停业下单地址",
+                status="closed",
+            )
+            user = User(openid="closed-order-customer", phone="13800009999")
+            db.add_all([store, user])
+            db.commit()
+            store_id, token = store.id, create_access_token(
+                str(user.id), user.openid, user.customer_login_version,
+            )
+        response = self.client.post(
+            "/api/v1/orders",
+            json={"store_id": store_id, "items": [], "order_type": "service"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "STORE_NOT_OPEN")
 
     def test_room_list_exposes_dashboard_fields(self):
         response = self.client.get("/api/v1/admin/v2/rooms")

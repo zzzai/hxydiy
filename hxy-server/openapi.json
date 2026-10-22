@@ -6930,7 +6930,9 @@
             "default": "preparing",
             "enum": [
               "preparing",
+              "trial_open",
               "open",
+              "suspended",
               "closed"
             ],
             "title": "Status",
@@ -7011,7 +7013,9 @@
               {
                 "enum": [
                   "preparing",
+                  "trial_open",
                   "open",
+                  "suspended",
                   "closed"
                 ],
                 "type": "string"

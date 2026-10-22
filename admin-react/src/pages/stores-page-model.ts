@@ -1,4 +1,4 @@
-export type StoreStatus = 'preparing' | 'open' | 'closed';
+export type StoreStatus = 'preparing' | 'trial_open' | 'open' | 'suspended' | 'closed';
 
 export type Store = {
   id: number;
@@ -13,7 +13,9 @@ export type Store = {
 
 const STATUS_META: Record<StoreStatus, { label: string; color: string }> = {
   preparing: { label: '筹备中', color: 'gold' },
+  trial_open: { label: '试营业', color: 'green' },
   open: { label: '营业中', color: 'green' },
+  suspended: { label: '暂停营业', color: 'orange' },
   closed: { label: '已停业', color: 'default' },
 };
 
