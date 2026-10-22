@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   getStoreStatusMeta,
+  getStoreStatusOptions,
   normalizeStoreList,
   type Store,
 } from '../src/pages/stores-page-model.ts';
@@ -11,6 +12,12 @@ test('门店状态使用统一中文文案和语义色', () => {
   assert.deepEqual(getStoreStatusMeta('open'), { label: '营业中', color: 'green' });
   assert.deepEqual(getStoreStatusMeta('preparing'), { label: '筹备中', color: 'gold' });
   assert.deepEqual(getStoreStatusMeta('closed'), { label: '已停业', color: 'default' });
+});
+
+test('门店编辑只提供当前状态允许的下一状态', () => {
+  assert.deepEqual(getStoreStatusOptions('open').map((item) => item.value), ['open', 'suspended', 'closed']);
+  assert.deepEqual(getStoreStatusOptions('closed').map((item) => item.value), ['closed']);
+  assert.equal(getStoreStatusOptions(undefined).length, 5);
 });
 
 test('门店列表兼容 Refine 返回的 data/total 结构', () => {

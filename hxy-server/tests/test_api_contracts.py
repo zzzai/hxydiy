@@ -546,6 +546,81 @@ class AdminV2ContractTests(unittest.TestCase):
                     db.query(Store).filter(Store.id == created_id).delete()
                     db.commit()
 
+    def test_store_lifecycle_transition_and_close_guard(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        store_id = user_id = order_id = None
+        try:
+            with self.SessionLocal() as db:
+                store = Store(
+                    store_code="lifecycle-guard-store",
+                    name="生命周期测试门店",
+                    city="安阳",
+                    address="测试路 2 号",
+                    status="preparing",
+                )
+                user = User(openid="lifecycle-guard-user", phone="13800008888")
+                db.add_all([store, user])
+                db.flush()
+                order = Order(
+                    store_id=store.id,
+                    user_id=user.id,
+                    order_no="LIFECYCLE-ACTIVE-1",
+                    order_type="service",
+                    status="paid",
+                    pay_status="paid",
+                    pay_amount_cents=9900,
+                )
+                db.add(order)
+                db.commit()
+                store_id, user_id, order_id = store.id, user.id, order.id
+
+            invalid = self.client.patch(
+                f"/api/v1/admin/v2/stores/{store_id}",
+                json={"status": "suspended"},
+            )
+            self.assertEqual(invalid.status_code, 409, invalid.text)
+            self.assertEqual(invalid.json()["detail"]["code"], "INVALID_STORE_TRANSITION")
+
+            opened = self.client.patch(
+                f"/api/v1/admin/v2/stores/{store_id}",
+                json={"status": "open", "reason": "完成开业准备"},
+            )
+            self.assertEqual(opened.status_code, 200, opened.text)
+
+            blocked = self.client.patch(
+                f"/api/v1/admin/v2/stores/{store_id}",
+                json={"status": "closed", "reason": "测试停业"},
+            )
+            self.assertEqual(blocked.status_code, 409, blocked.text)
+            self.assertEqual(blocked.json()["detail"]["code"], "STORE_HAS_ACTIVE_BUSINESS")
+
+            suspended = self.client.patch(
+                f"/api/v1/admin/v2/stores/{store_id}",
+                json={"status": "suspended", "reason": "临时暂停"},
+            )
+            self.assertEqual(suspended.status_code, 200, suspended.text)
+
+            with self.SessionLocal() as db:
+                db.query(Order).filter(Order.id == order_id).delete()
+                db.commit()
+
+            closed = self.client.patch(
+                f"/api/v1/admin/v2/stores/{store_id}",
+                json={"status": "closed", "reason": "完成收尾"},
+            )
+            self.assertEqual(closed.status_code, 200, closed.text)
+            self.assertEqual(closed.json()["status"], "closed")
+        finally:
+            with self.SessionLocal() as db:
+                if order_id:
+                    db.query(Order).filter(Order.id == order_id).delete()
+                if store_id:
+                    db.query(Store).filter(Store.id == store_id).delete()
+                if user_id:
+                    db.query(User).filter(User.id == user_id).delete()
+                db.commit()
+            self.__class__.current_staff_id = self.staff_id
+
     def test_store_manager_can_only_toggle_project_publication(self):
         self.__class__.current_staff_id = self.staff_id
         blocked = self.client.patch(

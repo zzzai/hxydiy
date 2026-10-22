@@ -6290,6 +6290,8 @@ export interface components {
             name?: string | null;
             /** Phone */
             phone?: string | null;
+            /** Reason */
+            reason?: string | null;
             /** Status */
             status?: ("preparing" | "trial_open" | "open" | "suspended" | "closed") | null;
         };

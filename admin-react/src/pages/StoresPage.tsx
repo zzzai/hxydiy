@@ -1,20 +1,12 @@
 import { useState } from 'react';
 import { App, Button, Tag } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
-import { ModalForm, PageContainer, ProFormGroup, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
+import { ModalForm, PageContainer, ProFormGroup, ProFormSelect, ProFormText, ProFormTextArea, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
 import { getStaff } from '../api';
 import { canManageStoreMasterData } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
-import { getStoreStatusMeta, normalizeStoreList, type Store, type StoreStatus } from './stores-page-model';
-
-const statusOptions = [
-  { value: 'preparing', label: '筹备中' },
-  { value: 'trial_open', label: '试营业' },
-  { value: 'open', label: '营业中' },
-  { value: 'suspended', label: '暂停营业' },
-  { value: 'closed', label: '已停业' },
-];
+import { STORE_STATUS_OPTIONS, getStoreStatusMeta, getStoreStatusOptions, normalizeStoreList, type Store, type StoreStatus } from './stores-page-model';
 
 export default function StoresPage() {
   const { message } = App.useApp();
@@ -37,7 +29,7 @@ export default function StoresPage() {
     { title: '营业时间', dataIndex: 'business_hours', width: 130 },
     {
       title: '状态', dataIndex: 'status', width: 100, valueType: 'select',
-      valueEnum: Object.fromEntries(statusOptions.map((item) => [item.value, { text: item.label }])),
+      valueEnum: Object.fromEntries(STORE_STATUS_OPTIONS.map((item) => [item.value, { text: item.label }])),
       render: (_, record) => { const meta = getStoreStatusMeta(record.status); return <Tag color={meta.color}>{meta.label}</Tag>; },
     },
     { title: '操作', valueType: 'option', width: 90, render: (_, record) => [<Button key="edit" type="link" onClick={() => { setEditing(record); setOpen(true); }}>编辑</Button>] },
@@ -97,7 +89,13 @@ export default function StoresPage() {
         </ProFormGroup>
         <ProFormText name="address" label="地址" rules={[{ required: true, message: '请输入门店地址' }]} />
         <ProFormText name="business_hours" label="营业时间" placeholder="10:00-22:00" />
-        <ProFormSelect name="status" label="营业状态" options={statusOptions} />
+        <ProFormSelect
+          name="status"
+          label="营业状态"
+          options={getStoreStatusOptions(editing?.status)}
+          extra={editing ? '只显示当前状态允许进入的下一状态；停业前系统会检查未完成订单和服务位占用。' : '新门店建议先保存为筹备中。'}
+        />
+        {editing && <ProFormTextArea name="reason" label="状态/资料变更原因" placeholder="例如：完成开业准备，进入试营业" maxLength={200} />}
       </ModalForm>
     </PageContainer>
   );

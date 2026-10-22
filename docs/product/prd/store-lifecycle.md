@@ -132,11 +132,12 @@ draft → preparing → trial_open → open ⇄ suspended → closed
 ## 10. 当前实现差距
 
 - 已实现：非 `open/trial_open` 门店拒绝新建选单、下单、扫码入座，顾客门店列表只返回营业中门店；
-- 门店编辑已记录 before/after 审计；
-- 还没有开业检查清单和状态转换动作；
+- 已实现门店状态转换图：只允许 documented transitions，非法转换返回 `INVALID_STORE_TRANSITION`；
+- 已实现停业前检查：有未完成订单或活动服务位占用时禁止关闭，返回 `STORE_HAS_ACTIVE_BUSINESS`；
+- 门店编辑已记录 before/after 审计和变更原因；
+- 还没有开业检查清单（项目、页面、人员、服务位完整性）；
 - 地址/营业时间变更无版本；
-- 闭店无检查；
-- 总部跨店经营视图缺失（见 BR-09）。
+- 暂停/停业的顾客端通知、预约处理仍未完成。
 
 ## 11. 非目标与开放问题
 
