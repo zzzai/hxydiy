@@ -15,3 +15,11 @@
 .technician-my-service-actions .ant-btn { min-height: 44px; flex: 1; }
 .technician-customer-panel { max-width: 640px; margin: 0 auto; }
 .technician-customer-panel > .ant-btn { margin-top: 12px; min-height: 44px; }
+
+.technician-customer-tags { display: flex; flex-direction: column; gap: 10px; }
+.technician-customer-hint { margin: 0 0 4px !important; color: var(--mobile-muted, #647a71); font-size: 12px !important; line-height: 1.55; }
+.technician-customer-tags .technician-customer-entry { margin: 0; padding: 12px 14px; border-radius: 10px; }
+.technician-customer-tags .technician-customer-entry > strong { display: block; margin-bottom: 6px; font-size: 15px; }
+.technician-customer-tags .technician-customer-entry > p { margin: 0 0 8px; color: var(--mobile-muted, #647a71); font-size: 12px; }
+.technician-customer-tags .ant-btn { min-height: 44px; }
+.technician-customer-tags > .ant-btn { min-height: 46px; }

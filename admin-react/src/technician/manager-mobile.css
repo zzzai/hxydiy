@@ -1,16 +1,17 @@
 .technician-mobile-app.manager-mobile-app { padding-bottom: env(safe-area-inset-bottom); }
-.manager-store-page { display: flex; flex-direction: column; gap: 16px; }
+.manager-store-page { display: flex; flex-direction: column; gap: 18px; }
 .manager-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.manager-page-heading h1 { font-size: 24px; line-height: 1.3; margin: 0; }
-.manager-page-heading p { color: #60776e; font-size: 13px; margin: 5px 0 0; }
+.manager-page-heading h1 { margin: 0; color: var(--mobile-ink, #132a24); font-size: 24px; line-height: 1.25; letter-spacing: -.02em; }
+.manager-page-heading p { color: var(--mobile-muted, #647a71); font-size: 13px; line-height: 1.5; margin: 5px 0 0; }
 .manager-page-heading > .ant-btn { min-height: 44px; min-width: 44px; background: #fff; }
-.manager-filter-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 12px; background: #e8f0ec; }
-.manager-filter-row button { min-height: 44px; padding: 8px 3px; border: 0; border-radius: 9px; background: transparent; color: #526b61; font: inherit; font-size: 14px; }
-.manager-filter-row button[aria-pressed="true"] { background: #fff; color: #0d4c3a; font-weight: 650; box-shadow: 0 1px 3px #183c3410; }
+.manager-filter-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 12px; background: #e7f0eb; }
+.manager-filter-row button { min-height: 44px; padding: 8px 3px; border: 0; border-radius: 9px; background: transparent; color: #526b61; font: inherit; font-size: 14px; touch-action: manipulation; }
+.manager-filter-row button[aria-pressed="true"] { background: #fff; color: #145545; font-weight: 650; box-shadow: 0 1px 3px rgba(19,58,46,.08); }
 .manager-selection-list { display: flex; flex-direction: column; gap: 12px; }
-.manager-selection-card { display: block; width: 100%; text-align: left; background: #fff; color: #183c34; border: 1px solid #dce7e1; border-radius: 14px; padding: 16px; font: inherit; cursor: pointer; }
-.manager-selection-card:active { background: #fafffc; }
-.manager-selection-card:focus-visible, .manager-filter-row button:focus-visible, .manager-change-row:focus-visible { outline: 2px solid #0d4c3a; outline-offset: 2px; }
+.manager-selection-card { display: block; width: 100%; min-height: 96px; text-align: left; background: #fff; color: #132a24; border: 1px solid #dce7e1; border-radius: 14px; padding: 16px; font: inherit; cursor: pointer; box-shadow: 0 1px 2px rgba(15,45,36,.04); transition: border-color .16s ease, box-shadow .16s ease; }
+.manager-selection-card:active { background: #f7fbf9; }
+.manager-selection-card:hover { border-color: #b9d2c6; box-shadow: 0 6px 18px rgba(15,45,36,.07); }
+.manager-selection-card:focus-visible, .manager-filter-row button:focus-visible, .manager-change-row:focus-visible { outline: 2px solid #145545; outline-offset: 2px; }
 .manager-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: #61776d; }
 .manager-card-top .ant-tag { margin: 0; flex-shrink: 0; }
 .manager-item-list { list-style: none; margin: 12px 0; padding: 0; color: #183c34; font-size: 16px; line-height: 1.6; font-weight: 600; overflow-wrap: anywhere; }
@@ -125,3 +126,11 @@
 .manager-order-timeline { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; padding-left: 18px; color: #183c34; font-size: 13px; }
 .manager-order-timeline li { display: flex; justify-content: space-between; gap: 12px; line-height: 1.5; }
 .manager-order-timeline time { color: #6b8077; font-size: 12px; white-space: nowrap; }
+
+.manager-review-card { min-height: 96px; box-shadow: 0 1px 2px rgba(15,45,36,.04); transition: border-color .16s ease, box-shadow .16s ease; }
+.manager-review-card:hover { border-color: #b9d2c6; box-shadow: 0 6px 18px rgba(15,45,36,.07); }
+.manager-review-card:focus-visible, .manager-review-task-row:focus-visible { outline: 2px solid #145545; outline-offset: 2px; }
+.manager-review-task-row { min-height: 48px; touch-action: manipulation; }
+.manager-task-stale { border-color: #ead9bd; background: #fffbf3; }
+.manager-task-stale .manager-task-top { color: #7a5415; }
+.manager-empty { border: 1px dashed #dce7e1; }

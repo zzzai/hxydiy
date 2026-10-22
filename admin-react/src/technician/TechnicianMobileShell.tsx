@@ -38,7 +38,7 @@ export default function TechnicianMobileShell({ children, onLogout, onOpenDeskto
       </header>
       <main className="technician-mobile-content">{children}</main>
       {visibleTabs.length > 0 && <nav className="technician-mobile-tabbar" aria-label="技师端导航" style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, 1fr)` }}>
-        {visibleTabs.map((tab) => <button key={tab.path} className={location.pathname === tab.path ? 'active' : ''} onClick={() => navigate(tab.path)}>{tab.icon}<span>{tab.label}</span></button>)}
+        {visibleTabs.map((tab) => <button key={tab.path} className={location.pathname === tab.path ? 'active' : ''} aria-current={location.pathname === tab.path ? 'page' : undefined} onClick={() => navigate(tab.path)}>{tab.icon}<span>{tab.label}</span></button>)}
       </nav>}
     </div>
   );

@@ -111,7 +111,7 @@ export default function TechnicianCustomerPanel({ occupancyId, onClose }: { occu
     }, '标签已添加');
   };
 
-  return <Drawer title="顾客资料" placement="bottom" height="90dvh" open onClose={onClose} destroyOnClose>
+  return <Drawer title="顾客资料与标签" placement="bottom" height="90dvh" open onClose={onClose} destroyOnClose>
     <div className="technician-customer-panel">
       {summary && <header><h2>{summary.customer_name || '本次顾客'}</h2><p>{summary.membership?.level || '未提供会员等级'}</p></header>}
       {summary?.access === 'unbound' ? <Alert type="info" message="本次服务尚未关联顾客资料，可正常继续服务。" /> : <>
@@ -122,8 +122,8 @@ export default function TechnicianCustomerPanel({ occupancyId, onClose }: { occu
           {section === 'history' && (history.length ? history.map((item) => <article key={item.id} className="technician-customer-entry"><time>{dateLabel(item.service_finished_at || item.service_started_at)}</time><p>{projectLabel(item.projects) || '未记录项目'}</p></article>) : <Empty description="暂无服务历史" />)}
           {section === 'reviews' && (reviews.length ? reviews.map((item) => <article key={`${item.feedback_type}:${item.id}`} className="technician-customer-entry"><h3>{item.feedback_type === 'visit' ? '到店反馈' : '服务评价'}</h3><time>{dateLabel(item.created_at)}</time>{item.rating !== null && <p>评分：{item.rating}</p>}{item.feedback_type === 'service' && item.projects.length > 0 && <p>{projectLabel(item.projects)}</p>}<p>{item.content || '顾客未填写文字'}</p>{item.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}</article>) : <Empty description="暂无顾客反馈" />)}
           {section === 'reports' && (detail ? <article className="technician-customer-entry"><Button onClick={() => setDetail(undefined)}>返回报告列表</Button><h3>{detail.title}</h3>{detail.sections.map((item, index) => <section key={index}><h4>{item.title}</h4><p style={{ whiteSpace: 'pre-wrap' }}>{item.content}</p></section>)}</article> : reports.length ? reports.map((item) => <article key={item.id} className="technician-customer-entry"><time>{dateLabel(item.created_at)}</time><Button block onClick={() => void openReport(item.id)}>{item.title}</Button></article>) : <Empty description="暂无可查看的报告" />)}
-          {section === 'tags' && tags && <>
-            <p>仅记录普通运营标签，与本次服务记录分开保存。</p>
+          {section === 'tags' && tags && <div className="technician-customer-tags">
+            <p className="technician-customer-hint">运营标签与本次服务记录分开保存，可添加或撤回本人添加的标签。</p>
             {tags.items.map((tag) => <article key={tag.id} className="technician-customer-entry"><strong>{tag.name}</strong>
               {tag.sources.some((source) => source.kind === 'legacy') && <p>含门店已有记录</p>}
               {tag.sources.filter((source) => source.kind === 'contribution' && source.owned_by_me && source.contribution_id !== null && source.version !== null).map((source) => <Button key={source.contribution_id} disabled={busy} onClick={() => void mutateTag(() => revokeTechnicianCustomerTag(occupancyId, source.contribution_id!, source.version!, '撤回本人添加的标签'), '已撤回本人添加，其他来源不受影响')}>撤回本人添加</Button>)}
@@ -131,7 +131,7 @@ export default function TechnicianCustomerPanel({ occupancyId, onClose }: { occu
             {!tags.items.length && <Empty description="暂无运营标签" />}
             <Select aria-label="选择运营标签" style={{ width: '100%' }} value={tagId} disabled={busy} placeholder="选择已有标签" onChange={setTagId} options={tags.available_tags.map((tag) => ({ value: tag.id, label: tag.name, disabled: tags.items.some((item) => item.id === tag.id && item.sources.some((source) => source.owned_by_me)) }))} />
             <Button type="primary" block disabled={!tagId || busy} loading={busy} onClick={addTag}>添加标签</Button>
-          </>}
+          </div>}
           {section !== 'tags' && !detail && total > 20 && <Pagination simple current={page} total={total} pageSize={20} onChange={setPage} />}
         </>}
       </>}

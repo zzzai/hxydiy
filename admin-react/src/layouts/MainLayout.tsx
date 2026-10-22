@@ -64,6 +64,8 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
   const selectedKeys = [location.pathname];
+  const currentGroup = visibleMenuGroups.find((group) => group.items.some((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)));
+  const currentItem = currentGroup?.items.find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
   const openKeys = visibleMenuGroups.map(g => g.key);
 
   const page = (path: string, element: React.ReactNode) => (
@@ -96,18 +98,25 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
   return (
     <ErrorBoundary>
       <Layout className="app-shell">
+        <a className="skip-link" href="#main-content">跳到主要内容</a>
         {!isMobile && <Sider trigger={null} collapsible collapsed={collapsed} width={240} className="desktop-sider" theme="dark">{navigation}</Sider>}
         <Drawer open={isMobile && mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} placement="left" width={288} closable={false} styles={{ body: { padding: 0, background: '#0d2f29' } }}>
           {navigation}
         </Drawer>
         <Layout>
           <header className="topbar">
-            <Button
-              type="text"
-              aria-label={isMobile ? '打开导航' : '折叠导航'}
-              icon={isMobile ? <MenuOutlined /> : (collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />)}
-              onClick={() => isMobile ? setMobileMenuOpen(true) : setCollapsed(!collapsed)}
-            />
+            <div className="topbar-main">
+              <Button
+                type="text"
+                aria-label={isMobile ? '打开导航' : '折叠导航'}
+                icon={isMobile ? <MenuOutlined /> : (collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />)}
+                onClick={() => isMobile ? setMobileMenuOpen(true) : setCollapsed(!collapsed)}
+              />
+              {!isMobile && <div className="topbar-context" aria-label="当前位置">
+                {currentGroup && <span>{currentGroup.label}</span>}
+                <strong>{currentItem?.label || '门店中台'}</strong>
+              </div>}
+            </div>
             <div className="topbar-actions">
               <Typography.Text className="store-name">{getStoreContextLabel(staff)}</Typography.Text>
               <Dropdown menu={{ items: [{ key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: onLogout }] }}>
@@ -117,7 +126,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
               </Dropdown>
             </div>
           </header>
-          <Content className="app-content">
+          <Content className="app-content" id="main-content" tabIndex={-1}>
             <Suspense fallback={<div className="page-loading" aria-live="polite">页面加载中...</div>}>
               <Routes>
                 <Route path="/" element={<Navigate to={getDefaultPath(role, staff?.store_id)} replace />} />
