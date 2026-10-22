@@ -9,7 +9,7 @@ from app.api.admin import create_staff_token, hash_password
 from app.api.technician import make_invite_token, token_hash
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, PositionOccupancy, SelectionSession, Staff, Store, Technician, TechnicianInvite
+from app.models import AuditLog, PositionOccupancy, SelectionSession, Staff, Store, Technician, TechnicianInvite, TechnicianLeaveRequest
 from app.models.operations import Room
 from app.models.service import ServiceAssignment
 
@@ -372,3 +372,65 @@ class TestTechnicianAccountLifecycle:
         resignation = self.client.post(f"/api/v1/admin/v2/technicians/{self.technician_id}/resign", headers=self.manager_headers, json={"reason": "服务未结束"})
         assert resignation.status_code == 409, resignation.text
         assert resignation.json()["detail"]["code"] == "TECHNICIAN_ACTIVE_SERVICE"
+
+    def test_manager_rejects_leave_with_reason_and_audit(self):
+        with self.SessionLocal() as db:
+            leave = TechnicianLeaveRequest(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                start_date=datetime.now(timezone.utc).date(),
+                end_date=datetime.now(timezone.utc).date(),
+                reason="家中有事",
+            )
+            db.add(leave)
+            db.commit()
+            leave_id = leave.id
+
+        missing_reason = self.client.post(
+            f"/api/v1/admin/v2/technician-leave-requests/{leave_id}/reject",
+            headers=self.manager_headers,
+            json={"review_note": ""},
+        )
+        assert missing_reason.status_code == 400, missing_reason.text
+
+        rejected = self.client.post(
+            f"/api/v1/admin/v2/technician-leave-requests/{leave_id}/reject",
+            headers=self.manager_headers,
+            json={"review_note": "周末人手不足，请改期"},
+        )
+        assert rejected.status_code == 200, rejected.text
+        assert rejected.json()["status"] == "rejected"
+        with self.SessionLocal() as db:
+            leave = db.get(TechnicianLeaveRequest, leave_id)
+            assert leave.status == "rejected"
+            assert leave.review_note == "周末人手不足，请改期"
+            audit_row = db.scalar(select(AuditLog).where(
+                AuditLog.action == "reject_technician_leave",
+                AuditLog.entity_id == str(self.technician_id),
+            ))
+            assert audit_row is not None
+
+    def test_manager_can_approve_leave_without_active_service(self):
+        with self.SessionLocal() as db:
+            leave = TechnicianLeaveRequest(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                start_date=datetime.now(timezone.utc).date(),
+                end_date=datetime.now(timezone.utc).date(),
+                reason="休息",
+            )
+            db.add(leave)
+            db.commit()
+            leave_id = leave.id
+
+        approved = self.client.post(
+            f"/api/v1/admin/v2/technician-leave-requests/{leave_id}/approve",
+            headers=self.manager_headers,
+            json={"review_note": "已安排替班"},
+        )
+        assert approved.status_code == 200, approved.text
+        assert approved.json()["status"] == "approved"
+        assert approved.json()["technician_status"] == "off"
+        with self.SessionLocal() as db:
+            assert db.get(TechnicianLeaveRequest, leave_id).status == "approved"
+            assert db.get(Technician, self.technician_id).status == "off"
