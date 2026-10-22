@@ -1066,6 +1066,7 @@ def list_selection_sessions(
     needs_position_assignment: bool | None = Query(None),
     active_only: bool = Query(False),
     stale_only: bool = Query(False),
+    period: Literal["all", "today", "7d"] = Query("all"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -1080,6 +1081,16 @@ def list_selection_sessions(
         q = q.where(
             SelectionSession.status.in_(("submitted", "confirmed")),
             SelectionSession.created_at < datetime.now(UTC) - timedelta(minutes=30),
+        )
+    if period != "all":
+        local_now = datetime.now(ZoneInfo("Asia/Shanghai"))
+        if period == "today":
+            start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            start_local = (local_now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_at = start_local.astimezone(UTC)
+        q = q.where(
+            sa_func.coalesce(SelectionSession.submitted_at, SelectionSession.created_at) >= start_at,
         )
     if staff.role == "staff":
         q = q.where(SelectionSession.status == "submitted")

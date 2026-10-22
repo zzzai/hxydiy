@@ -10084,6 +10084,7 @@ export interface operations {
                 needs_position_assignment?: boolean | null;
                 active_only?: boolean;
                 stale_only?: boolean;
+                period?: "all" | "today" | "7d";
                 page?: number;
                 page_size?: number;
             };

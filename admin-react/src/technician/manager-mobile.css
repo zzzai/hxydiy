@@ -162,3 +162,7 @@
 .manager-filter-row button[aria-pressed="true"], .manager-view-tabs button[aria-pressed="true"] { color: var(--hxy-primary); background: var(--hxy-selected); }
 .manager-selection-card:focus-visible, .manager-filter-row button:focus-visible, .manager-change-row:focus-visible, .manager-review-card:focus-visible, .manager-review-task-row:focus-visible { outline-color: var(--hxy-primary); }
 .manager-position-state, .manager-position-card-footer .ant-btn { color: var(--hxy-primary); }
+
+.manager-order-period { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--hxy-brand-soft); }
+.manager-order-period button { flex: 1; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--hxy-text-secondary); font: inherit; font-size: 13px; touch-action: manipulation; }
+.manager-order-period button[aria-pressed="true"] { background: var(--hxy-surface); color: var(--hxy-primary); font-weight: 650; box-shadow: 0 1px 2px rgba(32,42,35,.06); }
