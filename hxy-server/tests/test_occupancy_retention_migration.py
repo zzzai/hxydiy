@@ -24,6 +24,7 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                 "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
                 "staff_scope_assignments", "membership_cards",
                 "staff_external_identities", "staff_oauth_attempts", "customer_tag_contributions",
+                "page_content_versions",
             }:
                 continue
             copied = table.to_metadata(previous_metadata)

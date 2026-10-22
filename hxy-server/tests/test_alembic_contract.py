@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20261018_wecom_store_manager"])
+        self.assertEqual(scripts.get_heads(), ["20261023_page_content_versions"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -91,6 +91,7 @@ class AlembicContractTests(unittest.TestCase):
             "customer_profile_current", "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
             "staff_scope_assignments", "membership_cards",
             "staff_external_identities", "staff_oauth_attempts", "customer_tag_contributions",
+            "page_content_versions",
         }
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
@@ -280,6 +281,7 @@ class AlembicContractTests(unittest.TestCase):
             "visit_feedback",
             "staff_scope_assignments", "membership_cards",
             "staff_external_identities", "staff_oauth_attempts", "customer_tag_contributions",
+            "page_content_versions",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():
