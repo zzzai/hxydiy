@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -488,3 +489,64 @@ class TestTechnicianAccountLifecycle:
         assert detail["conflicts"][0]["order_no"] == "LEAVE-CONFLICT-1"
         with self.SessionLocal() as db:
             assert db.get(TechnicianLeaveRequest, leave_id).status == "submitted"
+
+    def test_technician_board_shows_approved_leave_and_summary(self):
+        today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+        with self.SessionLocal() as db:
+            db.add(TechnicianLeaveRequest(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                start_date=today,
+                end_date=today,
+                reason="休息",
+                status="approved",
+            ))
+            db.commit()
+
+        response = self.client.get(
+            "/api/v1/admin/v2/technician-board",
+            headers=self.manager_headers,
+            params={"day": today.isoformat()},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["date"] == today.isoformat()
+        assert body["summary"]["on_leave"] == 1
+        item = next(row for row in body["items"] if row["id"] == self.technician_id)
+        assert item["on_leave"] is True
+        assert item["on_duty"] is False
+        assert item["status_label"] == "请假"
+
+    def test_manager_cannot_approve_own_leave(self):
+        from app.models import Staff as StaffModel
+        with self.SessionLocal() as db:
+            own_manager = StaffModel(
+                username="self-approval-manager",
+                password_hash=hash_password("manager-pass"),
+                name="兼技师店长",
+                role="manager",
+                status="active",
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+            )
+            db.add(own_manager)
+            db.flush()
+            leave = TechnicianLeaveRequest(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                start_date=datetime.now(timezone.utc).date(),
+                end_date=datetime.now(timezone.utc).date(),
+                reason="个人休息",
+            )
+            db.add(leave)
+            db.commit()
+            manager_id, leave_id = own_manager.id, leave.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(manager_id, 'manager')}"}
+        blocked = self.client.post(
+            f"/api/v1/admin/v2/technician-leave-requests/{leave_id}/approve",
+            headers=headers,
+            json={"review_note": "同意"},
+        )
+        assert blocked.status_code == 403, blocked.text
+        assert blocked.json()["detail"]["code"] == "SELF_APPROVAL_FORBIDDEN"

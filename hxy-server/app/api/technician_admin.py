@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
+from datetime import date as date_type, datetime, timezone
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff, _staff_store_id, hash_password, normalize_staff_role
@@ -239,6 +240,75 @@ def list_leave_requests(status: str | None = None, authorization: str | None = H
     return {"items": [{"id": row.id, "technician_id": row.technician_id, "technician_name": technicians.get(row.technician_id).name if row.technician_id in technicians else "", "start_date": row.start_date.isoformat(), "end_date": row.end_date.isoformat(), "reason": row.reason, "status": row.status, "review_note": row.review_note} for row in rows]}
 
 
+@router.get("/technician-board")
+def technician_board(
+    day: str | None = Query(None),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Per-store on-duty board: leave, current bookings and next appointment."""
+    admin = require_admin(authorization, db)
+    try:
+        board_date = date_type.fromisoformat(day) if day else datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="日期格式应为 YYYY-MM-DD")
+    technicians = list(db.scalars(select(Technician).where(Technician.store_id == admin.store_id).order_by(Technician.id)))
+    leaves = list(db.scalars(select(TechnicianLeaveRequest).where(
+        TechnicianLeaveRequest.store_id == admin.store_id,
+        TechnicianLeaveRequest.status == "approved",
+        TechnicianLeaveRequest.start_date <= board_date,
+        TechnicianLeaveRequest.end_date >= board_date,
+    )))
+    leave_by_tech = {leave.technician_id: leave for leave in leaves}
+    assignment_rows = db.execute(
+        select(
+            ServiceAssignment.technician_id,
+            func.count().label("booking_count"),
+            func.min(Order.booking_time).label("next_booking_time"),
+        )
+        .join(ServiceOrder, ServiceOrder.id == ServiceAssignment.service_order_id)
+        .join(Order, Order.id == ServiceOrder.order_id)
+        .where(
+            ServiceAssignment.store_id == admin.store_id,
+            ServiceAssignment.status.in_(("assigned", "ready", "in_service")),
+            Order.booking_date == board_date.isoformat(),
+        )
+        .group_by(ServiceAssignment.technician_id)
+    ).all()
+    booking_by_tech = {row.technician_id: row for row in assignment_rows}
+    status_labels = {"available": "在岗", "busy": "服务中", "off": "休息", "resigned": "离职"}
+    items = []
+    for technician in technicians:
+        if technician.status == "resigned":
+            continue
+        leave = leave_by_tech.get(technician.id)
+        booking = booking_by_tech.get(technician.id)
+        on_leave = leave is not None
+        on_duty = not on_leave and technician.status in ("available", "busy")
+        items.append({
+            "id": technician.id,
+            "name": technician.name,
+            "code": technician.code,
+            "status": technician.status,
+            "status_label": "请假" if on_leave else status_labels.get(technician.status, technician.status),
+            "on_duty": on_duty,
+            "on_leave": on_leave,
+            "leave_end": leave.end_date.isoformat() if leave else None,
+            "booking_count": int(booking.booking_count) if booking else 0,
+            "next_booking_time": booking.next_booking_time if booking else None,
+        })
+    return {
+        "date": board_date.isoformat(),
+        "summary": {
+            "total": len(items),
+            "on_duty": sum(1 for item in items if item["on_duty"]),
+            "on_leave": sum(1 for item in items if item["on_leave"]),
+            "booking_count": sum(item["booking_count"] for item in items),
+        },
+        "items": items,
+    }
+
+
 @router.post("/technician-leave-requests/{request_id}/approve")
 def approve_leave_request(request_id: int, body: dict | None = None, authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
     admin = require_admin(authorization, db)
@@ -247,6 +317,8 @@ def approve_leave_request(request_id: int, body: dict | None = None, authorizati
         raise HTTPException(status_code=404, detail="请假申请不存在")
     if request.status != "submitted":
         raise HTTPException(status_code=409, detail="请假申请状态已变更")
+    if admin.technician_id and admin.technician_id == request.technician_id:
+        raise HTTPException(status_code=403, detail={"code": "SELF_APPROVAL_FORBIDDEN", "message": "不能审批自己的请假申请，请由其他管理员处理"})
     technician = db.get(Technician, request.technician_id)
     if not technician or technician.status == "resigned":
         raise HTTPException(status_code=409, detail="技师当前不可审批请假")
@@ -277,6 +349,8 @@ def reject_leave_request(request_id: int, body: dict | None = None, authorizatio
         raise HTTPException(status_code=404, detail="请假申请不存在")
     if request.status != "submitted":
         raise HTTPException(status_code=409, detail="请假申请状态已变更")
+    if admin.technician_id and admin.technician_id == request.technician_id:
+        raise HTTPException(status_code=403, detail={"code": "SELF_APPROVAL_FORBIDDEN", "message": "不能审批自己的请假申请，请由其他管理员处理"})
     review_note = str((body or {}).get("review_note") or "").strip()[:500]
     if len(review_note) < 2:
         raise HTTPException(status_code=400, detail="请填写至少 2 个字的驳回原因")

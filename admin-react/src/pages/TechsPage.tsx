@@ -3,7 +3,7 @@ import { App, Button, Card, Dropdown, Input, Modal, Space, Table, Tag, Tooltip }
 import type { MenuProps } from 'antd';
 import { CheckCircleOutlined, KeyOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, StopOutlined, UserSwitchOutlined } from '@ant-design/icons';
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
-import { approveTechnicianLeave, createTechnician, disableTechnicianLogin, getStaff, getTechnicianLeaveRequests, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin } from '../api';
+import { approveTechnicianLeave, createTechnician, disableTechnicianLogin, getStaff, getTechnicianBoard, getTechnicianLeaveRequests, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin } from '../api';
 import { canManageConfiguration, getStoreId } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
@@ -25,6 +25,17 @@ export default function TechsPage() {
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [rejecting, setRejecting] = useState<any>();
   const [rejectNote, setRejectNote] = useState('');
+  const [board, setBoard] = useState<any>();
+  const [boardLoading, setBoardLoading] = useState(false);
+
+  const loadBoard = async () => {
+    setBoardLoading(true);
+    try {
+      const response = await getTechnicianBoard();
+      setBoard(response.data);
+    } catch { /* API interceptor already presents the server error. */ }
+    finally { setBoardLoading(false); }
+  };
 
   const loadLeaves = async () => {
     setLeaveLoading(true);
@@ -35,7 +46,7 @@ export default function TechsPage() {
     finally { setLeaveLoading(false); }
   };
 
-  useEffect(() => { if (canManage) void loadLeaves(); }, [canManage]);
+  useEffect(() => { if (canManage) { void loadLeaves(); void loadBoard(); } }, [canManage]);
 
   const approveLeave = async (row: any) => {
     try {
@@ -104,7 +115,24 @@ export default function TechsPage() {
     ...(canManage ? [{ title: '操作', key: 'actions', width: 72, fixed: 'right' as const, render: (_: unknown, record: any) => <Tooltip title="账号操作"><Dropdown trigger={['click']} menu={{ items: actionMenu(record) }}><Button type="text" aria-label={`操作${record.name}`} icon={<MoreOutlined />} /></Dropdown></Tooltip> }] : []),
   ];
 
-  return <PageContainer title="技师管理" content="维护技师档案和登录账号生命周期。" extra={[<Button key="refresh" icon={<ReloadOutlined />} onClick={() => actionRef.current?.reload()}>刷新</Button>, ...(canManage ? [<Button key="create" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建技师</Button>] : [])]}>
+  return <PageContainer title="技师管理" content="维护技师档案和登录账号生命周期。" extra={[<Button key="refresh" icon={<ReloadOutlined />} onClick={() => { actionRef.current?.reload(); void loadBoard(); }}>刷新</Button>, ...(canManage ? [<Button key="create" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建技师</Button>] : [])]}>
+    {canManage && <Card title={`今日在岗看板${board?.date ? ` · ${board.date}` : ''}`} style={{ marginBottom: 16 }} loading={boardLoading} extra={<Button size="small" onClick={() => void loadBoard()}>刷新在岗</Button>}>
+      <Space size={8} wrap>
+        <Tag color="green">在岗 {board?.summary?.on_duty ?? 0}</Tag>
+        <Tag color="gold">请假 {board?.summary?.on_leave ?? 0}</Tag>
+        <Tag color="blue">今日预约 {board?.summary?.booking_count ?? 0}</Tag>
+        <Tag>在册 {board?.summary?.total ?? 0}</Tag>
+      </Space>
+      <div style={{ marginTop: 12 }}>
+        <Space size={8} wrap>
+          {(board?.items || []).map((item: any) => <Tag
+            key={item.id}
+            color={item.on_leave ? 'gold' : item.status === 'busy' ? 'processing' : item.on_duty ? 'green' : 'default'}
+          >{item.name} · {item.status_label}{item.booking_count ? ` · ${item.booking_count} 单` : ''}{item.next_booking_time ? ` · ${item.next_booking_time}` : ''}</Tag>)}
+        </Space>
+        {!board?.items?.length && <span style={{ color: 'var(--hxy-text-secondary)' }}>当前没有在册技师</span>}
+      </div>
+    </Card>}
     <ProTable<any> actionRef={actionRef} rowKey="id" columns={columns} search={{ labelWidth: 'auto', defaultCollapsed: true }} pagination={{ defaultPageSize: 20, showSizeChanger: true }} request={async (params) => {
       const result = await refineDataProvider.getList({ resource: resources.technicians, pagination: { currentPage: params.current, pageSize: params.pageSize, mode: 'server' }, filters: [{ field: 'status', operator: 'eq' as const, value: params.status }, { field: 'level', operator: 'eq' as const, value: params.level }], sorters: [] });
       return { success: true, data: result.data, total: result.total };
