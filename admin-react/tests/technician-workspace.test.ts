@@ -98,20 +98,15 @@ test('快记文本仅引导服务交接，身体补充先选大部位再显示�
   assert.match(bodyMap, /showPreciseMap/);
 });
 
-test('活动顾客服务单显式打开安全服务参考摘要', () => {
+test('技师端订单只读，不展示确认或结束动作', () => {
   const today = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
-  const drawer = readFileSync(new URL('../src/technician/TechnicianServiceReferenceDrawer.tsx', import.meta.url), 'utf8');
-  assert.match(today, /TechnicianServiceReferenceDrawer/);
-  assert.match(drawer, /getTechnicianServiceReference/);
-  assert.match(drawer, /请本次服务前再次确认/);
-  assert.match(drawer, /上次调整/);
-  assert.match(drawer, /service_adjustments/);
-  for (const sensitive of ['quote', 'note', 'phone', 'age_range', 'gender', 'occupation']) assert.doesNotMatch(drawer, new RegExp(sensitive));
+  assert.doesNotMatch(today, /confirmTechnicianService|finishTechnicianService|开始服务|服务结束/);
+  assert.match(today, /订单确认、开始和结束由系统自动处理/);
 });
 
-test('已完成服务单不展示只能在活动服务位读取的上次服务参考入口', () => {
-  const source = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
-  assert.match(source, /selectedActions\.length > 0 && selectedOrder\.customer\?\.id/);
+test('活动订单不再从操作入口打开服务参考', () => {
+  const today = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(today, /TechnicianServiceReferenceDrawer/);
 });
 
 test('画像写入请求附带幂等键', () => {

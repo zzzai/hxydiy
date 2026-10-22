@@ -965,6 +965,11 @@ def list_feedback(
         row["followed_up_at"] = row["followed_up_at"].isoformat() if row["followed_up_at"] else None
         row["created_at"] = row["created_at"].isoformat() if row["created_at"] else None
         rows.append(row)
+    customer_ids = {row["customer_id"] for row in rows if row.get("customer_id")}
+    phones = dict(db.execute(select(User.id, User.phone).where(User.id.in_(customer_ids))).all()) if customer_ids else {}
+    for row in rows:
+        phone = phones.get(row.get("customer_id")) if row.get("customer_id") else None
+        row["customer_phone"] = phone or None
     return {
         "items": rows,
         "total": total,
@@ -990,7 +995,10 @@ def get_feedback_detail(
     feedback = _feedback_by_type(db, feedback_type, feedback_id)
     if not feedback or feedback.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail="评价不存在")
-    return _feedback_view(feedback, feedback_type)
+    customer = db.get(User, feedback.customer_id) if feedback.customer_id else None
+    result = _feedback_view(feedback, feedback_type)
+    result["customer_phone"] = customer.phone if customer and customer.phone else None
+    return result
 
 
 @router.patch("/feedback/{feedback_type}/{feedback_id}")
@@ -1016,7 +1024,10 @@ def update_feedback_follow_up_by_type(
         "follow_up_status": feedback.follow_up_status,
     })
     db.commit()
-    return _feedback_view(feedback, feedback_type)
+    customer = db.get(User, feedback.customer_id) if feedback.customer_id else None
+    result = _feedback_view(feedback, feedback_type)
+    result["customer_phone"] = customer.phone if customer and customer.phone else None
+    return result
 
 
 @router.patch("/feedback/{feedback_id}")
@@ -1168,12 +1179,6 @@ def manager_workbench(
         Order.store_id == store_id,
         Order.status == "pending_checkout",
     )) or 0
-    pending_changes = db.scalar(select(sa_func.count()).select_from(SelectionChangeRequest).join(
-        SelectionSession, SelectionSession.id == SelectionChangeRequest.selection_session_id,
-    ).where(
-        SelectionSession.store_id == store_id,
-        SelectionChangeRequest.state == "awaiting_staff_confirmation",
-    )) or 0
     low_reviews = db.scalar(select(sa_func.count()).select_from(ServiceFeedback).where(
         ServiceFeedback.store_id == store_id,
         ServiceFeedback.rating <= 2,
@@ -1182,8 +1187,6 @@ def manager_workbench(
     attention = []
     if stale_orders:
         attention.append({"key": "stale_order", "label": "订单超过30分钟未开始", "count": stale_orders})
-    if pending_changes:
-        attention.append({"key": "addon", "label": "顾客加选待处理", "count": pending_changes})
     if low_reviews:
         attention.append({"key": "low_review", "label": "低分评价待跟进", "count": low_reviews})
     return {

@@ -1,35 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Drawer, Input, Spin, Tag } from 'antd';
+import { Alert, Button, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getFeedback, getManagerWorkbench, getSelectionChangeRequests, approveSelectionChangeRequest, rejectSelectionChangeRequest } from '../api';
-import { selectionChangeItemSummary } from '../selectionChanges';
-import type { ManagerChange } from './managerMobile';
+import { getFeedback, getManagerWorkbench } from '../api';
 
-function timeText(value?: string) {
+function timeText(value?: string | null) {
   if (!value || Number.isNaN(Date.parse(value))) return '时间待核实';
   return new Date(value).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
-/** 店长处理顾客加选；正常订单只在订单页查看，不进入待处理。 */
-export default function ManagerTasksView({ onChanged, onOpenReviews, onOpenOrders }: { onChanged?: () => void; onOpenReviews?: () => void; onOpenOrders?: () => void }) {
-  const [rows, setRows] = useState<ManagerChange[]>([]);
-  const [reviews, setReviews] = useState<Array<{ id: number; rating: number; note: string; created_at: string | null }>>([]);
+/** 店长只处理门店评价与超时提醒；订单确认/超时由系统负责，不在端上操作。 */
+export default function ManagerTasksView({ onOpenReviews, onOpenOrders }: { onOpenReviews?: () => void; onOpenOrders?: () => void }) {
+  const [reviews, setReviews] = useState<Array<{ id: number; rating: number; note: string; created_at: string | null; customer_phone?: string | null }>>([]);
   const [staleOrders, setStaleOrders] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState<ManagerChange | null>(null);
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [changesResponse, reviewsResponse, workbenchResponse] = await Promise.all([
-        getSelectionChangeRequests(),
+      const [reviewsResponse, workbenchResponse] = await Promise.all([
         getFeedback({ feedback_type: 'service_review', follow_up_status: 'open', page: 1, page_size: 20 }),
         getManagerWorkbench(),
       ]);
-      setRows(Array.isArray(changesResponse.data?.items) ? changesResponse.data.items : []);
       setReviews(Array.isArray(reviewsResponse.data?.items) ? reviewsResponse.data.items.filter((item: { rating: number }) => item.rating <= 2) : []);
       setStaleOrders(Number(workbenchResponse.data?.attention?.find((item: { key: string }) => item.key === 'stale_order')?.count) || 0);
       setError('');
@@ -42,56 +34,27 @@ export default function ManagerTasksView({ onChanged, onOpenReviews, onOpenOrder
 
   useEffect(() => { void load(); }, [load]);
 
-  const act = async (kind: 'approve' | 'reject') => {
-    if (!selected || busy) return;
-    if (kind === 'reject' && !reason.trim()) return;
-    setBusy(true);
-    try {
-      if (kind === 'approve') await approveSelectionChangeRequest(selected.id);
-      else await rejectSelectionChangeRequest(selected.id, reason.trim());
-      setSelected(null); setReason('');
-      await load(); onChanged?.();
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return <section className="manager-tasks-view">
     <div className="manager-tasks-heading">
-      <div><h2>待处理 <span>{rows.length + reviews.length + staleOrders}</span></h2><p>超时订单、顾客加选和低分评价会进入这里。</p></div>
+      <div><h2>待处理 <span>{reviews.length + staleOrders}</span></h2><p>超时提醒和低分评价会进入这里；订单确认由系统处理。</p></div>
       <Button icon={<ReloadOutlined />} aria-label="刷新待处理" onClick={() => void load()} loading={loading} />
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
-    {loading && !rows.length && !reviews.length && !staleOrders ? <div className="manager-empty"><Spin size="small" /><span>正在加载待处理</span></div>
+    {loading && !reviews.length && !staleOrders ? <div className="manager-empty"><Spin size="small" /><span>正在加载待处理</span></div>
       : <>
-        {!rows.length && !reviews.length && !staleOrders && <div className="manager-empty"><strong>没有待处理</strong><span>超时订单、顾客加选和低分评价会在这里出现</span></div>}
+        {!reviews.length && !staleOrders && <div className="manager-empty"><strong>没有待处理</strong><span>超时提醒和低分评价会在这里出现</span></div>}
         {staleOrders > 0 && <div className="manager-task-stale">
           <div className="manager-task-top"><span>超过 30 分钟未开始</span><Tag color="red">{staleOrders}</Tag></div>
-          <p>请核实现场是否已接待，必要时在订单页查看详情。</p>
-          <Button block onClick={onOpenOrders}>去查看订单</Button>
+          <p>订单确认和超时由系统自动处理；可查看订单详情了解现场状态。</p>
+          <Button block onClick={onOpenOrders}>查看超时订单</Button>
         </div>}
-        {rows.length > 0 && <div className="manager-task-list">{rows.map(row => <button type="button" className="manager-task-card" key={row.id} onClick={() => { setSelected(row); setReason(''); }}>
-          <div className="manager-task-top"><span>顾客加选</span><Tag color="gold">待确认</Tag></div>
-          <strong>{row.revision.added_items.length ? selectionChangeItemSummary(row.revision.added_items[0]) : '新增项目'}</strong>
-          <ul className="manager-task-items">{row.revision.added_items.map((item, index) => <li key={index}>{selectionChangeItemSummary(item)}</li>)}</ul>
-          <div className="manager-task-meta"><span>订单 · {row.selection.id.slice(-8)}</span><time>{timeText(row.created_at)}</time></div>
-        </button>)}</div>}
         {reviews.length > 0 && <div className="manager-review-tasks">
           <div className="manager-task-top"><span>低分评价待跟进</span><Tag color="red">{reviews.length}</Tag></div>
           {reviews.map(review => <button type="button" className="manager-review-task-row" key={review.id} onClick={onOpenReviews}>
-            <span><strong>{review.rating} 星</strong> {review.note || '顾客未填写文字'}</span><time>{timeText(review.created_at || undefined)}</time>
+            <span><strong>{review.rating} 星</strong> {review.note || '顾客未填写文字'}{review.customer_phone ? ' · ' + review.customer_phone : ''}</span><time>{timeText(review.created_at)}</time>
           </button>)}
           <Button block onClick={onOpenReviews}>去处理评价</Button>
         </div>}
       </>}
-    <Drawer title="处理顾客加选" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(selected)} onClose={() => setSelected(null)} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" disabled={busy} onClick={() => { setSelected(null); setReason(''); }}>关闭详情</Button><Button size="large" danger disabled={busy || !reason.trim()} loading={busy} onClick={() => void act('reject')}>拒绝加选</Button><Button size="large" type="primary" disabled={busy} loading={busy} onClick={() => void act('approve')}>确认加选</Button></div>}>
-      {selected && <>
-        <div className="manager-detail-intro"><span>顾客加选</span><Tag color="gold">待确认</Tag></div>
-        <span className="manager-order-code">订单 · {selected.selection.id.slice(-8)}</span>
-        <ul className="manager-task-items">{selected.revision.added_items.map((item, index) => <li key={index}>{selectionChangeItemSummary(item)}</li>)}</ul>
-        <p className="manager-detail-note">确认后加选项目加入本次服务；拒绝必须填写原因。</p>
-        <label className="manager-action-form">拒绝原因<Input.TextArea value={reason} maxLength={256} autoSize={{ minRows: 3, maxRows: 6 }} onChange={event => setReason(event.target.value)} placeholder="仅在拒绝时填写，说明本次不能加选的原因" /></label>
-      </>}
-    </Drawer>
   </section>;
 }
