@@ -9,9 +9,9 @@ from app.api.admin import create_staff_token, hash_password
 from app.api.technician import make_invite_token, token_hash
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, PositionOccupancy, SelectionSession, Staff, Store, Technician, TechnicianInvite, TechnicianLeaveRequest
+from app.models import AuditLog, Order, PositionOccupancy, SelectionSession, Staff, Store, Technician, TechnicianInvite, TechnicianLeaveRequest, User
 from app.models.operations import Room
-from app.models.service import ServiceAssignment
+from app.models.service import ServiceAssignment, ServiceOrder, Visit
 
 
 class TestTechnicianAccountLifecycle:
@@ -434,3 +434,57 @@ class TestTechnicianAccountLifecycle:
         with self.SessionLocal() as db:
             assert db.get(TechnicianLeaveRequest, leave_id).status == "approved"
             assert db.get(Technician, self.technician_id).status == "off"
+
+    def test_leave_approval_rejects_date_conflicting_scheduled_service(self):
+        today = datetime.now(timezone.utc).date()
+        with self.SessionLocal() as db:
+            user = User(openid="leave-conflict-user")
+            db.add(user)
+            db.flush()
+            order = Order(
+                order_no="LEAVE-CONFLICT-1",
+                order_type="service",
+                user_id=user.id,
+                store_id=self.store_id,
+                status="paid",
+                booking_date=today.isoformat(),
+                booking_time="14:00",
+            )
+            room = Room(store_id=self.store_id, code="LEAVE-CONFLICT-ROOM", name="冲突测试位", room_type="sofa")
+            db.add_all([order, room])
+            db.flush()
+            visit = Visit(store_id=self.store_id, order_id=order.id)
+            db.add(visit)
+            db.flush()
+            service_order = ServiceOrder(store_id=self.store_id, order_id=order.id, visit_id=visit.id)
+            db.add(service_order)
+            db.flush()
+            db.add(ServiceAssignment(
+                store_id=self.store_id,
+                service_order_id=service_order.id,
+                technician_id=self.technician_id,
+                room_id=room.id,
+                status="assigned",
+            ))
+            leave = TechnicianLeaveRequest(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                start_date=today,
+                end_date=today,
+                reason="临时休息",
+            )
+            db.add(leave)
+            db.commit()
+            leave_id = leave.id
+
+        blocked = self.client.post(
+            f"/api/v1/admin/v2/technician-leave-requests/{leave_id}/approve",
+            headers=self.manager_headers,
+            json={"review_note": "批准"},
+        )
+        assert blocked.status_code == 409, blocked.text
+        detail = blocked.json()["detail"]
+        assert detail["code"] == "LEAVE_SCHEDULE_CONFLICT"
+        assert detail["conflicts"][0]["order_no"] == "LEAVE-CONFLICT-1"
+        with self.SessionLocal() as db:
+            assert db.get(TechnicianLeaveRequest, leave_id).status == "submitted"

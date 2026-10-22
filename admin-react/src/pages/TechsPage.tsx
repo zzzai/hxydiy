@@ -43,7 +43,13 @@ export default function TechsPage() {
       message.success('请假申请已批准，技师状态已调整');
       await loadLeaves();
       actionRef.current?.reload();
-    } catch { /* API interceptor already presents the server error. */ }
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      if (detail?.code === 'LEAVE_SCHEDULE_CONFLICT') {
+        const orders = (detail.conflicts || []).map((item: any) => `${item.booking_date} ${item.booking_time || ''} ${item.order_no}`).join('、');
+        message.error(`${detail.message}${orders ? `：${orders}` : ''}`);
+      }
+    }
   };
 
   const rejectLeave = async () => {

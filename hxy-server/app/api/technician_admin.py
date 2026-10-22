@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff, _staff_store_id, hash_password, normalize_staff_role
 from app.db.session import get_db
-from app.models import AuditLog, PositionOccupancy, Staff
+from app.models import AuditLog, Order, PositionOccupancy, Staff
 from app.models.operations import Technician
-from app.models.service import ServiceAssignment
+from app.models.service import ServiceAssignment, ServiceOrder
 from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
 from app.api.technician import invite_expiry, make_invite_token, token_hash
 
@@ -69,6 +69,35 @@ def _active_service_occupancy(db: Session, admin: Staff, technician: Technician)
     if not entity_ids:
         return None
     return db.scalar(select(PositionOccupancy).where(PositionOccupancy.store_id == admin.store_id, PositionOccupancy.id.in_(entity_ids), PositionOccupancy.status == "in_service").with_for_update())
+
+
+def _leave_schedule_conflicts(
+    db: Session,
+    admin: Staff,
+    technician: Technician,
+    start_date,
+    end_date,
+) -> list[dict]:
+    rows = db.execute(
+        select(Order.order_no, Order.booking_date, Order.booking_time, ServiceAssignment.status)
+        .join(ServiceOrder, ServiceOrder.order_id == Order.id)
+        .join(ServiceAssignment, ServiceAssignment.service_order_id == ServiceOrder.id)
+        .where(
+            ServiceAssignment.store_id == admin.store_id,
+            ServiceAssignment.technician_id == technician.id,
+            ServiceAssignment.status.in_(("assigned", "ready", "in_service")),
+            Order.booking_date.is_not(None),
+            Order.booking_date >= start_date.isoformat(),
+            Order.booking_date <= end_date.isoformat(),
+        )
+        .order_by(Order.booking_date, Order.booking_time)
+    ).all()
+    return [{
+        "order_no": order_no,
+        "booking_date": booking_date,
+        "booking_time": booking_time,
+        "assignment_status": status,
+    } for order_no, booking_date, booking_time, status in rows]
 
 
 def _invalidate_invite(db: Session, technician_id: int) -> None:
@@ -223,6 +252,13 @@ def approve_leave_request(request_id: int, body: dict | None = None, authorizati
         raise HTTPException(status_code=409, detail="技师当前不可审批请假")
     if _active_service_occupancy(db, admin, technician):
         raise HTTPException(status_code=409, detail={"code": "TECHNICIAN_ACTIVE_SERVICE", "message": "存在未结束的 DIY 服务，请完成服务交接后再审批"})
+    conflicts = _leave_schedule_conflicts(db, admin, technician, request.start_date, request.end_date)
+    if conflicts:
+        raise HTTPException(status_code=409, detail={
+            "code": "LEAVE_SCHEDULE_CONFLICT",
+            "message": f"请假日期内仍有 {len(conflicts)} 个已排服务，请先改派或调整预约",
+            "conflicts": conflicts[:10],
+        })
     request.status = "approved"
     request.reviewed_by_staff_id = admin.id
     request.reviewed_at = datetime.now(timezone.utc)
