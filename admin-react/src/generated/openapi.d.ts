@@ -859,6 +859,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/coupons/{template_id}/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue Coupon To Customer */
+        post: operations["issue_coupon_to_customer_api_v1_admin_v2_coupons__template_id__issue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/customer-profile-records": {
         parameters: {
             query?: never;
@@ -4553,6 +4570,11 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IssueCouponIn */
+        IssueCouponIn: {
+            /** User Id */
+            user_id: number;
         };
         /** KioskSessionIn */
         KioskSessionIn: {
@@ -8612,6 +8634,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_coupon_to_customer_api_v1_admin_v2_coupons__template_id__issue_post: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCouponIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

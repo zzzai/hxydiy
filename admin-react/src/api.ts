@@ -263,6 +263,8 @@ export const getCoupons = (storeId?: number) => client.get('/admin/coupons', { p
 export const createCoupon = (data: any, storeId?: number) => client.post('/admin/coupons', data, { params: { store_id: storeId } });
 export const toggleCouponStatus = (id: number, status: string, storeId?: number) =>
   client.post(`/admin/coupons/${id}`, { status }, { params: { store_id: storeId } });
+export const issueCouponToCustomer = (templateId: number, userId: number, storeId?: number) =>
+  client.post(`/admin/v2/coupons/${templateId}/issue`, { user_id: userId }, { params: { store_id: storeId } });
 
 // Rooms
 export const getStoreMasterData = (params?: any) => client.get('/admin/v2/stores', { params });

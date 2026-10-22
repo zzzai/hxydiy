@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox, Dropdown, Space } from 'antd';
 import { MoreOutlined, SearchOutlined } from '@ant-design/icons';
-import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone } from '../api';
+import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 import { getMembershipEntitlements } from '../api';
@@ -31,6 +31,10 @@ export default function UsersPage() {
   const [phoneCustomer, setPhoneCustomer] = useState<any>();
   const [phoneValue, setPhoneValue] = useState('');
   const [phoneLoading, setPhoneLoading] = useState(false);
+  const [couponCustomer, setCouponCustomer] = useState<any>();
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponToIssue, setCouponToIssue] = useState<number>();
+  const [couponLoading, setCouponLoading] = useState(false);
   const [membershipForm] = Form.useForm();
   const canCreateProfile = getStaff()?.role === 'manager' || getStaff()?.role === 'admin';
   const canManageDevice = getStaff()?.role === 'manager';
@@ -68,6 +72,27 @@ export default function UsersPage() {
       setPhoneCustomer(undefined);
       message.error('手机号查看失败，可能无权查看该顾客');
     } finally { setPhoneLoading(false); }
+  };
+
+  const openCoupon = async (user: any) => {
+    setCouponCustomer(user); setCouponToIssue(undefined); setCoupons([]); setCouponLoading(true);
+    try {
+      const response = await getCoupons();
+      setCoupons((response.data?.items || []).filter((coupon: any) => coupon.status === 'published'));
+    } catch { message.error('券列表加载失败'); }
+    finally { setCouponLoading(false); }
+  };
+
+  const submitCoupon = async () => {
+    if (!couponCustomer || !couponToIssue) return;
+    setCouponLoading(true);
+    try {
+      await issueCouponToCustomer(couponToIssue, couponCustomer.id);
+      message.success('优惠券已发放');
+      setCouponCustomer(undefined); setCouponToIssue(undefined);
+    } catch (error: any) {
+      message.error(error?.response?.data?.detail?.message || '发券失败');
+    } finally { setCouponLoading(false); }
   };
 
   const openMembership = (user: any, mode: 'enroll' | 'renew' | 'cancel' | 'recover') => {
@@ -135,6 +160,7 @@ export default function UsersPage() {
                 {!r.is_member && <Button size="small" type="primary" onClick={() => openMembership(r, 'enroll')}>办理会员</Button>}
                 <Dropdown trigger={['click']} menu={{ items: [
                   ...(r.phone_masked ? [{ key: 'phone', label: '查看手机号', onClick: () => void openPhone(r) }] : []),
+                  { key: 'coupon', label: '发放优惠券', onClick: () => void openCoupon(r) },
                   { key: 'profile', label: '画像记录', disabled: !canCreateProfile, onClick: () => setProfileCustomerId(r.id) },
                   ...(r.has_store_membership && canManageDevice ? [{ key: 'device', label: '可信设备', onClick: () => void openDevice(r) }] : []),
                   ...(r.is_member ? [
@@ -194,6 +220,21 @@ export default function UsersPage() {
         <p style={{ marginTop: 0 }}>顾客：{phoneCustomer?.nickname || phoneCustomer?.phone_masked || '-'}</p>
         <p style={{ fontSize: 22, fontWeight: 700, letterSpacing: 1 }}>{phoneValue || '—'}</p>
         <p style={{ color: 'var(--hxy-text-secondary)', fontSize: 12, marginBottom: 0 }}>查看完整手机号会写入审计日志，请仅在顾客服务所需范围内使用。</p>
+      </Modal>
+      <Modal title="发放优惠券" open={Boolean(couponCustomer)} onCancel={() => setCouponCustomer(undefined)} onOk={() => void submitCoupon()} okText="确认发放" cancelText="取消" confirmLoading={couponLoading} okButtonProps={{ disabled: !couponToIssue }}>
+        <p style={{ marginTop: 0 }}>为 {couponCustomer?.nickname || couponCustomer?.phone_masked || '该顾客'} 发放本店已上架优惠券：</p>
+        <Select
+          aria-label="选择要发放的优惠券"
+          style={{ width: '100%' }}
+          placeholder={coupons.length ? '选择优惠券' : '本店暂无可发放优惠券'}
+          value={couponToIssue}
+          onChange={setCouponToIssue}
+          options={coupons.map((coupon: any) => ({
+            value: coupon.id,
+            label: `${coupon.name}${coupon.min_spend_cents ? `（满 ¥${(coupon.min_spend_cents / 100).toFixed(0)}）` : ''}`,
+          }))}
+        />
+        <p style={{ color: 'var(--hxy-text-secondary)', fontSize: 12, marginBottom: 0, marginTop: 12 }}>发券会记录审计；每人限领按券模板配置执行。</p>
       </Modal>
     </div>
   );
