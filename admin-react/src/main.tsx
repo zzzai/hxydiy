@@ -1,3 +1,4 @@
+/* Brand v1.0 semantic tokens are applied in ConfigProvider below. */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App as AntApp, ConfigProvider } from 'antd';
