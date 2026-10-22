@@ -946,6 +946,74 @@ def update_page_content(
     db.refresh(content)
     return _page_content_view(content)
 
+
+class IssueCouponIn(BaseModel):
+    user_id: int
+
+
+@router.post("/coupons/{template_id}/issue")
+def issue_coupon_to_customer(
+    template_id: int,
+    body: IssueCouponIn,
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    action_store_id = _resolve_target_store_id(db, staff, store_id)
+    template = db.scalar(select(CouponTemplate).where(
+        CouponTemplate.id == template_id,
+        CouponTemplate.store_id == action_store_id,
+    ))
+    if not template:
+        raise HTTPException(status_code=404, detail="券模板不存在")
+    if template.status != "published":
+        raise HTTPException(status_code=409, detail={"code": "COUPON_NOT_PUBLISHED", "message": "券未上架，不能发放"})
+    user = db.scalar(select(User).where(
+        User.id == body.user_id,
+        User.id.in_(_store_user_ids(action_store_id)),
+    ))
+    if not user:
+        raise HTTPException(status_code=404, detail="顾客不存在")
+    existing = db.scalar(
+        select(sa_func.count()).select_from(UserCoupon).where(
+            UserCoupon.user_id == user.id,
+            UserCoupon.template_id == template.id,
+            UserCoupon.status == "unused",
+        )
+    ) or 0
+    if template.claim_limit and existing >= template.claim_limit:
+        raise HTTPException(status_code=409, detail={
+            "code": "COUPON_CLAIM_LIMIT_REACHED",
+            "message": f"该顾客已持有 {existing} 张未使用券，超过每人限领 {template.claim_limit} 张",
+        })
+    now = datetime.now(UTC)
+    coupon = UserCoupon(
+        user_id=user.id,
+        template_id=template.id,
+        status="unused",
+        claimed_at=now,
+        expire_at=now + timedelta(days=template.validity_days or 30),
+    )
+    db.add(coupon)
+    db.flush()
+    _audit(db, staff, "issue_customer_coupon", "user_coupon", str(coupon.id), {
+        "store_id": action_store_id,
+        "user_id": user.id,
+        "template_id": template.id,
+        "template_code": template.code,
+        "expire_at": coupon.expire_at.isoformat(),
+    })
+    db.commit()
+    return {
+        "id": coupon.id,
+        "user_id": user.id,
+        "template_id": template.id,
+        "template_name": template.name,
+        "expire_at": coupon.expire_at.isoformat(),
+    }
+
 # ──────────────────────────────────────────────────────
 # 0. 到店服务选单：独立于订单的顾客 DIY 需求
 # ──────────────────────────────────────────────────────

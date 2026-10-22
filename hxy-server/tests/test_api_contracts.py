@@ -15,6 +15,7 @@ from app.db.session import Base, get_db
 from app.main import app
 from app.models import (
     CouponTemplate,
+    UserCoupon,
     AuditLog,
     EventLog,
     Order,
@@ -1201,6 +1202,68 @@ class AdminV2ContractTests(unittest.TestCase):
             with self.SessionLocal() as db:
                 db.query(Order).filter(Order.order_no == "PHONE-AUDIT-1").delete()
                 db.query(AuditLog).filter(AuditLog.action == "view_customer_phone").delete()
+                db.query(User).filter(User.id == user_id).delete()
+                db.commit()
+
+    def test_store_manager_can_issue_published_coupon_to_store_customer(self):
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, self.staff_id)
+            user = User(openid="coupon-issue-user", phone="13600001234")
+            db.add(user)
+            db.flush()
+            db.add(Order(
+                store_id=staff.store_id,
+                user_id=user.id,
+                order_no="COUPON-ISSUE-1",
+                order_type="service",
+                status="paid",
+                pay_status="paid",
+                pay_amount_cents=9900,
+            ))
+            template = CouponTemplate(
+                store_id=staff.store_id,
+                code="coupon-issue-template",
+                name="测试发券",
+                amount_cents=500,
+                status="published",
+                claim_limit=1,
+            )
+            db.add(template)
+            db.commit()
+            user_id, template_id = user.id, template.id
+
+        try:
+            response = self.client.post(
+                f"/api/v1/admin/v2/coupons/{template_id}/issue",
+                json={"user_id": user_id},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["template_id"], template_id)
+            with self.SessionLocal() as db:
+                coupon = db.scalar(select(UserCoupon).where(
+                    UserCoupon.user_id == user_id,
+                    UserCoupon.template_id == template_id,
+                ))
+                self.assertIsNotNone(coupon)
+                self.assertEqual(coupon.status, "unused")
+                audit = db.scalar(select(AuditLog).where(
+                    AuditLog.action == "issue_customer_coupon",
+                    AuditLog.entity_id == str(coupon.id),
+                ))
+                self.assertIsNotNone(audit)
+
+            duplicate = self.client.post(
+                f"/api/v1/admin/v2/coupons/{template_id}/issue",
+                json={"user_id": user_id},
+            )
+            self.assertEqual(duplicate.status_code, 409, duplicate.text)
+            self.assertEqual(duplicate.json()["detail"]["code"], "COUPON_CLAIM_LIMIT_REACHED")
+        finally:
+            with self.SessionLocal() as db:
+                db.query(UserCoupon).filter(UserCoupon.template_id == template_id).delete()
+                db.query(CouponTemplate).filter(CouponTemplate.id == template_id).delete()
+                db.query(Order).filter(Order.order_no == "COUPON-ISSUE-1").delete()
+                db.query(AuditLog).filter(AuditLog.action == "issue_customer_coupon").delete()
                 db.query(User).filter(User.id == user_id).delete()
                 db.commit()
 
