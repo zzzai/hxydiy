@@ -19,7 +19,7 @@ from app.models.settlement import SettlementAdjustment
 from app.models.service_position_qr import ServicePositionQr
 from app.models.customer_profile import CustomerProfileRecord
 from app.models.customer_profile_state import CustomerProfileConsent, CustomerProfileCurrent
-from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
+from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest, TechnicianShift
 from app.models.media import MediaAsset
 from app.models.staff_access import StaffScopeAssignment
 from app.models.staff_external_identity import StaffExternalIdentity, StaffOAuthAttempt
@@ -44,7 +44,7 @@ __all__ = [
     "CustomerVerificationCode", "PageContent", "PageContentVersion", "BrowserInstance", "ServiceFeedback", "VisitFeedback", "CustomerExternalIdentity",
     "MembershipBenefitGrant", "MembershipCard", "CustomerTrustedDevice", "MembershipCode", "SettlementAdjustment", "ServicePositionQr",
     "CustomerProfileRecord", "CustomerProfileConsent", "CustomerProfileCurrent",
-    "TechnicianInvite", "TechnicianLeaveRequest",
+    "TechnicianInvite", "TechnicianLeaveRequest", "TechnicianShift",
     "MediaAsset",
     "StaffScopeAssignment",
     "StaffExternalIdentity", "StaffOAuthAttempt", "CustomerTagContribution",

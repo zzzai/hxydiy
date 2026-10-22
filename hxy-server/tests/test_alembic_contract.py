@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20261023_operational_exceptions"])
+        self.assertEqual(scripts.get_heads(), ["20261024_technician_shifts"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -93,6 +93,7 @@ class AlembicContractTests(unittest.TestCase):
             "staff_external_identities", "staff_oauth_attempts", "customer_tag_contributions",
             "page_content_versions",
             "operational_exceptions",
+            "technician_shifts",
         }
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
@@ -284,6 +285,7 @@ class AlembicContractTests(unittest.TestCase):
             "staff_external_identities", "staff_oauth_attempts", "customer_tag_contributions",
             "page_content_versions",
             "operational_exceptions",
+            "technician_shifts",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():

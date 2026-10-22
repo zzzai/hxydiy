@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Card, Dropdown, Input, Modal, Space, Table, Tag, Tooltip } from 'antd';
+import { App, Button, Card, DatePicker, Dropdown, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { CheckCircleOutlined, KeyOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, StopOutlined, UserSwitchOutlined } from '@ant-design/icons';
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
-import { approveTechnicianLeave, createTechnician, disableTechnicianLogin, getStaff, getTechnicianBoard, getTechnicianLeaveRequests, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin } from '../api';
+import { approveTechnicianLeave, createTechnician, disableTechnicianLogin, getStaff, getTechnicianBoard, getTechnicianLeaveRequests, getTechnicianShifts, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin, saveTechnicianShift } from '../api';
 import { canManageConfiguration, getStoreId } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
@@ -27,6 +28,27 @@ export default function TechsPage() {
   const [rejectNote, setRejectNote] = useState('');
   const [board, setBoard] = useState<any>();
   const [boardLoading, setBoardLoading] = useState(false);
+  const [weekStart, setWeekStart] = useState<Dayjs>(dayjs().startOf('week'));
+  const [shifts, setShifts] = useState<any[]>([]);
+  const [shiftLoading, setShiftLoading] = useState(false);
+
+  const loadShifts = async (start = weekStart) => {
+    setShiftLoading(true);
+    try {
+      const response = await getTechnicianShifts(start.format('YYYY-MM-DD'), start.add(6, 'day').format('YYYY-MM-DD'));
+      setShifts(response.data?.items || []);
+    } catch { /* API interceptor already presents the server error. */ }
+    finally { setShiftLoading(false); }
+  };
+
+  const changeShift = async (technicianId: number, workDate: string, shiftType: string) => {
+    try {
+      await saveTechnicianShift({ technician_id: technicianId, work_date: workDate, shift_type: shiftType });
+      await loadShifts();
+    } catch { /* API interceptor already presents the server error. */ }
+  };
+
+  useEffect(() => { if (canManage) void loadShifts(); }, [canManage, weekStart]);
 
   const loadBoard = async () => {
     setBoardLoading(true);
@@ -115,7 +137,44 @@ export default function TechsPage() {
     ...(canManage ? [{ title: '操作', key: 'actions', width: 72, fixed: 'right' as const, render: (_: unknown, record: any) => <Tooltip title="账号操作"><Dropdown trigger={['click']} menu={{ items: actionMenu(record) }}><Button type="text" aria-label={`操作${record.name}`} icon={<MoreOutlined />} /></Dropdown></Tooltip> }] : []),
   ];
 
+  const weekDays = Array.from({ length: 7 }, (_, index) => weekStart.add(index, 'day'));
+  const shiftsByKey = new Map(shifts.map((shift: any) => [`${shift.technician_id}:${shift.work_date}`, shift]));
+
   return <PageContainer title="技师管理" content="维护技师档案和登录账号生命周期。" extra={[<Button key="refresh" icon={<ReloadOutlined />} onClick={() => { actionRef.current?.reload(); void loadBoard(); }}>刷新</Button>, ...(canManage ? [<Button key="create" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建技师</Button>] : [])]}>
+    {canManage && <Card title="本周排班" style={{ marginBottom: 16 }} loading={shiftLoading} extra={<Space><DatePicker picker="week" value={weekStart} allowClear={false} onChange={(value) => { if (value) setWeekStart(value.startOf('week')); }} /><Button size="small" onClick={() => void loadShifts()}>刷新排班</Button></Space>}>
+      <Table
+        rowKey="id"
+        size="small"
+        pagination={false}
+        scroll={{ x: 900 }}
+        dataSource={board?.items || []}
+        locale={{ emptyText: '当前没有可排班技师' }}
+        columns={[
+          { title: '技师', dataIndex: 'name', width: 110, fixed: 'left' as const },
+          ...weekDays.map((date) => ({
+            title: date.format('MM-DD ddd'),
+            width: 108,
+            render: (_: any, technician: any) => {
+              const shift = shiftsByKey.get(`${technician.id}:${date.format('YYYY-MM-DD')}`);
+              return <Select
+                size="small"
+                style={{ width: 96 }}
+                placeholder="未排"
+                value={shift?.shift_type}
+                onChange={(value) => void changeShift(technician.id, date.format('YYYY-MM-DD'), value)}
+                options={[
+                  { value: 'full', label: '全天' },
+                  { value: 'morning', label: '早班' },
+                  { value: 'afternoon', label: '午班' },
+                  { value: 'evening', label: '晚班' },
+                  { value: 'off', label: '休息' },
+                ]}
+              />;
+            },
+          })),
+        ]}
+      />
+    </Card>}
     {canManage && <Card title={`今日在岗看板${board?.date ? ` · ${board.date}` : ''}`} style={{ marginBottom: 16 }} loading={boardLoading} extra={<Button size="small" onClick={() => void loadBoard()}>刷新在岗</Button>}>
       <Space size={8} wrap>
         <Tag color="green">在岗 {board?.summary?.on_duty ?? 0}</Tag>
