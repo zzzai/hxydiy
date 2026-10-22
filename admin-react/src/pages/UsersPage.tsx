@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox, Dropdown, Space } from 'antd';
+import { MoreOutlined, SearchOutlined } from '@ant-design/icons';
 import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
@@ -113,23 +113,25 @@ export default function UsersPage() {
           { title: '标签', width: 240, render: (_: any, r: any) => (r.tags || []).map((t: any) => <Tag key={t.id} color={t.color}>{t.name}</Tag>) },
           { title: '注册时间', dataIndex: 'created_at', width: 140, render: (v: string) => v?.slice(0, 10) },
           {
-            title: '操作', width: 170,
+            title: '操作', width: 240,
             render: (_: any, r: any) => (
-              <>
-                <Button size="small" onClick={() => openTag(r)}>添加标签</Button>
-                <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openRights(r)}>权益说明</Button>
-                {canCreateProfile && <Button size="small" style={{ marginLeft: 6 }} onClick={() => setProfileCustomerId(r.id)}>画像记录</Button>}
-                {r.has_store_membership && canManageDevice && <Button size="small" style={{ marginLeft: 6 }} onClick={() => void openDevice(r)}>可信设备</Button>}
-                {r.is_member ? <>
-                  <Button size="small" style={{ marginLeft: 6 }} onClick={() => openMembership(r, 'renew')}>续费</Button>
-                  <Popconfirm title="确认取消/退款？未使用年度赠送权益会作废，已核销权益不会回退。" onConfirm={() => openMembership(r, 'cancel')}>
-                    <Button size="small" danger style={{ marginLeft: 6 }}>取消/退款</Button>
-                  </Popconfirm>
-                </> : <>
-                  <Button size="small" type="primary" style={{ marginLeft: 6 }} onClick={() => openMembership(r, 'enroll')}>办理会员</Button>
-                  {r.membership_cycle_id && <Button size="small" style={{ marginLeft: 6 }} onClick={() => openMembership(r, 'recover')}>异常恢复</Button>}
-                </>}
-              </>
+              <Space size={4} wrap>
+                <Button size="small" onClick={() => openTag(r)}>标签</Button>
+                <Button size="small" onClick={() => void openRights(r)}>权益</Button>
+                {!r.is_member && <Button size="small" type="primary" onClick={() => openMembership(r, 'enroll')}>办理会员</Button>}
+                <Dropdown trigger={['click']} menu={{ items: [
+                  { key: 'profile', label: '画像记录', disabled: !canCreateProfile, onClick: () => setProfileCustomerId(r.id) },
+                  ...(r.has_store_membership && canManageDevice ? [{ key: 'device', label: '可信设备', onClick: () => void openDevice(r) }] : []),
+                  ...(r.is_member ? [
+                    { key: 'renew', label: '续费会员', onClick: () => openMembership(r, 'renew') },
+                    { key: 'cancel', label: '取消/退款', danger: true, onClick: () => openMembership(r, 'cancel') },
+                  ] : [
+                    ...(r.membership_cycle_id ? [{ key: 'recover', label: '异常恢复', onClick: () => openMembership(r, 'recover') }] : []),
+                  ]),
+                ] }}>
+                  <Button size="small" icon={<MoreOutlined />} aria-label="更多顾客操作" />
+                </Dropdown>
+              </Space>
             ),
           },
         ]}
