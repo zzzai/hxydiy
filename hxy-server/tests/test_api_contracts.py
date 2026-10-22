@@ -707,6 +707,21 @@ class AdminV2ContractTests(unittest.TestCase):
                     db.commit()
             self.__class__.current_staff_id = self.staff_id
 
+    def test_headquarters_admin_can_open_content_marketing_automation(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        headers = {"Authorization": f"Bearer {create_staff_token(self.headquarters_admin_id, 'admin')}"}
+        try:
+            for path in (
+                "/api/v1/admin/v2/page-content",
+                "/api/v1/admin/coupons",
+                "/api/v1/admin/v2/automations",
+                "/api/v1/admin/v2/automations/trigger-events",
+            ):
+                response = self.client.get(path, headers=headers)
+                self.assertEqual(response.status_code, 200, f"{path}: {response.text}")
+        finally:
+            self.__class__.current_staff_id = self.staff_id
+
     def test_store_manager_can_only_toggle_project_publication(self):
         self.__class__.current_staff_id = self.staff_id
         blocked = self.client.patch(
