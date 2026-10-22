@@ -18,6 +18,7 @@ from app.models import (
     AuditLog,
     EventLog,
     Order,
+    PageContent,
     PositionOccupancy,
     PriceBook,
     Product,
@@ -531,6 +532,27 @@ class AdminV2ContractTests(unittest.TestCase):
             )
             self.assertEqual(created.status_code, 200, created.text)
             created_id = created.json()["id"]
+            with self.SessionLocal() as db:
+                db.add_all([
+                    Room(
+                        store_id=created_id,
+                        code=f"milestone-room-{created_id}",
+                        name="里程碑服务位",
+                        room_type="sofa",
+                        is_service_position=True,
+                        is_space_container=False,
+                        operational_status="active",
+                    ),
+                    Project(
+                        store_id=created_id,
+                        code=f"milestone-project-{created_id}",
+                        category="bath",
+                        name="里程碑项目",
+                        publication_status="published",
+                    ),
+                    PageContent(store_id=created_id, page_key="diy-home", published=True),
+                ])
+                db.commit()
 
             updated = self.client.patch(
                 f"/api/v1/admin/v2/stores/{created_id}",
@@ -543,6 +565,9 @@ class AdminV2ContractTests(unittest.TestCase):
             self.__class__.current_staff_id = self.staff_id
             if created_id:
                 with self.SessionLocal() as db:
+                    db.query(PageContent).filter(PageContent.store_id == created_id).delete()
+                    db.query(Project).filter(Project.store_id == created_id).delete()
+                    db.query(Room).filter(Room.store_id == created_id).delete()
                     db.query(Store).filter(Store.id == created_id).delete()
                     db.commit()
 
@@ -556,11 +581,31 @@ class AdminV2ContractTests(unittest.TestCase):
                     name="生命周期测试门店",
                     city="安阳",
                     address="测试路 2 号",
+                    business_hours="10:00-22:00",
                     status="preparing",
                 )
                 user = User(openid="lifecycle-guard-user", phone="13800008888")
                 db.add_all([store, user])
                 db.flush()
+                db.add_all([
+                    Room(
+                        store_id=store.id,
+                        code=f"lifecycle-room-{store.id}",
+                        name="生命周期服务位",
+                        room_type="sofa",
+                        is_service_position=True,
+                        is_space_container=False,
+                        operational_status="active",
+                    ),
+                    Project(
+                        store_id=store.id,
+                        code=f"lifecycle-project-{store.id}",
+                        category="bath",
+                        name="生命周期项目",
+                        publication_status="published",
+                    ),
+                    PageContent(store_id=store.id, page_key="diy-home", published=True),
+                ])
                 order = Order(
                     store_id=store.id,
                     user_id=user.id,
@@ -615,10 +660,51 @@ class AdminV2ContractTests(unittest.TestCase):
                 if order_id:
                     db.query(Order).filter(Order.id == order_id).delete()
                 if store_id:
+                    db.query(PageContent).filter(PageContent.store_id == store_id).delete()
+                    db.query(Project).filter(Project.store_id == store_id).delete()
+                    db.query(Room).filter(Room.store_id == store_id).delete()
                     db.query(Store).filter(Store.id == store_id).delete()
                 if user_id:
                     db.query(User).filter(User.id == user_id).delete()
                 db.commit()
+            self.__class__.current_staff_id = self.staff_id
+
+    def test_store_open_requires_opening_readiness(self):
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        store_id = None
+        try:
+            with self.SessionLocal() as db:
+                store = Store(
+                    store_code="opening-check-store",
+                    name="未准备好门店",
+                    city="安阳",
+                    address="测试路 3 号",
+                    business_hours="10:00-22:00",
+                    status="preparing",
+                )
+                db.add(store)
+                db.commit()
+                store_id = store.id
+
+            check = self.client.get(f"/api/v1/admin/v2/stores/{store_id}/opening-check")
+            self.assertEqual(check.status_code, 200, check.text)
+            self.assertFalse(check.json()["ready"])
+            self.assertEqual(
+                {item["key"] for item in check.json()["checks"] if not item["passed"]},
+                {"service_position", "published_project", "published_page"},
+            )
+
+            blocked = self.client.patch(
+                f"/api/v1/admin/v2/stores/{store_id}",
+                json={"status": "open", "reason": "提前开业"},
+            )
+            self.assertEqual(blocked.status_code, 409, blocked.text)
+            self.assertEqual(blocked.json()["detail"]["code"], "STORE_OPENING_CHECK_FAILED")
+        finally:
+            if store_id:
+                with self.SessionLocal() as db:
+                    db.query(Store).filter(Store.id == store_id).delete()
+                    db.commit()
             self.__class__.current_staff_id = self.staff_id
 
     def test_store_manager_can_only_toggle_project_publication(self):

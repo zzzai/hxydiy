@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { App, Button, Tag } from 'antd';
+import { Alert, App, Button, List, Modal, Tag } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ModalForm, PageContainer, ProFormGroup, ProFormSelect, ProFormText, ProFormTextArea, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
-import { getStaff } from '../api';
+import { getStaff, getStoreOpeningCheck } from '../api';
 import { canManageStoreMasterData } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
@@ -15,6 +15,23 @@ export default function StoresPage() {
   const [actionRef] = useState<React.MutableRefObject<ActionType | undefined>>({ current: undefined });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Store | null>(null);
+  const [checking, setChecking] = useState<Store | null>(null);
+  const [openingCheck, setOpeningCheck] = useState<{ ready: boolean; checks: { key: string; label: string; passed: boolean; detail: string }[] }>();
+  const [checkLoading, setCheckLoading] = useState(false);
+
+  const showOpeningCheck = async (store: Store) => {
+    setChecking(store);
+    setOpeningCheck(undefined);
+    setCheckLoading(true);
+    try {
+      const response = await getStoreOpeningCheck(store.id);
+      setOpeningCheck(response.data);
+    } catch {
+      message.error('开业检查加载失败，请稍后重试');
+    } finally {
+      setCheckLoading(false);
+    }
+  };
 
   if (!canManage) {
     return <PageContainer title="门店主数据" content="仅总部管理员可以管理门店。"><div /></PageContainer>;
@@ -32,7 +49,10 @@ export default function StoresPage() {
       valueEnum: Object.fromEntries(STORE_STATUS_OPTIONS.map((item) => [item.value, { text: item.label }])),
       render: (_, record) => { const meta = getStoreStatusMeta(record.status); return <Tag color={meta.color}>{meta.label}</Tag>; },
     },
-    { title: '操作', valueType: 'option', width: 90, render: (_, record) => [<Button key="edit" type="link" onClick={() => { setEditing(record); setOpen(true); }}>编辑</Button>] },
+    { title: '操作', valueType: 'option', width: 190, render: (_, record) => [
+      <Button key="check" type="link" onClick={() => void showOpeningCheck(record)}>开业检查</Button>,
+      <Button key="edit" type="link" onClick={() => { setEditing(record); setOpen(true); }}>编辑</Button>,
+    ] },
   ];
 
   return (
@@ -69,12 +89,18 @@ export default function StoresPage() {
         initialValues={editing || { status: 'preparing' as StoreStatus }}
         onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) setEditing(null); }}
         onFinish={async (values) => {
-          if (editing) {
-            await refineDataProvider.update({ resource: resources.stores, id: editing.id, variables: values });
-            message.success('门店信息已更新');
-          } else {
-            await refineDataProvider.create({ resource: resources.stores, variables: values });
-            message.success('门店已创建');
+          try {
+            if (editing) {
+              await refineDataProvider.update({ resource: resources.stores, id: editing.id, variables: values });
+              message.success('门店信息已更新');
+            } else {
+              await refineDataProvider.create({ resource: resources.stores, variables: values });
+              message.success('门店已创建');
+            }
+          } catch (error: any) {
+            const detail = error?.response?.data?.detail;
+            message.error(detail?.message || '门店保存失败');
+            return false;
           }
           actionRef.current?.reload(); setEditing(null); return true;
         }}
@@ -97,6 +123,27 @@ export default function StoresPage() {
         />
         {editing && <ProFormTextArea name="reason" label="状态/资料变更原因" placeholder="例如：完成开业准备，进入试营业" maxLength={200} />}
       </ModalForm>
+      <Modal
+        title={`开业检查 · ${checking?.name || ''}`}
+        open={Boolean(checking)}
+        onCancel={() => setChecking(null)}
+        footer={<Button onClick={() => setChecking(null)}>关闭</Button>}
+        loading={checkLoading}
+      >
+        {openingCheck && <>
+          <Alert
+            type={openingCheck.ready ? 'success' : 'warning'}
+            showIcon
+            message={openingCheck.ready ? '已满足当前开业检查条件' : '还有未完成项，暂不能切换到营业中'}
+            style={{ marginBottom: 12 }}
+          />
+          <List
+            size="small"
+            dataSource={openingCheck.checks}
+            renderItem={(item) => <List.Item>{item.passed ? '✅' : '⚠️'} {item.label}：{item.detail}</List.Item>}
+          />
+        </>}
+      </Modal>
     </PageContainer>
   );
 }

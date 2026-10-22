@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Order, PositionOccupancy, Store
+from app.models import Order, PageContent, PositionOccupancy, Project, Room, Store
 
 OPEN_STORE_STATUSES = frozenset({"open", "trial_open"})
 STORE_STATUS_LABELS = {
@@ -54,6 +54,74 @@ def require_store_open(store: Store | None, action: str = "到店服务") -> Sto
             },
         )
     return store
+
+
+def build_store_opening_check(db: Session, store: Store) -> dict:
+    """Return the minimum operational readiness checklist for opening a store."""
+    position_count = db.scalar(
+        select(Room.id).where(
+            Room.store_id == store.id,
+            Room.is_service_position.is_(True),
+            Room.is_space_container.is_(False),
+            Room.operational_status == "active",
+        ).limit(1)
+    )
+    project_count = db.scalar(
+        select(Project.id).where(
+            Project.store_id == store.id,
+            Project.publication_status == "published",
+        ).limit(1)
+    )
+    page_published = db.scalar(
+        select(PageContent.id).where(
+            PageContent.store_id == store.id,
+            PageContent.page_key == "diy-home",
+            PageContent.published.is_(True),
+        ).limit(1)
+    )
+    checks = [
+        {
+            "key": "store_profile",
+            "label": "门店资料",
+            "passed": bool(store.name.strip() and store.address.strip() and store.business_hours.strip()),
+            "detail": "名称、地址和营业时间必须完整",
+        },
+        {
+            "key": "service_position",
+            "label": "服务位",
+            "passed": position_count is not None,
+            "detail": "至少一个启用的实际服务位",
+        },
+        {
+            "key": "published_project",
+            "label": "已发布项目",
+            "passed": project_count is not None,
+            "detail": "至少一个已发布服务项目",
+        },
+        {
+            "key": "published_page",
+            "label": "顾客页面",
+            "passed": page_published is not None,
+            "detail": "首页内容必须已发布",
+        },
+    ]
+    return {"ready": all(item["passed"] for item in checks), "checks": checks}
+
+
+def enforce_store_opening_check(db: Session, store: Store) -> None:
+    result = build_store_opening_check(db, store)
+    if result["ready"]:
+        return
+    failed = [item for item in result["checks"] if not item["passed"]]
+    raise HTTPException(
+        status_code=409,
+        detail={
+            "code": "STORE_OPENING_CHECK_FAILED",
+            "message": "门店尚未满足开业条件",
+            "failed_checks": failed,
+            "checks": result["checks"],
+        },
+    )
 
 
 def validate_store_transition(current: str, target: str) -> None:

@@ -41,7 +41,7 @@ from app.domain.customer_operational_tags import customer_tag_ids, tagged_user_i
 from app.domain.occupancy import audit_occupancy, occupancy_view, release_occupancy
 from app.domain.staff_capabilities import staff_capabilities
 from app.services.customer_profile_projection import rebuild_customer_profile_current
-from app.services.store_lifecycle import validate_store_can_close, validate_store_transition
+from app.services.store_lifecycle import build_store_opening_check, enforce_store_opening_check, validate_store_can_close, validate_store_transition
 from app.models.operations import Room, Technician
 from app.models.customer_tag_contribution import CustomerTagContribution
 from app.models.room_assign import RoomAssignment
@@ -368,13 +368,16 @@ def update_store_master_data(
     if not store:
         raise HTTPException(status_code=404, detail="门店不存在")
     changes = body.model_dump(exclude_unset=True, exclude={"reason"})
-    if "status" in changes and changes["status"] != store.status:
+    status_changed = "status" in changes and changes["status"] != store.status
+    if status_changed:
         validate_store_transition(store.status, changes["status"])
         if changes["status"] == "closed":
             validate_store_can_close(db, store.id)
     before = {field: getattr(store, field) for field in changes}
     for field, value in changes.items():
         setattr(store, field, value)
+    if status_changed and changes["status"] == "open":
+        enforce_store_opening_check(db, store)
     _audit(db, staff, "update_store", "store", str(store.id), {
         "before": before,
         "after": changes,
@@ -383,6 +386,20 @@ def update_store_master_data(
     db.commit()
     db.refresh(store)
     return _store_master_view(store)
+
+
+@router.get("/stores/{store_id}/opening-check")
+def store_opening_check(
+    store_id: int,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_headquarters_admin(staff)
+    store = db.get(Store, store_id)
+    if not store:
+        raise HTTPException(status_code=404, detail="门店不存在")
+    return {"store_id": store.id, "status": store.status, **build_store_opening_check(db, store)}
 
 
 @router.get("/brand/overview")

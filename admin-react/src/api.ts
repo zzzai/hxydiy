@@ -267,6 +267,7 @@ export const toggleCouponStatus = (id: number, status: string) =>
 export const getStoreMasterData = (params?: any) => client.get('/admin/v2/stores', { params });
 export const createStoreMasterData = (data: any) => client.post('/admin/v2/stores', data);
 export const updateStoreMasterData = (id: number, data: any) => client.patch(`/admin/v2/stores/${id}`, data);
+export const getStoreOpeningCheck = (id: number) => client.get(`/admin/v2/stores/${id}/opening-check`);
 export const getRooms = (params?: any) => client.get('/admin/v2/rooms', { params });
 export const createRoom = (data: any) => client.post('/admin/v2/rooms', data);
 export const deleteRoom = (id: number) => client.delete(`/admin/v2/rooms/${id}`);
