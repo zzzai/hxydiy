@@ -110,7 +110,7 @@ export default function TodayPage() {
         <Text strong style={{ fontSize: 16 }}>选单/订单对账</Text>
         {Number(reconciliation?.summary?.anomaly_count || 0) > 0 ? <Tag color="warning">{reconciliation?.summary?.anomaly_count} 条待核对</Tag> : <Tag color="green">近 30 天无异常</Tag>}
         <Text type="secondary">检查订单 {reconciliation?.summary?.orders_checked ?? 0} 条、选单 {reconciliation?.summary?.selections_checked ?? 0} 条</Text>
-        <Button type="link" style={{ paddingInline: 0 }} onClick={() => navigate('/orders')}>去结算页核对</Button>
+        <Button type="link" style={{ paddingInline: 0 }} onClick={() => navigate('/exceptions')}>查看异常队列</Button>
       </Space>
     </section>
     <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>在店服务流</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table<LiveVisit> rowKey="id" columns={columns} dataSource={board.visits} pagination={false} locale={{ emptyText: <Empty description="当前没有在店服务" /> }} scroll={{ x: 760 }} />}</section>

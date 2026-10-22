@@ -42,6 +42,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
       { path: '/orders', label: '结算记录', icon: 'ordered-list', roles: managementRoles, capability: 'view_store_operations' },
       { path: '/feedback', label: '顾客评价', icon: 'message', roles: managementRoles, capability: 'follow_up_reviews' },
       { path: '/analytics', label: '经营分析', icon: 'bar-chart', roles: managementRoles, capability: 'view_analytics' },
+      { path: '/exceptions', label: '异常处理', icon: 'warning', roles: managementRoles, capability: 'view_store_operations' },
       { path: '/audit-logs', label: '审计日志', icon: 'file-search', roles: managementRoles, capability: 'manage_store_resources', headquartersAccess: true },
     ],
   },

@@ -21,6 +21,7 @@ from app.models import (
     Order,
     PageContent,
     PageContentVersion,
+    OperationalException,
     PositionOccupancy,
     PriceBook,
     Product,
@@ -1361,6 +1362,34 @@ class AdminV2ContractTests(unittest.TestCase):
         body = response.json()
         self.assertGreater(body["summary"]["orders_checked"], 0)
         self.assertIn("missing_selection", body["summary"]["by_type"])
+
+    def test_reconciliation_sync_creates_and_resolves_exception_queue_items(self):
+        sync = self.client.post("/api/v1/admin/order-reconciliation/sync?days=30", headers=self.auth_headers)
+        self.assertEqual(sync.status_code, 200, sync.text)
+        body = sync.json()
+        self.assertGreater(body["anomaly_count"], 0)
+        self.assertGreater(body["created"], 0)
+
+        listing = self.client.get("/api/v1/admin/exceptions?status=open", headers=self.auth_headers)
+        self.assertEqual(listing.status_code, 200, listing.text)
+        items = listing.json()["items"]
+        self.assertTrue(items)
+        exception_id = items[0]["id"]
+
+        resolved = self.client.post(
+            f"/api/v1/admin/exceptions/{exception_id}/resolve",
+            headers=self.auth_headers,
+            json={"resolution_note": "已人工核对并修正关联"},
+        )
+        self.assertEqual(resolved.status_code, 200, resolved.text)
+        self.assertEqual(resolved.json()["status"], "resolved")
+        with self.SessionLocal() as db:
+            row = db.get(OperationalException, exception_id)
+            self.assertEqual(row.status, "resolved")
+            self.assertEqual(row.resolution_note, "已人工核对并修正关联")
+            db.query(OperationalException).filter(OperationalException.store_id == row.store_id).delete()
+            db.query(AuditLog).filter(AuditLog.action.in_(["sync_order_reconciliation", "resolve_operational_exception"])).delete()
+            db.commit()
 
     def test_store_staff_cannot_check_in_another_store_order(self):
         with self.SessionLocal() as db:
