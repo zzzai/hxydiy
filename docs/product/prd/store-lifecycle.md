@@ -135,7 +135,8 @@ draft → preparing → trial_open → open ⇄ suspended → closed
 - 已实现门店状态转换图：只允许 documented transitions，非法转换返回 `INVALID_STORE_TRANSITION`；
 - 已实现停业前检查：有未完成订单或活动服务位占用时禁止关闭，返回 `STORE_HAS_ACTIVE_BUSINESS`；
 - 门店编辑已记录 before/after 审计和变更原因；
-- 还没有开业检查清单（项目、页面、人员、服务位完整性）；
+- 已实现基础开业检查：门店资料、至少一个服务位、至少一个已发布项目、首页已发布；未通过禁止进入营业中；
+- 开业检查仍缺负责人/技师资质/价格/隐私文案检查；
 - 地址/营业时间变更无版本；
 - 暂停/停业的顾客端通知、预约处理仍未完成。
 
