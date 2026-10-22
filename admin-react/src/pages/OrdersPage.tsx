@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Card, Empty, Input, InputNumber, Modal, Select, Spin, Tag, message } from 'antd';
+import { Button, Card, Empty, Input, InputNumber, Modal, Select, Space, Spin, Tag, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getOrders, getStaff, registerRefundNote } from '../api';
 import { buildRefundNotePayload, makeIdempotencyKey } from '../operations';
@@ -91,11 +91,16 @@ export default function OrdersPage() {
        items.map((o: any) => (
         <Card key={o.id} size="small" style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ color: '#bbb', fontSize: 12 }}>{o.order_no}</span>
+            <Space size={6}>
+              <span style={{ color: '#bbb', fontSize: 12 }}>{o.order_no}</span>
+              {o.link_status === 'linked' && <Tag color="green">已关联选单</Tag>}
+              {o.link_status === 'missing' && <Tag color="orange">未关联选单</Tag>}
+            </Space>
             <Tag color={STATUS_MAP[o.status]?.color}>{STATUS_MAP[o.status]?.text || o.status}</Tag>
           </div>
           <div style={{ fontWeight: 600 }}>{(o.items || []).map((i: any) => i.name + ' ×' + i.quantity).join('、') || '-'}</div>
           <div style={{ color: '#999', fontSize: 12 }}>预约 {o.booking_date || '-'} {o.booking_time || ''} · ¥{(o.pay_amount_cents / 100).toFixed(2)} · {o.created_at?.slice(5, 16)}</div>
+          {o.selection_session_id && <div style={{ color: '#667369', fontSize: 12 }}>选单 {o.selection_session_id.slice(0, 8)} · 选单金额 ¥{((o.selection_total_cents || 0) / 100).toFixed(2)}</div>}
           {o.refund_status && <Tag color={o.refund_status === 'refunded' ? 'red' : 'orange'}>{o.refund_status === 'refunded' ? '已全额退款' : '已部分退款'}</Tag>}
           {staff?.role === 'admin' && o.pay_status === 'paid' && <Button size="small" danger onClick={() => openRefund(o)}>登记退款</Button>}
         </Card>

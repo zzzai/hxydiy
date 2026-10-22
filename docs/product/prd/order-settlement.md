@@ -182,8 +182,9 @@ pending_payment → paid → confirmed → in_service → pending_checkout → c
 
 ## 11. 当前实现差距
 
-- 桌面 Orders 页面仍提供确认/开始/结束，移动端只读，契约不一致；
-- `selection_sessions` 与订单总额未做统一对账；
+- 桌面 Orders 页面已改成只读结算列表，但后端仍保留 checkout/check-in/complete 等 legacy 动作接口，需要收口或加异常授权门；
+- 已实现 `selection_sessions.fulfillment_order_id` 一对一关联；结算列表展示选单号、选单金额和关联状态；
+- 仍缺金额/状态对账异常提示（例如选单金额与订单实付不一致）；
 - 结算列表已有标题/筛选，但缺详情、分页、状态全集和退款证据；
 - 加选确认链路未统一为变更记录；
 - 退款只有“登记线下退款”，没有审批和凭证模型；

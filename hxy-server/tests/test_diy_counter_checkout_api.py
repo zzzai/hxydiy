@@ -1390,6 +1390,9 @@ class DiyCounterCheckoutApiTests(unittest.TestCase):
         order_summary = next(item for item in orders.json()["items"] if item["id"] == order_id)
         self.assertEqual(order_summary["pay_status"], "paid")
         self.assertEqual(order_summary["refund_status"], "partially_refunded")
+        self.assertEqual(order_summary["link_status"], "linked")
+        self.assertIsNotNone(order_summary["selection_session_id"])
+        self.assertGreater(order_summary["selection_total_cents"], 0)
         with self.SessionLocal() as db:
             order = db.get(Order, order_id)
             refund_adjustment = db.scalar(select(adjustment_model).where(
