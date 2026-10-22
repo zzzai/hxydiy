@@ -31,6 +31,7 @@ from app.models import (
     User,
 )
 from app.models.operations import Room, Technician
+from app.models.scrm import AutomationLog, AutomationRule
 from app.models.room_assign import RoomAssignment
 from app.models.orders import ORDER_STATUSES
 
@@ -721,6 +722,33 @@ class AdminV2ContractTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200, f"{path}: {response.text}")
         finally:
             self.__class__.current_staff_id = self.staff_id
+
+    def test_automation_rule_logs_are_visible_and_scoped(self):
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, self.staff_id)
+            user = User(openid="automation-log-user", phone="13700001234")
+            db.add(user)
+            db.flush()
+            rule = AutomationRule(store_id=staff.store_id, name="日志测试规则", trigger_event="new_user")
+            db.add(rule)
+            db.flush()
+            db.add(AutomationLog(rule_id=rule.id, user_id=user.id, action_type="grant_coupon", success=False, error_message="库存不足"))
+            db.commit()
+            rule_id, user_id = rule.id, user.id
+        try:
+            response = self.client.get(f"/api/v1/admin/v2/automations/{rule_id}/logs")
+            self.assertEqual(response.status_code, 200, response.text)
+            body = response.json()
+            self.assertEqual(body["total"], 1)
+            self.assertEqual(body["items"][0]["customer"], "用户%d" % user_id)
+            self.assertFalse(body["items"][0]["success"])
+            self.assertEqual(body["items"][0]["error_message"], "库存不足")
+        finally:
+            with self.SessionLocal() as db:
+                db.query(AutomationLog).filter(AutomationLog.rule_id == rule_id).delete()
+                db.query(AutomationRule).filter(AutomationRule.id == rule_id).delete()
+                db.query(User).filter(User.id == user_id).delete()
+                db.commit()
 
     def test_store_manager_can_only_toggle_project_publication(self):
         self.__class__.current_staff_id = self.staff_id

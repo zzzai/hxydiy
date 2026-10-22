@@ -399,5 +399,7 @@ export const getAutomations = (storeId?: number) => client.get('/admin/v2/automa
 export const createAutomation = (data: any, storeId?: number) => client.post('/admin/v2/automations', data, { params: { store_id: storeId } });
 export const updateAutomation = (id: number, data: any, storeId?: number) => client.post(`/admin/v2/automations/${id}`, data, { params: { store_id: storeId } });
 export const deleteAutomationRule = (id: number, storeId?: number) => client.delete(`/admin/v2/automations/${id}`, { params: { store_id: storeId } });
+export const getAutomationLogs = (id: number, storeId?: number, page = 1, pageSize = 20) =>
+  client.get(`/admin/v2/automations/${id}/logs`, { params: { store_id: storeId, page, page_size: pageSize } });
 
 export { getToken, getStaff };

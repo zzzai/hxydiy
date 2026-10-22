@@ -5256,6 +5256,54 @@ def delete_automation(
     return {"ok": True}
 
 
+@router.get("/automations/{rule_id}/logs")
+def list_automation_logs(
+    rule_id: int,
+    store_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    action_store_id = _resolve_target_store_id(db, staff, store_id)
+    rule = db.scalar(select(AutomationRule).where(
+        AutomationRule.id == rule_id,
+        AutomationRule.store_id == action_store_id,
+    ))
+    if not rule:
+        raise HTTPException(404)
+    total = db.scalar(
+        select(sa_func.count()).select_from(AutomationLog).where(AutomationLog.rule_id == rule_id)
+    ) or 0
+    logs = list(db.scalars(
+        select(AutomationLog)
+        .where(AutomationLog.rule_id == rule_id)
+        .order_by(AutomationLog.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ))
+    user_ids = {log.user_id for log in logs if log.user_id}
+    users = {user.id: user for user in db.scalars(select(User).where(User.id.in_(user_ids)))} if user_ids else {}
+    return {
+        "items": [{
+            "id": log.id,
+            "user_id": log.user_id,
+            "customer": _customer_display_name(users[log.user_id]) if log.user_id in users else None,
+            "phone_masked": _masked_phone(users[log.user_id].phone) if log.user_id in users else None,
+            "action_type": log.action_type,
+            "action_detail": log.action_detail,
+            "success": log.success,
+            "error_message": log.error_message,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        } for log in logs],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 
 # ──────────────────────────────────────────────────────
 # 8.5 房间分配（技师+项目绑定）
