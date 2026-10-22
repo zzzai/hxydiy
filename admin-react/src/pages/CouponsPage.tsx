@@ -2,16 +2,18 @@ import { useState, useEffect } from 'react';
 import { App, Button, Table, Tag, Space, Modal, Form, Input, Select, InputNumber, Checkbox } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { getCoupons, createCoupon, toggleCouponStatus } from '../api';
+import StoreScopeSelect from '../components/StoreScopeSelect';
 
 export default function CouponsPage() {
   const { message } = App.useApp();
   const [data, setData] = useState<any[]>([]);
+  const [storeId, setStoreId] = useState<number>();
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
 
-  const load = async () => { setLoading(true); try { const r = await getCoupons(); setData(r.data?.items || []); } catch {} finally { setLoading(false); } };
-  useEffect(() => { load(); }, []);
+  const load = async () => { setLoading(true); try { const r = await getCoupons(storeId); setData(r.data?.items || []); } catch {} finally { setLoading(false); } };
+  useEffect(() => { load(); }, [storeId]);
 
   const onFinish = async (v: any) => {
     await createCoupon({
@@ -19,21 +21,21 @@ export default function CouponsPage() {
       min_spend_cents: Math.round((v.min_spend || 0) * 100),
       validity_days: v.validity_days || 30,
       status: 'published',
-    });
+    }, storeId);
     message.success('已创建并上架'); setOpen(false); form.resetFields(); load();
   };
 
   const toggle = async (id: number, current: string) => {
     const newStatus = current === 'published' ? 'draft' : 'published';
-    await toggleCouponStatus(id, newStatus);
+    await toggleCouponStatus(id, newStatus, storeId);
     message.success(newStatus === 'published' ? '已上架' : '已下架');
     load();
   };
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <span style={{ fontWeight: 600 }}>营销券配置</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Space size={12} wrap><span style={{ fontWeight: 600 }}>营销券配置</span><StoreScopeSelect value={storeId} onChange={setStoreId} /></Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建券</Button>
       </div>
       <Table dataSource={data} loading={loading} rowKey="id" size="small" pagination={false}

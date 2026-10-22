@@ -258,10 +258,10 @@ export const updateFeedbackFollowUp = (type: 'service_review' | 'visit_feedback'
   client.patch(`/admin/v2/feedback/${type}/${id}`, data);
 
 // Coupons
-export const getCoupons = () => client.get('/admin/coupons');
-export const createCoupon = (data: any) => client.post('/admin/coupons', data);
-export const toggleCouponStatus = (id: number, status: string) =>
-  client.post(`/admin/coupons/${id}`, { status });
+export const getCoupons = (storeId?: number) => client.get('/admin/coupons', { params: { store_id: storeId } });
+export const createCoupon = (data: any, storeId?: number) => client.post('/admin/coupons', data, { params: { store_id: storeId } });
+export const toggleCouponStatus = (id: number, status: string, storeId?: number) =>
+  client.post(`/admin/coupons/${id}`, { status }, { params: { store_id: storeId } });
 
 // Rooms
 export const getStoreMasterData = (params?: any) => client.get('/admin/v2/stores', { params });
@@ -355,8 +355,8 @@ export const publishCatalog = (projectId: number) => client.post(`/admin/v2/proj
 export const getCatalogVersions = (projectId: number) => client.get(`/admin/v2/projects/${projectId}/versions`);
 export const previewCatalogPrice = (projectId: number, data: { choice_ids: number[]; is_member: boolean; confirmed_at: string; store_timezone: string }) => client.post(`/admin/v2/projects/${projectId}/price-preview`, data);
 
-export const getPageContent = (pageKey = 'diy-home') => client.get('/admin/v2/page-content', { params: { page_key: pageKey } });
-export const updatePageContent = (pageKey: string, data: any) => client.put('/admin/v2/page-content', data, { params: { page_key: pageKey } });
+export const getPageContent = (pageKey = 'diy-home', storeId?: number) => client.get('/admin/v2/page-content', { params: { page_key: pageKey, store_id: storeId } });
+export const updatePageContent = (pageKey: string, data: any, storeId?: number) => client.put('/admin/v2/page-content', data, { params: { page_key: pageKey, store_id: storeId } });
 
 // Products
 export const getProductsAdmin = () => client.get('/admin/v2/products');
@@ -394,9 +394,9 @@ export const createSegment = (data: any) => client.post('/admin/v2/segments', da
 export const recountSegment = (id: number) => client.post(`/admin/v2/segments/${id}/recount`);
 
 // Automations
-export const getAutomations = () => client.get('/admin/v2/automations');
-export const createAutomation = (data: any) => client.post('/admin/v2/automations', data);
-export const updateAutomation = (id: number, data: any) => client.post(`/admin/v2/automations/${id}`, data);
-export const deleteAutomationRule = (id: number) => client.delete(`/admin/v2/automations/${id}`);
+export const getAutomations = (storeId?: number) => client.get('/admin/v2/automations', { params: { store_id: storeId } });
+export const createAutomation = (data: any, storeId?: number) => client.post('/admin/v2/automations', data, { params: { store_id: storeId } });
+export const updateAutomation = (id: number, data: any, storeId?: number) => client.post(`/admin/v2/automations/${id}`, data, { params: { store_id: storeId } });
+export const deleteAutomationRule = (id: number, storeId?: number) => client.delete(`/admin/v2/automations/${id}`, { params: { store_id: storeId } });
 
 export { getToken, getStaff };
