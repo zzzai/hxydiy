@@ -360,6 +360,8 @@ export const previewCatalogPrice = (projectId: number, data: { choice_ids: numbe
 
 export const getPageContent = (pageKey = 'diy-home', storeId?: number) => client.get('/admin/v2/page-content', { params: { page_key: pageKey, store_id: storeId } });
 export const updatePageContent = (pageKey: string, data: any, storeId?: number) => client.put('/admin/v2/page-content', data, { params: { page_key: pageKey, store_id: storeId } });
+export const getPageContentVersions = (pageKey = 'diy-home', storeId?: number) => client.get('/admin/v2/page-content/versions', { params: { page_key: pageKey, store_id: storeId } });
+export const rollbackPageContent = (versionId: number, pageKey = 'diy-home', storeId?: number) => client.post(`/admin/v2/page-content/versions/${versionId}/rollback`, {}, { params: { page_key: pageKey, store_id: storeId } });
 
 // Products
 export const getProductsAdmin = () => client.get('/admin/v2/products');

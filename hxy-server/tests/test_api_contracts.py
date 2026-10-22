@@ -20,6 +20,7 @@ from app.models import (
     EventLog,
     Order,
     PageContent,
+    PageContentVersion,
     PositionOccupancy,
     PriceBook,
     Product,
@@ -708,6 +709,69 @@ class AdminV2ContractTests(unittest.TestCase):
                     db.query(Store).filter(Store.id == store_id).delete()
                     db.commit()
             self.__class__.current_staff_id = self.staff_id
+
+    def test_page_content_publish_creates_versions_and_rolls_back(self):
+        page_key = "test-version-page"
+        payload = {
+            "title": "版本一",
+            "subtitle": "第一版",
+            "promo_banners": [],
+            "tea_options": [],
+            "coupon_prompt": {},
+            "brand_story": {},
+            "published": True,
+        }
+        try:
+            first = self.client.put(
+                "/api/v1/admin/v2/page-content",
+                params={"page_key": page_key},
+                json=payload,
+                headers=self.auth_headers,
+            )
+            self.assertEqual(first.status_code, 200, first.text)
+            versions = self.client.get(
+                "/api/v1/admin/v2/page-content/versions",
+                params={"page_key": page_key},
+                headers=self.auth_headers,
+            )
+            self.assertEqual(versions.status_code, 200, versions.text)
+            self.assertEqual(versions.json()["total"], 1)
+            first_version_id = versions.json()["items"][0]["id"]
+
+            second = self.client.put(
+                "/api/v1/admin/v2/page-content",
+                params={"page_key": page_key},
+                json={**payload, "title": "版本二", "subtitle": "第二版"},
+                headers=self.auth_headers,
+            )
+            self.assertEqual(second.status_code, 200, second.text)
+            versions = self.client.get(
+                "/api/v1/admin/v2/page-content/versions",
+                params={"page_key": page_key},
+                headers=self.auth_headers,
+            )
+            self.assertEqual(versions.json()["total"], 2)
+
+            rollback = self.client.post(
+                f"/api/v1/admin/v2/page-content/versions/{first_version_id}/rollback",
+                params={"page_key": page_key},
+                headers=self.auth_headers,
+            )
+            self.assertEqual(rollback.status_code, 200, rollback.text)
+            self.assertEqual(rollback.json()["title"], "版本一")
+            versions = self.client.get(
+                "/api/v1/admin/v2/page-content/versions",
+                params={"page_key": page_key},
+                headers=self.auth_headers,
+            )
+            self.assertEqual(versions.json()["total"], 3)
+            self.assertEqual(versions.json()["items"][0]["version_no"], 3)
+        finally:
+            with self.SessionLocal() as db:
+                db.query(PageContentVersion).filter(PageContentVersion.page_key == page_key).delete()
+                db.query(PageContent).filter(PageContent.page_key == page_key).delete()
+                db.query(AuditLog).filter(AuditLog.action.in_(["update_page_content", "rollback_page_content"])).delete()
+                db.commit()
 
     def test_headquarters_admin_can_open_content_marketing_automation(self):
         self.__class__.current_staff_id = self.headquarters_admin_id
