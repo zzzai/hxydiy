@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.catalog import get_project
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import Project
+from app.models import Project, Store
 from app.seed import PROJECTS, seed
 
 
@@ -95,6 +95,9 @@ def test_combined_care_choice_is_required_and_snapshot_names_selected_method():
     session_local = sessionmaker(bind=engine, expire_on_commit=False)
     with session_local() as db:
         seed(db)
+        store = db.scalar(select(Store))
+        store.status = "open"
+        db.commit()
         project = db.scalar(select(Project).where(Project.code == "hxy-cupping-scraping-1"))
         store_id, project_id = project.store_id, project.id
 

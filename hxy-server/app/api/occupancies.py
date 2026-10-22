@@ -35,6 +35,7 @@ from app.domain.occupancy_release_policy import (
 )
 from app.domain.selection_collaboration_tokens import create_collaboration_token
 from app.domain.visit_feedback_tokens import create_visit_feedback_token
+from app.services.store_lifecycle import require_store_open
 from app.models import AuditLog, BrowserInstance, PositionOccupancy, Room, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceLine, ServicePositionQr, Store, User
 from app.models.service import ServiceOrder, Visit
 from app.schemas.occupancy import (
@@ -367,8 +368,7 @@ def _create_entry(db: Session, body: EntrySessionIn, request: Request) -> tuple[
         raise HTTPException(status_code=403, detail={"code": "QR_BINDING_REQUIRED", "message": "请使用门店服务位二维码进入"})
     expire_stale_holds(db, body.store_id)
     store = db.get(Store, body.store_id)
-    if not store:
-        raise HTTPException(status_code=404, detail="门店不存在")
+    require_store_open(store, "扫码入座")
     room = db.scalar(select(Room).where(
         Room.store_id == body.store_id,
         Room.code == body.position_code,

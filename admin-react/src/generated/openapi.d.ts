@@ -6254,7 +6254,7 @@ export interface components {
              * @default preparing
              * @enum {string}
              */
-            status: "preparing" | "open" | "closed";
+            status: "preparing" | "trial_open" | "open" | "suspended" | "closed";
             /** Store Code */
             store_code: string;
         };
@@ -6271,7 +6271,7 @@ export interface components {
             /** Phone */
             phone?: string | null;
             /** Status */
-            status?: ("preparing" | "open" | "closed") | null;
+            status?: ("preparing" | "trial_open" | "open" | "suspended" | "closed") | null;
         };
         /** StoreOut */
         StoreOut: {

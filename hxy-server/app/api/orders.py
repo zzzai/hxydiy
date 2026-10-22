@@ -16,6 +16,7 @@ from app.db.session import get_db
 from app.models import Order, OrderEvent, PriceBook, Project, Store, User, UserCoupon
 from app.schemas.order import CreateOrderResponse, OrderCreate, OrderOut
 from app.core.customer_auth import current_customer_id
+from app.services.store_lifecycle import require_store_open
 from fastapi import Header
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -85,8 +86,10 @@ def create_order(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=401, detail="用户不存在")
-    if not db.get(Store, body.store_id):
+    store = db.get(Store, body.store_id)
+    if not store:
         raise HTTPException(status_code=404, detail="门店不存在")
+    require_store_open(store, "下单")
     if user.is_member and body.coupon_id:
         raise HTTPException(status_code=400, detail="会员已享会员价，无需领取优惠券")
 

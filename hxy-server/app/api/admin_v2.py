@@ -288,7 +288,7 @@ class StoreMasterIn(BaseModel):
     address: str
     phone: str = ""
     business_hours: str = ""
-    status: Literal["preparing", "open", "closed"] = "preparing"
+    status: Literal["preparing", "trial_open", "open", "suspended", "closed"] = "preparing"
 
 
 class StoreMasterPatch(BaseModel):
@@ -297,7 +297,7 @@ class StoreMasterPatch(BaseModel):
     address: str | None = None
     phone: str | None = None
     business_hours: str | None = None
-    status: Literal["preparing", "open", "closed"] | None = None
+    status: Literal["preparing", "trial_open", "open", "suspended", "closed"] | None = None
 
 
 def _store_master_view(store: Store) -> dict:
@@ -366,9 +366,10 @@ def update_store_master_data(
     if not store:
         raise HTTPException(status_code=404, detail="门店不存在")
     changes = body.model_dump(exclude_unset=True)
+    before = {field: getattr(store, field) for field in changes}
     for field, value in changes.items():
         setattr(store, field, value)
-    _audit(db, staff, "update_store", "store", str(store.id), changes)
+    _audit(db, staff, "update_store", "store", str(store.id), {"before": before, "after": changes})
     db.commit()
     db.refresh(store)
     return _store_master_view(store)
