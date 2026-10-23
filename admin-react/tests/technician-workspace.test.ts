@@ -98,10 +98,13 @@ test('快记文本仅引导服务交接，身体补充先选大部位再显示�
   assert.match(bodyMap, /showPreciseMap/);
 });
 
-test('技师端订单只读，不展示确认或结束动作', () => {
+test('技师端可确认接单并结束服务，动作带幂等键', () => {
   const today = readFileSync(new URL('../src/technician/TechnicianTodayPage.tsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(today, /confirmTechnicianService|finishTechnicianService|开始服务|服务结束/);
-  assert.match(today, /订单确认、开始和结束由系统自动处理/);
+  assert.match(today, /confirmTechnicianService/);
+  assert.match(today, /finishTechnicianService/);
+  assert.match(today, /确认接单并开始服务/);
+  assert.match(today, /结束服务/);
+  assert.match(today, /makeIdempotencyKey/);
 });
 
 test('活动订单不再从操作入口打开服务参考', () => {

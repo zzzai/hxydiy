@@ -141,15 +141,16 @@ export default function ManagerStorePage() {
     <header className="manager-page-heading">
       <div>
         <h1>门店工作台</h1>
-        <p>{view === 'tasks' ? '超时提醒与低分评价，订单由系统处理' : view === 'selections' ? '订单只读，确认与超时由系统处理' : view === 'positions' ? '按沙发、房间查看当前订单' : '查看本店评价并记录跟进'}</p>
+        <p>{view === 'tasks' ? '未分配、超时与评价跟进' : view === 'selections' ? '订单只读，确认与超时由系统处理' : view === 'positions' ? '按沙发、房间查看当前订单' : '查看本店评价并记录跟进'}</p>
       </div>
       <Button aria-label={view === 'tasks' ? '刷新待处理' : view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
     </header>
     {deepLinkError && <Alert type="warning" showIcon closable message={deepLinkError} onClose={() => setDeepLinkError('')} />}
     <div className="manager-workbench-summary" aria-label="今日门店概览">
       <span><strong>{workbench?.summary?.today_orders ?? '—'}</strong>今日订单</span>
+      <span><strong>{workbench?.summary?.waiting_service ?? '—'}</strong>待服务</span>
       <span><strong>{workbench?.summary?.in_service ?? '—'}</strong>服务中</span>
-      <span><strong>{workbench?.summary?.pending_checkout ?? '—'}</strong>待结账</span>
+      <span><strong>{workbench?.summary?.completed_today ?? '—'}</strong>已完成</span>
       <button type="button" className={workbench?.summary?.attention ? 'has-attention' : ''} onClick={() => setView('tasks')}><strong>{workbench?.summary?.attention ?? '—'}</strong>需处理</button>
     </div>
     <nav className="manager-view-tabs" aria-label="工作台视图">
@@ -159,7 +160,7 @@ export default function ManagerStorePage() {
       <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button>
     </nav>
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
-    {view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenOrders={() => { setStaleOnly(true); setPeriod('all'); setView('selections'); }} />
+    {view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenPositions={() => setView('positions')} onOpenOrders={() => { setStaleOnly(true); setPeriod('all'); setView('selections'); }} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
       : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} onFocusError={() => setDeepLinkError('评价链接已失效或无权查看，已返回评价列表。')} />
         : <>
@@ -186,7 +187,7 @@ export default function ManagerStorePage() {
         </dl>
         {Boolean(detail.timeline?.length) && <ol className="manager-order-timeline">{(detail.timeline || []).map(event => <li key={event.key}><span>{event.label}</span><time>{timeText(event.at)}</time></li>)}</ol>}
         {detail.feedback && <div className="manager-order-review"><div><Tag color={detail.feedback.rating <= 2 ? 'red' : 'gold'}>{detail.feedback.rating} 星</Tag><span>{detail.feedback.note || (detail.feedback.tags || []).join('、') || '顾客已评价'}</span></div><Button onClick={() => { setDetail(null); setReviewFocus({ type: 'service_review', id: detail.feedback!.id }); setView('reviews'); }}>查看评价详情</Button></div>}
-        <p className="manager-detail-note">订单仅供查看；无需店长确认或分配座位。</p>
+        <p className="manager-detail-note">订单仅供查看；服务状态以技师确认/结束为准。</p>
         <Typography.Text type="secondary">如需取消或调整，请联系门店负责人。</Typography.Text>
       </>}
     </Drawer>

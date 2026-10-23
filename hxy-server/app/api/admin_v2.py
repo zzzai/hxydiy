@@ -1745,6 +1745,20 @@ def manager_workbench(
         PositionOccupancy.store_id == store_id,
         PositionOccupancy.status == "in_service",
     )) or 0
+    waiting_service = db.scalar(select(sa_func.count()).select_from(PositionOccupancy).where(
+        PositionOccupancy.store_id == store_id,
+        PositionOccupancy.status == "waiting_service",
+    )) or 0
+    unassigned_service = db.scalar(select(sa_func.count()).select_from(PositionOccupancy).where(
+        PositionOccupancy.store_id == store_id,
+        PositionOccupancy.status == "waiting_service",
+        PositionOccupancy.serviced_by_technician_id.is_(None),
+    )) or 0
+    completed_today = db.scalar(select(sa_func.count()).select_from(PositionOccupancy).where(
+        PositionOccupancy.store_id == store_id,
+        PositionOccupancy.actual_service_end_at.isnot(None),
+        PositionOccupancy.actual_service_end_at >= day_start,
+    )) or 0
     stale_orders = db.scalar(select(sa_func.count()).select_from(SelectionSession).where(
         SelectionSession.store_id == store_id,
         SelectionSession.status.in_(("submitted", "confirmed")),
@@ -1774,6 +1788,8 @@ def manager_workbench(
         attention.append({"key": "stale_order", "label": "订单超过30分钟未开始", "count": stale_orders})
     if low_reviews:
         attention.append({"key": "low_review", "label": "低分评价待跟进", "count": low_reviews})
+    if unassigned_service:
+        attention.append({"key": "unassigned_service", "label": "待服务订单尚未分配技师", "count": unassigned_service})
     if open_exceptions:
         attention.append({"key": "exception_queue", "label": "异常待处理", "count": open_exceptions})
     if overdue_exceptions:
@@ -1783,7 +1799,10 @@ def manager_workbench(
         "generated_at": datetime.now(UTC).isoformat(),
         "summary": {
             "today_orders": today_orders,
+            "waiting_service": waiting_service,
+            "unassigned_service": unassigned_service,
             "in_service": in_service,
+            "completed_today": completed_today,
             "pending_checkout": pending_checkout,
             "open_exceptions": open_exceptions,
             "overdue_exceptions": overdue_exceptions,

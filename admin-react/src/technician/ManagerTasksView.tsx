@@ -9,9 +9,10 @@ function timeText(value?: string | null) {
 }
 
 /** 店长只处理门店评价与超时提醒；订单确认/超时由系统负责，不在端上操作。 */
-export default function ManagerTasksView({ onOpenReviews, onOpenOrders }: { onOpenReviews?: () => void; onOpenOrders?: () => void }) {
+export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPositions }: { onOpenReviews?: () => void; onOpenOrders?: () => void; onOpenPositions?: () => void }) {
   const [reviews, setReviews] = useState<Array<{ id: number; rating: number; note: string; created_at: string | null; customer_phone?: string | null }>>([]);
   const [staleOrders, setStaleOrders] = useState(0);
+  const [unassignedServices, setUnassignedServices] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -24,6 +25,7 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders }: { onOp
       ]);
       setReviews(Array.isArray(reviewsResponse.data?.items) ? reviewsResponse.data.items.filter((item: { rating: number }) => item.rating <= 2) : []);
       setStaleOrders(Number(workbenchResponse.data?.attention?.find((item: { key: string }) => item.key === 'stale_order')?.count) || 0);
+      setUnassignedServices(Number(workbenchResponse.data?.attention?.find((item: { key: string }) => item.key === 'unassigned_service')?.count) || 0);
       setError('');
     } catch {
       setError('待处理事项加载失败，请重试');
@@ -36,13 +38,18 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders }: { onOp
 
   return <section className="manager-tasks-view">
     <div className="manager-tasks-heading">
-      <div><h2>待处理 <span>{reviews.length + staleOrders}</span></h2><p>超时提醒和低分评价会进入这里；订单确认由系统处理。</p></div>
+      <div><h2>待处理 <span>{reviews.length + staleOrders + unassignedServices}</span></h2><p>漏单、未分配技师、超时和低分评价会进入这里。</p></div>
       <Button icon={<ReloadOutlined />} aria-label="刷新待处理" onClick={() => void load()} loading={loading} />
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
-    {loading && !reviews.length && !staleOrders ? <div className="manager-empty"><Spin size="small" /><span>正在加载待处理</span></div>
+    {loading && !reviews.length && !staleOrders && !unassignedServices ? <div className="manager-empty"><Spin size="small" /><span>正在加载待处理</span></div>
       : <>
-        {!reviews.length && !staleOrders && <div className="manager-empty"><strong>没有待处理</strong><span>超时提醒和低分评价会在这里出现</span></div>}
+        {!reviews.length && !staleOrders && !unassignedServices && <div className="manager-empty"><strong>没有待处理</strong><span>漏单、未分配技师、超时和低分评价会在这里出现</span></div>}
+        {unassignedServices > 0 && <div className="manager-task-stale">
+          <div className="manager-task-top"><span>待服务订单尚未分配技师</span><Tag color="orange">{unassignedServices}</Tag></div>
+          <p>由店长现场核对服务位并安排技师；安排后状态会同步到技师端。</p>
+          <Button block onClick={onOpenPositions}>查看服务位</Button>
+        </div>}
         {staleOrders > 0 && <div className="manager-task-stale">
           <div className="manager-task-top"><span>超过 30 分钟未开始</span><Tag color="red">{staleOrders}</Tag></div>
           <p>订单确认和超时由系统自动处理；可查看订单详情了解现场状态。</p>
