@@ -1448,6 +1448,11 @@ class AdminV2ContractTests(unittest.TestCase):
             self.assertEqual(listed["issued_count"], 1)
             self.assertEqual(listed["unused_count"], 1)
             self.assertEqual(listed["usage_rate_percent"], 0.0)
+            redemptions = self.client.get(f"/api/v1/admin/v2/coupons/{template_id}/redemptions", headers=self.auth_headers)
+            self.assertEqual(redemptions.status_code, 200, redemptions.text)
+            self.assertEqual(redemptions.json()["total"], 1)
+            self.assertEqual(redemptions.json()["items"][0]["status"], "unused")
+            self.assertEqual(redemptions.json()["items"][0]["phone_masked"], "136****1234")
 
             duplicate = self.client.post(
                 f"/api/v1/admin/v2/coupons/{template_id}/issue",
