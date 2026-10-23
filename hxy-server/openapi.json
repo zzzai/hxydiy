@@ -24904,6 +24904,16 @@
             }
           },
           {
+            "in": "query",
+            "name": "record_status",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "title": "Record Status",
+              "type": "string"
+            }
+          },
+          {
             "in": "header",
             "name": "authorization",
             "required": false,

@@ -14,6 +14,7 @@ from app.api.admin import _current_staff, create_staff_token, hash_password, nor
 from app.db.session import get_db
 from app.domain.membership_entitlements import has_membership
 from app.domain.technician_pricing import selection_pricing
+from app.domain.service_record_status import _supported_reference_version, _not_superseded_reference, own_record_exists, recordable_service
 from app.models import AuditLog, CustomerProfileRecord, CustomerTrustedDevice, MembershipCode, PositionOccupancy, SelectionSession, Staff, User
 from app.models.operations import Room, Technician
 from app.models.catalog import Addon, Project
@@ -713,26 +714,6 @@ def finish_service(occupancy_id: int, body: ActionIn, authorization: str | None 
     return _action(occupancy_id, "finish", body, authorization, db)
 
 
-def _supported_reference_version():
-    return or_(
-        and_(CustomerProfileRecord.schema_version == 7, CustomerProfileRecord.taxonomy_version == "service_handoff_v1"),
-        and_(CustomerProfileRecord.schema_version == 6, CustomerProfileRecord.taxonomy_version == 'service_record_v1'),
-        and_(CustomerProfileRecord.schema_version == 2, CustomerProfileRecord.taxonomy_version == "service_reference_v1"),
-        and_(CustomerProfileRecord.schema_version == 3, CustomerProfileRecord.taxonomy_version == "service_reference_v2"),
-        and_(CustomerProfileRecord.schema_version == 4, CustomerProfileRecord.taxonomy_version == "service_reference_v3"),
-        and_(CustomerProfileRecord.schema_version == 5, CustomerProfileRecord.taxonomy_version == "service_reference_v4"),
-    )
-
-
-def _not_superseded_reference():
-    correction = aliased(CustomerProfileRecord)
-    return ~exists().where(
-        correction.correction_of_id == CustomerProfileRecord.id,
-        correction.store_id == CustomerProfileRecord.store_id,
-        correction.user_id == CustomerProfileRecord.user_id,
-    )
-
-
 def _safe_reference_profile(value) -> dict:
     # Validate each container and leaf before label lookup. Historical JSON may
     # predate validation; never stringify arbitrary values or trust nested shape.
@@ -829,6 +810,7 @@ def service_history(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     profile_status: str = Query(default="all"),
+    record_status: str = Query(default="all"),
     authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -836,6 +818,8 @@ def service_history(
     if profile_status not in {"all", "confirmed", "pending"}:
         raise HTTPException(status_code=422, detail="画像状态筛选值不合法")
 
+    if record_status not in {"all", "pending", "completed"}:
+        raise HTTPException(status_code=422, detail="服务记录状态筛选值不合法")
     confirmed_profile = exists().where(
         CustomerProfileRecord.store_id == PositionOccupancy.store_id,
         CustomerProfileRecord.selection_session_id == PositionOccupancy.selection_session_id,
@@ -849,6 +833,10 @@ def service_history(
         PositionOccupancy.serviced_by_technician_id == technician.id,
         PositionOccupancy.actual_service_end_at.is_not(None),
     ]
+    if record_status == 'pending':
+        conditions.extend([~own_record_exists(staff.id), recordable_service(staff.id)])
+    elif record_status == 'completed':
+        conditions.append(own_record_exists(staff.id))
     if profile_status == "confirmed":
         conditions.append(confirmed_profile)
     elif profile_status == "pending":
@@ -909,7 +897,12 @@ def service_history(
                 0,
                 int((occupancy.actual_service_end_at - occupancy.actual_start_at).total_seconds() // 60),
             )
+        can_record = customer is not None and own_record is None and db.scalar(select(PositionOccupancy.id).where(
+            PositionOccupancy.id == occupancy.id, recordable_service(staff.id),
+        )) is not None
         items.append({
+            'record_task': {'selection_session_id': session.id, 'user_id': customer.id,
+                            'items': [{'name': name} for name in project_names], 'room_name': room.name} if can_record else None,
             "occupancy_id": occupancy.id,
             'own_record_id': own_record.id if own_record and own_record.schema_version in (6, 7) and own_record.created_by_staff_id == staff.id else None,
             'editable_record': {

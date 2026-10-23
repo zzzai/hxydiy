@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Empty, Pagination, Segmented, Spin, Tag, Typography } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Button, Checkbox, Empty, Pagination, Segmented, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getTechnicianServiceHistory } from '../api';
 import ProjectRecordHistory from './ProjectRecordHistory';
 import TechnicianProfileSheet from './TechnicianProfileSheet';
 import { technicianHistoryEmptyState, technicianHistorySummaryLines, technicianProfileStatusLabel, type TechnicianHistoryProfileSummary } from './technicianMobile';
+import { useTechnicianSession } from './useTechnicianSession';
 
 type ProfileStatus = 'all' | 'confirmed' | 'pending';
 type HistoryItem = {
   own_record_id?: number | null;
+  record_task?: { selection_session_id: string; user_id: number; items: Array<{ name: string }>; room_name: string } | null;
   editable_record?: {
     id: number;
     schema_version: number;
@@ -41,23 +43,29 @@ export default function TechnicianServiceHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [unassignedLegacyCount, setUnassignedLegacyCount] = useState(0);
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const current = useTechnicianSession();
+  const request = useRef(0);
 
   const load = useCallback(async () => {
+    if (!current()) return;
+    const version = ++request.current;
     setLoading(true);
     setFailed(false);
     try {
-      const response = await getTechnicianServiceHistory(page, 20, status);
+      const response = await getTechnicianServiceHistory(page, 20, status, pendingOnly ? 'pending' : 'all');
+      if (!current() || request.current !== version) return;
       setItems(response.data?.items || []);
       setTotal(response.data?.total || 0);
       setUnassignedLegacyCount(response.data?.unassigned_legacy_count || 0);
     } catch {
-      setFailed(true);
+      if (current() && request.current === version) setFailed(true);
     } finally {
-      setLoading(false);
+      if (current() && request.current === version) setLoading(false);
     }
-  }, [page, status]);
+  }, [page, status, pendingOnly, current]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); return () => { request.current++; }; }, [load]);
 
   const editV5Record = (item: HistoryItem) => {
     const record = item.editable_record;
@@ -77,9 +85,11 @@ export default function TechnicianServiceHistoryPage() {
       <Segmented block value={status} options={[{ label: '全部', value: 'all' }, { label: '未确认', value: 'pending' }, { label: '顾客已确认', value: 'confirmed' }]} onChange={(value) => { setPage(1); setStatus(value as ProfileStatus); }} />
       <Button aria-label="刷新本人历史" icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} />
     </div>
+    <Checkbox checked={pendingOnly} onChange={(event) => { setPage(1); setPendingOnly(event.target.checked); }}>只看待填写</Checkbox>
     {failed ? <Alert type="error" showIcon message="本人历史加载失败" description="请检查网络后重试。" action={<Button size="small" onClick={() => void load()}>重试</Button>} />
       : loading && !items.length ? <div className="technician-loading"><Spin /></div>
         : !items.length ? (() => {
+          if (pendingOnly) return <div className="technician-empty-state"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选下没有待填写的服务记录" /></div>;
           const emptyState = technicianHistoryEmptyState(status, unassignedLegacyCount);
           if (emptyState === 'legacy') return <div className="technician-empty-state"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="旧数据未关联" /><Typography.Paragraph type="secondary">有 {unassignedLegacyCount} 条本店已结束旧服务无法确认服务技师，不会猜测归入本人历史。</Typography.Paragraph></div>;
           if (emptyState === 'filtered') return <div className="technician-empty-state"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={status === 'confirmed' ? '当前筛选下尚无顾客已确认记录' : '当前筛选下尚无未确认服务'} /></div>;
@@ -95,6 +105,7 @@ export default function TechnicianServiceHistoryPage() {
               {item.own_record_id && <Button onClick={()=>setRecordId(item.own_record_id!)}>查看记录与更正</Button>}
               {item.editable_record?.schema_version === 5 && <Button onClick={() => editV5Record(item)}>更正本次记录</Button>}
               <Typography.Paragraph className="technician-history-summary">{technicianHistorySummaryLines(item.own_record_summary || item.profile_summary).join(' · ') || (item.record_completed ? '本次记录已保存' : '本次尚未记录')}</Typography.Paragraph>
+              {!item.record_completed && item.record_task && <Button type="primary" onClick={() => { if (current()) setEditTask(item.record_task); }}>补填服务记录</Button>}
             </div>
           </article>)}</div>
           {total > 20 && <Pagination current={page} pageSize={20} total={total} showSizeChanger={false} onChange={setPage} />}

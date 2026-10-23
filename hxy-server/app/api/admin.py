@@ -1132,7 +1132,9 @@ def list_operational_exceptions(
     _require_manager_staff(staff)
     store_id = _staff_store_id(staff)
     query = select(OperationalException).where(OperationalException.store_id == store_id)
-    if status:
+    if status == "unresolved":
+        query = query.where(OperationalException.status.in_(("open", "acknowledged")))
+    elif status:
         query = query.where(OperationalException.status == status)
     rows = list(db.scalars(query.order_by(OperationalException.id.desc()).limit(200)))
     staff_ids = {row.assigned_staff_id for row in rows if row.assigned_staff_id}
@@ -1204,11 +1206,15 @@ def acknowledge_operational_exception(
     staff = _current_staff(authorization, db)
     _require_manager_staff(staff)
     store_id = _staff_store_id(staff)
-    row = db.get(OperationalException, exception_id)
+    row = db.scalar(select(OperationalException).where(
+        OperationalException.id == exception_id, OperationalException.store_id == store_id,
+    ).with_for_update().execution_options(populate_existing=True))
     if not row or row.store_id != store_id:
         raise HTTPException(status_code=404, detail="异常记录不存在")
     if row.status == "resolved":
         raise HTTPException(status_code=409, detail="异常已处理")
+    if row.status == "acknowledged":
+        return {"id": row.id, "status": row.status, "acknowledged_at": _summary_utc(row.acknowledged_at).isoformat() if row.acknowledged_at else None}
     row.status = "acknowledged"
     row.acknowledged_at = datetime.now(timezone.utc)
     if row.assigned_staff_id is None:

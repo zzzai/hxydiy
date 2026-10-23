@@ -30,6 +30,7 @@ from app.core.config import settings
 from app.api.admin import _current_staff, _summary_utc, hash_password, normalize_staff_role
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
+from app.domain.service_record_status import pending_record_summary
 from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, VisitFeedback, ServiceLine, PageContent, PageContentVersion,
@@ -1775,15 +1776,18 @@ def manager_workbench(
     )) or 0
     open_exceptions = db.scalar(select(sa_func.count()).select_from(OperationalException).where(
         OperationalException.store_id == store_id,
-        OperationalException.status == "open",
+        OperationalException.status.in_(("open", "acknowledged")),
     )) or 0
     overdue_exceptions = db.scalar(select(sa_func.count()).select_from(OperationalException).where(
         OperationalException.store_id == store_id,
-        OperationalException.status == "open",
+        OperationalException.status.in_(("open", "acknowledged")),
         OperationalException.due_at.isnot(None),
         OperationalException.due_at < datetime.now(UTC),
     )) or 0
+    record_follow_up = pending_record_summary(db, store_id, datetime.now(UTC))
     attention = []
+    if record_follow_up['pending_count']:
+        attention.append({'key': 'record_pending', 'label': '近30天服务记录待补填', 'count': record_follow_up['pending_count']})
     if stale_orders:
         attention.append({"key": "stale_order", "label": "订单超过30分钟未开始", "count": stale_orders})
     if low_reviews:
@@ -1797,6 +1801,7 @@ def manager_workbench(
     return {
         "store_id": store_id,
         "generated_at": datetime.now(UTC).isoformat(),
+        "record_follow_up": record_follow_up,
         "summary": {
             "today_orders": today_orders,
             "waiting_service": waiting_service,
@@ -1806,7 +1811,7 @@ def manager_workbench(
             "pending_checkout": pending_checkout,
             "open_exceptions": open_exceptions,
             "overdue_exceptions": overdue_exceptions,
-            "attention": sum(int(item["count"]) for item in attention),
+            "attention": sum(int(item["count"]) for item in attention if item["key"] != "exception_overdue"),
         },
         "attention": attention,
     }

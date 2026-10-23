@@ -16260,6 +16260,7 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 profile_status?: string;
+                record_status?: string;
             };
             header?: {
                 authorization?: string | null;

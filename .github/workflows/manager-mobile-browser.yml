@@ -13,6 +13,7 @@ on:
       - 'admin-react/src/wecomSession.ts'
       - 'admin-react/src/workspaceLogin.ts'
       - 'admin-react/tests/manager-mobile*'
+      - 'admin-react/tests/mobile-closeout*'
       - 'admin-react/tests/manager-positions*'
       - 'admin-react/package*.json'
       - '.github/workflows/manager-mobile-browser.yml'
@@ -65,6 +66,7 @@ jobs:
           if [[ "$ready" != true ]]; then echo "Isolated preview failed to start"; exit 1; fi
           cd ..
           timeout 300s node admin-react/tests/manager-mobile.browser.cjs
+          timeout 120s node admin-react/tests/mobile-closeout.browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -72,5 +74,7 @@ jobs:
           path: |
             output/playwright/manager-mobile/${{ github.event.pull_request.head.sha }}/report.json
             output/playwright/manager-mobile/${{ github.event.pull_request.head.sha }}/*.png
+            output/playwright/mobile-closeout/report.json
+            output/playwright/mobile-closeout/*.png
           if-no-files-found: error
           retention-days: 7
