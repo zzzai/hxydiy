@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox, Dropdown, Space } from 'antd';
 import { MoreOutlined, SearchOutlined } from '@ant-design/icons';
-import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer, exportCustomers } from '../api';
+import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer, exportCustomers, getCustomerExports } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 import { getMembershipEntitlements } from '../api';
@@ -13,6 +13,9 @@ export default function UsersPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportRows, setExportRows] = useState<any[]>([]);
+  const [exportLoading, setExportLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState<number | undefined>();
   const [memberFilter, setMemberFilter] = useState<string>('');
@@ -68,6 +71,15 @@ export default function UsersPage() {
       message.success('顾客列表已导出，手机号已脱敏');
     } catch { message.error('导出失败，请稍后重试'); }
     finally { setExporting(false); }
+  };
+
+  const openExportHistory = async () => {
+    setExportOpen(true); setExportLoading(true);
+    try {
+      const response = await getCustomerExports();
+      setExportRows(response.data?.items || []);
+    } catch { message.error('导出记录加载失败'); }
+    finally { setExportLoading(false); }
   };
 
   useEffect(() => { load(); }, [tagFilter, memberFilter]);
@@ -157,7 +169,10 @@ export default function UsersPage() {
           <h2>顾客列表</h2>
           <div className="page-kicker">查找顾客、维护运营标签与会员权益；敏感操作会记录审计</div>
         </div>
-        <Button loading={exporting} onClick={() => void handleExport()}>导出顾客（脱敏）</Button>
+        <Space>
+          <Button onClick={() => void openExportHistory()}>导出记录</Button>
+          <Button loading={exporting} onClick={() => void handleExport()}>导出顾客（脱敏）</Button>
+        </Space>
       </div>
       <div className="users-filter-row">
         <Input aria-label="搜索昵称或手机号" prefix={<SearchOutlined />} placeholder="搜索昵称或手机号" value={search} onChange={e => setSearch(e.target.value)} onPressEnter={() => load()} style={{ width: 220 }} />
@@ -256,6 +271,23 @@ export default function UsersPage() {
           }))}
         />
         <p style={{ color: 'var(--hxy-text-secondary)', fontSize: 12, marginBottom: 0, marginTop: 12 }}>发券会记录审计；每人限领按券模板配置执行。</p>
+      </Modal>
+      <Modal title="顾客导出记录" open={exportOpen} onCancel={() => setExportOpen(false)} footer={<Button onClick={() => setExportOpen(false)}>关闭</Button>} width={720}>
+        <Table
+          rowKey="id"
+          size="small"
+          loading={exportLoading}
+          dataSource={exportRows}
+          pagination={false}
+          locale={{ emptyText: '还没有导出记录' }}
+          columns={[
+            { title: '导出时间', dataIndex: 'created_at', width: 170, render: (value: string) => value?.slice(0, 19).replace('T', ' ') || '-' },
+            { title: '操作人', dataIndex: 'actor', width: 120 },
+            { title: '行数', dataIndex: 'row_count', width: 80, align: 'right' as const },
+            { title: '筛选', render: (_: any, row: any) => <span style={{ color: 'var(--hxy-text-secondary)' }}>{row.search ? '有搜索 · ' : ''}{row.tag_id ? `标签 ${row.tag_id} · ` : ''}{row.is_member === true ? '会员' : row.is_member === false ? '非会员' : '全部'}</span> },
+            { title: '手机号', dataIndex: 'phone_mode', width: 90, render: () => <Tag>脱敏</Tag> },
+          ]}
+        />
       </Modal>
     </div>
   );

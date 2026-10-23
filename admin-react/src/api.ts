@@ -389,6 +389,7 @@ export const deleteTag = (id: number) => client.delete(`/admin/v2/tags/${id}`);
 // Users
 export const getUsers = (params?: any) => client.get('/admin/v2/users', { params });
 export const exportCustomers = (params?: any) => client.get('/admin/v2/customers/export', { params, responseType: 'blob' });
+export const getCustomerExports = () => client.get('/admin/v2/customer-exports');
 export const getMembershipEntitlements = (userId: number, storeId?: number) => client.get<MembershipExplanation>(`/admin/v2/users/${userId}/membership-entitlements`, { params: { store_id: storeId } });
 export const getCustomerTrustedDevice = (userId: number) => client.get(`/admin/v2/users/${userId}/trusted-device`);
 export const getCustomerPhone = (userId: number) => client.get(`/admin/v2/users/${userId}/phone`);
