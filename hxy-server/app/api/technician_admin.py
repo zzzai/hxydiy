@@ -345,6 +345,86 @@ def list_technician_shifts(
     }
 
 
+def _shift_hours(start_time: str | None, end_time: str | None, shift_type: str) -> float:
+    if shift_type == "off" or not start_time or not end_time:
+        return 0.0
+    try:
+        start_hour, start_minute = (int(part) for part in start_time.split(":")[:2])
+        end_hour, end_minute = (int(part) for part in end_time.split(":")[:2])
+    except (TypeError, ValueError):
+        return 0.0
+    start = start_hour * 60 + start_minute
+    end = end_hour * 60 + end_minute
+    if end <= start:
+        end += 24 * 60
+    return round((end - start) / 60, 2)
+
+
+@router.get("/technician-hours")
+def technician_hours(
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Weekly shift-hour summary per technician, including approved leave days."""
+    admin = require_admin(authorization, db)
+    store_id = _staff_store_id(admin)
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    try:
+        range_start = date_type.fromisoformat(start_date) if start_date else today - timedelta(days=today.weekday())
+        range_end = date_type.fromisoformat(end_date) if end_date else range_start + timedelta(days=6)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="日期格式应为 YYYY-MM-DD")
+    if range_end < range_start or (range_end - range_start).days > 62:
+        raise HTTPException(status_code=400, detail="统计日期范围不合法")
+    technicians = list(db.scalars(select(Technician).where(Technician.store_id == store_id).order_by(Technician.id)))
+    shifts = list(db.scalars(select(TechnicianShift).where(
+        TechnicianShift.store_id == store_id,
+        TechnicianShift.work_date >= range_start,
+        TechnicianShift.work_date <= range_end,
+    )))
+    leaves = list(db.scalars(select(TechnicianLeaveRequest).where(
+        TechnicianLeaveRequest.store_id == store_id,
+        TechnicianLeaveRequest.status == "approved",
+        TechnicianLeaveRequest.start_date <= range_end,
+        TechnicianLeaveRequest.end_date >= range_start,
+    )))
+    leave_days: dict[int, set[date_type]] = {}
+    for leave in leaves:
+        start = max(leave.start_date, range_start)
+        end = min(leave.end_date, range_end)
+        cursor = start
+        while cursor <= end:
+            leave_days.setdefault(leave.technician_id, set()).add(cursor)
+            cursor += timedelta(days=1)
+    shifts_by_tech: dict[int, list[TechnicianShift]] = {}
+    for shift in shifts:
+        shifts_by_tech.setdefault(shift.technician_id, []).append(shift)
+    items = []
+    total_hours = 0.0
+    for technician in technicians:
+        tech_shifts = shifts_by_tech.get(technician.id, [])
+        hours = round(sum(_shift_hours(shift.start_time, shift.end_time, shift.shift_type) for shift in tech_shifts), 2)
+        total_hours += hours
+        items.append({
+            "technician_id": technician.id,
+            "name": technician.name,
+            "code": technician.code,
+            "status": technician.status,
+            "shift_days": len([shift for shift in tech_shifts if shift.shift_type != "off"]),
+            "off_days": len([shift for shift in tech_shifts if shift.shift_type == "off"]),
+            "leave_days": len(leave_days.get(technician.id, set())),
+            "hours": hours,
+        })
+    return {
+        "start_date": range_start.isoformat(),
+        "end_date": range_end.isoformat(),
+        "summary": {"technicians": len(items), "total_hours": round(total_hours, 2)},
+        "items": sorted(items, key=lambda item: item["hours"], reverse=True),
+    }
+
+
 @router.put("/technician-shifts")
 def upsert_technician_shift(
     body: dict | None = None,
