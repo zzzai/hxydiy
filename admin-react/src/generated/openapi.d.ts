@@ -3778,6 +3778,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/technician/my-shifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Shifts
+         * @description Read-only personal shift list for the technician mobile app.
+         */
+        get: operations["my_shifts_api_v1_technician_my_shifts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/technician/my-tasks": {
         parameters: {
             query?: never;
@@ -15590,6 +15610,41 @@ export interface operations {
     membership_verification_selections_api_v1_technician_membership_verification_selections_get: {
         parameters: {
             query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_shifts_api_v1_technician_my_shifts_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
             header?: {
                 authorization?: string | null;
             };

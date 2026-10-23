@@ -69,6 +69,7 @@ export const selectStaffWorkspace = (assignmentId: number, selectorToken: string
   );
 
 export const getTechnicianMe = () => client.get('/technician/me');
+export const getMyShifts = (days = 14) => client.get('/technician/my-shifts', { params: { days } });
 export const getTechnicianTasks = () => client.get('/technician/tasks');
 export const getTechnicianMyTasks = () => client.get<{ items: TechnicianCustomerTask[] }>('/technician/my-tasks');
 const customerPath = (id: number, section: string) => `/technician/occupancies/${id}/customer-${section}`;

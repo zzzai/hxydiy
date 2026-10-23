@@ -2,6 +2,7 @@ import hashlib
 import json
 import secrets
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -17,7 +18,7 @@ from app.models import AuditLog, CustomerProfileRecord, CustomerTrustedDevice, M
 from app.models.operations import Room, Technician
 from app.models.catalog import Addon, Project
 from app.models.service import StateTransition
-from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest
+from app.models.technician_portal import TechnicianInvite, TechnicianLeaveRequest, TechnicianShift
 from app.schemas.service_record import ProjectServiceRecord, safe_service_lines
 from app.schemas.service_handoff import safe_handoff_lines
 
@@ -207,6 +208,37 @@ def activate(body: ActivateIn, db: Session = Depends(get_db)) -> dict:
 def me(authorization: str | None = Header(None), db: Session = Depends(get_db)) -> dict:
     staff, technician = current_technician(authorization, db)
     return {"staff": {"id": staff.id, "name": staff.name, "username": staff.username, "role": "technician", "status": staff.status, "store_id": staff.store_id, "technician_id": technician.id}, "technician": {"id": technician.id, "name": technician.name, "code": technician.code, "level": technician.level, "skills": technician.skills, "status": technician.status}}
+
+
+@router.get("/my-shifts")
+def my_shifts(
+    days: int = Query(14, ge=1, le=62),
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Read-only personal shift list for the technician mobile app."""
+    _staff, technician = current_technician(authorization, db)
+    start = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    end = start + timedelta(days=days - 1)
+    rows = list(db.scalars(select(TechnicianShift).where(
+        TechnicianShift.technician_id == technician.id,
+        TechnicianShift.work_date >= start,
+        TechnicianShift.work_date <= end,
+    ).order_by(TechnicianShift.work_date)))
+    labels = {"off": "休息", "full": "全天", "morning": "早班", "afternoon": "午班", "evening": "晚班", "custom": "自定义"}
+    return {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+        "items": [{
+            "id": row.id,
+            "work_date": row.work_date.isoformat(),
+            "shift_type": row.shift_type,
+            "shift_label": labels.get(row.shift_type, row.shift_type),
+            "start_time": row.start_time,
+            "end_time": row.end_time,
+            "note": row.note,
+        } for row in rows],
+    }
 
 
 @router.get("/tasks")

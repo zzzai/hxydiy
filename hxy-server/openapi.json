@@ -23698,6 +23698,70 @@
         ]
       }
     },
+    "/api/v1/technician/my-shifts": {
+      "get": {
+        "description": "Read-only personal shift list for the technician mobile app.",
+        "operationId": "my_shifts_api_v1_technician_my_shifts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 62,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response My Shifts Api V1 Technician My Shifts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "My Shifts",
+        "tags": [
+          "technician"
+        ]
+      }
+    },
     "/api/v1/technician/my-tasks": {
       "get": {
         "operationId": "my_tasks_api_v1_technician_my_tasks_get",

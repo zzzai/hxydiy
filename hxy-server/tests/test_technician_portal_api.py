@@ -11,6 +11,7 @@ from app.main import app
 from app.models import AuditLog, CustomerProfileRecord, Order, PositionOccupancy, SelectionSession, Staff, Store, User, Project, PriceBook
 from app.models.operations import Room, Technician
 from app.models.service import ServiceAssignment, ServiceOrder, Visit
+from app.models.technician_portal import TechnicianShift
 
 
 class TestTechnicianPortalApi:
@@ -710,3 +711,36 @@ class TestTechnicianPortalApi:
         assert response.json()["detail"]["code"] == "POSITION_OCCUPANCY_CONFLICT"
         with self.SessionLocal() as db:
             assert db.get(PositionOccupancy, first_id).status == "waiting_service"
+
+    def test_technician_can_read_own_upcoming_shifts(self):
+        with self.SessionLocal() as db:
+            staff = Staff(
+                username="tech-shift-reader",
+                password_hash=hash_password("tech-pass"),
+                name="排班技师",
+                role="technician",
+                status="active",
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+            )
+            db.add(staff)
+            db.flush()
+            shift_date = date.today() + timedelta(days=1)
+            db.add(TechnicianShift(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                work_date=shift_date,
+                shift_type="morning",
+                start_time="09:00",
+                end_time="13:00",
+            ))
+            db.commit()
+            staff_id = staff.id
+
+        headers = {"Authorization": f"Bearer {create_staff_token(staff_id, 'technician')}"}
+        response = self.client.get("/api/v1/technician/my-shifts", headers=headers)
+        assert response.status_code == 200, response.text
+        items = response.json()["items"]
+        assert items[0]["work_date"] == shift_date.isoformat()
+        assert items[0]["shift_label"] == "早班"
+        assert items[0]["start_time"] == "09:00"
