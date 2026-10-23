@@ -4124,6 +4124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/visit-feedback/store-entry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enter Store Visit Feedback */
+        post: operations["enter_store_visit_feedback_api_v1_visit_feedback_store_entry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wechat/jssdk-config": {
         parameters: {
             query?: never;
@@ -6778,6 +6795,20 @@ export interface components {
             status: string;
             /** Store Code */
             store_code: string;
+        };
+        /** StoreVisitFeedbackEntryIn */
+        StoreVisitFeedbackEntryIn: {
+            /** Store Id */
+            store_id: number;
+        };
+        /** StoreVisitFeedbackEntryOut */
+        StoreVisitFeedbackEntryOut: {
+            /** Store Id */
+            store_id: number;
+            /** Store Name */
+            store_name: string;
+            /** Visit Feedback Token */
+            visit_feedback_token: string;
         };
         /** TagContributionIn */
         TagContributionIn: {
@@ -16394,6 +16425,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enter_store_visit_feedback_api_v1_visit_feedback_store_entry_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreVisitFeedbackEntryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreVisitFeedbackEntryOut"];
                 };
             };
             /** @description Validation Error */

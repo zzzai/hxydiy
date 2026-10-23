@@ -7125,6 +7125,45 @@
         "title": "StoreOut",
         "type": "object"
       },
+      "StoreVisitFeedbackEntryIn": {
+        "additionalProperties": false,
+        "properties": {
+          "store_id": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 2147483647.0,
+            "title": "Store Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "store_id"
+        ],
+        "title": "StoreVisitFeedbackEntryIn",
+        "type": "object"
+      },
+      "StoreVisitFeedbackEntryOut": {
+        "properties": {
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "store_name": {
+            "title": "Store Name",
+            "type": "string"
+          },
+          "visit_feedback_token": {
+            "title": "Visit Feedback Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visit_feedback_token",
+          "store_id",
+          "store_name"
+        ],
+        "title": "StoreVisitFeedbackEntryOut",
+        "type": "object"
+      },
       "TagContributionIn": {
         "additionalProperties": false,
         "properties": {
@@ -25148,6 +25187,65 @@
           }
         },
         "summary": "Enter Visit Feedback",
+        "tags": [
+          "visit-feedback"
+        ]
+      }
+    },
+    "/api/v1/visit-feedback/store-entry": {
+      "post": {
+        "operationId": "enter_store_visit_feedback_api_v1_visit_feedback_store_entry_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreVisitFeedbackEntryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreVisitFeedbackEntryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enter Store Visit Feedback",
         "tags": [
           "visit-feedback"
         ]

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Room, ServicePositionQr
+from app.models import Room, ServicePositionQr, Store
 
 
 TOKEN_TTL = timedelta(hours=12)
@@ -24,6 +24,57 @@ def _error(code: str, message: str) -> HTTPException:
 
 def _browser_hash(browser_token: str) -> str:
     return hashlib.sha256(f"browser:{browser_token}".encode()).hexdigest()
+
+
+def create_store_visit_feedback_token(store_id: int, browser_token: str) -> str:
+    """Authorize public store feedback, not proof of a physical visit."""
+    payload = {
+        "v": 1,
+        "store_id": store_id,
+        "source": "store_qr",
+        "browser_hash": _browser_hash(browser_token),
+        "exp": int(time.time() + TOKEN_TTL.total_seconds()),
+    }
+    raw = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    ).decode().rstrip("=")
+    signature = base64.urlsafe_b64encode(
+        hmac.new(settings.jwt_secret.encode(), f"vfs1.{raw}".encode(), hashlib.sha256).digest()[:16]
+    ).decode().rstrip("=")
+    return f"vfs1.{raw}.{signature}"
+
+
+def resolve_store_visit_feedback_token(db: Session, token: str, browser_token: str | None) -> Store:
+    try:
+        version, raw, signature = token.split(".")
+        expected = base64.urlsafe_b64encode(
+            hmac.new(settings.jwt_secret.encode(), f"vfs1.{raw}".encode(), hashlib.sha256).digest()[:16]
+        ).decode().rstrip("=")
+        if version != "vfs1" or not hmac.compare_digest(signature, expected):
+            raise ValueError
+        payload = json.loads(base64.b64decode(raw + "=" * (-len(raw) % 4), altchars=b"-_", validate=True))
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != {"v", "store_id", "source", "browser_hash", "exp"}
+            or type(payload["v"]) is not int or payload["v"] != 1
+            or type(payload["store_id"]) is not int or not 0 < payload["store_id"] <= 2**31 - 1
+            or type(payload["exp"]) is not int or payload["exp"] <= 0
+            or payload["source"] != "store_qr"
+            or not isinstance(payload["browser_hash"], str)
+            or len(payload["browser_hash"]) != 64
+            or any(char not in "0123456789abcdef" for char in payload["browser_hash"])
+        ):
+            raise ValueError
+    except (ValueError, TypeError, UnicodeDecodeError):
+        raise _error("VISIT_FEEDBACK_TOKEN_INVALID", "到店反馈入口无效，请重新进入") from None
+    if payload["exp"] <= int(time.time()):
+        raise _error("VISIT_FEEDBACK_TOKEN_EXPIRED", "到店反馈入口已过期，请重新进入")
+    if not browser_token or not hmac.compare_digest(payload["browser_hash"], _browser_hash(browser_token)):
+        raise _error("VISIT_FEEDBACK_TOKEN_INVALID", "到店反馈入口与当前浏览器不匹配，请重新进入")
+    store = db.get(Store, payload["store_id"])
+    if not store or store.status != "open":
+        raise _error("VISIT_FEEDBACK_TOKEN_INVALID", "门店暂不可用，请重新进入")
+    return store
 
 
 def create_visit_feedback_token(room: Room, source: str, browser_token: str, qr_id: int | None = None) -> str:

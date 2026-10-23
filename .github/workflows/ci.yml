@@ -212,6 +212,28 @@ jobs:
         if: steps.detect.outputs.available == 'true'
         working-directory: hxy-server
         run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+      - name: Create isolated feedback migration database
+        if: steps.detect.outputs.available == 'true'
+        working-directory: hxy-server
+        run: |
+          python - <<'PY'
+          import os
+          from sqlalchemy import create_engine
+          from sqlalchemy.engine import make_url
+
+          url = make_url(os.environ["HXY_FEEDBACK_TEST_POSTGRES_URL"])
+          if (url.drivername, url.host, url.port, url.database, url.username) != (
+              "postgresql+psycopg", "127.0.0.1", 5432, "hxy_feedback_ci", "feedback_ci"
+          ) or url.query:
+              raise RuntimeError("Only the disposable CI feedback database may be used")
+          # Both databases belong to this job's disposable PostgreSQL service.
+          engine = create_engine(url, isolation_level="AUTOCOMMIT")
+          try:
+              with engine.connect() as connection:
+                  connection.exec_driver_sql("CREATE DATABASE hxy_feedback_migration_ci")
+          finally:
+              engine.dispose()
+          PY
       - name: Run backend tests
         if: steps.detect.outputs.available == 'true'
         working-directory: hxy-server

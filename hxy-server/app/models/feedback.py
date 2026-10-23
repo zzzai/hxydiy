@@ -34,7 +34,7 @@ class VisitFeedback(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
-    room_id: Mapped[int] = mapped_column(ForeignKey("rooms.id"), index=True)
+    room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id"), nullable=True, index=True)
     service_position_qr_id: Mapped[int | None] = mapped_column(
         ForeignKey("service_position_qrs.id"), nullable=True, index=True
     )
