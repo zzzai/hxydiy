@@ -1445,6 +1445,10 @@ class AdminV2ContractTests(unittest.TestCase):
             ))
             self.assertIsNotNone(audit)
             self.assertEqual(audit.detail.get("phone_mode"), "masked")
+        history = self.client.get("/api/v1/admin/v2/customer-exports", headers=self.auth_headers)
+        self.assertEqual(history.status_code, 200, history.text)
+        self.assertGreaterEqual(history.json()["total"], 1)
+        self.assertEqual(history.json()["items"][0]["phone_mode"], "masked")
         with self.SessionLocal() as db:
             db.query(AuditLog).filter(AuditLog.action == "export_customer_list").delete()
             db.commit()

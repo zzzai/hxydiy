@@ -4979,6 +4979,40 @@ def export_customers(
     )
 
 
+@router.get("/customer-exports")
+def list_customer_exports(
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Recent masked customer exports for the current store."""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    rows = list(db.scalars(select(AuditLog).where(
+        AuditLog.action == "export_customer_list",
+        AuditLog.store_id == store_id,
+    ).order_by(AuditLog.id.desc()).limit(limit)))
+    numeric_actor_ids = [int(row.actor_id) for row in rows if row.actor_id and str(row.actor_id).isdigit()]
+    actor_names = {
+        str(member.id): member.name
+        for member in db.scalars(select(Staff).where(Staff.id.in_(numeric_actor_ids)))
+    } if numeric_actor_ids else {}
+    return {
+        "items": [{
+            "id": row.id,
+            "actor": actor_names.get(str(row.actor_id), f"员工 {row.actor_id}"),
+            "row_count": (row.detail or {}).get("row_count", 0),
+            "tag_id": (row.detail or {}).get("tag_id"),
+            "search": (row.detail or {}).get("search"),
+            "is_member": (row.detail or {}).get("is_member"),
+            "phone_mode": (row.detail or {}).get("phone_mode", "masked"),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        } for row in rows],
+        "total": len(rows),
+    }
+
+
 class MembershipUpdateIn(BaseModel):
     """线下年度权益卡的严格周期输入。"""
 
