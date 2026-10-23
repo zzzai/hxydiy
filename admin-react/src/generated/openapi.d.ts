@@ -577,7 +577,8 @@ export interface paths {
         put?: never;
         /**
          * Check In Order
-         * @description 到店核销：paid/confirmed -> checked_in。
+         * @deprecated
+         * @description Retired desktop check-in path; kept only for explicit 410 audit.
          */
         post: operations["check_in_order_api_v1_admin_orders__order_id__check_in_post"];
         delete?: never;
@@ -597,7 +598,8 @@ export interface paths {
         put?: never;
         /**
          * Complete Order
-         * @description 服务完成：checked_in/in_service -> completed。
+         * @deprecated
+         * @description Retired desktop complete path; kept only for explicit 410 audit.
          */
         post: operations["complete_order_api_v1_admin_orders__order_id__complete_post"];
         delete?: never;

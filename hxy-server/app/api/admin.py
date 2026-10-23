@@ -814,40 +814,49 @@ def audit_logs(
     }
 
 
-@router.post("/orders/{order_id}/check-in")
+def _retire_legacy_order_action(db: Session, staff: Staff, order: Order, action: str) -> None:
+    db.add(AuditLog(
+        actor_type="staff",
+        actor_id=str(staff.id),
+        store_id=staff.store_id,
+        action="legacy_order_action_rejected",
+        entity_type="order",
+        entity_id=str(order.id),
+        detail={"legacy_action": action, "order_no": order.order_no, "current_status": order.status},
+    ))
+    db.commit()
+    raise HTTPException(status_code=410, detail={
+        "code": "LEGACY_ORDER_ACTION_RETIRED",
+        "message": "桌面结算动作已停用，请使用技师端/服务位流程推进服务状态",
+        "legacy_action": action,
+        "order_no": order.order_no,
+    })
+
+
+@router.post("/orders/{order_id}/check-in", deprecated=True)
 def check_in_order(
     order_id: int,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """到店核销：paid/confirmed -> checked_in。"""
+    """Retired desktop check-in path; kept only for explicit 410 audit."""
     staff = _current_staff(authorization, db)
     _require_manager_staff(staff)
     order = _owned_order(db, order_id, staff)
-    if order.status not in ("paid", "confirmed"):
-        raise HTTPException(status_code=400, detail=f"当前状态({order.status})不可核销")
-    _record_event(db, order.id, order.status, "checked_in", "check_in", staff.name)
-    order.status = "checked_in"
-    db.commit()
-    return {"code": 0, "order_no": order.order_no, "status": order.status}
+    _retire_legacy_order_action(db, staff, order, "check_in")
 
 
-@router.post("/orders/{order_id}/complete")
+@router.post("/orders/{order_id}/complete", deprecated=True)
 def complete_order(
     order_id: int,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """服务完成：checked_in/in_service -> completed。"""
+    """Retired desktop complete path; kept only for explicit 410 audit."""
     staff = _current_staff(authorization, db)
     _require_manager_staff(staff)
     order = _owned_order(db, order_id, staff)
-    if order.status not in ("checked_in", "in_service"):
-        raise HTTPException(status_code=400, detail=f"当前状态({order.status})不可完成")
-    _record_event(db, order.id, order.status, "completed", "complete", staff.name)
-    order.status = "completed"
-    db.commit()
-    return {"code": 0, "order_no": order.order_no, "status": order.status}
+    _retire_legacy_order_action(db, staff, order, "complete")
 
 
 @router.get("/orders")

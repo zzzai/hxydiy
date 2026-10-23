@@ -182,7 +182,7 @@ pending_payment → paid → confirmed → in_service → pending_checkout → c
 
 ## 11. 当前实现差距
 
-- 桌面 Orders 页面已改成只读结算列表，但后端仍保留 checkout/check-in/complete 等 legacy 动作接口，需要收口或加异常授权门；
+- 桌面 Orders 页面已改成只读结算列表；旧 check-in/complete 动作已停用并返回 410 + 审计，不再允许绕过技师/服务位流程；
 - 已实现 `selection_sessions.fulfillment_order_id` 一对一关联；结算列表展示选单号、选单金额和关联状态；
 - 已实现选单/订单对账检查：缺选单、缺订单、状态不一致、金额不一致；
 - 工作台已展示近 30 天对账异常汇总，并可跳转异常队列；对账差异已持久化为工作项，支持同步、处理说明、关闭和审计；总部品牌总览已提供跨店待处理异常视图；已实现责任人指派、SLA 截止、确认处理和逾期提示；仍缺定时自动同步和升级通知；
