@@ -10153,7 +10153,8 @@
     },
     "/api/v1/admin/orders/{order_id}/check-in": {
       "post": {
-        "description": "到店核销：paid/confirmed -> checked_in。",
+        "deprecated": true,
+        "description": "Retired desktop check-in path; kept only for explicit 410 audit.",
         "operationId": "check_in_order_api_v1_admin_orders__order_id__check_in_post",
         "parameters": [
           {
@@ -10214,7 +10215,8 @@
     },
     "/api/v1/admin/orders/{order_id}/complete": {
       "post": {
-        "description": "服务完成：checked_in/in_service -> completed。",
+        "deprecated": true,
+        "description": "Retired desktop complete path; kept only for explicit 410 audit.",
         "operationId": "complete_order_api_v1_admin_orders__order_id__complete_post",
         "parameters": [
           {

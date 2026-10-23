@@ -1342,6 +1342,23 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertIn("events", detail.json())
         self.assertIn("refund_adjustments", detail.json())
 
+    def test_legacy_desktop_order_actions_are_retired_with_audit(self):
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, self.staff_id)
+            order = db.scalar(select(Order).where(Order.store_id == staff.store_id).order_by(Order.id))
+            order_id = order.id
+        response = self.client.post(f"/api/v1/admin/orders/{order_id}/check-in", headers=self.auth_headers)
+        self.assertEqual(response.status_code, 410, response.text)
+        self.assertEqual(response.json()["detail"]["code"], "LEGACY_ORDER_ACTION_RETIRED")
+        with self.SessionLocal() as db:
+            audit = db.scalar(select(AuditLog).where(
+                AuditLog.action == "legacy_order_action_rejected",
+                AuditLog.entity_id == str(order_id),
+            ))
+            self.assertIsNotNone(audit)
+            db.query(AuditLog).filter(AuditLog.action == "legacy_order_action_rejected").delete()
+            db.commit()
+
     def test_customer_phone_reveal_is_store_scoped_and_audited(self):
         with self.SessionLocal() as db:
             staff = db.get(Staff, self.staff_id)
