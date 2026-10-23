@@ -3,7 +3,7 @@ import { PageContainer } from '@ant-design/pro-components';
 import { Alert, Button, Card, Col, DatePicker, Empty, Row, Space, Statistic, Table, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
-import { getBrandExceptions, getBrandOverview } from '../api';
+import { getBrandExceptions, getBrandOverview, getBrandWorkforce } from '../api';
 
 type StoreOverview = {
   store_id: number;
@@ -64,6 +64,7 @@ export default function BrandOverviewPage() {
   const [range, setRange] = useState<[Dayjs, Dayjs]>([dayjs().subtract(6, 'day'), dayjs()]);
   const [data, setData] = useState<Overview>();
   const [exceptions, setExceptions] = useState<{ items: any[]; total: number; summary?: { by_store?: any[] } }>();
+  const [workforce, setWorkforce] = useState<{ date?: string; summary?: any; stores?: any[] }>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -71,12 +72,14 @@ export default function BrandOverviewPage() {
     setLoading(true);
     setError('');
     try {
-      const [response, exceptionResponse] = await Promise.all([
+      const [response, exceptionResponse, workforceResponse] = await Promise.all([
         getBrandOverview(next[0].format('YYYY-MM-DD'), next[1].format('YYYY-MM-DD')),
         getBrandExceptions('open').catch(() => ({ data: { items: [], total: 0 } })),
+        getBrandWorkforce().catch(() => ({ data: { summary: {}, stores: [] } })),
       ]);
       setData(response.data);
       setExceptions(exceptionResponse.data);
+      setWorkforce(workforceResponse.data);
     } catch {
       setData(undefined);
       setError('品牌经营数据加载失败，请稍后重试。');
@@ -142,6 +145,25 @@ export default function BrandOverviewPage() {
               { title: '评价数', dataIndex: 'review_count', width: 90, align: 'right' },
               { title: '均分', dataIndex: 'average_rating', width: 80, align: 'right', render: (value) => ratio(value) },
               { title: '低分', dataIndex: 'low_rating_count', width: 80, align: 'right', render: (value) => <span style={{ color: value > 0 ? 'var(--hxy-warning)' : undefined }}>{value}</span> },
+            ]}
+          />
+        </Card>
+        <Card style={{ marginTop: 16 }} title={`跨店人力${workforce?.date ? ` · ${workforce.date}` : ''}`} extra={<Space size={6}><Tag color="green">在岗 {workforce?.summary?.on_duty ?? 0}</Tag><Tag color="gold">请假 {workforce?.summary?.on_leave ?? 0}</Tag><Tag color="blue">今日预约 {workforce?.summary?.bookings ?? 0}</Tag></Space>}>
+          <Table
+            rowKey="store_id"
+            size="small"
+            dataSource={workforce?.stores || []}
+            pagination={false}
+            locale={{ emptyText: <Empty description="暂无门店人力数据" /> }}
+            expandable={{
+              expandedRowRender: (row: any) => <Space wrap size={6}>{(row.technicians || []).map((tech: any) => <Tag key={tech.technician_id} color={tech.on_leave ? 'gold' : tech.status === 'busy' ? 'processing' : tech.on_duty ? 'green' : 'default'}>{tech.name} · {tech.status_label}{tech.booking_count ? ` · ${tech.booking_count} 单` : ''}</Tag>)}</Space>,
+            }}
+            columns={[
+              { title: '门店', dataIndex: 'store_name', render: (value: string, row: any) => <Space direction="vertical" size={0}><Typography.Text strong>{value}</Typography.Text><Typography.Text type="secondary">{row.store_code}</Typography.Text></Space> },
+              { title: '技师数', dataIndex: 'technician_count', width: 100, align: 'right' },
+              { title: '在岗', dataIndex: 'on_duty', width: 90, align: 'right' },
+              { title: '请假', dataIndex: 'on_leave', width: 90, align: 'right' },
+              { title: '今日预约', dataIndex: 'booking_count', width: 110, align: 'right' },
             ]}
           />
         </Card>

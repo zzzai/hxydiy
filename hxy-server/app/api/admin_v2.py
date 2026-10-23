@@ -36,7 +36,7 @@ from app.models import (
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
     CustomerProfileCurrent, CustomerProfileRecord,
     ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup,
-    TechnicianInvite, OperationalException,
+    TechnicianInvite, OperationalException, Technician, TechnicianLeaveRequest, TechnicianShift,
 )
 from app.domain.catalog_options import CatalogDomainError, copy_catalog_version_graph, lock_catalog_projects
 from app.domain.membership_pricing import price_book_snapshot
@@ -1467,6 +1467,103 @@ def brand_exceptions(
             "by_type": type_counts,
             "by_store": sorted(store_counts.values(), key=lambda row: row["count"], reverse=True),
         },
+    }
+
+
+@router.get("/brand/workforce")
+def brand_workforce(
+    day: str | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Cross-store workforce snapshot for headquarters."""
+    staff = _current_staff(authorization, db)
+    _require_headquarters_admin(staff)
+    local_tz = ZoneInfo("Asia/Shanghai")
+    try:
+        board_date = date.fromisoformat(day) if day else datetime.now(local_tz).date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_DATE", "message": "日期必须为 YYYY-MM-DD"})
+    stores = list(db.scalars(select(Store).order_by(Store.id)))
+    store_ids = [store.id for store in stores]
+    if not store_ids:
+        return {"date": board_date.isoformat(), "summary": {"technicians": 0, "on_duty": 0, "on_leave": 0, "bookings": 0}, "stores": []}
+    technicians = list(db.scalars(select(Technician).where(Technician.store_id.in_(store_ids))))
+    leaves = list(db.scalars(select(TechnicianLeaveRequest).where(
+        TechnicianLeaveRequest.store_id.in_(store_ids),
+        TechnicianLeaveRequest.status == "approved",
+        TechnicianLeaveRequest.start_date <= board_date,
+        TechnicianLeaveRequest.end_date >= board_date,
+    )))
+    leave_tech_ids = {leave.technician_id for leave in leaves}
+    shifts = list(db.scalars(select(TechnicianShift).where(
+        TechnicianShift.store_id.in_(store_ids),
+        TechnicianShift.work_date == board_date,
+    )))
+    shift_by_tech = {shift.technician_id: shift for shift in shifts}
+    booking_rows = db.execute(
+        select(ServiceAssignment.technician_id, sa_func.count())
+        .join(ServiceOrder, ServiceOrder.id == ServiceAssignment.service_order_id)
+        .join(Order, Order.id == ServiceOrder.order_id)
+        .where(
+            ServiceAssignment.store_id.in_(store_ids),
+            ServiceAssignment.status.in_(("assigned", "ready", "in_service")),
+            Order.booking_date == board_date.isoformat(),
+        )
+        .group_by(ServiceAssignment.technician_id)
+    ).all()
+    bookings_by_tech = {technician_id: int(count) for technician_id, count in booking_rows}
+    techs_by_store: dict[int, list[Technician]] = {}
+    for technician in technicians:
+        techs_by_store.setdefault(technician.store_id, []).append(technician)
+    status_labels = {"available": "在岗", "busy": "服务中", "off": "休息", "resigned": "离职"}
+    rows = []
+    total_techs = total_on_duty = total_leave = total_bookings = 0
+    for store in stores:
+        store_techs = [technician for technician in techs_by_store.get(store.id, []) if technician.status != "resigned"]
+        items = []
+        for technician in store_techs:
+            shift = shift_by_tech.get(technician.id)
+            on_leave = technician.id in leave_tech_ids
+            bookings = bookings_by_tech.get(technician.id, 0)
+            on_duty = not on_leave and technician.status in ("available", "busy")
+            items.append({
+                "technician_id": technician.id,
+                "name": technician.name,
+                "status": technician.status,
+                "status_label": "请假" if on_leave else status_labels.get(technician.status, technician.status),
+                "on_duty": on_duty,
+                "on_leave": on_leave,
+                "shift_type": shift.shift_type if shift else None,
+                "booking_count": bookings,
+            })
+        store_on_duty = sum(1 for item in items if item["on_duty"])
+        store_leave = sum(1 for item in items if item["on_leave"])
+        store_bookings = sum(item["booking_count"] for item in items)
+        total_techs += len(items)
+        total_on_duty += store_on_duty
+        total_leave += store_leave
+        total_bookings += store_bookings
+        rows.append({
+            "store_id": store.id,
+            "store_code": store.store_code,
+            "store_name": store.name,
+            "status": store.status,
+            "technician_count": len(items),
+            "on_duty": store_on_duty,
+            "on_leave": store_leave,
+            "booking_count": store_bookings,
+            "technicians": items,
+        })
+    return {
+        "date": board_date.isoformat(),
+        "summary": {
+            "technicians": total_techs,
+            "on_duty": total_on_duty,
+            "on_leave": total_leave,
+            "bookings": total_bookings,
+        },
+        "stores": rows,
     }
 
 

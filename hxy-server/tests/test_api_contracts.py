@@ -34,6 +34,7 @@ from app.models import (
     User,
 )
 from app.models.operations import Room, Technician
+from app.models.technician_portal import TechnicianLeaveRequest, TechnicianShift
 from app.models.scrm import AutomationLog, AutomationRule
 from app.models.room_assign import RoomAssignment
 from app.models.orders import ORDER_STATUSES
@@ -830,6 +831,55 @@ class AdminV2ContractTests(unittest.TestCase):
             self.__class__.current_staff_id = self.staff_id
             with self.SessionLocal() as db:
                 db.query(OperationalException).filter(OperationalException.dedupe_key.in_(["hq-test-main", "hq-test-other"])).delete()
+                db.commit()
+
+    def test_headquarters_admin_can_view_cross_store_workforce(self):
+        with self.SessionLocal() as db:
+            store_id = db.get(Staff, self.staff_id).store_id
+            first = Technician(store_id=store_id, code="HQ-WF-1", name="一号技师", status="available")
+            second = Technician(store_id=self.other_store_id, code="HQ-WF-2", name="二号技师", status="available")
+            db.add_all([first, second])
+            db.flush()
+            today = datetime.now(timezone.utc).date()
+            db.add(TechnicianLeaveRequest(
+                store_id=store_id,
+                technician_id=first.id,
+                start_date=today,
+                end_date=today,
+                reason="休息",
+                status="approved",
+            ))
+            db.add(TechnicianShift(
+                store_id=store_id,
+                technician_id=first.id,
+                work_date=today,
+                shift_type="full",
+                start_time="09:00",
+                end_time="22:00",
+            ))
+            db.commit()
+            first_id, second_id = first.id, second.id
+
+        self.__class__.current_staff_id = self.headquarters_admin_id
+        headers = {"Authorization": f"Bearer {create_staff_token(self.headquarters_admin_id, 'admin')}"}
+        try:
+            response = self.client.get("/api/v1/admin/v2/brand/workforce", headers=headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            body = response.json()
+            self.assertGreaterEqual(body["summary"]["technicians"], 2)
+            self.assertGreaterEqual(body["summary"]["on_leave"], 1)
+            self.assertGreaterEqual(body["summary"]["on_duty"], 1)
+            stores = {row["store_id"]: row for row in body["stores"]}
+            first_item = next(item for item in stores[store_id]["technicians"] if item["technician_id"] == first_id)
+            second_item = next(item for item in stores[self.other_store_id]["technicians"] if item["technician_id"] == second_id)
+            self.assertTrue(first_item["on_leave"])
+            self.assertTrue(second_item["on_duty"])
+        finally:
+            self.__class__.current_staff_id = self.staff_id
+            with self.SessionLocal() as db:
+                db.query(TechnicianShift).filter(TechnicianShift.technician_id.in_([first_id, second_id])).delete()
+                db.query(TechnicianLeaveRequest).filter(TechnicianLeaveRequest.technician_id.in_([first_id, second_id])).delete()
+                db.query(Technician).filter(Technician.id.in_([first_id, second_id])).delete()
                 db.commit()
 
     def test_automation_rule_logs_are_visible_and_scoped(self):

@@ -964,6 +964,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/brand/workforce": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Brand Workforce
+         * @description Cross-store workforce snapshot for headquarters.
+         */
+        get: operations["brand_workforce_api_v1_admin_v2_brand_workforce_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/coupons/{template_id}/issue": {
         parameters: {
             query?: never;
@@ -9098,6 +9118,39 @@ export interface operations {
             query?: {
                 start_date?: string | null;
                 end_date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    brand_workforce_api_v1_admin_v2_brand_workforce_get: {
+        parameters: {
+            query?: {
+                day?: string | null;
             };
             header?: {
                 authorization?: string | null;
