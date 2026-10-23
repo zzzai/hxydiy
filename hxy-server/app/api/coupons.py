@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.customer_auth import current_customer_id
 from app.core.config import settings
 from app.db.session import get_db
+from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.models import CouponTemplate, User, UserCoupon, SelectionSession
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
@@ -149,7 +150,7 @@ def claim_coupon(
         raise HTTPException(status_code=400, detail="会员已享会员价，无需领取优惠券")
     # 锁用户行：同一顾客的并发领券串行化，防止重复突破限领。
     db.scalar(select(User.id).where(User.id == user_id).with_for_update())
-    tpl = db.get(CouponTemplate, body.template_id)
+    tpl = lock_coupon_template(db, CouponTemplate.id == body.template_id)
     if not tpl or not tpl.is_claimable or tpl.status != "published" or not _template_allowed(tpl, _trusted_store_id(db, user)):
         raise HTTPException(status_code=404, detail="券不存在或不可领取")
 
@@ -166,12 +167,8 @@ def claim_coupon(
         if tpl.claim_limit > 0 and len(claimed) >= tpl.claim_limit:
             raise HTTPException(status_code=400, detail="已达领取上限")
 
-    db.add(UserCoupon(
-        user_id=user_id,
-        template_id=tpl.id,
-        status="unused",
-        expire_at=now + timedelta(days=tpl.validity_days),
-    ))
+    if try_issue_coupon(db, tpl, user_id, now + timedelta(days=tpl.validity_days)) is None:
+        raise coupon_budget_exhausted()
     db.commit()
     return {"code": 0, "name": tpl.name}
 
@@ -191,7 +188,7 @@ def claim_share_coupon(
     if user and user.is_member:
         return {"code": 0, "granted": False, "reason": "会员已享会员价，无需领取优惠券"}
     db.scalar(select(User.id).where(User.id == user_id).with_for_update())
-    tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.code == SHARE_COUPON_CODE))
+    tpl = lock_coupon_template(db, CouponTemplate.code == SHARE_COUPON_CODE)
     if not tpl or tpl.status != "published" or not _template_allowed(tpl, _trusted_store_id(db, user)):
         return {"code": 0, "granted": False, "reason": "分享券未配置"}
 
@@ -204,12 +201,8 @@ def claim_share_coupon(
     if recent:
         return {"code": 0, "granted": False, "reason": "24h 内已领取"}
 
-    db.add(UserCoupon(
-        user_id=user_id,
-        template_id=tpl.id,
-        status="unused",
-        expire_at=now + timedelta(days=tpl.validity_days),
-    ))
+    if try_issue_coupon(db, tpl, user_id, now + timedelta(days=tpl.validity_days)) is None:
+        return {"code": 0, "granted": False, "reason": "券预算不足，不能继续发放"}
     db.commit()
     return {"code": 0, "granted": True, "name": tpl.name}
 

@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
+from app.domain.coupon_issuance import lock_coupon_template, require_issued_value_unchanged
 from app.models import (
     AuditLog,
     CouponTemplate,
@@ -1473,7 +1474,7 @@ def admin_update_coupon(
     """更新券模板（含上下架：status 置 published/draft/archived）。"""
     staff = _require_admin(authorization, db)
     action_store_id = _resolve_marketing_store_id(db, staff, store_id)
-    tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.id == tpl_id, CouponTemplate.store_id == action_store_id))
+    tpl = lock_coupon_template(db, CouponTemplate.id == tpl_id, CouponTemplate.store_id == action_store_id)
     if not tpl:
         raise HTTPException(status_code=404, detail="券不存在")
     data = body.model_dump(exclude_unset=True)
@@ -1484,6 +1485,7 @@ def admin_update_coupon(
                 CouponTemplate.store_id == action_store_id,
                 CouponTemplate.code == body.code, CouponTemplate.id != tpl_id)):
             raise HTTPException(status_code=400, detail="券编码已存在")
+    require_issued_value_unchanged(db, tpl, data)
     for k, v in data.items():
         setattr(tpl, k, v)
     db.commit()
