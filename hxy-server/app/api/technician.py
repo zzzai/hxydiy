@@ -815,6 +815,7 @@ def service_history(
     db: Session = Depends(get_db),
 ) -> dict:
     staff, technician = current_technician(authorization, db)
+    can_write_record = normalize_staff_role(staff.role, staff.technician_id) == 'technician'
     if profile_status not in {"all", "confirmed", "pending"}:
         raise HTTPException(status_code=422, detail="画像状态筛选值不合法")
 
@@ -834,7 +835,7 @@ def service_history(
         PositionOccupancy.actual_service_end_at.is_not(None),
     ]
     if record_status == 'pending':
-        conditions.extend([~own_record_exists(staff.id), recordable_service(staff.id)])
+        conditions.extend([can_write_record, ~own_record_exists(staff.id), recordable_service(staff.id)])
     elif record_status == 'completed':
         conditions.append(own_record_exists(staff.id))
     if profile_status == "confirmed":
@@ -897,7 +898,7 @@ def service_history(
                 0,
                 int((occupancy.actual_service_end_at - occupancy.actual_start_at).total_seconds() // 60),
             )
-        can_record = customer is not None and own_record is None and db.scalar(select(PositionOccupancy.id).where(
+        can_record = can_write_record and customer is not None and own_record is None and db.scalar(select(PositionOccupancy.id).where(
             PositionOccupancy.id == occupancy.id, recordable_service(staff.id),
         )) is not None
         items.append({

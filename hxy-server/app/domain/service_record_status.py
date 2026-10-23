@@ -79,8 +79,8 @@ def pending_record_summary(db, store_id, now):
         PositionOccupancy.actual_service_end_at >= now - timedelta(days=30),
         PositionOccupancy.actual_service_end_at <= now,
         SelectionSession.customer_id.is_not(None),
-        Staff.status == 'active', Staff.role.in_(('technician', 'staff')),
-        Technician.status != 'resigned',
+        Staff.status == 'active', Staff.role == 'technician',
+        Technician.status.in_(('available', 'busy')),
         recordable_service(Staff.id), ~own_record_exists(Staff.id),
     ).group_by(Technician.id, Technician.name).order_by(Technician.id)).all()
     return {

@@ -55,8 +55,16 @@ export default function TechnicianServiceHistoryPage() {
     try {
       const response = await getTechnicianServiceHistory(page, 20, status, pendingOnly ? 'pending' : 'all');
       if (!current() || request.current !== version) return;
+      const nextTotal = response.data?.total || 0;
+      const lastPage = Math.max(1, Math.ceil(nextTotal / 20));
+      if (page > lastPage) {
+        setItems([]);
+        setTotal(nextTotal);
+        setPage(lastPage);
+        return;
+      }
       setItems(response.data?.items || []);
-      setTotal(response.data?.total || 0);
+      setTotal(nextTotal);
       setUnassignedLegacyCount(response.data?.unassigned_legacy_count || 0);
     } catch {
       if (current() && request.current === version) setFailed(true);

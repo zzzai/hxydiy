@@ -42,11 +42,12 @@ async function main() {
     await page.screenshot({ path: path.join(out, 'manager.png') });
   });
   await check('return refresh clears completed record reminder without writing or resolving exception', async () => {
+    await open('return');
     await page.getByText('1 次服务待填写', { exact: true }).waitFor();
     await page.getByRole('button', { name: '模拟返回并已补填' }).click();
     await page.getByText('1 次服务待填写', { exact: true }).waitFor({ state: 'hidden' });
     await page.getByText('已知悉 · 待处理', { exact: true }).waitFor();
-    assert.equal(await page.evaluate(() => window.closeoutStats.ack), 1);
+    assert.equal(await page.evaluate(() => window.closeoutStats.ack), 0);
   });
   await check('acknowledge network failure remains retryable', async () => {
     await open('ack-error');
@@ -85,6 +86,18 @@ async function main() {
     assert.equal(await page.evaluate(() => window.closeoutStats.pending), 1);
     await page.getByRole('button', { name: '本次没有新情况', exact: true }).click();
     await page.getByText('当前筛选下没有待填写的服务记录', { exact: true }).waitFor();
+  });
+  await check('last page record save returns to remaining pending records', async () => {
+    await open('history-last-page');
+    await page.getByRole('checkbox', { name: '只看待填写' }).check();
+    await waitFor(() => window.closeoutStats.filter === 'pending');
+    await page.locator('.ant-pagination-item-2').click();
+    await page.waitForFunction(() => document.querySelectorAll('.technician-history-card').length === 1);
+    await page.getByRole('button', { name: '补填服务记录' }).click();
+    await page.getByRole('button', { name: '本次没有新情况', exact: true }).click();
+    await page.waitForFunction(() => document.querySelectorAll('.technician-history-card').length === 20);
+    assert.equal(await page.getByText('当前筛选下没有待填写的服务记录', { exact: true }).count(), 0);
+    assert.equal(await page.evaluate(() => window.closeoutStats.pending), 20);
   });
   assert.deepEqual(report.unexpectedRequests, []);
   assert.deepEqual(report.pageErrors, []);

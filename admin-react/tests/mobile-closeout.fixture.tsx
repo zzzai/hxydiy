@@ -10,8 +10,8 @@ import '../src/technician/technician-mobile.css';
 import '../src/technician/manager-mobile.css';
 
 const mode = new URLSearchParams(location.search).get('mode') || 'manager';
-const stats = { reads: 0, ack: 0, saves: 0, unexpected: 0, filter: '', pending: 1 };
-let status = 'open', failAck = mode === 'ack-error', failSave = mode === 'save-error';
+const stats = { reads: 0, ack: 0, saves: 0, unexpected: 0, filter: '', pending: mode === 'history-last-page' ? 21 : 1 };
+let status = mode === 'return' ? 'acknowledged' : 'open', failAck = mode === 'ack-error', failSave = mode === 'save-error';
 let release: (() => void) | undefined;
 let hold = mode === 'late';
 const service = {
@@ -45,15 +45,19 @@ client.defaults.adapter = async config => {
   }
   if (path === '/technician/service-history' && method === 'get') {
     stats.filter = config.params.record_status;
-    return ok({ items: stats.pending ? [service] : [], total: stats.pending, unassigned_legacy_count: 0 });
+    const offset = (Number(config.params.page) - 1) * 20;
+    const items = Array.from({ length: Math.max(0, Math.min(20, stats.pending - offset)) }, (_, index) => ({
+      ...service, occupancy_id: offset + index + 1, record_task: { ...service.record_task, selection_session_id: 'synthetic-closeout-' + (offset + index + 1) },
+    }));
+    return ok({ items, total: stats.pending, unassigned_legacy_count: 0 });
   }
   if (path === '/technician/service-record-options' && method === 'get') return ok({ taxonomy_version: 'service_handoff_v1', groups: { body_region: [], session_change: [] } });
   if (path === '/admin/v2/customer-profile-records' && method === 'post') {
     stats.saves++;
     if (failSave) { failSave = false; return fail(); }
     const body = JSON.parse(config.data);
-    if (body.user_id !== 1001 || body.selection_session_id !== 'synthetic-closeout' || body.customer_confirmed !== false || body.profile.recording_outcome !== 'no_additional_notes') throw Error('Incorrect save payload');
-    stats.pending = 0; return ok({ id: 44 });
+    if (body.user_id !== 1001 || !/^synthetic-closeout-\d+$/.test(body.selection_session_id) || body.customer_confirmed !== false || body.profile.recording_outcome !== 'no_additional_notes') throw Error('Incorrect save payload');
+    stats.pending--; return ok({ id: 44 });
   }
   stats.unexpected++; throw Error('Non-whitelisted fixture request');
 };

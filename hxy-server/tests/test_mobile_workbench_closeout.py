@@ -195,6 +195,26 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
         with self.Session() as db:
             self.assertEqual(db.scalar(select(func.count()).select_from(AuditLog)), 0)
 
+    def test_only_currently_writable_technicians_receive_record_tasks(self):
+        self.service('role-check')
+        for role, status in [('staff', 'available'), ('manager', 'available'), ('technician', 'off')]:
+            with self.subTest(role=role, status=status):
+                with self.Session() as db:
+                    db.get(Staff, self.worker.id).role = role
+                    db.get(Technician, self.tech.id).status = status
+                    db.commit()
+                headers = {'Authorization': 'Bearer ' + create_staff_token(self.worker.id, role)}
+                summary = self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.headers).json()
+                self.assertEqual(summary['record_follow_up']['pending_count'], 0)
+                history = self.client.get('/api/v1/technician/service-history', headers=headers)
+                if role == 'manager':
+                    self.assertEqual(history.status_code, 200)
+                    self.assertIsNone(history.json()['items'][0]['record_task'])
+                    pending = self.client.get('/api/v1/technician/service-history?record_status=pending', headers=headers)
+                    self.assertEqual(pending.json()['total'], 0)
+                else:
+                    self.assertIn(history.status_code, (401, 403))
+
     def test_manager_cannot_use_technician_history_and_worker_cannot_read_manager_todos(self):
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.worker_headers).status_code, 403)
         self.assertEqual(self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.worker_headers).status_code, 403)
