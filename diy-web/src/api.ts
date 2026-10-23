@@ -343,6 +343,14 @@ export function createEntrySession(input: {
   }>('/entry-sessions', { method: 'POST', body: JSON.stringify(input) }));
 }
 
+export function createStoreVisitFeedbackEntry(storeId: number) {
+  return request<{
+    visit_feedback_token: string;
+    store_id: number;
+    store_name: string;
+  }>('/visit-feedback/store-entry', { method: 'POST', body: JSON.stringify({ store_id: storeId }) });
+}
+
 export function createVisitFeedbackEntry(input: {
   store_id: number;
   position_code: string;
