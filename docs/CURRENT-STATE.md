@@ -6,6 +6,17 @@
 
 ## 当前生产
 
+- `MOBILE-WORKBENCH-CLOSEOUT-20261023` 已上线：[PR #378](https://github.com/zzzai/hxydiy/pull/378)，候选 `415adf80992337e91e37a44d98dce33ea5ed8526`，合并/生产 `7684ff3bab9c9540d38a4caa67fbbd3b62a3166d`；精确 [CI 39978453389](https://github.com/zzzai/hxydiy/actions/runs/39978453389) 与唯一 [Deploy 39979231372](https://github.com/zzzai/hxydiy/actions/runs/39979231372) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-7684ff3bab9c-39979231372`。
+- 店长近30天待补记录按技师汇总，技师从历史服务筛选并补填本人可写记录；顾客是否确认与记录是否完成分开。知悉不再冒充解决，重复知悉不重复审计；返回只读刷新、失败重试、迟到身份响应和末页保存均覆盖。
+- 总控核验504项 MANIFEST、169个安装 Python 文件、4个运行源文件及管理/店长/技师入口 HTML、主 JS/CSS 一致，health=`ok/production`。本批没有新增迁移、款项或外发消息；核验未调用业务 API、未查询数据库、业务写入0，不声称完成生产顾客业务或真机验收。
+- 本批不等于全部收尾：旧“超过30分钟未开始”口径还需排除已开始/已结束履约；旧漏单扫描依赖支付 Order，不能自动启用；现行模型自动异常检测、服务位冲突待办和人工真机验收待办见 [接管交付](operations/mobile-workbench-closeout-20261023.md)。发布事实文档收尾不再次部署。
+
+### 2026-10-23 DeepSeek 移动待办既往发布（包含于当前版本）
+
+- 接管时只读核实 current=`github-5329b35a771a-39960000171`（PR #377）。其移动异常展示、知悉入口保留；本批修正知悉即消项等语义，并补齐记录待办。不能把旧阶段“已知悉后消失”的描述继续当成现行规则。
+
+### 2026-10-23 评价与券预算既往发布（包含于当前版本）
+
 - `STORE-FEEDBACK-QR-20261023` 已上线，固定入口为 `https://diy.hexiaoyue.com/?store=1&view=feedback`。无座位、无需登录，主动评分 / 建议选填，提交后可返回菜单或查看本人检测报告；不创建订单、占位或技师评价关系。
 - 评价 PR #370 与券预算 PR #371 已包含于当前版本；预算跨入口保护 [PR #372](https://github.com/zzzai/hxydiy/pull/372) 合并/生产为 `59de5b564788111a61c3943dedf6fe66ad4f348a`，实际 current=`github-59de5b564788-39914869286`。精确 [CI 39914253425](https://github.com/zzzai/hxydiy/actions/runs/39914253425) 与唯一 [Deploy 39914869286](https://github.com/zzzai/hxydiy/actions/runs/39914869286) 成功；发布资格、备份恢复演练、部署与验证通过。
 - 生产核验：504 项 MANIFEST、168 个安装 Python 文件、9 个运行源文件（3 个评价、6 个券预算入口/保护）及公网 HTML / 主 JS / 评价 chunk 一致，health=`ok/production`。revision 仍为 `20261026_coupon_budget`，本次预算补修没有新增迁移；旧 12 条反馈与 5 个券模板保护摘要不变，旧模板预算仍为空。验收没有提交生产测试评价或发券，业务写入 0。

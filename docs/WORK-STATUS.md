@@ -1,3 +1,12 @@
+# 2026-10-23 移动服务待办第一批接管收尾已生产验收
+
+- PR #378，候选 `415adf80992337e91e37a44d98dce33ea5ed8526`，合并/生产 `7684ff3bab9c9540d38a4caa67fbbd3b62a3166d`；精确主干 CI `39978453389`、唯一 Deploy `39979231372` 成功。现网 current=`github-7684ff3bab9c-39979231372`。上传链路较慢但持续推进，只等待原运行，没有并行发布或重复 dispatch。
+- 店长近30天待补记录汇总、技师历史待填筛选和现有 v7 补填；已知悉异常仍待处理、重复知悉稳定返回、不重复审计；逾期子集不重复计数。角色/在职状态与保存权限对齐，匿名或已替代占用不暴露无法操作的任务；末页最后一条保存后回到有效页。
+- 隔离定向后端曾44测试/10子案例通过，复核增量相关22测试/3子案例通过（有重叠，不相加）；前端281测试和构建通过。新增浏览器用例覆盖知悉重入/失败、只读返回刷新、加载失败、身份迟到响应、记录保存/失败与分页；必需 CI 含 Manager mobile browser gate 通过。独立复核发现的两项重要边界均以失败复现后修复。
+- 生产核验504项 MANIFEST（SHA256 `50cdc29ff4fae868f24e272d703cc1b1f47c526239aa6e648e3115c9adefbd0b`）、169个安装 Python 文件、4个运行源文件以及 `/admin/`、`/technician/store`、`/technician/history` 的 HTML/主 JS/CSS 一致，健康 `ok/production`；核验业务API调用0、数据库查询0、业务写入0。无新增迁移；不扩大身体/私人记录可见范围、不新增款项或外发消息。
+- 未完成：旧超时待办口径修正、基于现行选单/占用的自动异常检测、服务位关联冲突闭环、人工企微/弱网验收。未启用旧订单对账 sync，不以刷新成功冒充异常自动生成。
+- 脱敏证据：总控本机 `output/store-feedback-qr-20261023/closeout-deployment-result.json`、`closeout-production-verification-7684ff3bab9c-39979231372.json`；服务器隔离日志 `/root/hxy-diy-development/mobile-closeout-tools-20261023/`。详见 `operations/mobile-workbench-closeout-20261023.md`。此事实文档收尾不再次部署。
+
 # 2026-10-23 券预算跨入口保护完成生产验收
 
 - PR #372，候选 `f56d774e548e2672ca017903234a00bd5789c38c`，合并/生产 `59de5b564788111a61c3943dedf6fe66ad4f348a`；精确 CI `39914253425` 与唯一 Deploy `39914869286` 成功。实际 current=`github-59de5b564788-39914869286`，备份、恢复演练、部署和校验 job 成功。回执 GET 的网络波动只恢复读取，未重复发布。
