@@ -4,7 +4,7 @@ import type { MenuProps } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { CheckCircleOutlined, KeyOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, StopOutlined, UserSwitchOutlined } from '@ant-design/icons';
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
-import { approveTechnicianLeave, createTechnician, disableTechnicianLogin, getStaff, getTechnicianBoard, getTechnicianLeaveRequests, getTechnicianShifts, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin, saveTechnicianShift } from '../api';
+import { approveTechnicianLeave, copyTechnicianShiftWeek, createTechnician, disableTechnicianLogin, getStaff, getTechnicianBoard, getTechnicianLeaveRequests, getTechnicianShifts, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin, saveTechnicianShift } from '../api';
 import { canManageConfiguration, getStoreId } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
@@ -47,6 +47,20 @@ export default function TechsPage() {
       await loadShifts();
     } catch { /* API interceptor already presents the server error. */ }
   };
+
+  const copyPreviousWeek = () => Modal.confirm({
+    title: '复制上一周排班？',
+    content: '将上一周的班次复制到本周；已有排班默认跳过，请假和已排服务冲突也会跳过。',
+    okText: '确认复制',
+    cancelText: '取消',
+    onOk: async () => {
+      const source = weekStart.subtract(7, 'day');
+      const response = await copyTechnicianShiftWeek({ source_start: source.format('YYYY-MM-DD'), target_start: weekStart.format('YYYY-MM-DD') });
+      const data = response.data || {};
+      message.success(`已复制 ${data.copied || 0} 条；跳过已存在 ${data.skipped_existing || 0}、请假冲突 ${data.skipped_leave || 0}、服务冲突 ${data.skipped_booking || 0}`);
+      await loadShifts();
+    },
+  });
 
   useEffect(() => { if (canManage) void loadShifts(); }, [canManage, weekStart]);
 
@@ -141,7 +155,7 @@ export default function TechsPage() {
   const shiftsByKey = new Map(shifts.map((shift: any) => [`${shift.technician_id}:${shift.work_date}`, shift]));
 
   return <PageContainer title="技师管理" content="维护技师档案和登录账号生命周期。" extra={[<Button key="refresh" icon={<ReloadOutlined />} onClick={() => { actionRef.current?.reload(); void loadBoard(); }}>刷新</Button>, ...(canManage ? [<Button key="create" type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>新建技师</Button>] : [])]}>
-    {canManage && <Card title="本周排班" style={{ marginBottom: 16 }} loading={shiftLoading} extra={<Space><DatePicker picker="week" value={weekStart} allowClear={false} onChange={(value) => { if (value) setWeekStart(value.startOf('week')); }} /><Button size="small" onClick={() => void loadShifts()}>刷新排班</Button></Space>}>
+    {canManage && <Card title="本周排班" style={{ marginBottom: 16 }} loading={shiftLoading} extra={<Space><DatePicker picker="week" value={weekStart} allowClear={false} onChange={(value) => { if (value) setWeekStart(value.startOf('week')); }} /><Button size="small" onClick={() => copyPreviousWeek()}>复制上一周</Button><Button size="small" onClick={() => void loadShifts()}>刷新排班</Button></Space>}>
       <Table
         rowKey="id"
         size="small"

@@ -595,3 +595,43 @@ class TestTechnicianAccountLifecycle:
         )
         assert allowed.status_code == 200, allowed.text
         assert allowed.json()["shift_type"] == "off"
+
+    def test_copy_previous_week_shifts_skips_existing(self):
+        today = datetime.now(timezone.utc).date()
+        source_monday = today - timedelta(days=today.weekday())
+        target_monday = source_monday + timedelta(days=7)
+        source = self.client.put(
+            "/api/v1/admin/v2/technician-shifts",
+            headers=self.manager_headers,
+            json={"technician_id": self.technician_id, "work_date": source_monday.isoformat(), "shift_type": "morning"},
+        )
+        assert source.status_code == 200, source.text
+        target = self.client.put(
+            "/api/v1/admin/v2/technician-shifts",
+            headers=self.manager_headers,
+            json={"technician_id": self.technician_id, "work_date": target_monday.isoformat(), "shift_type": "off"},
+        )
+        assert target.status_code == 200, target.text
+
+        copied = self.client.post(
+            "/api/v1/admin/v2/technician-shifts/copy-week",
+            headers=self.manager_headers,
+            json={"source_start": source_monday.isoformat(), "target_start": target_monday.isoformat()},
+        )
+        assert copied.status_code == 200, copied.text
+        assert copied.json()["skipped_existing"] == 1
+        assert copied.json()["copied"] == 0
+
+        overwritten = self.client.post(
+            "/api/v1/admin/v2/technician-shifts/copy-week",
+            headers=self.manager_headers,
+            json={"source_start": source_monday.isoformat(), "target_start": target_monday.isoformat(), "overwrite": True},
+        )
+        assert overwritten.status_code == 200, overwritten.text
+        assert overwritten.json()["copied"] == 1
+        listing = self.client.get(
+            "/api/v1/admin/v2/technician-shifts",
+            headers=self.manager_headers,
+            params={"start_date": target_monday.isoformat(), "end_date": target_monday.isoformat()},
+        )
+        assert listing.json()["items"][0]["shift_type"] == "morning"
