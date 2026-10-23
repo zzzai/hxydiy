@@ -1348,6 +1348,7 @@ class CouponTemplateIn(BaseModel):
     claim_limit: int = 1
     daily_claimable: bool = False
     auto_apply: bool = False
+    budget_cents: int | None = None
     status: str = "draft"               # draft / published / archived
 
 
@@ -1364,6 +1365,7 @@ class CouponTemplateUpdate(BaseModel):
     claim_limit: int | None = None
     daily_claimable: bool | None = None
     auto_apply: bool | None = None
+    budget_cents: int | None = None
     status: str | None = None
 
 
@@ -1384,6 +1386,8 @@ def _coupon_out(t: CouponTemplate, stats: dict | None = None) -> dict:
     stats = stats or {}
     issued = int(stats.get("total", 0))
     used = int(stats.get("used", 0))
+    committed = t.amount_cents * issued if (t.budget_cents is not None and t.coupon_type == "fixed") else None
+    remaining = max(0, int(t.budget_cents) - committed) if (t.budget_cents is not None and committed is not None) else None
     return {
         "id": t.id,
         "code": t.code,
@@ -1398,6 +1402,10 @@ def _coupon_out(t: CouponTemplate, stats: dict | None = None) -> dict:
         "claim_limit": t.claim_limit,
         "daily_claimable": t.daily_claimable,
         "auto_apply": t.auto_apply,
+        "budget_cents": t.budget_cents,
+        "committed_cents": committed,
+        "remaining_budget_cents": remaining,
+        "budget_usage_percent": round(committed / t.budget_cents * 100, 2) if (t.budget_cents and committed is not None) else None,
         "status": t.status,
         "issued_count": issued,
         "unused_count": int(stats.get("unused", 0)),

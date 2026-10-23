@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20261023_store_feedback"])
+        self.assertEqual(scripts.get_heads(), ["20261026_coupon_budget"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -182,6 +182,8 @@ class AlembicContractTests(unittest.TestCase):
                             copied.foreign_key_constraints.discard(constraint)
                             copied.constraints.discard(constraint)
                     copied._columns.remove(column)
+            if copied.name == "coupon_templates" and "budget_cents" in copied.c:
+                copied._columns.remove(copied.c["budget_cents"])
             if copied.name == "audit_logs":
                 for column_name in ("assignment_id", "actor_role", "scope_type", "scope_id"):
                     column = copied.c[column_name]
@@ -398,6 +400,8 @@ class AlembicContractTests(unittest.TestCase):
                                 copied.foreign_key_constraints.discard(constraint)
                                 copied.constraints.discard(constraint)
                         copied._columns.remove(follow_up_column)
+                if copied.name == "coupon_templates" and "budget_cents" in copied.c:
+                    copied._columns.remove(copied.c["budget_cents"])
                 if copied.name == "audit_logs":
                     for column_name in ("assignment_id", "actor_role", "scope_type", "scope_id"):
                         column = copied.c[column_name]

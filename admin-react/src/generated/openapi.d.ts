@@ -4673,6 +4673,8 @@ export interface components {
              * @default false
              */
             auto_grant_new_user: boolean;
+            /** Budget Cents */
+            budget_cents?: number | null;
             /**
              * Claim Limit
              * @default 1
@@ -4726,6 +4728,8 @@ export interface components {
             auto_apply?: boolean | null;
             /** Auto Grant New User */
             auto_grant_new_user?: boolean | null;
+            /** Budget Cents */
+            budget_cents?: number | null;
             /** Claim Limit */
             claim_limit?: number | null;
             /** Code */

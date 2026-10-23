@@ -1102,6 +1102,16 @@ def issue_coupon_to_customer(
             "code": "COUPON_CLAIM_LIMIT_REACHED",
             "message": f"该顾客已持有 {existing} 张未使用券，超过每人限领 {template.claim_limit} 张",
         })
+    if template.budget_cents is not None and template.coupon_type == "fixed":
+        issued_total = int(db.scalar(
+            select(sa_func.count()).select_from(UserCoupon).where(UserCoupon.template_id == template.id)
+        ) or 0)
+        committed_after = template.amount_cents * (issued_total + 1)
+        if committed_after > template.budget_cents:
+            raise HTTPException(status_code=409, detail={
+                "code": "COUPON_BUDGET_EXHAUSTED",
+                "message": f"券预算不足：已发放面额占用 {template.amount_cents * issued_total / 100:.2f} 元，预算 {template.budget_cents / 100:.2f} 元",
+            })
     now = datetime.now(UTC)
     coupon = UserCoupon(
         user_id=user.id,

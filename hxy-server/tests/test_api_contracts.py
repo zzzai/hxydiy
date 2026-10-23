@@ -1469,6 +1469,61 @@ class AdminV2ContractTests(unittest.TestCase):
                 db.query(User).filter(User.id == user_id).delete()
                 db.commit()
 
+    def test_coupon_budget_blocks_issue_after_commitment_exceeds_budget(self):
+        with self.SessionLocal() as db:
+            staff = db.get(Staff, self.staff_id)
+            users = [User(openid=f"coupon-budget-{index}", phone=f"1360000123{index}") for index in range(3)]
+            db.add_all(users)
+            db.flush()
+            for index, user in enumerate(users):
+                db.add(Order(
+                    store_id=staff.store_id,
+                    user_id=user.id,
+                    order_no=f"COUPON-BUDGET-{index}",
+                    order_type="service",
+                    status="paid",
+                    pay_status="paid",
+                    pay_amount_cents=9900,
+                ))
+            template = CouponTemplate(
+                store_id=staff.store_id,
+                code="coupon-budget-template",
+                name="预算券",
+                amount_cents=500,
+                budget_cents=1000,
+                status="published",
+                claim_limit=10,
+            )
+            db.add(template)
+            db.commit()
+            user_ids, template_id = [user.id for user in users], template.id
+
+        try:
+            for user_id in user_ids[:2]:
+                response = self.client.post(
+                    f"/api/v1/admin/v2/coupons/{template_id}/issue",
+                    json={"user_id": user_id},
+                )
+                self.assertEqual(response.status_code, 200, response.text)
+            rejected = self.client.post(
+                f"/api/v1/admin/v2/coupons/{template_id}/issue",
+                json={"user_id": user_ids[2]},
+            )
+            self.assertEqual(rejected.status_code, 409, rejected.text)
+            self.assertEqual(rejected.json()["detail"]["code"], "COUPON_BUDGET_EXHAUSTED")
+            listing = self.client.get("/api/v1/admin/coupons", headers=self.auth_headers)
+            listed = next(item for item in listing.json()["items"] if item["id"] == template_id)
+            self.assertEqual(listed["budget_cents"], 1000)
+            self.assertEqual(listed["committed_cents"], 1000)
+            self.assertEqual(listed["remaining_budget_cents"], 0)
+        finally:
+            with self.SessionLocal() as db:
+                db.query(UserCoupon).filter(UserCoupon.template_id == template_id).delete()
+                db.query(CouponTemplate).filter(CouponTemplate.id == template_id).delete()
+                db.query(Order).filter(Order.order_no.like("COUPON-BUDGET-%")).delete()
+                db.query(User).filter(User.id.in_(user_ids)).delete()
+                db.commit()
+
     def test_customer_export_is_masked_and_audited(self):
         response = self.client.get("/api/v1/admin/v2/customers/export")
         self.assertEqual(response.status_code, 200, response.text)
