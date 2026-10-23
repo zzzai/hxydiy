@@ -174,6 +174,7 @@ approved_migrations=(
   '20261024_technician_shifts.py'
   '20261025_exception_owner.py'
   '20261023_store_feedback.py'
+  '20261026_coupon_budget.py'
 )
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \

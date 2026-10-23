@@ -1159,6 +1159,17 @@
             "title": "Auto Grant New User",
             "type": "boolean"
           },
+          "budget_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Cents"
+          },
           "claim_limit": {
             "default": 1,
             "title": "Claim Limit",
@@ -1255,6 +1266,17 @@
               }
             ],
             "title": "Auto Grant New User"
+          },
+          "budget_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Cents"
           },
           "claim_limit": {
             "anyOf": [

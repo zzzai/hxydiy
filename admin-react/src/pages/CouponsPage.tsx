@@ -32,6 +32,7 @@ export default function CouponsPage() {
       ...v, amount_cents: Math.round((v.amount || 0) * 100),
       min_spend_cents: Math.round((v.min_spend || 0) * 100),
       validity_days: v.validity_days || 30,
+      budget_cents: v.budget ? Math.round(v.budget * 100) : undefined,
       status: 'published',
     }, storeId);
     message.success('已创建并上架'); setOpen(false); form.resetFields(); load();
@@ -62,6 +63,7 @@ export default function CouponsPage() {
           { title: '已发/已用', width: 100, render: (_: any, r: any) => `${r.issued_count || 0} / ${r.used_count || 0}` },
           { title: '未用', width: 70, render: (_: any, r: any) => r.unused_count || 0 },
           { title: '使用率', width: 90, render: (_: any, r: any) => r.usage_rate_percent === null || r.usage_rate_percent === undefined ? '—' : `${r.usage_rate_percent}%` },
+          { title: '预算', width: 140, render: (_: any, r: any) => r.budget_cents ? `${((r.committed_cents || 0) / 100).toFixed(0)} / ${(r.budget_cents / 100).toFixed(0)} 元` : '不限' },
           { title: '状态', dataIndex: 'status', width: 80, render: (v: string) => <Tag color={v === 'published' ? 'green' : 'default'}>{v === 'published' ? '已上架' : '未上架'}</Tag> },
           { title: '操作', width: 140, render: (_: any, r: any) => <Space size={0}><Button size="small" type="link" onClick={() => void openRedemptions(r)}>明细</Button><Button size="small" onClick={() => toggle(r.id, r.status)}>{r.status === 'published' ? '下架' : '上架'}</Button></Space> },
         ]}
@@ -75,6 +77,7 @@ export default function CouponsPage() {
             <Form.Item name="amount" label="面额(元)"><InputNumber min={0} /></Form.Item></Space>
             <Space><Form.Item name="min_spend" label="门槛(元)"><InputNumber min={0} /></Form.Item>
             <Form.Item name="validity_days" label="有效期(天)" initialValue={30}><InputNumber min={1} /></Form.Item></Space>
+            <Form.Item name="budget" label="预算(元，可不填)" tooltip="固定面额券按已发张数×面额占用预算，超出后停止发放"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
             <Space><Form.Item name="is_claimable" valuePropName="checked"><Checkbox>领券中心可领</Checkbox></Form.Item>
             <Form.Item name="daily_claimable" valuePropName="checked"><Checkbox>每日可领</Checkbox></Form.Item></Space>
             <Space><Form.Item name="auto_apply" valuePropName="checked"><Checkbox>满减活动(自动立减)</Checkbox></Form.Item>

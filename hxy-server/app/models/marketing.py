@@ -31,6 +31,8 @@ class CouponTemplate(Base):
     daily_claimable: Mapped[bool] = mapped_column(default=False)
     # 全场满减活动：结算时自动立减（用户未选券时自动应用）
     auto_apply: Mapped[bool] = mapped_column(default=False)
+    # 预算（分）；为空表示不限制。固定面额券按已发放张数×面额占用预算。
+    budget_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft/published/archived
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
