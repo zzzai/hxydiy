@@ -1128,6 +1128,51 @@ def issue_coupon_to_customer(
         "expire_at": coupon.expire_at.isoformat(),
     }
 
+
+@router.get("/coupons/{template_id}/redemptions")
+def list_coupon_redemptions(
+    template_id: int,
+    status: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    action_store_id = _resolve_target_store_id(db, staff, store_id)
+    template = db.scalar(select(CouponTemplate).where(
+        CouponTemplate.id == template_id,
+        CouponTemplate.store_id == action_store_id,
+    ))
+    if not template:
+        raise HTTPException(status_code=404, detail="券模板不存在")
+    base = select(UserCoupon).where(UserCoupon.template_id == template.id)
+    if status:
+        base = base.where(UserCoupon.status == status)
+    total = int(db.scalar(select(sa_func.count()).select_from(base.subquery())) or 0)
+    coupons = list(db.scalars(base.order_by(UserCoupon.id.desc()).offset((page - 1) * page_size).limit(page_size)))
+    user_ids = {coupon.user_id for coupon in coupons}
+    users = {user.id: user for user in db.scalars(select(User).where(User.id.in_(user_ids)))} if user_ids else {}
+    return {
+        "template": {"id": template.id, "name": template.name, "code": template.code},
+        "items": [{
+            "id": coupon.id,
+            "user_id": coupon.user_id,
+            "customer": _customer_display_name(users[coupon.user_id]) if coupon.user_id in users else None,
+            "phone_masked": _masked_phone(users[coupon.user_id].phone) if coupon.user_id in users else None,
+            "status": coupon.status,
+            "used_order_id": coupon.used_order_id,
+            "claimed_at": coupon.claimed_at.isoformat() if coupon.claimed_at else None,
+            "expire_at": coupon.expire_at.isoformat() if coupon.expire_at else None,
+        } for coupon in coupons],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 # ──────────────────────────────────────────────────────
 # 0. 到店服务选单：独立于订单的顾客 DIY 需求
 # ──────────────────────────────────────────────────────

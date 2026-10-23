@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { App, Button, Table, Tag, Space, Modal, Form, Input, Select, InputNumber, Checkbox } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { getCoupons, createCoupon, toggleCouponStatus } from '../api';
+import { getCoupons, createCoupon, getCouponRedemptions, toggleCouponStatus } from '../api';
 import StoreScopeSelect from '../components/StoreScopeSelect';
 
 export default function CouponsPage() {
@@ -10,7 +10,19 @@ export default function CouponsPage() {
   const [storeId, setStoreId] = useState<number>();
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [detailTemplate, setDetailTemplate] = useState<any>();
+  const [detailRows, setDetailRows] = useState<any[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [form] = Form.useForm();
+
+  const openRedemptions = async (template: any) => {
+    setDetailTemplate(template); setDetailRows([]); setDetailLoading(true);
+    try {
+      const response = await getCouponRedemptions(template.id, undefined, storeId);
+      setDetailRows(response.data?.items || []);
+    } catch { message.error('券明细加载失败'); }
+    finally { setDetailLoading(false); }
+  };
 
   const load = async () => { setLoading(true); try { const r = await getCoupons(storeId); setData(r.data?.items || []); } catch {} finally { setLoading(false); } };
   useEffect(() => { load(); }, [storeId]);
@@ -51,7 +63,7 @@ export default function CouponsPage() {
           { title: '未用', width: 70, render: (_: any, r: any) => r.unused_count || 0 },
           { title: '使用率', width: 90, render: (_: any, r: any) => r.usage_rate_percent === null || r.usage_rate_percent === undefined ? '—' : `${r.usage_rate_percent}%` },
           { title: '状态', dataIndex: 'status', width: 80, render: (v: string) => <Tag color={v === 'published' ? 'green' : 'default'}>{v === 'published' ? '已上架' : '未上架'}</Tag> },
-          { title: '操作', width: 80, render: (_: any, r: any) => <Button size="small" onClick={() => toggle(r.id, r.status)}>{r.status === 'published' ? '下架' : '上架'}</Button> },
+          { title: '操作', width: 140, render: (_: any, r: any) => <Space size={0}><Button size="small" type="link" onClick={() => void openRedemptions(r)}>明细</Button><Button size="small" onClick={() => toggle(r.id, r.status)}>{r.status === 'published' ? '下架' : '上架'}</Button></Space> },
         ]}
       />
       <Modal open={open} onCancel={() => setOpen(false)} title="新建营销券" footer={null} width={480}>
@@ -70,6 +82,23 @@ export default function CouponsPage() {
             <Button type="primary" htmlType="submit" block>保存并上架</Button>
           </Space>
         </Form>
+      </Modal>
+      <Modal title={`券明细 · ${detailTemplate?.name || ''}`} open={Boolean(detailTemplate)} onCancel={() => setDetailTemplate(undefined)} footer={<Button onClick={() => setDetailTemplate(undefined)}>关闭</Button>} width={760}>
+        <Table
+          rowKey="id"
+          size="small"
+          loading={detailLoading}
+          dataSource={detailRows}
+          pagination={false}
+          locale={{ emptyText: '该券还没有发放记录' }}
+          columns={[
+            { title: '顾客', width: 150, render: (_: any, row: any) => row.customer || row.phone_masked || '-' },
+            { title: '状态', dataIndex: 'status', width: 90, render: (value: string) => <Tag color={value === 'used' ? 'green' : value === 'expired' ? 'default' : 'gold'}>{value === 'used' ? '已使用' : value === 'expired' ? '已过期' : value === 'locked' ? '锁定中' : '未使用'}</Tag> },
+            { title: '领取时间', dataIndex: 'claimed_at', width: 170, render: (value: string) => value?.slice(0, 19).replace('T', ' ') || '-' },
+            { title: '到期时间', dataIndex: 'expire_at', width: 170, render: (value: string) => value?.slice(0, 19).replace('T', ' ') || '-' },
+            { title: '使用订单', dataIndex: 'used_order_id', width: 100, render: (value: number) => value || '-' },
+          ]}
+        />
       </Modal>
     </div>
   );
