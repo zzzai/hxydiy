@@ -38,7 +38,7 @@ export default function TechnicianMyServicesPage() {
     return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
   }, [load, closeCustomer]);
   return <section className="technician-my-services">
-    <header><h1>我的服务</h1><p>查看本人正在服务和已结束的顾客；订单确认与结束由系统自动处理。</p></header>
+    <header><h1>我的服务</h1><p>查看本人正在服务和已结束的顾客；确认与结束操作在服务看板完成。</p></header>
     <Button block onClick={() => navigate('/positions')}>查看门店服务位</Button>
     {error && <Alert type="error" message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     {loading ? <Spin /> : tasks.length ? tasks.map((task) => {

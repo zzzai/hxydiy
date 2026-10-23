@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Empty, List, Spin, Tag, Typography } from 'antd';
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
-import { getTechnicianMe, getTechnicianTasks } from '../api';
+import { confirmTechnicianService, finishTechnicianService, getTechnicianMe, getTechnicianTasks } from '../api';
+import { makeIdempotencyKey } from '../operations';
 import {
   technicianBoardGroups,
   technicianOrderItemLabel,
@@ -115,6 +116,8 @@ export default function TechnicianTodayPage() {
   const [selectedOrder, setSelectedOrder] = useState<any>();
   const [profileOrder, setProfileOrder] = useState<any>();
   const [error, setError] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
   const activeLoads = useRef(0);
   const latestLoadRequest = useRef(0);
 
@@ -157,6 +160,20 @@ export default function TechnicianTodayPage() {
       window.removeEventListener('focus', refresh);
     };
   }, [load]);
+
+  const runServiceAction = async (action: 'confirm' | 'finish') => {
+    if (!selectedOrder?.occupancy_id || actionLoading) return;
+    setActionLoading(true); setActionError('');
+    try {
+      const key = makeIdempotencyKey(action + '-service', selectedOrder.occupancy_id);
+      if (action === 'confirm') await confirmTechnicianService(selectedOrder.occupancy_id, key);
+      else await finishTechnicianService(selectedOrder.occupancy_id, key);
+      setSelectedOrder(undefined);
+      await load();
+    } catch (failure: any) {
+      setActionError(failure?.response?.data?.detail?.message || (action === 'confirm' ? '确认接单失败，请重试' : '结束服务失败，请重试'));
+    } finally { setActionLoading(false); }
+  };
 
   const groups = technicianBoardGroups(tasks);
   const boardCounts = tasks.reduce((counts, task) => {
@@ -243,9 +260,12 @@ export default function TechnicianTodayPage() {
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
         <OrderItems order={selectedOrder} />
         <OrderPricingBlock pricing={selectedOrder.pricing} />
+        {actionError && <Alert type="error" showIcon message={actionError} />}
         <div className="technician-task-card-foot">
-          <Typography.Text type="secondary">订单确认、开始和结束由系统自动处理，技师端仅查看。</Typography.Text>
-          {selectedOrder.completed_by_me && selectedOrder.customer?.id && selectedOrder.selection_session_id && <Button block size="large" onClick={() => { setProfileOrder(selectedOrder); setSelectedOrder(undefined); }}>填写服务参考</Button>}
+          <Typography.Text type="secondary">操作会同步到店长工作台；重复提交由幂等键保护。</Typography.Text>
+          {selectedOrder.occupancy_status === 'waiting_service' && <Button block size="large" type="primary" loading={actionLoading} onClick={() => void runServiceAction('confirm')}>确认接单并开始服务</Button>}
+          {selectedOrder.occupancy_status === 'in_service' && <Button block size="large" type="primary" loading={actionLoading} onClick={() => void runServiceAction('finish')}>结束服务</Button>}
+          {selectedOrder.completed_by_me && selectedOrder.customer?.id && selectedOrder.selection_session_id && <Button block size="large" onClick={() => { setProfileOrder(selectedOrder); setSelectedOrder(undefined); }}>填写服务记录</Button>}
         </div>
         </>}
       </div>}
