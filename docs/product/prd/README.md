@@ -1,10 +1,11 @@
 # 荷小悦管理后台业务 PRD 套件
 
-日期：2026-10-22
-版本：v1.0（业务逻辑补全基线）
+日期：2026-10-23
+版本：v1.1（30 轮持续落地基线）
 关联产品规范：[admin-platform-redesign-v2.md](../admin-platform-redesign-v2.md)
 关联设计审查：[admin-design-review-20261022.md](../../design/admin-design-review-20261022.md)
-当前生产：`github-0c4142e2d096-39749724308`
+当前生产：`github-f5332e001b30-39886828808`
+最终实现矩阵：[IMPLEMENTATION-MATRIX.md](IMPLEMENTATION-MATRIX.md)
 
 ## 0. 为什么补这组 PRD
 
@@ -71,16 +72,16 @@
 
 | 编号 | 模块 | 文档 | 状态 | 现有实现 |
 |---|---|---|---|---|
-| BR-01 | 工作台与异常中心 | [workbench-exception.md](workbench-exception.md) | 新增 | 部分 |
-| BR-02 | 到店选单、订单、结算、退款 | [order-settlement.md](order-settlement.md) | 新增 | 部分 |
+| BR-01 | 工作台与异常中心 | [workbench-exception.md](workbench-exception.md) | 新增 | 较完整：工作台、异常队列、责任人/SLA、跨店异常 |
+| BR-02 | 到店选单、订单、结算、退款 | [order-settlement.md](order-settlement.md) | 新增 | 较完整：只读结算、对账、异常队列；遗留动作收口待做 |
 | BR-03 | 服务位与房间 | [service-position.md](service-position.md) | 新增 | 较完整 |
-| BR-04 | 门店生命周期与开业 | [store-lifecycle.md](store-lifecycle.md) | 新增 | 基础 CRUD |
-| BR-05 | 服务目录、加项、商品、页面 | [catalog-publication.md](catalog-publication.md) | 新增 | 项目较强，商品/页面弱 |
-| BR-06 | 技师档案、排班、请假、账号 | [technician-workforce.md](technician-workforce.md) | 新增 | 账号生命周期强，排班缺口 |
-| BR-07 | 顾客、标签、分群、评价运营 | [customer-operations.md](customer-operations.md) | 新增 | 评价/会员部分完成 |
-| BR-08 | 优惠券与 SCRM 自动化 | [marketing-scrm.md](marketing-scrm.md) | 新增 | 页面不可达/基础 CRUD |
-| BR-09 | 经营分析与指标 | [analytics-metrics.md](analytics-metrics.md) | 新增 | 指标多，口径需修 |
-| BR-10 | 权限、工作区、员工账号、审计 | [governance-permissions.md](governance-permissions.md) | 新增 | 基础能力有，存在死页 |
+| BR-04 | 门店生命周期与开业 | [store-lifecycle.md](store-lifecycle.md) | 新增 | 营业状态闸门、开业检查、闭店校验；版本化清单待做 |
+| BR-05 | 服务目录、加项、商品、页面 | [catalog-publication.md](catalog-publication.md) | 新增 | 项目/店铺选择器较强；页面版本+回滚已实现；商品交易仍弱 |
+| BR-06 | 技师档案、排班、请假、账号 | [technician-workforce.md](technician-workforce.md) | 新增 | 账号、请假审批、周排班、在岗看板、复制周、跨店人力已实现 |
+| BR-07 | 顾客、标签、分群、评价运营 | [customer-operations.md](customer-operations.md) | 新增 | 顾客导出/记录、手机号审计、券发放；分群/合并仍弱 |
+| BR-08 | 优惠券与 SCRM 自动化 | [marketing-scrm.md](marketing-scrm.md) | 新增 | 已可达；发券/统计/执行日志完成；预算/核销明细待做 |
+| BR-09 | 经营分析与指标 | [analytics-metrics.md](analytics-metrics.md) | 新增 | 数据质量、客单价、环比已实现；区域/导出待做 |
+| BR-10 | 权限、工作区、员工账号、审计 | [governance-permissions.md](governance-permissions.md) | 新增 | 基础能力有；死页已恢复；细粒度范围仍待做 |
 | 已有 | 顾客评价体验 | [customer-service-feedback-prd.md](../customer-service-feedback-prd.md) | 已有 | 顾客端已实现 |
 | 已有 | 会员闭环 | [admin-membership-closure-prd.md](../admin-membership-closure-prd.md) | 已有 | 已实现 |
 | 已有 | 顾客画像 | [customer-profile-prd.md](../customer-profile-prd.md) | 已有 | 已实现 |
@@ -148,12 +149,12 @@ account:    not_opened / invited / active / disabled
 | P0 | 门店状态阻断业务 | ✅ 已实现状态闸门，仍需开业清单/闭店检查 |
 | P0 | 死页面可达性（页面配置/优惠券/SCRM） | ✅ 已恢复总部/品牌管理员入口 |
 | P0 | 总部跨店经营视图 | ✅ 已实现第一版品牌总览，仍需区域/趋势/排名 |
-| P0 | 选单/订单双事实边界 | 移动端只读与桌面端人工操作不一致 |
+| P0 | 选单/订单双事实边界 | ✅ 已实现对账、异常队列、责任人/SLA |
 | P0 | 写操作幂等与前后值审计 | 弱网/并发下的数据风险 |
 | P1 | 目录 master + 门店覆盖 + 批量发布 | 连锁标准化基础 |
-| P1 | 技师档案、排班、请假审批 | 门店人力运营基础 |
+| P1 | 技师档案、排班、请假审批 | ✅ 已实现审批/周排班/看板/复制周 |
 | P1 | 顾客标签/分群/评价跟进历史 | 顾客运营基础 |
-| P1 | 结算详情、分页、状态全集 | 财务可追溯 |
+| P1 | 结算详情、分页、状态全集 | ⏳ 部分：只读+对账已实现，详情/分页仍待做 |
 | P1 | 经营分析口径、日期、时区、利用率 | 决策可信度 |
 | P1 | 页面配置/优惠券/自动化表单化 | 运营可用性 |
 | P2 | 批量操作、审批流、版本回滚、数据质量监控 | 规模化效率 |
