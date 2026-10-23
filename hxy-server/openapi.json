@@ -17444,6 +17444,90 @@
         ]
       }
     },
+    "/api/v1/admin/v2/technician-hours": {
+      "get": {
+        "description": "Weekly shift-hour summary per technician, including approved leave days.",
+        "operationId": "technician_hours_api_v1_admin_v2_technician_hours_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Technician Hours Api V1 Admin V2 Technician Hours Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Technician Hours",
+        "tags": [
+          "technician-lifecycle"
+        ]
+      }
+    },
     "/api/v1/admin/v2/technician-leave-requests": {
       "get": {
         "operationId": "list_leave_requests_api_v1_admin_v2_technician_leave_requests_get",

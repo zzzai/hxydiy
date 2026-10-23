@@ -11,7 +11,7 @@ from app.main import app
 from app.models import AuditLog, CustomerProfileRecord, Order, PositionOccupancy, SelectionSession, Staff, Store, User, Project, PriceBook
 from app.models.operations import Room, Technician
 from app.models.service import ServiceAssignment, ServiceOrder, Visit
-from app.models.technician_portal import TechnicianShift
+from app.models.technician_portal import TechnicianLeaveRequest, TechnicianShift
 
 
 class TestTechnicianPortalApi:
@@ -744,3 +744,37 @@ class TestTechnicianPortalApi:
         assert items[0]["work_date"] == shift_date.isoformat()
         assert items[0]["shift_label"] == "早班"
         assert items[0]["start_time"] == "09:00"
+
+    def test_admin_can_read_weekly_technician_hours(self):
+        with self.SessionLocal() as db:
+            work_date = date.today()
+            db.add(TechnicianShift(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                work_date=work_date,
+                shift_type="custom",
+                start_time="09:00",
+                end_time="17:00",
+            ))
+            db.add(TechnicianLeaveRequest(
+                store_id=self.store_id,
+                technician_id=self.technician_id,
+                start_date=work_date + timedelta(days=1),
+                end_date=work_date + timedelta(days=1),
+                reason="休息",
+                status="approved",
+            ))
+            db.commit()
+
+        response = self.client.get(
+            "/api/v1/admin/v2/technician-hours",
+            params={"start_date": (work_date - timedelta(days=7)).isoformat(), "end_date": (work_date + timedelta(days=7)).isoformat()},
+            headers=self.admin_headers,
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        item = next(row for row in body["items"] if row["technician_id"] == self.technician_id)
+        assert item["hours"] == 8.0
+        assert item["shift_days"] == 1
+        assert item["leave_days"] == 1
+        assert body["summary"]["total_hours"] == 8.0

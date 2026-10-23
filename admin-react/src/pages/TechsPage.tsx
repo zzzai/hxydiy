@@ -4,7 +4,7 @@ import type { MenuProps } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { CheckCircleOutlined, KeyOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, StopOutlined, UserSwitchOutlined } from '@ant-design/icons';
 import { ModalForm, PageContainer, ProFormDigit, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
-import { approveTechnicianLeave, copyTechnicianShiftWeek, createTechnician, disableTechnicianLogin, getStaff, getTechnicianBoard, getTechnicianLeaveRequests, getTechnicianShifts, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin, saveTechnicianShift } from '../api';
+import { approveTechnicianLeave, copyTechnicianShiftWeek, createTechnician, disableTechnicianLogin, getStaff, getTechnicianBoard, getTechnicianHours, getTechnicianLeaveRequests, getTechnicianShifts, inviteTechnician, rehireTechnician, rejectTechnicianLeave, resetTechnicianLogin, resignTechnician, restoreTechnicianLogin, saveTechnicianShift } from '../api';
 import { canManageConfiguration, getStoreId } from '../auth';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
@@ -31,6 +31,8 @@ export default function TechsPage() {
   const [weekStart, setWeekStart] = useState<Dayjs>(dayjs().startOf('week'));
   const [shifts, setShifts] = useState<any[]>([]);
   const [shiftLoading, setShiftLoading] = useState(false);
+  const [hoursData, setHoursData] = useState<any>();
+  const [hoursLoading, setHoursLoading] = useState(false);
 
   const loadShifts = async (start = weekStart) => {
     setShiftLoading(true);
@@ -39,6 +41,15 @@ export default function TechsPage() {
       setShifts(response.data?.items || []);
     } catch { /* API interceptor already presents the server error. */ }
     finally { setShiftLoading(false); }
+  };
+
+  const loadHours = async (start = weekStart) => {
+    setHoursLoading(true);
+    try {
+      const response = await getTechnicianHours(start.format('YYYY-MM-DD'), start.add(6, 'day').format('YYYY-MM-DD'));
+      setHoursData(response.data);
+    } catch { /* API interceptor already presents the server error. */ }
+    finally { setHoursLoading(false); }
   };
 
   const changeShift = async (technicianId: number, workDate: string, shiftType: string) => {
@@ -62,7 +73,7 @@ export default function TechsPage() {
     },
   });
 
-  useEffect(() => { if (canManage) void loadShifts(); }, [canManage, weekStart]);
+  useEffect(() => { if (canManage) { void loadShifts(); void loadHours(); } }, [canManage, weekStart]);
 
   const loadBoard = async () => {
     setBoardLoading(true);
@@ -186,6 +197,23 @@ export default function TechsPage() {
               />;
             },
           })),
+        ]}
+      />
+    </Card>}
+    {canManage && <Card title="本周工时" style={{ marginBottom: 16 }} loading={hoursLoading} extra={<Space size={8}><Tag color="blue">总工时 {hoursData?.summary?.total_hours ?? 0} h</Tag><Button size="small" onClick={() => void loadHours()}>刷新工时</Button></Space>}>
+      <Table
+        rowKey="technician_id"
+        size="small"
+        pagination={false}
+        dataSource={hoursData?.items || []}
+        locale={{ emptyText: '本周暂无排班工时' }}
+        columns={[
+          { title: '技师', dataIndex: 'name', width: 120 },
+          { title: '编码', dataIndex: 'code', width: 120 },
+          { title: '出勤天数', dataIndex: 'shift_days', width: 100, align: 'right' as const },
+          { title: '休息天数', dataIndex: 'off_days', width: 100, align: 'right' as const },
+          { title: '请假天数', dataIndex: 'leave_days', width: 100, align: 'right' as const },
+          { title: '工时', dataIndex: 'hours', width: 100, align: 'right' as const, render: (value: number) => <b>{value} h</b> },
         ]}
       />
     </Card>}
