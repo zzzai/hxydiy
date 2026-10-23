@@ -243,8 +243,8 @@ export const getBrandOverview = (startDate: string, endDate: string) =>
   client.get('/admin/v2/brand/overview', { params: { start_date: startDate, end_date: endDate } });
 export const getBrandExceptions = (status = 'open') =>
   client.get('/admin/v2/brand/exceptions', { params: { status } });
-export const getOperationsSummary = (startDate: string, endDate: string) =>
-  client.get('/admin/operations-summary', { params: { start_date: startDate, end_date: endDate } });
+export const getOperationsSummary = (startDate: string, endDate: string, compare = true) =>
+  client.get('/admin/operations-summary', { params: { start_date: startDate, end_date: endDate, compare } });
 export type ServiceReferenceSummary = {
   total: number;
   confirmed: number;

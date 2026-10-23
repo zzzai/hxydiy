@@ -1604,7 +1604,7 @@ class AdminV2ContractTests(unittest.TestCase):
 
         response = self.client.get(
             "/api/v1/admin/operations-summary",
-            params={"start_date": "2026-08-20", "end_date": "2026-08-20"},
+            params={"start_date": "2026-08-20", "end_date": "2026-08-20", "compare": True},
             headers=self.auth_headers,
         )
         self.assertEqual(response.status_code, 200, response.text)
@@ -1616,6 +1616,8 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertIn("data_quality", body)
         self.assertIn("warnings", body["data_quality"])
         self.assertIn("definitions", body)
+        self.assertIn("comparison", body)
+        self.assertEqual(body["comparison"]["period"]["end_date"], "2026-08-19")
         self.assertEqual(body["transactions"]["discount_cents"], 3000)
         self.assertEqual(body["customers"]["new_count"], 1)
         self.assertEqual(body["customers"]["repeat_count"], 1)
@@ -1708,7 +1710,7 @@ class AdminV2ContractTests(unittest.TestCase):
 
         response = self.client.get(
             "/api/v1/admin/operations-summary",
-            params={"start_date": "2026-08-20", "end_date": "2026-08-20"},
+            params={"start_date": "2026-08-20", "end_date": "2026-08-20", "compare": True},
             headers=self.auth_headers,
         )
         self.assertEqual(response.status_code, 200, response.text)
