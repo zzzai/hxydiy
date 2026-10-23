@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Alert, Button, Card, Empty, Input, InputNumber, List, Modal, Select, Space, Spin, Tag, message } from 'antd';
+import { Alert, Button, Card, Descriptions, Drawer, Empty, Input, InputNumber, List, Modal, Pagination, Select, Space, Spin, Tag, Typography, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getOrderReconciliation, getOrders, getStaff, registerRefundNote } from '../api';
+import { getOrderDetail, getOrderReconciliation, getOrders, getStaff, registerRefundNote } from '../api';
 import { buildRefundNotePayload, makeIdempotencyKey } from '../operations';
 
 const STATUS_MAP: Record<string, { color: string; text: string }> = {
@@ -27,6 +27,13 @@ export default function OrdersPage() {
   const [reconOpen, setReconOpen] = useState(false);
   const [reconLoading, setReconLoading] = useState(false);
   const [recon, setRecon] = useState<any>();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detail, setDetail] = useState<any>();
   const staff = getStaff();
 
   const openReconciliation = async () => {
@@ -36,11 +43,22 @@ export default function OrdersPage() {
     finally { setReconLoading(false); }
   };
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { void load(); }, [filter, page, pageSize]);
 
   const load = async () => {
     setLoading(true);
-    try { const r = await getOrders(filter || undefined); setItems(r.data?.items || []); } catch {} finally { setLoading(false); }
+    try {
+      const r = await getOrders({ status: filter || undefined, page, page_size: pageSize, q: search || undefined });
+      setItems(r.data?.items || []);
+      setTotal(r.data?.total || 0);
+    } catch {} finally { setLoading(false); }
+  };
+
+  const openDetail = async (order: any) => {
+    setDetailOpen(true); setDetail(undefined); setDetailLoading(true);
+    try { const response = await getOrderDetail(order.id); setDetail(response.data); }
+    catch { message.error('订单详情加载失败'); }
+    finally { setDetailLoading(false); }
   };
 
   const openRefund = (order: any) => {
@@ -88,16 +106,28 @@ export default function OrdersPage() {
         <span>记录状态</span>
         <Select
           aria-label="筛选结算记录状态"
-          value={filter} onChange={setFilter}
+          value={filter} onChange={(value) => { setFilter(value); setPage(1); }}
           style={{ width: 170 }}
           options={[
             { value: '', label: '全部记录' },
             { value: 'pending_payment', label: '待门店确认' },
             { value: 'paid', label: '待核销' },
+            { value: 'confirmed', label: '已确认' },
+            { value: 'checked_in', label: '已到店' },
+            { value: 'in_service', label: '服务中' },
             { value: 'completed', label: '已完成' },
           ]}
         />
-        <span className="orders-count">共 {items.length} 条</span>
+        <Input.Search
+          aria-label="按订单号搜索"
+          placeholder="搜索订单号"
+          allowClear
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          onSearch={() => { setPage(1); void load(); }}
+          style={{ width: 200 }}
+        />
+        <span className="orders-count">共 {total} 条</span>
       </div>
       {loading ? <Spin style={{ display: 'block', margin: '40px auto' }} /> :
        items.length === 0 ? <Empty description={filter ? '当前筛选下没有结算记录，可切换到全部记录查看' : '本店还没有结算记录'} /> :
@@ -115,9 +145,22 @@ export default function OrdersPage() {
           <div style={{ color: '#999', fontSize: 12 }}>预约 {o.booking_date || '-'} {o.booking_time || ''} · ¥{(o.pay_amount_cents / 100).toFixed(2)} · {o.created_at?.slice(5, 16)}</div>
           {o.selection_session_id && <div style={{ color: '#667369', fontSize: 12 }}>选单 {o.selection_session_id.slice(0, 8)} · 选单金额 ¥{((o.selection_total_cents || 0) / 100).toFixed(2)}</div>}
           {o.refund_status && <Tag color={o.refund_status === 'refunded' ? 'red' : 'orange'}>{o.refund_status === 'refunded' ? '已全额退款' : '已部分退款'}</Tag>}
-          {staff?.role === 'admin' && o.pay_status === 'paid' && <Button size="small" danger onClick={() => openRefund(o)}>登记退款</Button>}
+          <Space size={6}>
+            <Button size="small" onClick={() => void openDetail(o)}>详情</Button>
+            {staff?.role === 'admin' && o.pay_status === 'paid' && <Button size="small" danger onClick={() => openRefund(o)}>登记退款</Button>}
+          </Space>
         </Card>
       ))}
+      {total > 0 && <Pagination
+        style={{ marginTop: 16, textAlign: 'right' }}
+        current={page}
+        pageSize={pageSize}
+        total={total}
+        showSizeChanger
+        pageSizeOptions={[10, 20, 50]}
+        onChange={(nextPage, nextSize) => { setPage(nextPage); if (nextSize !== pageSize) setPageSize(nextSize); }}
+        showTotal={(value) => `共 ${value} 条`}
+      />}
       <Modal
         title="登记已完成退款"
         open={Boolean(refundOrder)}
@@ -168,6 +211,24 @@ export default function OrdersPage() {
           />}
         </>}
       </Modal>
+      <Drawer title="结算详情" width={520} open={detailOpen} onClose={() => setDetailOpen(false)} loading={detailLoading}>
+        {detail?.order && <>
+          <Descriptions column={1} size="small" items={[
+            { label: '订单号', children: detail.order.order_no },
+            { label: '状态', children: <Tag color={STATUS_MAP[detail.order.status]?.color}>{STATUS_MAP[detail.order.status]?.text || detail.order.status}</Tag> },
+            { label: '实付', children: `¥${((detail.order.pay_amount_cents || 0) / 100).toFixed(2)}` },
+            { label: '退款状态', children: detail.order.refund_status || '无' },
+            { label: '预约', children: `${detail.order.booking_date || '-'} ${detail.order.booking_time || ''}` },
+            { label: '选单', children: detail.order.selection_session_id ? `${detail.order.selection_session_id} · ¥${((detail.order.selection_total_cents || 0) / 100).toFixed(2)}` : '未关联' },
+          ]} />
+          <Typography.Title level={5}>服务项目</Typography.Title>
+          <List size="small" dataSource={detail.order.items || []} locale={{ emptyText: '无项目快照' }} renderItem={(item: any) => <List.Item>{item.name || '项目'} × {item.quantity || 1}</List.Item>} />
+          <Typography.Title level={5}>状态历史</Typography.Title>
+          <List size="small" dataSource={detail.events || []} locale={{ emptyText: '暂无状态历史' }} renderItem={(event: any) => <List.Item><Space direction="vertical" size={0}><span>{event.from_status || '-'} → {event.to_status} · {event.action}</span><span style={{ color: 'var(--hxy-text-secondary)', fontSize: 12 }}>{event.created_at?.slice(0, 19).replace('T', ' ') || '-'} · {event.operator || '系统'}</span></Space></List.Item>} />
+          <Typography.Title level={5}>退款调整</Typography.Title>
+          <List size="small" dataSource={detail.refund_adjustments || []} locale={{ emptyText: '暂无退款调整' }} renderItem={(adjustment: any) => <List.Item><Space direction="vertical" size={0}><span>¥{(adjustment.amount_cents / 100).toFixed(2)} · {adjustment.reason_code}</span><span style={{ color: 'var(--hxy-text-secondary)', fontSize: 12 }}>{adjustment.created_at?.slice(0, 19).replace('T', ' ') || '-'} · {adjustment.reason || '无说明'}</span></Space></List.Item>} />
+        </>}
+      </Drawer>
     </div>
   );
 }

@@ -1327,6 +1327,21 @@ class AdminV2ContractTests(unittest.TestCase):
         self.assertNotIn("OTHER-PENDING", order_numbers)
         self.assertNotIn("OTHER-PAID", order_numbers)
 
+    def test_admin_order_detail_and_pagination(self):
+        listing = self.client.get("/api/v1/admin/orders", params={"page": 1, "page_size": 1}, headers=self.auth_headers)
+        self.assertEqual(listing.status_code, 200, listing.text)
+        body = listing.json()
+        self.assertEqual(body["page"], 1)
+        self.assertEqual(body["page_size"], 1)
+        self.assertGreaterEqual(body["total"], 1)
+        self.assertEqual(len(body["items"]), 1)
+        order_id = body["items"][0]["id"]
+        detail = self.client.get(f"/api/v1/admin/orders/{order_id}", headers=self.auth_headers)
+        self.assertEqual(detail.status_code, 200, detail.text)
+        self.assertEqual(detail.json()["order"]["id"], order_id)
+        self.assertIn("events", detail.json())
+        self.assertIn("refund_adjustments", detail.json())
+
     def test_customer_phone_reveal_is_store_scoped_and_audited(self):
         with self.SessionLocal() as db:
             staff = db.get(Staff, self.staff_id)

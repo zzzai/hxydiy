@@ -535,9 +535,29 @@ export interface paths {
         };
         /**
          * Admin Orders
-         * @description 订单查询（可按状态/日期过滤）。
+         * @description 订单查询（按状态/日期/单号过滤，分页返回）。
          */
         get: operations["admin_orders_api_v1_admin_orders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/orders/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Order Detail
+         * @description Order detail with selection link, status history and refund adjustments.
+         */
+        get: operations["admin_order_detail_api_v1_admin_orders__order_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8159,11 +8179,49 @@ export interface operations {
             query?: {
                 status?: string | null;
                 date?: string | null;
+                q?: string | null;
+                page?: number;
+                page_size?: number;
             };
             header?: {
                 authorization?: string | null;
             };
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_order_detail_api_v1_admin_orders__order_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                order_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
