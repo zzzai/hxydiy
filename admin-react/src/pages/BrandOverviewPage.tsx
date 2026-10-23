@@ -63,7 +63,7 @@ function ratio(value?: number | null) {
 export default function BrandOverviewPage() {
   const [range, setRange] = useState<[Dayjs, Dayjs]>([dayjs().subtract(6, 'day'), dayjs()]);
   const [data, setData] = useState<Overview>();
-  const [exceptions, setExceptions] = useState<{ items: any[]; total: number; summary?: { by_store?: any[] } }>();
+  const [exceptions, setExceptions] = useState<{ items: any[]; total: number; summary?: { by_store?: any[]; overdue?: number } }>();
   const [workforce, setWorkforce] = useState<{ date?: string; summary?: any; stores?: any[] }>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -167,7 +167,7 @@ export default function BrandOverviewPage() {
             ]}
           />
         </Card>
-        <Card style={{ marginTop: 16 }} title="跨店异常" extra={<Typography.Text type="secondary">待处理 {exceptions?.total || 0} 条</Typography.Text>}>
+        <Card style={{ marginTop: 16 }} title="跨店异常" extra={<Space size={6}><Typography.Text type="secondary">待处理 {exceptions?.total || 0} 条</Typography.Text>{exceptions?.summary?.overdue ? <Tag color="red">逾期 {exceptions.summary.overdue}</Tag> : null}</Space>}>
           <Table
             rowKey="id"
             size="small"
@@ -176,8 +176,10 @@ export default function BrandOverviewPage() {
             locale={{ emptyText: <Empty description="当前没有跨店待处理异常" /> }}
             columns={[
               { title: '门店', width: 180, render: (_: any, row: any) => <Space direction="vertical" size={0}><Typography.Text strong>{row.store_name}</Typography.Text><Typography.Text type="secondary">{row.store_code}</Typography.Text></Space> },
-              { title: '类型', dataIndex: 'exception_type', width: 140, render: (value: string) => <Tag color="orange">{value}</Tag> },
+              { title: '类型', dataIndex: 'exception_type', width: 140, render: (value: string, row: any) => <Tag color={row.overdue ? 'red' : 'orange'}>{value}</Tag> },
               { title: '问题', dataIndex: 'title', ellipsis: true },
+              { title: '责任人', dataIndex: 'owner', width: 110, render: (value: string) => value || <Typography.Text type="danger">未指派</Typography.Text> },
+              { title: 'SLA 截止', dataIndex: 'due_at', width: 170, render: (value: string, row: any) => value ? <span style={{ color: row.overdue ? 'var(--hxy-danger)' : undefined }}>{value.slice(0, 19).replace('T', ' ')}</span> : '-' },
               { title: '发现时间', dataIndex: 'created_at', width: 170, render: (value: string) => value?.slice(0, 19).replace('T', ' ') || '-' },
             ]}
           />

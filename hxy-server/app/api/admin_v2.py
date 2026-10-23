@@ -27,7 +27,7 @@ from app.domain.membership_entitlements import card_state, has_membership, legac
 from app.schemas.member_cards import MembershipExplanation, MemberCardFactUpdate
 from app.core.config import settings
 
-from app.api.admin import _current_staff, hash_password, normalize_staff_role
+from app.api.admin import _current_staff, _summary_utc, hash_password, normalize_staff_role
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.models import (
@@ -1483,12 +1483,20 @@ def brand_exceptions(
     if status:
         query = query.where(OperationalException.status == status)
     rows = db.execute(query.order_by(OperationalException.id.desc()).limit(300)).all()
+    owner_ids = {exception.assigned_staff_id for exception, _store in rows if exception.assigned_staff_id}
+    owners = {member.id: member.name for member in db.scalars(select(Staff).where(Staff.id.in_(owner_ids)))} if owner_ids else {}
+    now = datetime.now(UTC)
     store_counts: dict[int, dict] = {}
     type_counts: dict[str, int] = {}
+    overdue_count = 0
     items = []
     for exception, store in rows:
-        store_counts.setdefault(store.id, {"store_id": store.id, "store_name": store.name, "store_code": store.store_code, "count": 0})
+        due_at = _summary_utc(exception.due_at) if exception.due_at else None
+        overdue = bool(exception.status == "open" and due_at and due_at < now)
+        overdue_count += 1 if overdue else 0
+        store_counts.setdefault(store.id, {"store_id": store.id, "store_name": store.name, "store_code": store.store_code, "count": 0, "overdue": 0})
         store_counts[store.id]["count"] += 1
+        store_counts[store.id]["overdue"] += 1 if overdue else 0
         type_counts[exception.exception_type] = type_counts.get(exception.exception_type, 0) + 1
         items.append({
             "id": exception.id,
@@ -1502,6 +1510,10 @@ def brand_exceptions(
             "detail": exception.detail,
             "entity_type": exception.entity_type,
             "entity_id": exception.entity_id,
+            "assigned_staff_id": exception.assigned_staff_id,
+            "owner": owners.get(exception.assigned_staff_id),
+            "due_at": due_at.isoformat() if due_at else None,
+            "overdue": overdue,
             "created_at": exception.created_at.isoformat() if exception.created_at else None,
         })
     return {
@@ -1510,6 +1522,7 @@ def brand_exceptions(
         "summary": {
             "by_type": type_counts,
             "by_store": sorted(store_counts.values(), key=lambda row: row["count"], reverse=True),
+            "overdue": overdue_count,
         },
     }
 
@@ -1746,11 +1759,25 @@ def manager_workbench(
         ServiceFeedback.rating <= 2,
         ServiceFeedback.follow_up_status == "open",
     )) or 0
+    open_exceptions = db.scalar(select(sa_func.count()).select_from(OperationalException).where(
+        OperationalException.store_id == store_id,
+        OperationalException.status == "open",
+    )) or 0
+    overdue_exceptions = db.scalar(select(sa_func.count()).select_from(OperationalException).where(
+        OperationalException.store_id == store_id,
+        OperationalException.status == "open",
+        OperationalException.due_at.isnot(None),
+        OperationalException.due_at < datetime.now(UTC),
+    )) or 0
     attention = []
     if stale_orders:
         attention.append({"key": "stale_order", "label": "订单超过30分钟未开始", "count": stale_orders})
     if low_reviews:
         attention.append({"key": "low_review", "label": "低分评价待跟进", "count": low_reviews})
+    if open_exceptions:
+        attention.append({"key": "exception_queue", "label": "异常待处理", "count": open_exceptions})
+    if overdue_exceptions:
+        attention.append({"key": "exception_overdue", "label": "异常已逾期", "count": overdue_exceptions})
     return {
         "store_id": store_id,
         "generated_at": datetime.now(UTC).isoformat(),
@@ -1758,6 +1785,8 @@ def manager_workbench(
             "today_orders": today_orders,
             "in_service": in_service,
             "pending_checkout": pending_checkout,
+            "open_exceptions": open_exceptions,
+            "overdue_exceptions": overdue_exceptions,
             "attention": sum(int(item["count"]) for item in attention),
         },
         "attention": attention,

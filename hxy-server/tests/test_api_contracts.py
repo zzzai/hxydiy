@@ -804,6 +804,8 @@ class AdminV2ContractTests(unittest.TestCase):
                     detail={},
                     entity_type="order",
                     entity_id="1",
+                    assigned_staff_id=self.staff_id,
+                    due_at=datetime.now(timezone.utc) - timedelta(hours=2),
                 ),
                 OperationalException(
                     store_id=self.other_store_id,
@@ -827,10 +829,44 @@ class AdminV2ContractTests(unittest.TestCase):
             self.assertEqual(body["total"], 2)
             self.assertEqual({row["store_id"] for row in body["items"]}, {store_id, self.other_store_id})
             self.assertEqual(len(body["summary"]["by_store"]), 2)
+            self.assertEqual(body["summary"]["overdue"], 1)
+            main = next(row for row in body["items"] if row["store_id"] == store_id)
+            self.assertTrue(main["overdue"])
+            self.assertEqual(main["owner"], "管理员")
         finally:
             self.__class__.current_staff_id = self.staff_id
             with self.SessionLocal() as db:
                 db.query(OperationalException).filter(OperationalException.dedupe_key.in_(["hq-test-main", "hq-test-other"])).delete()
+                db.commit()
+
+    def test_manager_workbench_surfaces_open_and_overdue_exceptions(self):
+        with self.SessionLocal() as db:
+            store_id = db.get(Staff, self.staff_id).store_id
+            db.add(OperationalException(
+                store_id=store_id,
+                exception_type="missing_selection",
+                severity="warning",
+                status="open",
+                dedupe_key="workbench-exception",
+                title="工作台异常",
+                detail={},
+                entity_type="order",
+                entity_id="3",
+                due_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            ))
+            db.commit()
+        try:
+            response = self.client.get("/api/v1/admin/v2/manager/workbench", headers=self.auth_headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            body = response.json()
+            self.assertGreaterEqual(body["summary"]["open_exceptions"], 1)
+            self.assertGreaterEqual(body["summary"]["overdue_exceptions"], 1)
+            keys = {item["key"] for item in body["attention"]}
+            self.assertIn("exception_queue", keys)
+            self.assertIn("exception_overdue", keys)
+        finally:
+            with self.SessionLocal() as db:
+                db.query(OperationalException).filter(OperationalException.dedupe_key == "workbench-exception").delete()
                 db.commit()
 
     def test_headquarters_admin_can_view_cross_store_workforce(self):

@@ -113,7 +113,7 @@ class SelectionAdminApiTests(unittest.TestCase):
         assert response.status_code == 200, response.text
         body = response.json()
         assert body["store_id"] == self.store_id
-        assert set(body["summary"]) == {"today_orders", "in_service", "pending_checkout", "attention"}
+        assert set(body["summary"]) == {"today_orders", "in_service", "pending_checkout", "open_exceptions", "overdue_exceptions", "attention"}
         assert body["summary"]["attention"] == sum(item["count"] for item in body["attention"])
         assert isinstance(body["attention"], list)
 
