@@ -128,7 +128,8 @@ export const settleService = (serviceOrderId: number, idempotencyKey: string) =>
   });
 
 // Orders
-export const getOrders = (status?: string) => client.get('/admin/orders', { params: { status } });
+export const getOrders = (params?: any) => client.get('/admin/orders', { params });
+export const getOrderDetail = (orderId: number) => client.get(`/admin/orders/${orderId}`);
 export const getOrderReconciliation = (days = 30) => client.get('/admin/order-reconciliation', { params: { days } });
 export const syncOrderReconciliation = (days = 30) => client.post('/admin/order-reconciliation/sync', null, { params: { days } });
 export const getOperationalExceptions = (status = 'open') => client.get('/admin/exceptions', { params: { status } });

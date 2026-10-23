@@ -32,6 +32,7 @@ from app.models import (
     Room,
     ServiceFeedback,
     SelectionSession,
+    SettlementAdjustment,
     Staff,
     StaffScopeAssignment,
     Store,
@@ -853,19 +854,28 @@ def complete_order(
 def admin_orders(
     status: str | None = None,
     date: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """订单查询（可按状态/日期过滤）。"""
+    """订单查询（按状态/日期/单号过滤，分页返回）。"""
     staff = _current_staff(authorization, db)
     _require_manager_staff(staff)
     store_id = _staff_store_id(staff)
-    stmt = select(Order).where(Order.store_id == store_id).order_by(Order.id.desc()).limit(100)
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    base = select(Order).where(Order.store_id == store_id)
     if status:
-        stmt = stmt.where(Order.status == status)
+        base = base.where(Order.status == status)
     if date:
-        stmt = stmt.where(Order.booking_date == date)
-    orders = list(db.scalars(stmt))
+        base = base.where(Order.booking_date == date)
+    if q and q.strip():
+        base = base.where(Order.order_no.ilike(f"%{q.strip()}%"))
+    from sqlalchemy import func
+    total = int(db.scalar(select(func.count()).select_from(base.subquery())) or 0)
+    orders = list(db.scalars(base.order_by(Order.id.desc()).offset((page - 1) * page_size).limit(page_size)))
     sessions = list(db.scalars(
         select(SelectionSession).where(
             SelectionSession.fulfillment_order_id.in_([order.id for order in orders])
@@ -874,7 +884,56 @@ def admin_orders(
     session_by_order = {session.fulfillment_order_id: session for session in sessions}
     return {
         "items": [_order_summary(order, session_by_order.get(order.id)) for order in orders],
-        "total": len(orders),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/orders/{order_id}")
+def admin_order_detail(
+    order_id: int,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Order detail with selection link, status history and refund adjustments."""
+    staff = _current_staff(authorization, db)
+    _require_manager_staff(staff)
+    store_id = _staff_store_id(staff)
+    order = db.scalar(select(Order).where(Order.id == order_id, Order.store_id == store_id))
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    session = db.scalar(select(SelectionSession).where(
+        SelectionSession.fulfillment_order_id == order.id,
+        SelectionSession.store_id == store_id,
+    ))
+    events = list(db.scalars(select(OrderEvent).where(OrderEvent.order_id == order.id).order_by(OrderEvent.id.desc()).limit(100)))
+    adjustments = list(db.scalars(select(SettlementAdjustment).where(
+        SettlementAdjustment.order_id == order.id,
+        SettlementAdjustment.store_id == store_id,
+    ).order_by(SettlementAdjustment.id.desc())))
+    return {
+        "order": _order_summary(order, session),
+        "events": [{
+            "id": event.id,
+            "from_status": event.from_status,
+            "to_status": event.to_status,
+            "action": event.action,
+            "operator": event.operator,
+            "reason": event.reason,
+            "created_at": event.created_at.isoformat() if event.created_at else None,
+        } for event in events],
+        "refund_adjustments": [{
+            "id": adjustment.id,
+            "amount_cents": adjustment.amount_cents,
+            "original_amount_cents": adjustment.original_amount_cents,
+            "final_amount_cents": adjustment.final_amount_cents,
+            "reason_code": adjustment.reason_code,
+            "reason": adjustment.reason,
+            "responsibility": adjustment.responsibility,
+            "status": adjustment.status,
+            "created_at": adjustment.created_at.isoformat() if adjustment.created_at else None,
+        } for adjustment in adjustments],
     }
 
 
