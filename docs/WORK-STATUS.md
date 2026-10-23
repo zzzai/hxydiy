@@ -1,3 +1,19 @@
+# 2026-10-23 券预算跨入口保护完成生产验收
+
+- PR #372，候选 `f56d774e548e2672ca017903234a00bd5789c38c`，合并/生产 `59de5b564788111a61c3943dedf6fe66ad4f348a`；精确 CI `39914253425` 与唯一 Deploy `39914869286` 成功。实际 current=`github-59de5b564788-39914869286`，备份、恢复演练、部署和校验 job 成功。回执 GET 的网络波动只恢复读取，未重复发布。
+- 统一模板锁覆盖五类既有发券入口；锁后刷新模板，旧预算模板已有发券时禁止改面额/类型；自动奖励预算耗尽跳过，不阻断登录或下单。启用首单奖励时按 ID 排序先锁购买人与邀请人，再检查首单/锁模板，关闭互为邀请人完整订单事务死锁；空预算、原权限与既有发券开关不变，无新迁移或前端变动。
+- 隔离证据复用：跨入口 PostgreSQL 5 项、模板修改/刷新/同顾客锁序 4 项、完整 ASGI HTTP 路由+真实 PostgreSQL 并发首单 2 项均通过；最后两项预算 0/500 均由 DeadlockDetected RED 转 GREEN，断言两笔订单和 0/1 张券。SQLite 分阶段与相关回归已通过，数量有重叠不相加；独立复核通过，不把 TestClient 当网络监听或真机验收。PG opt-in 在默认 CI 跳过不代替上述隔离证据。
+- 总控生产核验 504 项 MANIFEST、168 个安装 Python 文件、9 个运行源文件及评价公网资产一致，health=`ok/production`；revision 仍 `20261026_coupon_budget`。原 12 条反馈与 5 个券模板摘要不变，旧预算仍为空；测试反馈/发券与验证业务写入均为 0。评价前端资源与此前交付完全一致，原可打印二维码继续使用。
+- 脱敏证据：总控 `output/store-feedback-qr-20261023/budget-guard-deployment-result.json`、`production-verification-59de5b564788-39914869286.json`；后台 `output/coupon-budget-guard/receipt.md` 和分阶段日志。微信/实物扫码仍由人验收；本次事实文档不再次部署。
+
+# 2026-10-23 无座评价入口已生产核验并交付打印
+
+- 评价 PR #370 合并 `01cfae4bacb96d142ab1a9a236b1e247792a57cd`，现已随包含 PR #371 的主干 `6bd447a7f97db7ebfd1c00c53cbfbb5d952ea688` 上线。精确 CI `39904613141`、Deploy `39907709539` 成功，发布资格及备份/恢复演练/部署/验证两个 job 均成功。实际 current=`github-6bd447a7f97d-39907709539`，schema=`20261026_coupon_budget`。
+- 总控只读核验 503 项 MANIFEST、167 个安装 Python 文件、3 个运行评价源文件、公网 HTML / 主 JS / 评价 chunk 与安装目录一致，health=`ok/production`。原 12 条反馈和 5 个券模板保护摘要不变，旧模板预算全部为空；未在生产提交测试反馈或发券，验证业务写入 0。
+- 固定二维码 `https://diy.hexiaoyue.com/?store=1&view=feedback` 不含座位、顾客身份或令牌。扫码直达主动评分与选填建议，提交成功显示返回菜单 / 查看检测报告。A5 PDF 148×210 mm、90 mm 二维码及 1440×1440 PNG 已交付；图片及 PDF 渲染解码均为同一完整 URL。真机/纸张扫码交人验收。
+- 早期 Deploy `39903765158`、`39905099208` 因容量门禁失败（迁移/切换前），并行重试 `39906749757` 已取消；未降低 3 GiB 门槛。两批精确失败输入及自有测试依赖在本机完整包留存与保护检查后移除，分别回收 79,720,448 / 64,786,432 字节。独立执行方另有空间释放，不归因本任务。旧 release、业务数据与备份未由本任务删除。
+- 成功 Deploy `39907709539` 为外部执行，总控核验后交付；重新上传旧评价包时发现 current 已推进，因此未执行任何旧版本部署。首次交付时预算并发保护尚未上线，后续已由本文件上方 PR #372 记录收尾。脱敏证据：总控工作区 `output/store-feedback-qr-20261023/production-verification-6bd447a7f97d-39907709539.json`、`external-deploy-39907709539.json`、`print/artifact-check.json`。文档收尾不额外部署。
+
 # 2026-10-21 MANAGER-MOBILE-20261020 已生产发布
 
 - 业务 [PR #299](https://github.com/zzzai/hxydiy/pull/299)，候选 `646f50332ba49218051656c6806ce237e42f0a66`，合并/生产 `576bcc25982ad742d8767cb65beb1ec5c9d195e4`。精确主干 [CI 39468039639](https://github.com/zzzai/hxydiy/actions/runs/39468039639) 与唯一 [Deploy 39468665453](https://github.com/zzzai/hxydiy/actions/runs/39468665453) 成功；发布资格、备份、恢复演练、部署与校验job均success。没有第二次部署。

@@ -1,10 +1,18 @@
 # hxy-diy 当前状态
 
-更新时间：2026-10-21（Asia/Shanghai）
+更新时间：2026-10-23（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
+
+- `STORE-FEEDBACK-QR-20261023` 已上线，固定入口为 `https://diy.hexiaoyue.com/?store=1&view=feedback`。无座位、无需登录，主动评分 / 建议选填，提交后可返回菜单或查看本人检测报告；不创建订单、占位或技师评价关系。
+- 评价 PR #370 与券预算 PR #371 已包含于当前版本；预算跨入口保护 [PR #372](https://github.com/zzzai/hxydiy/pull/372) 合并/生产为 `59de5b564788111a61c3943dedf6fe66ad4f348a`，实际 current=`github-59de5b564788-39914869286`。精确 [CI 39914253425](https://github.com/zzzai/hxydiy/actions/runs/39914253425) 与唯一 [Deploy 39914869286](https://github.com/zzzai/hxydiy/actions/runs/39914869286) 成功；发布资格、备份恢复演练、部署与验证通过。
+- 生产核验：504 项 MANIFEST、168 个安装 Python 文件、9 个运行源文件（3 个评价、6 个券预算入口/保护）及公网 HTML / 主 JS / 评价 chunk 一致，health=`ok/production`。revision 仍为 `20261026_coupon_budget`，本次预算补修没有新增迁移；旧 12 条反馈与 5 个券模板保护摘要不变，旧模板预算仍为空。验收没有提交生产测试评价或发券，业务写入 0。
+- 券预算计数与发放使用同模板事务锁，覆盖已有人工、领取、分享、新客及邀请奖励入口；已发预算模板面额/类型保护及购买人/邀请人有序锁已验。预算为空的既有行为不变，不改发券开关、权限或旧券。A5 PDF / PNG / SVG 二维码已交付，公开评价入口和前端资源与首次发布一致；微信真机和实物扫码仍交人验收。
+- 早期容量失败及并行重试取消记录保留；先由外部成功发布包含评价的 `6bd447a`，总控核验并交付打印，之后总控仅发布上述 `59de5b5` 预算补修，没有回退旧版本。GitHub 回执读取网络中断只恢复读取，没有重复 dispatch。详见 `operations/store-feedback-qr-20261023.md`；事实文档收尾不再部署。
+
+### 2026-10-21 店长手机工作台既往发布（能力包含于当前版本）
 
 - `MANAGER-MOBILE-20261020` 已上线：[PR #299](https://github.com/zzzai/hxydiy/pull/299)，候选 `646f50332ba49218051656c6806ce237e42f0a66`，合并/生产 `576bcc25982ad742d8767cb65beb1ec5c9d195e4`；精确主干 [CI 39468039639](https://github.com/zzzai/hxydiy/actions/runs/39468039639) 与唯一 [Deploy 39468665453](https://github.com/zzzai/hxydiy/actions/runs/39468665453) 成功。实际 current=`github-576bcc25982a-39468665453`。
 - 店长默认进入手机“门店工作台”：选单筛选/分页、确认/取消/配位、加选审批及全店座位只读详情；座位关联异常不展示选单内容，换单后详情不静默切换。店长与技师会话隔离、既有权限和价格快照规则保持，不新增后端接口、权限或数据库结构。

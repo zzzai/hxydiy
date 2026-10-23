@@ -28,7 +28,29 @@
 
 ## 状态记录
 
-2026-10-23：隔离实现与验收完成，进入精确候选 CI；此记录不表示已发布。
+### 最终预算保护发布（2026-10-23）
+
+PR #372 候选 `f56d774e548e2672ca017903234a00bd5789c38c` 已合并为 `59de5b564788111a61c3943dedf6fe66ad4f348a`。精确 CI `39914253425`、唯一 Deploy `39914869286` 及发布资格/备份恢复演练/部署验证全部成功。实际 current=`github-59de5b564788-39914869286`，revision 仍 `20261026_coupon_budget`，无新增数据库迁移。
+
+- 原人工、领取、分享、新客、邀请奖励入口统一模板预算锁；已发预算模板面额/类型变更拒绝，空预算旧行为不变。购买人与邀请人按 ID 锁序在模板锁前获取，避免互为邀请人的首单死锁；策略关闭时不增加双人锁。
+- 最后两项实际 PostgreSQL + 完整 ASGI HTTP 路由并发测试使用 TestClient，预算 0/500 的 RED 均出现 DeadlockDetected，GREEN 均两请求成功、两订单及 0/1 张券；不是监听端口或真机测试。独立复核无阻断。其他有效隔离验收不重复，默认 CI 的 PG opt-in 跳过不作为真实并发证据。
+- 504 项 MANIFEST、168 个安装 Python 文件与 9 个运行源文件均核验一致；公网 HTML/主 JS/评价 chunk 与首次交付哈希相同，原二维码不用更换。旧 12 条反馈与 5 个券模板保持下方保护摘要，旧预算仍为空。health=`ok/production`，验证业务写入 0、生产测试反馈/发券 0。
+- 回执读取网络中断只恢复原发布的 GET，不重发部署。结果：`budget-guard-deployment-result.json` 与 `production-verification-59de5b564788-39914869286.json`；后台实际隔离证据在 `output/coupon-budget-guard/receipt.md`。现场手机/纸张扫码仍交人，文档收尾不再次部署。
+
+### 首次生产与打印交付（2026-10-23）
+
+评价 PR #370 已合并；包含后续券预算 PR #371 的 `6bd447a7f97db7ebfd1c00c53cbfbb5d952ea688` 已通过 CI `39904613141` 和 Deploy `39907709539`，实际 current 为 `github-6bd447a7f97d-39907709539`。发布工作流的备份、隔离恢复演练、迁移及部署校验 job 成功，总控随后独立只读核验。
+
+- 503 项 MANIFEST、167 个安装 Python 文件和 3 个运行评价源文件通过；公网固定入口 HTML、主 JS 和 `StoreFeedbackPage` chunk 与安装制品逐字节一致，health=`ok/production`。
+- revision=`20261026_coupon_budget`，`visit_feedback.room_id` 可空。旧 `visit_feedback` 6 行摘要 `f477708154438958b45c70087d08e9ae0ddbc409659f1aed5304bc2c032d0bfe`；旧 `service_feedback` 6 行摘要 `5f7f2598b42d460a504e67b2402b1253e7250289d0e4279a2c93c425c078f75b`；旧 5 个券模板（排除新增预算列）摘要 `d167642ee007f3fbfd5a2cb9d8f63a3b37c145431092d6b33efccca77b95b114` 均保持，旧模板预算仍为空。生产测试评价 / 发券及验证业务写入均为 0。
+- PDF `ziwei-feedback-print-A5.pdf` 为 148×210 mm 单页、90 mm 向量二维码；PNG `ziwei-feedback-qr.png` 为 1440×1440、Q 纠错、四模块静区。两种输出均已解码为本文件固定入口，已交付打印，真机和实物扫码待人验收。
+- 脱敏证据保存在总控任务输出：`production-verification-6bd447a7f97d-39907709539.json`、`external-deploy-39907709539.json`、`print/artifact-check.json`。这些是本次可复核证据，不替代未来实时 current 检查。
+- 两次早期发布因空间不足在原 3 GiB 门禁处停止，另一次并行重试取消，均不改写为成功。只清理已冻结、校验且留存原包的失败输入与本批测试依赖，未删除旧 release / 数据 / 备份。成功版本由外部发布，总控未再部署旧评价版本。
+- 首次打印交付时并发预算保护未上线；该历史边界保留，后续完成状态以上方最终发布为准。文档变更不触发重复业务发布。
+
+### 隔离验收历史
+
+2026-10-23 发布前：隔离实现与验收完成，以下是当时精确候选 CI 前的记录，不覆盖上方现网核验。
 
 - 后台：96 passed + 10 subtests；其中 1 个 PostgreSQL-only 场景随后由独立 PostgreSQL 4 项验证完整覆盖。另有真实 localhost Uvicorn HTTP 保存、重放及拒绝路径 1 passed；OpenAPI、管理端类型检查通过。
 - 顾客端：61 项回归通过；TypeScript 检查通过；375px / 390px 合成浏览器预览无横向溢出。未触达生产 API。
