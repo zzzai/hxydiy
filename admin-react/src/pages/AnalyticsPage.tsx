@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Spin, Empty, Button, Progress, DatePicker, Row, Col, Statistic, Table, Tag, Space, Result } from 'antd';
+import { Card, Spin, Empty, Button, Progress, DatePicker, Row, Col, Statistic, Table, Tag, Space, Result, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,14 @@ const funnelRateKeys: Record<string, string> = {
 };
 
 function formatYuan(cents = 0) { return `¥${(cents / 100).toFixed(2)}`; }
+function changeLabel(value?: number | null) {
+  if (value === null || value === undefined) return '—';
+  return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
+}
+function changeColor(value?: number | null) {
+  if (value === null || value === undefined) return undefined;
+  return value > 0 ? 'green' : value < 0 ? 'red' : undefined;
+}
 
 export default function AnalyticsPage() {
   const navigate = useNavigate();
@@ -88,6 +96,15 @@ export default function AnalyticsPage() {
         <Col xs={12} md={6}><Card><Statistic title="优惠金额" value={formatYuan(transaction.discount_cents)} /></Card></Col>
         <Col xs={12} md={6}><Card><Statistic title="服务位" value={positions.total_count || 0} suffix={`活跃 ${positions.active_count || 0}`} /></Card></Col>
       </Row>
+      <Card title="环比上一周期" style={{ marginBottom: 16 }}>
+        {summary.comparison ? <Space wrap size={8}>
+          <Tag>上一周期 {summary.comparison.period?.start_date} ~ {summary.comparison.period?.end_date}</Tag>
+          <Tag color={changeColor(summary.comparison.changes?.paid_amount_percent)}>实收 {changeLabel(summary.comparison.changes?.paid_amount_percent)}</Tag>
+          <Tag color={changeColor(summary.comparison.changes?.orders_count_percent)}>订单 {changeLabel(summary.comparison.changes?.orders_count_percent)}</Tag>
+          <Tag color={changeColor(summary.comparison.changes?.average_order_value_percent)}>客单价 {changeLabel(summary.comparison.changes?.average_order_value_percent)}</Tag>
+          <Typography.Text type="secondary">上一周期实收 {formatYuan(summary.comparison.transactions?.paid_amount_cents || 0)} · 订单 {summary.comparison.transactions?.orders_count || 0}</Typography.Text>
+        </Space> : <Typography.Text type="secondary">环比数据暂不可用</Typography.Text>}
+      </Card>
       <Card title="数据质量" style={{ marginBottom: 16 }}>
         {summary.data_quality?.warnings?.length ? <Space direction="vertical" size={6}>
           {(summary.data_quality.warnings || []).map((warning: string) => <Tag key={warning} color="warning">{warning}</Tag>)}

@@ -401,6 +401,7 @@ def operations_summary(
     start_date: date_type | None = None,
     end_date: date_type | None = None,
     store_id: int | None = None,
+    compare: bool = False,
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -608,6 +609,43 @@ def operations_summary(
         data_warnings.append("埋点覆盖天数不足 50%，行为漏斗仅供参考")
     aov_cents = round(sum(order.pay_amount_cents for order in orders) / len(orders)) if orders else 0
 
+    comparison = None
+    if compare:
+        period_days = (end - start).days + 1
+        previous_end = start - timedelta(days=1)
+        previous_start = previous_end - timedelta(days=period_days - 1)
+        previous_start_at = datetime.combine(previous_start, datetime.min.time(), tzinfo=start_at.tzinfo).astimezone(timezone.utc)
+        previous_end_at = datetime.combine(previous_end + timedelta(days=1), datetime.min.time(), tzinfo=start_at.tzinfo).astimezone(timezone.utc)
+        previous_orders = list(db.scalars(select(Order).where(
+            Order.store_id == selected_store_id,
+            Order.created_at >= previous_start_at,
+            Order.created_at < previous_end_at,
+            Order.pay_status == "paid",
+            Order.status.not_in(("cancelled", "expired", "refunded", "refund_rejected")),
+        )))
+        previous_paid = sum(order.pay_amount_cents for order in previous_orders)
+        previous_count = len(previous_orders)
+        previous_aov = round(previous_paid / previous_count) if previous_count else 0
+
+        def percent(current: int, previous: int):
+            if previous == 0:
+                return None
+            return round((current - previous) / previous * 100, 2)
+
+        comparison = {
+            "period": {"start_date": previous_start.isoformat(), "end_date": previous_end.isoformat()},
+            "transactions": {
+                "orders_count": previous_count,
+                "paid_amount_cents": previous_paid,
+                "average_order_value_cents": previous_aov,
+            },
+            "changes": {
+                "orders_count_percent": percent(len(orders), previous_count),
+                "paid_amount_percent": percent(sum(order.pay_amount_cents for order in orders), previous_paid),
+                "average_order_value_percent": percent(aov_cents, previous_aov),
+            },
+        }
+
     return {
         "period": {"start_date": start.isoformat(), "end_date": end.isoformat(), "store_id": selected_store_id},
         "transactions": {
@@ -664,6 +702,7 @@ def operations_summary(
             "utilization": "已完成服务占用分钟 / 服务位理论可用分钟",
             "data_quality": "订单/选单关联、异常队列和埋点覆盖检查；不修改原始经营事实",
         },
+        "comparison": comparison,
     }
 
 

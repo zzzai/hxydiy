@@ -9790,6 +9790,16 @@
             }
           },
           {
+            "in": "query",
+            "name": "compare",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Compare",
+              "type": "boolean"
+            }
+          },
+          {
             "in": "header",
             "name": "authorization",
             "required": false,

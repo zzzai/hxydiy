@@ -8012,6 +8012,7 @@ export interface operations {
                 start_date?: string | null;
                 end_date?: string | null;
                 store_id?: number | null;
+                compare?: boolean;
             };
             header?: {
                 authorization?: string | null;
