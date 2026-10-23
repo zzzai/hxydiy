@@ -318,6 +318,7 @@ export const getTechnicianLeaveRequests = (status?: string) => client.get('/admi
 export const getTechnicianBoard = (day?: string) => client.get('/admin/v2/technician-board', { params: { day } });
 export const getTechnicianShifts = (start_date: string, end_date: string) => client.get('/admin/v2/technician-shifts', { params: { start_date, end_date } });
 export const saveTechnicianShift = (data: any) => client.put('/admin/v2/technician-shifts', data);
+export const copyTechnicianShiftWeek = (data: any) => client.post('/admin/v2/technician-shifts/copy-week', data);
 export const approveTechnicianLeave = (id: number, review_note = '') => client.post(`/admin/v2/technician-leave-requests/${id}/approve`, { review_note });
 export const rejectTechnicianLeave = (id: number, review_note: string) => client.post(`/admin/v2/technician-leave-requests/${id}/reject`, { review_note });
 

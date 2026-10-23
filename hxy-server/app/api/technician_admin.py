@@ -435,6 +435,100 @@ def upsert_technician_shift(
     }
 
 
+@router.post("/technician-shifts/copy-week")
+def copy_technician_shift_week(
+    body: dict | None = None,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+) -> dict:
+    admin = require_admin(authorization, db)
+    payload = body or {}
+    try:
+        source_start = date_type.fromisoformat(str(payload.get("source_start") or ""))
+        target_start = date_type.fromisoformat(str(payload.get("target_start") or ""))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="源周和目标周日期必填")
+    if source_start.weekday() != 0 or target_start.weekday() != 0:
+        raise HTTPException(status_code=400, detail="请使用周一作为周的起点")
+    if source_start == target_start:
+        raise HTTPException(status_code=400, detail="源周和目标周不能相同")
+    overwrite = bool(payload.get("overwrite"))
+    source_shifts = list(db.scalars(select(TechnicianShift).where(
+        TechnicianShift.store_id == admin.store_id,
+        TechnicianShift.work_date >= source_start,
+        TechnicianShift.work_date <= source_start + timedelta(days=6),
+    )))
+    copied = 0
+    skipped_existing = 0
+    skipped_leave = 0
+    skipped_booking = 0
+    for source in source_shifts:
+        target_date = target_start + timedelta(days=(source.work_date - source_start).days)
+        existing = db.scalar(select(TechnicianShift).where(
+            TechnicianShift.technician_id == source.technician_id,
+            TechnicianShift.work_date == target_date,
+        ))
+        if existing and not overwrite:
+            skipped_existing += 1
+            continue
+        if source.shift_type != "off":
+            leave = db.scalar(select(TechnicianLeaveRequest).where(
+                TechnicianLeaveRequest.store_id == admin.store_id,
+                TechnicianLeaveRequest.technician_id == source.technician_id,
+                TechnicianLeaveRequest.status == "approved",
+                TechnicianLeaveRequest.start_date <= target_date,
+                TechnicianLeaveRequest.end_date >= target_date,
+            ))
+            if leave:
+                skipped_leave += 1
+                continue
+        if source.shift_type == "off":
+            booking_count = db.scalar(
+                select(func.count()).select_from(ServiceAssignment)
+                .join(ServiceOrder, ServiceOrder.id == ServiceAssignment.service_order_id)
+                .join(Order, Order.id == ServiceOrder.order_id)
+                .where(
+                    ServiceAssignment.store_id == admin.store_id,
+                    ServiceAssignment.technician_id == source.technician_id,
+                    ServiceAssignment.status.in_(("assigned", "ready", "in_service")),
+                    Order.booking_date == target_date.isoformat(),
+                )
+            ) or 0
+            if booking_count:
+                skipped_booking += 1
+                continue
+        row = existing or TechnicianShift(
+            store_id=admin.store_id,
+            technician_id=source.technician_id,
+            work_date=target_date,
+            created_by_staff_id=admin.id,
+        )
+        if existing is None:
+            db.add(row)
+        row.shift_type = source.shift_type
+        row.start_time = source.start_time
+        row.end_time = source.end_time
+        row.note = source.note
+        copied += 1
+    audit(db, admin, "copy_technician_shift_week", admin.id, {
+        "source_start": source_start.isoformat(),
+        "target_start": target_start.isoformat(),
+        "copied": copied,
+        "skipped_existing": skipped_existing,
+        "skipped_leave": skipped_leave,
+        "skipped_booking": skipped_booking,
+    })
+    db.commit()
+    return {
+        "source_start": source_start.isoformat(),
+        "target_start": target_start.isoformat(),
+        "copied": copied,
+        "skipped_existing": skipped_existing,
+        "skipped_leave": skipped_leave,
+        "skipped_booking": skipped_booking,
+    }
+
+
 @router.delete("/technician-shifts/{shift_id}")
 def delete_technician_shift(
     shift_id: int,

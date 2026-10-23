@@ -17412,6 +17412,75 @@
         ]
       }
     },
+    "/api/v1/admin/v2/technician-shifts/copy-week": {
+      "post": {
+        "operationId": "copy_technician_shift_week_api_v1_admin_v2_technician_shifts_copy_week_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Copy Technician Shift Week Api V1 Admin V2 Technician Shifts Copy Week Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Copy Technician Shift Week",
+        "tags": [
+          "technician-lifecycle"
+        ]
+      }
+    },
     "/api/v1/admin/v2/technician-shifts/{shift_id}": {
       "delete": {
         "operationId": "delete_technician_shift_api_v1_admin_v2_technician_shifts__shift_id__delete",
