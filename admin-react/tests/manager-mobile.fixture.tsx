@@ -88,7 +88,9 @@ client.defaults.adapter = async config => {
   }
   if (path === '/admin/login') return ok({ token: 'synthetic-manager', staff: { ...manager, role: 'store_manager' }, workspaces: [], selector_token: null });
   if (scenario === 'expired') return fail(401, '合成会话已失效');
+  if (method === 'get' && ['/admin/exceptions', '/admin/v2/feedback'].includes(path)) return ok({ items: [] });
   if (method === 'get' && path === '/admin/v2/manager/workbench') return ok({
+    record_follow_up: { window_days: 30, pending_count: 0, technicians: [] },
     store_id: 1,
     generated_at: '2026-10-21T00:00:00Z',
     summary: { today_orders: scenario === 'empty' ? 0 : 3, in_service: scenario === 'empty' ? 0 : 1, pending_checkout: scenario === 'empty' ? 0 : 1, attention: scenario === 'empty' ? 0 : 1 },

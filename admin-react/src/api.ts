@@ -90,8 +90,8 @@ export const revokeTechnicianCustomerTag = (id: number, contributionId: number, 
 export const getTechnicianServiceReference = (occupancyId: number) =>
   client.get<TechnicianServiceReferenceResponse>(`/technician/occupancies/${occupancyId}/service-reference`);
 export const getTechnicianServiceReferenceTaxonomy = () => client.get('/technician/service-reference-taxonomy');
-export const getTechnicianServiceHistory = (page = 1, pageSize = 20, profileStatus: 'all' | 'confirmed' | 'pending' = 'all') =>
-  client.get('/technician/service-history', { params: { page, page_size: pageSize, profile_status: profileStatus } });
+export const getTechnicianServiceHistory = (page = 1, pageSize = 20, profileStatus: 'all' | 'confirmed' | 'pending' = 'all', recordStatus: 'all' | 'pending' | 'completed' = 'all') =>
+  client.get('/technician/service-history', { params: { page, page_size: pageSize, profile_status: profileStatus, record_status: recordStatus } });
 export const getTechnicianServiceOrders = (status: 'in_progress' | 'history' = 'in_progress', page = 1, pageSize = 30) =>
   client.get('/admin/v2/service-orders', { params: { status, page, page_size: pageSize } });
 export const createProfileRecord = (customerId: number, data: { tags: string[]; service_note: string }, idempotencyKey?: string) =>
