@@ -29,6 +29,7 @@ from app.core.config import settings
 
 from app.api.admin import _current_staff, hash_password, normalize_staff_role
 from app.db.session import get_db
+from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.models import (
     CouponTemplate, UserCoupon, MemberPlan, Recharge,
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, VisitFeedback, ServiceLine, PageContent, PageContentVersion,
@@ -1076,20 +1077,21 @@ def issue_coupon_to_customer(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     action_store_id = _resolve_target_store_id(db, staff, store_id)
-    template = db.scalar(select(CouponTemplate).where(
-        CouponTemplate.id == template_id,
+    # Match customer claim lock order: user first, then template.
+    user = db.scalar(select(User).where(
+        User.id == body.user_id,
+        User.id.in_(_store_user_ids(action_store_id)),
+    ).with_for_update())
+    if not user:
+        raise HTTPException(status_code=404, detail="顾客不存在")
+    template = lock_coupon_template(
+        db, CouponTemplate.id == template_id,
         CouponTemplate.store_id == action_store_id,
-    ))
+    )
     if not template:
         raise HTTPException(status_code=404, detail="券模板不存在")
     if template.status != "published":
         raise HTTPException(status_code=409, detail={"code": "COUPON_NOT_PUBLISHED", "message": "券未上架，不能发放"})
-    user = db.scalar(select(User).where(
-        User.id == body.user_id,
-        User.id.in_(_store_user_ids(action_store_id)),
-    ))
-    if not user:
-        raise HTTPException(status_code=404, detail="顾客不存在")
     existing = db.scalar(
         select(sa_func.count()).select_from(UserCoupon).where(
             UserCoupon.user_id == user.id,
@@ -1102,26 +1104,13 @@ def issue_coupon_to_customer(
             "code": "COUPON_CLAIM_LIMIT_REACHED",
             "message": f"该顾客已持有 {existing} 张未使用券，超过每人限领 {template.claim_limit} 张",
         })
-    if template.budget_cents is not None and template.coupon_type == "fixed":
-        issued_total = int(db.scalar(
-            select(sa_func.count()).select_from(UserCoupon).where(UserCoupon.template_id == template.id)
-        ) or 0)
-        committed_after = template.amount_cents * (issued_total + 1)
-        if committed_after > template.budget_cents:
-            raise HTTPException(status_code=409, detail={
-                "code": "COUPON_BUDGET_EXHAUSTED",
-                "message": f"券预算不足：已发放面额占用 {template.amount_cents * issued_total / 100:.2f} 元，预算 {template.budget_cents / 100:.2f} 元",
-            })
     now = datetime.now(UTC)
-    coupon = UserCoupon(
-        user_id=user.id,
-        template_id=template.id,
-        status="unused",
+    coupon = try_issue_coupon(
+        db, template, user.id, now + timedelta(days=template.validity_days or 30),
         claimed_at=now,
-        expire_at=now + timedelta(days=template.validity_days or 30),
     )
-    db.add(coupon)
-    db.flush()
+    if coupon is None:
+        raise coupon_budget_exhausted()
     _audit(db, staff, "issue_customer_coupon", "user_coupon", str(coupon.id), {
         "store_id": action_store_id,
         "user_id": user.id,

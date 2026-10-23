@@ -16,6 +16,7 @@ from app.db.session import get_db
 from app.models import Order, OrderEvent, PriceBook, Project, Store, User, UserCoupon
 from app.schemas.order import CreateOrderResponse, OrderCreate, OrderOut
 from app.core.customer_auth import current_customer_id
+from app.domain.coupon_issuance import lock_coupon_template, try_issue_coupon
 from app.services.store_lifecycle import require_store_open
 from fastapi import Header
 
@@ -53,7 +54,8 @@ def _grant_inviter_reward(db: Session, inviter_id: int) -> bool:
     if not settings.coupon_issuance_enabled:
         return False
     from app.models import CouponTemplate
-    tpl = db.scalar(select(CouponTemplate).where(CouponTemplate.code == INVITE_REWARD_CODE))
+    db.scalar(select(User.id).where(User.id == inviter_id).with_for_update())
+    tpl = lock_coupon_template(db, CouponTemplate.code == INVITE_REWARD_CODE)
     if not tpl or tpl.status != "published":
         return False
     now = datetime.now(timezone.utc)
@@ -65,11 +67,9 @@ def _grant_inviter_reward(db: Session, inviter_id: int) -> bool:
     ))))
     if today_count >= INVITE_REWARD_DAILY_LIMIT:
         return False
-    db.add(UserCoupon(
-        user_id=inviter_id, template_id=tpl.id, status="unused",
-        expire_at=now + timedelta(days=tpl.validity_days),
-    ))
-    return True
+    return try_issue_coupon(
+        db, tpl, inviter_id, now + timedelta(days=tpl.validity_days),
+    ) is not None
 
 
 @router.post("", response_model=CreateOrderResponse)
@@ -181,7 +181,15 @@ def create_order(
 
     # 邀请裂变：被邀请人首单成功创建 → 邀请人得老带新券（每日限 3 张，防刷）
     if user.inviter_id and body.order_type != "member":
+        from app.core.config import settings
         from app.models import Order as OrderModel
+        if settings.coupon_issuance_enabled:
+            # Lock both FK owners before the template, in a stable order.
+            # Mutual inviters must not hold opposite user rows while inserting orders.
+            list(db.scalars(
+                select(User.id).where(User.id.in_([user.id, user.inviter_id]))
+                .order_by(User.id).with_for_update()
+            ))
         first_order = not db.scalar(select(OrderModel.id).where(
             OrderModel.user_id == user.id
         ).limit(1))

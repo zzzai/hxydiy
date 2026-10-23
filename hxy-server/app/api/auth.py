@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.core.customer_auth import current_customer_id
 from app.db.session import get_db
+from app.domain.coupon_issuance import lock_coupon_template, try_issue_coupon
 from app.domain.membership_entitlements import has_membership, membership_snapshot
 from app.models import AuditLog, CouponTemplate, CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
 from app.models.service import Visit
@@ -328,22 +329,23 @@ def grant_new_user_coupons(db: Session, user_id: int) -> None:
     """新用户自动发券：发放所有 auto_grant_new_user 的已发布券模板。"""
     if not settings.coupon_issuance_enabled:
         return
-    templates = db.scalars(select(CouponTemplate).where(
+    db.scalar(select(User.id).where(User.id == user_id).with_for_update())
+    template_ids = list(db.scalars(select(CouponTemplate.id).where(
         CouponTemplate.auto_grant_new_user.is_(True),
         CouponTemplate.status == "published",
-    ))
-    for tpl in templates:
+    ).order_by(CouponTemplate.id)))
+    for template_id in template_ids:
+        tpl = lock_coupon_template(db, CouponTemplate.id == template_id)
+        if not tpl or not tpl.auto_grant_new_user or tpl.status != "published":
+            continue
         exists = db.scalar(select(UserCoupon).where(
             UserCoupon.user_id == user_id, UserCoupon.template_id == tpl.id
         ))
         if exists:
             continue
-        db.add(UserCoupon(
-            user_id=user_id,
-            template_id=tpl.id,
-            status="unused",
-            expire_at=datetime.now(timezone.utc) + timedelta(days=tpl.validity_days),
-        ))
+        try_issue_coupon(
+            db, tpl, user_id, datetime.now(timezone.utc) + timedelta(days=tpl.validity_days),
+        )
 
 
 @router.post("/login", response_model=LoginResponse)
