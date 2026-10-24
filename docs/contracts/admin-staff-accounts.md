@@ -11,10 +11,12 @@
 
 ### 列表
 
-`GET /api/v1/admin/v2/staff?store_id=&status=&page=1&page_size=20`
+`GET /api/v1/admin/v2/staff?store_id=&status=&username=&name=&role=&page=1&page_size=20`
 
 - 返回 `{items, total, page, page_size}`；`items` 仅包含未关联技师的 `manager` / `staff`。
 - `page >= 1`，`1 <= page_size <= 100`。
+- `username`、`name` 各最多64字，首尾空白移除后按大小写不敏感的字面子串匹配；`%`、`_` 不作为通配符。空值不筛选。
+- `role` 仅允许 `manager` / `staff`，非法值422。姓名、登录名、角色、门店、状态采用AND组合；没有改变总部限定的授权范围。
 - 单项仅返回 `id`、`username`、`name`、`role`、`store_id`、`status`、`created_at`；绝不返回密码、密码哈希或登录令牌。
 
 ### 创建

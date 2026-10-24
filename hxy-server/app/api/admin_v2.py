@@ -601,6 +601,9 @@ def _managed_staff_account(db: Session, staff_id: int) -> Staff:
 def list_staff_accounts(
     store_id: int | None = None,
     status: StaffManagedStatus | None = None,
+    name: str | None = Query(None, max_length=64),
+    username: str | None = Query(None, max_length=64),
+    role: StaffManagedRole | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -616,6 +619,12 @@ def list_staff_accounts(
         query = query.where(Staff.store_id == store_id)
     if status is not None:
         query = query.where(Staff.status == status)
+    if name and name.strip():
+        query = query.where(Staff.name.icontains(name.strip(), autoescape=True))
+    if username and username.strip():
+        query = query.where(Staff.username.icontains(username.strip(), autoescape=True))
+    if role is not None:
+        query = query.where(Staff.role == role)
     total = db.scalar(select(sa_func.count()).select_from(query.subquery())) or 0
     accounts = list(db.scalars(
         query.order_by(Staff.store_id, Staff.id).offset((page - 1) * page_size).limit(page_size)
@@ -1422,18 +1431,27 @@ def update_feedback_follow_up_by_type(
 ) -> dict:
     staff = _current_staff(authorization, db)
     _require_admin(staff)
-    feedback = _feedback_by_type(db, feedback_type, feedback_id)
+    model = ServiceFeedback if feedback_type == "service_review" else VisitFeedback
+    feedback = db.scalar(select(model).where(
+        model.id == feedback_id, model.store_id == _staff_store_id(staff),
+    ).with_for_update().execution_options(populate_existing=True))
     if not feedback or feedback.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail="评价不存在")
-    feedback.follow_up_status = body.follow_up_status
-    feedback.follow_up_note = body.follow_up_note.strip()
-    feedback.follow_up_staff_id = staff.id
-    feedback.followed_up_at = datetime.now(timezone.utc)
-    _audit(db, staff, "update_feedback_follow_up", feedback_type, str(feedback.id), {
-        "store_id": feedback.store_id,
-        "feedback_type": feedback_type,
-        "follow_up_status": feedback.follow_up_status,
-    })
+    unchanged = (
+        feedback.follow_up_status == body.follow_up_status
+        and feedback.follow_up_note == body.follow_up_note.strip()
+        and feedback.follow_up_staff_id == staff.id
+    )
+    if not unchanged:
+        feedback.follow_up_status = body.follow_up_status
+        feedback.follow_up_note = body.follow_up_note.strip()
+        feedback.follow_up_staff_id = staff.id
+        feedback.followed_up_at = datetime.now(timezone.utc)
+        _audit(db, staff, "update_feedback_follow_up", feedback_type, str(feedback.id), {
+            "store_id": feedback.store_id,
+            "feedback_type": feedback_type,
+            "follow_up_status": feedback.follow_up_status,
+        })
     db.commit()
     customer = db.get(User, feedback.customer_id) if feedback.customer_id else None
     result = _feedback_view(feedback, feedback_type)
@@ -1450,17 +1468,25 @@ def update_feedback_follow_up(
 ) -> dict:
     staff = _current_staff(authorization, db)
     _require_admin(staff)
-    feedback = db.get(ServiceFeedback, feedback_id)
+    feedback = db.scalar(select(ServiceFeedback).where(
+        ServiceFeedback.id == feedback_id, ServiceFeedback.store_id == _staff_store_id(staff),
+    ).with_for_update().execution_options(populate_existing=True))
     if not feedback or feedback.store_id != _staff_store_id(staff):
         raise HTTPException(status_code=404, detail="评价不存在")
-    feedback.follow_up_status = body.follow_up_status
-    feedback.follow_up_note = body.follow_up_note.strip()[:1000]
-    feedback.follow_up_staff_id = staff.id
-    feedback.followed_up_at = datetime.now(timezone.utc)
-    _audit(db, staff, "update_feedback_follow_up", "service_feedback", str(feedback.id), {
-        "store_id": feedback.store_id,
-        "follow_up_status": feedback.follow_up_status,
-    })
+    unchanged = (
+        feedback.follow_up_status == body.follow_up_status
+        and feedback.follow_up_note == body.follow_up_note.strip()
+        and feedback.follow_up_staff_id == staff.id
+    )
+    if not unchanged:
+        feedback.follow_up_status = body.follow_up_status
+        feedback.follow_up_note = body.follow_up_note.strip()[:1000]
+        feedback.follow_up_staff_id = staff.id
+        feedback.followed_up_at = datetime.now(timezone.utc)
+        _audit(db, staff, "update_feedback_follow_up", "service_feedback", str(feedback.id), {
+            "store_id": feedback.store_id,
+            "follow_up_status": feedback.follow_up_status,
+        })
     db.commit()
     return {
         "id": feedback.id,

@@ -11617,6 +11617,9 @@ export interface operations {
             query?: {
                 store_id?: number | null;
                 status?: ("active" | "disabled") | null;
+                name?: string | null;
+                username?: string | null;
+                role?: ("manager" | "staff") | null;
                 page?: number;
                 page_size?: number;
             };
