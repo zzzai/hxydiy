@@ -1,6 +1,13 @@
 # hxy-diy 共享记忆
 
-2026-10-24 `ADMIN-DAILY-OPERATIONS-20261024` 隔离候选（未提交/合并/部署）：今日在店服务接入当前服务位与执行项目投影；服务核对不再将正常 ServiceLine 选单误报为缺旧订单。服务待办保留已知悉事项，关闭与指派增加行锁/重复保护；评价状态与说明一次保存、相同处理人相同内容重试不重复审计；总部员工列表姓名、登录名、角色与门店/状态组合筛选真实生效。无数据库迁移，不改价格/会员/生产数据；旧待办不自动删除。详见 `contracts/admin-daily-operations-v1.md`、`contracts/admin-staff-accounts.md`、`contracts/open-visit-feedback-v1.md` 及 `product/admin-daily-operations-prd-v2-20261024.md`。本条只描述当前候选，不能作为已合并共享事实或上线证明。
+2026-10-25 日常作业修复已生产验收，准确版本及边界如下。
+
+- `ADMIN-DAILY-OPERATIONS-20261024` 已上线：[PR #382](https://github.com/zzzai/hxydiy/pull/382)，候选 `25565e39ab0782b25eed03ee645af111e689f5f9`，合并/生产 `f705ff522c8498d3d83f44a58ab54f595086b16f`；精确 [CI 40111030635](https://github.com/zzzai/hxydiy/actions/runs/40111030635) 与唯一 [Deploy 40111537521](https://github.com/zzzai/hxydiy/actions/runs/40111537521) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-f705ff522c84-40111537521`。
+- 今日工作台读取现行服务位/选单，正常执行项目不再误报缺旧订单；到店选单保留无座提交及失败恢复。待办知悉后继续保留，指派/关闭具备行锁与重复保护；评价状态和说明一次保存，失败保留草稿；总部员工姓名、登录名、角色、门店和状态组合筛选生效。
+- 生产核验 511 项 MANIFEST、169 个安装 Python 文件、3 个运行源文件和 10 个公网入口/资源哈希一致，health=`ok/production`；发布备份 checksum 通过，迁移集合及内容与前一版一致。本批没有数据迁移、清理、充值、退款、发券或外发消息。
+- 隔离合成 PostgreSQL 的42项真实网络HTTP断言与13项浏览器验收已通过，覆盖保存回读、并发/重复操作及门店权限；最终候选仅补修旧前端接口断言和UTC/北京时间跨午夜测试日期。生产复核业务API调用0、数据库查询0、业务写入0；人工现场验收仍由人完成。详见 `operations/admin-daily-operations-release-20261025.md`。事实文档收尾不再次部署。
+
+2026-10-24 `ADMIN-DAILY-OPERATIONS-20261024` 隔离候选阶段历史快照：今日在店服务接入当前服务位与执行项目投影；服务核对不再将正常 ServiceLine 选单误报为缺旧订单。服务待办保留已知悉事项，关闭与指派增加行锁/重复保护；评价状态与说明一次保存、相同处理人相同内容重试不重复审计；总部员工列表姓名、登录名、角色与门店/状态组合筛选真实生效。无数据库迁移，不改价格/会员/生产数据；旧待办不自动删除。详见 `contracts/admin-daily-operations-v1.md`、`contracts/admin-staff-accounts.md`、`contracts/open-visit-feedback-v1.md` 及 `product/admin-daily-operations-prd-v2-20261024.md`。本条描述当时的隔离阶段；当前上线事实以上方为准。
 
 
 2026-10-23 `MOBILE-WORKBENCH-CLOSEOUT-20261023`：店长待办按既有服务完成审计只读汇总近30天“记录待补填”，仅返回对应技师与数量，不返回顾客/身体/私人正文；技师历史新增独立 `record_status` 筛选及本人可补填入口，保存后按同一口径消项，顾客未确认不等于未填写。`status=unresolved` 包含 open/acknowledged；知悉不等于解决、不得隐去，重复知悉不新增审计/时间；逾期为子集，不重复计数。移动端进入及返回只发 GET 刷新，未接通旧 `/order-reconciliation/sync`，因为合法无座位/占用履约不能按缺少旧 Order 判断漏单。本批无迁移、款项处理、外发消息或权限扩张。合同见 `contracts/mobile-service-todos-20261023.md`；实现、合并、生产及人工真机验收分别记录，不由本条推定发布。
