@@ -1,3 +1,10 @@
+# 2026-10-24 管理后台项目编辑与结构化展示修复已生产验收
+
+- `ADMIN-CATALOG-RECOVERY-20261024` 已上线：[PR #380](https://github.com/zzzai/hxydiy/pull/380)，候选 `c6128ce43b13db1be84c22dfded30813c3efe2f3`，合并/生产 `8362674795a09da45c3e4402efd6e84b1993fa7f`；精确 [CI 40081262322](https://github.com/zzzai/hxydiy/actions/runs/40081262322) 与唯一 [Deploy 40081627303](https://github.com/zzzai/hxydiy/actions/runs/40081627303) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-8362674795a0-40081627303`。
+- 服务项目编辑按真实接口限制校验，图片上传携带门店；已发布可选内容先创建草稿再编辑，重复/并发复用一份草稿，旧版不可变，保存后校验发布并刷新返回状态。页面内容、操作记录、分群和规则使用业务表单或中文摘要，未知历史字段保留；停用规则只是配置，未启用执行、发券或消息。
+- 生产核验 510 项 MANIFEST、169 个安装 Python 文件、3 个运行源文件与 10 个公网入口/资源哈希一致，health=`ok/production`；本次备份文件 checksum 通过。迁移集合及内容与前一版一致，没有数据库结构、凭据、余额、会员或历史订单变更。
+- 验收使用隔离合成 PostgreSQL（51 项真实 HTTP）、27 项后端目录合同、30 项前端定向检查、TypeScript/构建和真实组件浏览器保存/发布回读。生产复核不调用业务写接口、不查询顾客数据，业务写入 0；人工现场验收仍由人完成。详见 `operations/admin-catalog-recovery-release-20261024.md`。本次事实文档收尾不再次部署。
+
 # 2026-10-23 移动服务待办第一批接管收尾已生产验收
 
 - PR #378，候选 `415adf80992337e91e37a44d98dce33ea5ed8526`，合并/生产 `7684ff3bab9c9540d38a4caa67fbbd3b62a3166d`；精确主干 CI `39978453389`、唯一 Deploy `39979231372` 成功。现网 current=`github-7684ff3bab9c-39979231372`。上传链路较慢但持续推进，只等待原运行，没有并行发布或重复 dispatch。

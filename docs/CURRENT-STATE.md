@@ -1,10 +1,17 @@
 # hxy-diy 当前状态
 
-更新时间：2026-10-23（Asia/Shanghai）
+更新时间：2026-10-24（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
 ## 当前生产
+
+- `ADMIN-CATALOG-RECOVERY-20261024` 已上线：[PR #380](https://github.com/zzzai/hxydiy/pull/380)，候选 `c6128ce43b13db1be84c22dfded30813c3efe2f3`，合并/生产 `8362674795a09da45c3e4402efd6e84b1993fa7f`；精确 [CI 40081262322](https://github.com/zzzai/hxydiy/actions/runs/40081262322) 与唯一 [Deploy 40081627303](https://github.com/zzzai/hxydiy/actions/runs/40081627303) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-8362674795a0-40081627303`。
+- 服务项目编辑按真实接口限制校验，图片上传携带门店；已发布可选内容先创建草稿再编辑，重复/并发复用一份草稿，旧版不可变，保存后校验发布并刷新返回状态。页面内容、操作记录、分群和规则使用业务表单或中文摘要，未知历史字段保留；停用规则只是配置，未启用执行、发券或消息。
+- 生产核验 510 项 MANIFEST、169 个安装 Python 文件、3 个运行源文件与 10 个公网入口/资源哈希一致，health=`ok/production`；本次备份文件 checksum 通过。迁移集合及内容与前一版一致，没有数据库结构、凭据、余额、会员或历史订单变更。
+- 验收使用隔离合成 PostgreSQL（51 项真实 HTTP）、27 项后端目录合同、30 项前端定向检查、TypeScript/构建和真实组件浏览器保存/发布回读。生产复核不调用业务写接口、不查询顾客数据，业务写入 0；人工现场验收仍由人完成。详见 `operations/admin-catalog-recovery-release-20261024.md`。本次事实文档收尾不再次部署。
+
+### 2026-10-23 移动待办既往发布（包含于当前版本）
 
 - `MOBILE-WORKBENCH-CLOSEOUT-20261023` 已上线：[PR #378](https://github.com/zzzai/hxydiy/pull/378)，候选 `415adf80992337e91e37a44d98dce33ea5ed8526`，合并/生产 `7684ff3bab9c9540d38a4caa67fbbd3b62a3166d`；精确 [CI 39978453389](https://github.com/zzzai/hxydiy/actions/runs/39978453389) 与唯一 [Deploy 39979231372](https://github.com/zzzai/hxydiy/actions/runs/39979231372) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-7684ff3bab9c-39979231372`。
 - 店长近30天待补记录按技师汇总，技师从历史服务筛选并补填本人可写记录；顾客是否确认与记录是否完成分开。知悉不再冒充解决，重复知悉不重复审计；返回只读刷新、失败重试、迟到身份响应和末页保存均覆盖。
