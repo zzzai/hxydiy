@@ -1,3 +1,4 @@
+import { requestErrorMessage } from './requestError.ts';
 import axios from 'axios';
 import { installSessionGuards } from './apiSession.ts';
 import { clearStaffSession, isStaleSessionError } from './wecomSession.ts';
@@ -36,7 +37,7 @@ client.interceptors.response.use(
     if (isStaleSessionError(err)) return Promise.reject(err);
     if (err.response?.status === 401) {
       const detail = err.response?.data?.detail;
-      const msg = typeof detail === 'string' ? detail : detail?.message || '账号不可用，请联系店长';
+      const msg = requestErrorMessage(err);
       clearStaffSession();
       if (err.config?.url?.includes('/admin/login') || err.config?.url?.includes('/technician/activate')) {
         apiErrorHandler(msg);
@@ -51,7 +52,7 @@ client.interceptors.response.use(
       return Promise.reject(err);
     }
     const detail = err.response?.data?.detail;
-    const msg = typeof detail === 'string' ? detail : detail?.message || '请求失败';
+    const msg = requestErrorMessage(err);
     apiErrorHandler(msg);
     return Promise.reject(err);
   }
@@ -330,7 +331,7 @@ export const approveTechnicianLeave = (id: number, review_note = '') => client.p
 export const rejectTechnicianLeave = (id: number, review_note: string) => client.post(`/admin/v2/technician-leave-requests/${id}/reject`, { review_note });
 
 // Projects
-export const getProjectsAdmin = () => client.get('/admin/v2/projects');
+export const getProjectsAdmin = (storeId?: number) => client.get('/admin/v2/projects', { params: storeId ? { store_id: storeId } : undefined });
 export const createProject = (data: any) => client.post('/admin/v2/projects', data);
 export const updateProject = (id: number, data: any) => client.post(`/admin/v2/projects/${id}`, data);
 export const getAddonsAdmin = (params?: any) => client.get('/admin/v2/addons', { params });
@@ -364,6 +365,7 @@ export const isDirectMediaUploadUnavailable = (error: unknown) =>
 export const deleteMedia = (id: number) => client.delete(`/admin/media/${id}`);
 
 // Project catalog options
+export const ensureCatalogDraft = (projectId: number) => client.post(`/admin/v2/projects/${projectId}/catalog-draft`);
 export const getOptionGroups = (projectId: number) => client.get(`/admin/v2/projects/${projectId}/option-groups`);
 export const createOptionGroup = (projectId: number, data: any) => client.post(`/admin/v2/projects/${projectId}/option-groups`, data);
 export const updateOptionGroup = (projectId: number, groupId: number, data: any) => client.patch(`/admin/v2/projects/${projectId}/option-groups/${groupId}`, data);

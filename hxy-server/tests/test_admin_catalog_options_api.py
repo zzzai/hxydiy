@@ -144,6 +144,41 @@ class AdminCatalogOptionsApiTests(unittest.TestCase):
         self.assertEqual(custom_response.status_code, 200, custom_response.text)
         return {"group_id": group_id, "free_choice_id": free_response.json()["id"], "linked_choice_id": linked_response.json()["id"], "custom_choice_id": custom_response.json()["id"]}
 
+    def test_explicit_draft_copies_published_and_reuses_latest_without_mutating_live_graph(self):
+        ids = self._create_valid_draft()
+        published = self.client.post(f"/api/v1/admin/v2/projects/{self.main_id}/publish", headers=self.admin_headers).json()
+        url = f"/api/v1/admin/v2/projects/{self.main_id}/catalog-draft"
+        first = self.client.post(url, headers=self.admin_headers)
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertTrue(first.json()["created"])
+        again = self.client.post(url, headers=self.admin_headers)
+        self.assertFalse(again.json()["created"])
+        self.assertEqual(first.json()["catalog_version"]["id"], again.json()["catalog_version"]["id"])
+        draft = self.client.get(f"/api/v1/admin/v2/projects/{self.main_id}/option-groups", headers=self.admin_headers).json()
+        group = draft["items"][0]
+        self.assertNotEqual(group["id"], ids["group_id"])
+        self.assertEqual(len(group["choices"]), 3)
+        changed = self.client.patch(f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{group['id']}", headers=self.admin_headers, json={"name": "草稿手法"})
+        self.assertEqual(changed.status_code, 200, changed.text)
+        old_write = self.client.patch(f"/api/v1/admin/v2/projects/{self.main_id}/option-groups/{ids['group_id']}", headers=self.admin_headers, json={"name": "Must reject"})
+        self.assertEqual(old_write.status_code, 409)
+        with self.SessionLocal() as db:
+            self.assertEqual(db.get(Project, self.main_id).current_published_version_id, published["id"])
+            self.assertEqual(db.get(ProjectOptionGroup, ids["group_id"]).name, "手法")
+            self.assertEqual(_snapshot_hash(db, published["id"]), published["snapshot_hash"])
+            audits = list(db.scalars(select(AuditLog).where(AuditLog.action == "create_catalog_draft")))
+            self.assertEqual(len(audits), 1)
+
+    def test_explicit_draft_keeps_catalog_write_permissions_and_archived_guard(self):
+        url = f"/api/v1/admin/v2/projects/{self.main_id}/catalog-draft"
+        self.assertEqual(self.client.post(url).status_code, 401)
+        self.assertEqual(self.client.post(url, headers=self.staff_headers).status_code, 403)
+        self.assertEqual(self.client.post(url, headers=self.other_headers).status_code, 403)
+        self.assertEqual(self.client.post("/api/v1/admin/v2/projects/99999/catalog-draft", headers=self.admin_headers).status_code, 404)
+        self.assertEqual(self.client.post(f"/api/v1/admin/v2/projects/{self.archived_id}/catalog-draft", headers=self.admin_headers).status_code, 409)
+        with self.SessionLocal() as db:
+            self.assertIsNone(db.scalar(select(ProjectCatalogVersion).where(ProjectCatalogVersion.project_id == self.main_id)))
+
     def test_admin_can_publish_project_with_free_linked_and_custom_options(self):
         ids = self._create_valid_draft()
 

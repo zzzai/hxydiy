@@ -1,3 +1,22 @@
+export function linkedProjectLabel(project: { name: string; prices?: Record<string, number | null> }): string {
+  const prices = (['store', 'member', 'group'] as const).map((type) => {
+    const labels = { store: '门店', member: '会员', group: '团购' };
+    const value = project.prices?.[type];
+    return `${labels[type]} ${typeof value === 'number' && Number.isFinite(value) ? formatCents(value) : '未配置'}`;
+  });
+  return `${project.name} · ${prices.join(' / ')}`;
+}
+
+export function yuanToCents(value: number | null | undefined): number | null | undefined {
+  if (value === null || value === undefined) return value;
+  if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) throw new Error('请输入有效金额');
+  return Math.round(value * 100);
+}
+
+export const CHOICE_TYPE_LABELS: Record<string, string> = {
+  preference: '免费偏好', linked_project: '关联服务项目', dedicated_charge: '单独收费',
+};
+
 export type ChoiceType = 'preference' | 'linked_project' | 'dedicated_charge';
 export type ChargeMode = 'free' | 'inherit_linked_price' | 'custom_price';
 export type PriceType = 'store' | 'group' | 'member';
@@ -84,7 +103,7 @@ export function optionChoicePayload(form: OptionChoiceForm): OptionChoicePayload
   const linked = choiceType === 'linked_project' ? (form.linked_project_id ?? null) : null;
   const chargeMode = choiceType === 'preference'
     ? 'free'
-    : choiceType === 'linked_project' ? 'inherit_linked_price' : (form.charge_mode || 'custom_price');
+    : choiceType === 'linked_project' ? 'inherit_linked_price' : 'custom_price';
   const prices = chargeMode === 'custom_price'
     ? (form.prices || []).map((price) => ({ ...price, amount_cents: Math.max(0, Number(price.amount_cents || 0)) }))
     : [];
@@ -114,7 +133,7 @@ function readablePath(path: string): string {
 
 export function catalogValidationMessage(error: CatalogValidationError): string {
   const message = error.message || CHOICE_ERROR_MESSAGES[error.code || ''] || '目录发布检查未通过';
-  return error.path ? `${readablePath(error.path)}：${message}` : message;
+  return message;
 }
 
 export function catalogPublishState(errors: CatalogValidationError[]): { canPublish: boolean; messages: string[] } {

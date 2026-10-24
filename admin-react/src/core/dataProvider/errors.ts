@@ -1,3 +1,4 @@
+import { requestErrorMessage } from '../../requestError.ts';
 export type ProviderErrorCode = 'UNAUTHORIZED' | 'FORBIDDEN' | 'CONFLICT' | 'REQUEST_FAILED';
 
 export class DataProviderError extends Error {
@@ -16,7 +17,7 @@ export class DataProviderError extends Error {
 export function normalizeProviderError(error: any): DataProviderError {
   const status = Number(error?.response?.status || 0);
   const detail = error?.response?.data?.detail;
-  const message = typeof detail === 'string' ? detail : detail?.message || '请求失败';
+  const message = requestErrorMessage(error);
   const code: ProviderErrorCode = status === 401 ? 'UNAUTHORIZED'
     : status === 403 ? 'FORBIDDEN'
       : status === 409 ? 'CONFLICT' : 'REQUEST_FAILED';

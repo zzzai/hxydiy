@@ -610,6 +610,28 @@ def copy_project_option_groups(
     }
 
 
+@router.post("/projects/{project_id}/catalog-draft")
+def ensure_project_catalog_draft(
+    project_id: int,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_catalog_master_admin(staff)
+    project = _project_for_staff(db, project_id, staff, lock=True)
+    if project.publication_status == "archived":
+        raise HTTPException(status_code=409, detail="归档项目不可编辑目录")
+    draft = _latest_version(db, project.id, "draft")
+    created = draft is None
+    if created:
+        draft = _create_draft_from_published(db, project)
+        _audit(db, staff, "create_catalog_draft", "project_catalog_version", str(draft.id),
+               {"project_id": project.id, "catalog_version_id": draft.id, "version": draft.version})
+    _commit_or_conflict(db)
+    db.refresh(draft)
+    return {"project_id": project.id, "created": created, "catalog_version": _version_meta(draft)}
+
+
 @router.get("/projects/{project_id}/option-groups")
 def list_option_groups(
     project_id: int,

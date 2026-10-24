@@ -14,35 +14,43 @@ import {
 } from '../api';
 import { waitForQiniuUpload } from '../qiniuDirectUpload';
 
+import { requestErrorMessage } from '../requestError';
+import { mediaPreviewSource } from '../mediaPreview';
 type MediaValue = string | { id?: number; url: string } | undefined;
 type RetryableDirectUpload = { file: File; grant: DirectMediaUploadGrant };
 
-export default function MediaUploadField({ value, onChange, purpose = 'general', storeId, requireStoreId = false }: {
+export default function MediaUploadField({ value, onChange, purpose = 'general', storeId, requireStoreId = false, removeFromFormOnly = false }: {
   value?: MediaValue;
   onChange?: (value: string) => void;
   purpose?: string;
   storeId?: number;
   requireStoreId?: boolean;
+  removeFromFormOnly?: boolean;
 }) {
   const { message } = App.useApp();
   const [uploading, setUploading] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<number>();
   const [previewUrl, setPreviewUrl] = useState<string>();
   const [failedFile, setFailedFile] = useState<File>();
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
   const [retryableDirectUpload, setRetryableDirectUpload] = useState<RetryableDirectUpload>();
   const url = typeof value === 'string' ? value : value?.url;
   const mediaId = typeof value === 'object' ? value?.id : Number(url?.match(/\/media\/(\d+)\//)?.[1]) || undefined;
   useEffect(() => {
-    if (!url || url.startsWith('data:') || url.startsWith('blob:') || /^https?:\/\//.test(url)) {
-      setPreviewUrl(url);
+    const source = mediaPreviewSource(url);
+    setPreviewFailed(false); setPreviewUrl(undefined);
+    if (!source?.authenticated) {
+      setPreviewUrl(source?.url);
       return;
     }
     let active = true;
-    client.get(url, { responseType: 'blob' }).then((response) => {
-      if (active) setPreviewUrl(URL.createObjectURL(response.data));
-    }).catch(() => { if (active) setPreviewUrl(undefined); });
-    return () => { active = false; };
-  }, [url]);
+    let objectUrl: string | undefined;
+    client.get(source.url, { responseType: 'blob' }).then((response) => {
+      if (active) { objectUrl = URL.createObjectURL(response.data); setPreviewUrl(objectUrl); }
+    }).catch(() => { if (active) setPreviewFailed(true); });
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url, previewAttempt]);
   const upload = async (file: File) => {
     setUploading(true);
     setUploadPercent(undefined);
@@ -73,7 +81,7 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
     } catch (error) {
       setFailedFile(file);
       if (grant) setRetryableDirectUpload({ file, grant });
-      message.error(error instanceof Error ? error.message : '图片上传失败');
+      message.error(requestErrorMessage(error));
       throw error;
     } finally {
       setUploading(false);
@@ -93,6 +101,7 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
       }
     },
     beforeUpload: (file) => {
+      if (requireStoreId && !storeId) { message.error('请先选择目标门店'); return Upload.LIST_IGNORE; }
       if (!file.type.startsWith('image/')) {
         message.error('请选择图片文件');
         return Upload.LIST_IGNORE;
@@ -105,11 +114,12 @@ export default function MediaUploadField({ value, onChange, purpose = 'general',
     },
   };
   return <Space direction="vertical" size={8}>
-    {previewUrl && <Image src={previewUrl} width={120} height={90} style={{ objectFit: 'cover' }} />}
+    {previewUrl && !previewFailed && <Image key={previewAttempt} src={previewUrl} width={120} height={90} style={{ objectFit: 'cover' }} onError={() => setPreviewFailed(true)} />}
+    {previewFailed && <Space wrap><span role="status">图片暂时无法预览，原图仍保留。</span><Button size="small" onClick={() => setPreviewAttempt(value => value + 1)}>重试预览</Button></Space>}
     <Space>
       <Upload {...props}><Button icon={<UploadOutlined />} loading={uploading} disabled={uploading || (requireStoreId && !storeId)}>{uploading && uploadPercent !== undefined ? `上传中 ${Math.round(uploadPercent)}%` : (url ? '替换图片' : '上传图片')}</Button></Upload>
-      {failedFile && <Button loading={uploading} onClick={() => void upload(failedFile)}>重试上传</Button>}
-      {mediaId && <Button danger type="text" icon={<DeleteOutlined />} onClick={async () => { await deleteMedia(mediaId); onChange?.(''); message.success('图片已删除'); }}>删除</Button>}
+      {failedFile && <Button loading={uploading} onClick={() => { void upload(failedFile).catch(() => undefined); }}>重试上传</Button>}
+      {removeFromFormOnly && url ? <Button type="text" disabled={uploading} onClick={() => onChange?.('')}>移除配图</Button> : mediaId && <Button danger type="text" icon={<DeleteOutlined />} onClick={async () => { await deleteMedia(mediaId); onChange?.(''); message.success('图片已删除'); }}>删除</Button>}
     </Space>
   </Space>;
 }
