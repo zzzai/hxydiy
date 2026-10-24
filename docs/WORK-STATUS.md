@@ -1,3 +1,10 @@
+# 2026-10-25 门店日常作业修复已生产验收
+
+- `ADMIN-DAILY-OPERATIONS-20261024` 已上线：[PR #382](https://github.com/zzzai/hxydiy/pull/382)，候选 `25565e39ab0782b25eed03ee645af111e689f5f9`，合并/生产 `f705ff522c8498d3d83f44a58ab54f595086b16f`；精确 [CI 40111030635](https://github.com/zzzai/hxydiy/actions/runs/40111030635) 与唯一 [Deploy 40111537521](https://github.com/zzzai/hxydiy/actions/runs/40111537521) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-f705ff522c84-40111537521`。
+- 今日工作台读取现行服务位/选单，正常执行项目不再误报缺旧订单；到店选单保留无座提交及失败恢复。待办知悉后继续保留，指派/关闭具备行锁与重复保护；评价状态和说明一次保存，失败保留草稿；总部员工姓名、登录名、角色、门店和状态组合筛选生效。
+- 生产核验 511 项 MANIFEST、169 个安装 Python 文件、3 个运行源文件和 10 个公网入口/资源哈希一致，health=`ok/production`；发布备份 checksum 通过，迁移集合及内容与前一版一致。本批没有数据迁移、清理、充值、退款、发券或外发消息。
+- 隔离合成 PostgreSQL 的42项真实网络HTTP断言与13项浏览器验收已通过，覆盖保存回读、并发/重复操作及门店权限；最终候选仅补修旧前端接口断言和UTC/北京时间跨午夜测试日期。生产复核业务API调用0、数据库查询0、业务写入0；人工现场验收仍由人完成。详见 `operations/admin-daily-operations-release-20261025.md`。事实文档收尾不再次部署。
+
 # 2026-10-24 管理后台项目编辑与结构化展示修复已生产验收
 
 - `ADMIN-CATALOG-RECOVERY-20261024` 已上线：[PR #380](https://github.com/zzzai/hxydiy/pull/380)，候选 `c6128ce43b13db1be84c22dfded30813c3efe2f3`，合并/生产 `8362674795a09da45c3e4402efd6e84b1993fa7f`；精确 [CI 40081262322](https://github.com/zzzai/hxydiy/actions/runs/40081262322) 与唯一 [Deploy 40081627303](https://github.com/zzzai/hxydiy/actions/runs/40081627303) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-8362674795a0-40081627303`。

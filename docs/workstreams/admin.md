@@ -1,6 +1,13 @@
 # 管理后台与员工工作台工作流
 
-## 2026-10-24 门店日常作业隔离候选
+## 2026-10-25 门店日常作业已生产验收
+
+- `ADMIN-DAILY-OPERATIONS-20261024` 已上线：[PR #382](https://github.com/zzzai/hxydiy/pull/382)，候选 `25565e39ab0782b25eed03ee645af111e689f5f9`，合并/生产 `f705ff522c8498d3d83f44a58ab54f595086b16f`；精确 [CI 40111030635](https://github.com/zzzai/hxydiy/actions/runs/40111030635) 与唯一 [Deploy 40111537521](https://github.com/zzzai/hxydiy/actions/runs/40111537521) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-f705ff522c84-40111537521`。
+- 今日工作台读取现行服务位/选单，正常执行项目不再误报缺旧订单；到店选单保留无座提交及失败恢复。待办知悉后继续保留，指派/关闭具备行锁与重复保护；评价状态和说明一次保存，失败保留草稿；总部员工姓名、登录名、角色、门店和状态组合筛选生效。
+- 生产核验 511 项 MANIFEST、169 个安装 Python 文件、3 个运行源文件和 10 个公网入口/资源哈希一致，health=`ok/production`；发布备份 checksum 通过，迁移集合及内容与前一版一致。本批没有数据迁移、清理、充值、退款、发券或外发消息。
+- 隔离合成 PostgreSQL 的42项真实网络HTTP断言与13项浏览器验收已通过，覆盖保存回读、并发/重复操作及门店权限；最终候选仅补修旧前端接口断言和UTC/北京时间跨午夜测试日期。生产复核业务API调用0、数据库查询0、业务写入0；人工现场验收仍由人完成。详见 `../operations/admin-daily-operations-release-20261025.md`。事实文档收尾不再次部署。
+
+## 2026-10-24 门店日常作业隔离候选（阶段历史）
 
 今日工作台、到店选单、服务待办、评价一次保存和总部员工筛选已接真实隔离API；42项网络断言、PG并发与门店权限、浏览器13项操作、TypeScript及快照构建通过。补修正常执行项目被旧订单核对误报的问题。所有写入只在合成库，无迁移、无提交合并发布；原有修改保留。PRD与验收见 `../product/admin-daily-operations-prd-v2-20261024.md`、`../product/admin-daily-operations-integration-acceptance-v2-20261024.md`。此条为未合并候选，不替代主干或生产事实。
 
