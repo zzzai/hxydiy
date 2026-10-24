@@ -14187,6 +14187,51 @@
         ]
       }
     },
+    "/api/v1/admin/v2/projects/{project_id}/catalog-draft": {
+      "post": {
+        "operationId": "ensure_project_catalog_draft_api_v1_admin_v2_projects__project_id__catalog_draft_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "StaffBearer": []
+          }
+        ],
+        "summary": "Ensure Project Catalog Draft",
+        "tags": [
+          "admin-catalog"
+        ]
+      }
+    },
     "/api/v1/admin/v2/projects/{project_id}/option-groups": {
       "get": {
         "operationId": "list_option_groups_api_v1_admin_v2_projects__project_id__option_groups_get",

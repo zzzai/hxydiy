@@ -1,5 +1,12 @@
 # 管理后台与员工工作台工作流
 
+## 2026-10-24 ADMIN-CATALOG-RECOVERY（隔离验收通过，获准提交发布）
+
+- 本批只包含服务项目编辑/图片/保存/目录草稿发布和后台结构化展示修复；已发布目录仍不可变，新增草稿接口复用项目锁与总部写权限，无数据库迁移。
+- 真实隔离 PostgreSQL 网络 HTTP 51 项、后端目录合同 27 项、前端定向 30 项、TypeScript 和生产构建通过；浏览器完成真实保存/发布/返回状态验证，源码快照 SHA256=14fa1c9578855866ef18a5b66f1e758018fb4daa035be6979bbf69089cd8e5ed。
+- 当前用户已批准本批 CI 与服务器验证通过后合并上线。预览入口、合成登录夹具和 node_modules 不纳入提交；无会员同步、支付退款、外部消息、执行引擎或其他未验收功能。
+- PRD/验收：`../product/admin-catalog-integration-prd-v3-20261024.md`、`../product/admin-catalog-integration-acceptance-v3-20261024.md`。发布事实以本批完成后的 CURRENT-STATE / WORK-STATUS 为准，本节不预先宣称已上线。
+
 ## 2026-10-20 WECOM-STAFF-ADD-20261020（工具已合并，生产新增绑定完成）
 
 - hxy 独立工作区 `/root/hxy-diy-development/wecom-staff-add-20261020`，基线 `a70a668a56a84313be4746fefe50dc4c82724367`；只改正式 provision 脚本、定向测试及契约文档，不改应用/API/迁移/旧档案，不混入价格或其他窗口工作。技师显式官方姓名字段由真实 provider 严格校验，本地姓名使用已确认值；无字段保持旧请求摘要完全一致。
