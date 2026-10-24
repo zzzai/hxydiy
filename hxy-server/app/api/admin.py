@@ -32,6 +32,8 @@ from app.models import (
     PositionOccupancy,
     Room,
     ServiceFeedback,
+    ServiceLine,
+    SelectionRevision,
     SelectionSession,
     SettlementAdjustment,
     Staff,
@@ -968,6 +970,17 @@ def _order_reconciliation_result(db: Session, store_id: int, days: int) -> dict:
         "in_service": {"checked_in", "in_service", "completed"},
         "completed": {"completed"},
     }
+    # Current selections create execution lines, not legacy payment orders.
+    fulfilled_selection_ids = set(db.scalars(
+        select(ServiceLine.selection_session_id)
+        .join(SelectionRevision, ServiceLine.selection_revision_id == SelectionRevision.id)
+        .where(
+            ServiceLine.selection_session_id.in_([session.id for session in sessions]),
+            SelectionRevision.selection_session_id == ServiceLine.selection_session_id,
+            SelectionRevision.state == "confirmed",
+        )
+        .distinct()
+    ))
     anomalies: list[dict] = []
 
     for order in orders:
@@ -1015,7 +1028,11 @@ def _order_reconciliation_result(db: Session, store_id: int, days: int) -> dict:
             })
 
     for session in sessions:
-        if session.status in expected_order_status and session.fulfillment_order_id is None:
+        if (
+            session.status in expected_order_status
+            and session.fulfillment_order_id is None
+            and session.id not in fulfilled_selection_ids
+        ):
             anomalies.append({
                 "type": "missing_order",
                 "selection_session_id": session.id,
@@ -1176,9 +1193,13 @@ def assign_operational_exception(
     staff = _current_staff(authorization, db)
     _require_manager_staff(staff)
     store_id = _staff_store_id(staff)
-    row = db.get(OperationalException, exception_id)
+    row = db.scalar(select(OperationalException).where(
+        OperationalException.id == exception_id, OperationalException.store_id == store_id,
+    ).with_for_update().execution_options(populate_existing=True))
     if not row or row.store_id != store_id:
         raise HTTPException(status_code=404, detail="异常记录不存在")
+    if row.status == "resolved":
+        raise HTTPException(status_code=409, detail="异常已处理")
     target_staff_id = (body or {}).get("staff_id") or staff.id
     try:
         target_staff_id = int(target_staff_id)
@@ -1187,6 +1208,8 @@ def assign_operational_exception(
     target = db.get(Staff, target_staff_id)
     if not target or target.store_id != store_id or target.status != "active":
         raise HTTPException(status_code=400, detail="只能指派给本店在职员工")
+    if row.assigned_staff_id == target.id:
+        return {"id": row.id, "assigned_staff_id": row.assigned_staff_id, "assigned_to": target.name}
     row.assigned_staff_id = target.id
     db.add(AuditLog(
         actor_type="staff", actor_id=str(staff.id), store_id=store_id,
@@ -1238,7 +1261,9 @@ def resolve_operational_exception(
     staff = _current_staff(authorization, db)
     _require_manager_staff(staff)
     store_id = _staff_store_id(staff)
-    row = db.get(OperationalException, exception_id)
+    row = db.scalar(select(OperationalException).where(
+        OperationalException.id == exception_id, OperationalException.store_id == store_id,
+    ).with_for_update().execution_options(populate_existing=True))
     if not row or row.store_id != store_id:
         raise HTTPException(status_code=404, detail="异常记录不存在")
     if row.status == "resolved":

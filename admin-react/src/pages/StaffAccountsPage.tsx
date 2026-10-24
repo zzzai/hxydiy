@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Tag } from 'antd';
+import { Alert, App, Button, Tag } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ModalForm, PageContainer, ProFormGroup, ProFormSelect, ProFormText, ProTable, type ActionType, type ProColumns } from '@ant-design/pro-components';
 import { getStaff, getStoreMasterData } from '../api';
 import { canManageStoreMasterData } from '../auth';
+import { dataProvider } from '../core/dataProvider';
 import { refineDataProvider } from '../core/dataProvider/refine';
 import { resources } from '../core/resources';
 import {
@@ -34,13 +35,15 @@ export default function StaffAccountsPage() {
   const [actionRef] = useState<React.MutableRefObject<ActionType | undefined>>({ current: undefined });
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<StaffAccount | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [storesError, setStoresError] = useState('');
   const [stores, setStores] = useState<StoreOption[]>([]);
 
   useEffect(() => {
     if (!canManage) return;
     getStoreMasterData({ page: 1, page_size: 100 })
       .then((response) => setStores(response.data.items || response.data || []))
-      .catch(() => undefined);
+      .catch(() => setStoresError('门店列表加载失败，请刷新后重试。'));
   }, [canManage]);
 
   if (!canManage) {
@@ -56,7 +59,8 @@ export default function StaffAccountsPage() {
       render: (_, record) => { const meta = getStaffAccountRoleMeta(record.role); return <Tag color={meta.color}>{meta.label}</Tag>; },
     },
     {
-      title: '所属门店', dataIndex: 'store_id', width: 180,
+      title: '所属门店', dataIndex: 'store_id', width: 180, valueType: 'select',
+      fieldProps: { options: stores.map(store => ({ value: store.id, label: store.name })), showSearch: true, optionFilterProp: 'label' },
       render: (_, record) => stores.find((store) => store.id === record.store_id)?.name || `门店 #${record.store_id}`,
     },
     {
@@ -76,6 +80,8 @@ export default function StaffAccountsPage() {
       <Button key="create" type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); setOpen(true); }}>新建账号</Button>,
     ]}
   >
+    {storesError && <Alert type="warning" showIcon message={storesError} />}
+    {loadError && <Alert type="error" showIcon message={loadError} action={<Button onClick={() => actionRef.current?.reload()}>重试加载</Button>} />}
     <ProTable<StaffAccount>
       actionRef={actionRef}
       rowKey="id"
@@ -83,16 +89,23 @@ export default function StaffAccountsPage() {
       search={{ labelWidth: 'auto', defaultCollapsed: true }}
       pagination={{ defaultPageSize: 20, showSizeChanger: true }}
       request={async (params) => {
+        setLoadError('');
+        try {
+        dataProvider.invalidate(resources.staffAccounts);
         const result = await refineDataProvider.getList({
           resource: resources.staffAccounts,
           pagination: { currentPage: params.current, pageSize: params.pageSize, mode: 'server' },
           filters: [
+            { field: 'username', operator: 'contains', value: params.username },
+            { field: 'name', operator: 'contains', value: params.name },
+            { field: 'role', operator: 'eq', value: params.role },
             { field: 'status', operator: 'eq', value: params.status },
             { field: 'store_id', operator: 'eq', value: params.store_id },
           ],
           sorters: [],
         });
         return { success: true, data: result.data as StaffAccount[], total: result.total };
+        } catch { setLoadError('员工账号加载失败，请重试。'); return { success: false, data: [], total: 0 }; }
       }}
       options={{ density: true, fullScreen: true, reload: true, setting: true }}
       scroll={{ x: 1000 }}

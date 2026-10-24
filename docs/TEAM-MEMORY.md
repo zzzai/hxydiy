@@ -1,5 +1,8 @@
 # hxy-diy 共享记忆
 
+2026-10-24 `ADMIN-DAILY-OPERATIONS-20261024` 隔离候选（未提交/合并/部署）：今日在店服务接入当前服务位与执行项目投影；服务核对不再将正常 ServiceLine 选单误报为缺旧订单。服务待办保留已知悉事项，关闭与指派增加行锁/重复保护；评价状态与说明一次保存、相同处理人相同内容重试不重复审计；总部员工列表姓名、登录名、角色与门店/状态组合筛选真实生效。无数据库迁移，不改价格/会员/生产数据；旧待办不自动删除。详见 `contracts/admin-daily-operations-v1.md`、`contracts/admin-staff-accounts.md`、`contracts/open-visit-feedback-v1.md` 及 `product/admin-daily-operations-prd-v2-20261024.md`。本条只描述当前候选，不能作为已合并共享事实或上线证明。
+
+
 2026-10-23 `MOBILE-WORKBENCH-CLOSEOUT-20261023`：店长待办按既有服务完成审计只读汇总近30天“记录待补填”，仅返回对应技师与数量，不返回顾客/身体/私人正文；技师历史新增独立 `record_status` 筛选及本人可补填入口，保存后按同一口径消项，顾客未确认不等于未填写。`status=unresolved` 包含 open/acknowledged；知悉不等于解决、不得隐去，重复知悉不新增审计/时间；逾期为子集，不重复计数。移动端进入及返回只发 GET 刷新，未接通旧 `/order-reconciliation/sync`，因为合法无座位/占用履约不能按缺少旧 Order 判断漏单。本批无迁移、款项处理、外发消息或权限扩张。合同见 `contracts/mobile-service-todos-20261023.md`；实现、合并、生产及人工真机验收分别记录，不由本条推定发布。
 
 2026-10-23 `STORE-FEEDBACK-QR-20261023`：新增公开门店通用评价入口 `?store=1&view=feedback`，无需登录、选座或下单，主动评分后提交；成功后可返回无座菜单或报告中心（`view=reports`，未登录沿用既有验证）。独立门店 scope 凭证绑定浏览器与有效期，旧服务位 `vf1` 不放宽；到店反馈允许空 `room_id`，不关联订单或技师、不计技师评分。旧数据保留、带门店隔离的幂等与限流保持；详见 `contracts/open-visit-feedback-v1.md`。本条是本批实现契约，是否上线以实际发布回执为准。

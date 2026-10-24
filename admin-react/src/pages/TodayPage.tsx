@@ -1,119 +1,89 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { App, Button, Col, Empty, Popconfirm, Result, Row, Space, Spin, Statistic, Table, Tag, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
-import { finishService, getManagerWorkbench, getOrderReconciliation, getStaff, getTodayAppointments, getTodayStats, readyService } from '../api';
+import { Alert, Button, Descriptions, Drawer, Empty, Space, Spin, Statistic, Table, Tag, Typography } from 'antd';
+import { ReloadOutlined, RightOutlined } from '@ant-design/icons';
+import { getLiveServicePositionMap, getManagerWorkbench, getOrderReconciliation, getStaff, getSelectionSessions } from '../api';
 import { canViewReadOnlyOperations } from '../auth';
-import { dataProvider } from '../core/dataProvider';
-import { resources } from '../core/resources';
-import { getNextOperation, getOperationConfirmation, getResourceStatus, type LiveBoard, type LiveVisit, makeIdempotencyKey, type OperationAction } from '../operations';
+import { type LiveServicePositionMap, type ServicePosition, type SelectionSummary } from '../servicePositions';
+import { attentionDestination, displayCount, operationTime, serviceStatus } from '../dailyOperations';
+import './daily-operations.css';
 
-const { Text, Title } = Typography;
-const emptyBoard: LiveBoard = { summary: {}, visits: [], resources: { technicians: [], rooms: [] } };
-const sectionStyle: React.CSSProperties = { background: 'var(--hxy-surface)', border: '1px solid var(--hxy-border-subtle)', borderRadius: 12, padding: 20 };
-const itemNames = (items: LiveVisit['items']) => items.map((item) => `${item.name || '服务项目'}${item.quantity ? ` ×${item.quantity}` : ''}`).join('、');
-
-function boardFromResponse(value: unknown): LiveBoard {
-  if (!value || typeof value !== 'object') return emptyBoard;
-  const payload = 'data' in value && value.data && typeof value.data === 'object' ? value.data : value;
-  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { visits?: unknown }).visits)) return emptyBoard;
-  return { ...emptyBoard, ...(payload as Partial<LiveBoard>) };
-}
-
+type Workbench = { generated_at?: string; summary: Record<string, number>; attention: Array<{ key: string; label: string; count: number }>; record_follow_up?: { pending_count: number; window_days: number; technicians: Array<{ technician_id: number; name: string; count: number }> } };
+type Reconciliation = { summary: { anomaly_count: number; orders_checked: number; selections_checked: number } };
+const itemNames = (items: SelectionSummary['items']) => items.map(item => `${item.name || '服务项目'}${(item.quantity || 0) > 1 ? ` ×${item.quantity}` : ''}`).join('、');
+const taskCopy: Record<string, { label: string; hint: string; action: string }> = {
+  stale_order: { label: '超过30分钟的选单待核实', hint: '核对现场是否已开始服务，历史未完成事项也可能计入。', action: '核对选单' },
+  low_review: { label: '低分评价待跟进', hint: '查看顾客反馈，记录本次处理结果。', action: '查看评价' },
+  unassigned_service: { label: '待服务项目尚未安排技师', hint: '查看对应服务位并核对现场安排。', action: '查看服务位' },
+  record_pending: { label: '近30天服务记录待补填', hint: '按技师查看缺少的记录，由服务技师本人补填。', action: '查看待补记录' },
+  exception_queue: { label: '服务信息待核对', hint: '已知悉的事项也会保留，直到记录处理结果。', action: '去处理' },
+  exception_overdue: { label: '服务待办已逾期', hint: '属于未处理事项，请优先跟进，不重复计为新问题。', action: '查看待办' },
+};
 export default function TodayPage() {
-  const { message } = App.useApp();
   const navigate = useNavigate();
   const readOnly = canViewReadOnlyOperations(getStaff()?.role);
-  const [stats, setStats] = useState<Record<string, number>>({});
-  const [board, setBoard] = useState<LiveBoard>(emptyBoard);
-  const [workbench, setWorkbench] = useState<{ summary?: Record<string, number>; attention?: Array<{ key: string; label: string; count: number }> }>();
-  const [reconciliation, setReconciliation] = useState<{ summary?: { anomaly_count?: number; orders_checked?: number; selections_checked?: number } }>();
-  const [appointments, setAppointments] = useState<Array<{ id: number; order_no: string; status: string; booking_time?: string; items?: Array<{ name?: string; quantity?: number }> }>>([]);
+  const [board, setBoard] = useState<LiveServicePositionMap | null>(null);
+  const [workbench, setWorkbench] = useState<Workbench | null>(null);
+  const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
+  const [appointments, setAppointments] = useState<Array<{ id: string; status: string; submitted_at?: string; position?: { status: string }; items: SelectionSummary['items'] }>>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [acting, setActing] = useState('');
-
+  const [errors, setErrors] = useState<string[]>([]);
+  const [recordsOpen, setRecordsOpen] = useState(false);
+  const version = useRef(0);
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (readOnly) {
-        const response = await getTodayAppointments();
-        setAppointments(response.data?.items || []);
-        return;
-      }
-      dataProvider.invalidate(resources.serviceOrders);
-      const [statsResponse, boardResponse, workbenchResponse, reconciliationResponse] = await Promise.all([
-        getTodayStats(),
-        dataProvider.getList<unknown>(resources.serviceOrders),
-        getManagerWorkbench().catch(() => ({ data: {} })),
-        getOrderReconciliation(30).catch(() => ({ data: {} })),
-      ]);
-      setStats(statsResponse.data || {});
-      setBoard(boardFromResponse(boardResponse));
-      setWorkbench(workbenchResponse.data || {});
-      setReconciliation(reconciliationResponse.data || {});
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '请稍后重试');
-    } finally {
-      setLoading(false);
+    const current = ++version.current;
+    setLoading(true); setErrors([]);
+    if (readOnly) {
+      try {
+        const response = await getSelectionSessions(undefined, undefined, { page: 1, page_size: 100 }, true);
+        if (!Array.isArray(response.data?.items)) throw new Error('Invalid appointment response');
+        if (current === version.current) setAppointments(response.data.items);
+      } catch { if (current === version.current) { setAppointments([]); setErrors(['今日安排加载失败']); } }
+      finally { if (current === version.current) setLoading(false); }
+      return;
     }
+    const result = await Promise.allSettled([
+      getManagerWorkbench().then(response => { if (!response.data?.summary || !Array.isArray(response.data.attention)) throw new Error('Invalid workbench response'); return response.data as Workbench; }),
+      getLiveServicePositionMap().then(response => { if (!Array.isArray(response.data?.positions)) throw new Error('Invalid position response'); return response.data; }),
+      getOrderReconciliation(30).then(response => { if (displayCount(response.data?.summary?.anomaly_count) === '—') throw new Error('Invalid reconciliation response'); return response.data as Reconciliation; }),
+    ]);
+    if (current !== version.current) return;
+    setWorkbench(result[0].status === 'fulfilled' ? result[0].value : null);
+    setBoard(result[1].status === 'fulfilled' ? result[1].value : null);
+    setReconciliation(result[2].status === 'fulfilled' ? result[2].value : null);
+    setErrors(result.flatMap((item, index) => item.status === 'rejected' ? [['待办与服务概况加载失败', '在店服务加载失败', '服务信息核对暂时不可用'][index]] : []));
+    setLoading(false);
   }, [readOnly]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const run = async (key: string, request: () => Promise<unknown>, success: string) => {
-    setActing(key);
-    try { await request(); message.success(success); await load(); } finally { setActing(''); }
-  };
-
-  const runServiceAction = (visit: LiveVisit, action: OperationAction) => {
-    const id = visit.service_order_id;
-    const key = makeIdempotencyKey(action, id);
-    const requests: Record<OperationAction, () => Promise<unknown>> = {
-      ready: () => readyService(id, key), finish: () => finishService(id, key),
-    };
-    const success: Record<OperationAction, string> = {
-      ready: '已确认服务', finish: '已记录服务结束',
-    };
-    return run(`${action}-${id}`, requests[action], success[action]);
-  };
-
-  const columns = useMemo(() => [
-    { title: '顾客服务', key: 'service', render: (_: unknown, record: LiveVisit) => <Space direction="vertical" size={1}><Text strong>{itemNames(record.items) || '到店服务'}</Text><Text type="secondary" style={{ fontSize: 12 }}>{record.order_no}</Text></Space> },
-    { title: '进度', dataIndex: 'status', width: 110 },
-    { title: '技师 / 资源', key: 'resource', width: 180, render: (_: unknown, record: LiveVisit) => record.technician_name ? `${record.technician_name} · ${record.room_name}` : <Text type="secondary">等待智慧宝现场安排</Text> },
-    { title: '金额', dataIndex: 'pay_amount_cents', width: 100, align: 'right' as const, render: (amount: number) => `¥${(amount / 100).toFixed(2)}` },
-    { title: '下一步', key: 'action', width: 130, align: 'right' as const, render: (_: unknown, record: LiveVisit) => { const next = getNextOperation(record.status, record.service_order_status); if (!next) return <Text type="secondary">等待处理</Text>; return <Popconfirm title={getOperationConfirmation(next.label)} onConfirm={() => runServiceAction(record, next.action)}><Button loading={acting === `${next.action}-${record.service_order_id}`}>{next.label}</Button></Popconfirm>; } },
-  ], [acting]);
-
-  const readOnlyColumns = useMemo(() => [
-    { title: '服务项目', key: 'service', render: (_: unknown, record: typeof appointments[number]) => itemNames(record.items || []) || '到店服务' },
-    { title: '预约时间', dataIndex: 'booking_time', width: 140, render: (value: string | undefined) => value || '-' },
-    { title: '状态', dataIndex: 'status', width: 120 },
-  ], []);
-
-  if (error) return <Result status="error" title="工作台数据加载失败" subTitle={error} extra={<Button type="primary" icon={<ReloadOutlined />} onClick={() => void load()}>重试</Button>} />;
-
-  if (readOnly) return <Space direction="vertical" size={16} style={{ width: '100%' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={2} style={{ margin: 0 }}>工作台</Title><Text type="secondary">仅查看本店当日服务安排</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
-    <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>今日预约</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table rowKey="id" columns={readOnlyColumns} dataSource={appointments} pagination={false} locale={{ emptyText: <Empty description="当前没有今日预约" /> }} />}</section>
-  </Space>;
-
-  return <Space direction="vertical" size={16} style={{ width: '100%' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}><div><Title level={2} style={{ margin: 0 }}>工作台</Title><Text type="secondary">在店服务与结算状态 · “今日”按上海自然日计算</Text></div><Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>刷新</Button></div>
-    <Row gutter={[12, 12]}>{[['今日新订单', workbench?.summary?.today_orders || 0], ['服务中', workbench?.summary?.in_service ?? board.summary.in_service ?? 0], ['待结账', workbench?.summary?.pending_checkout ?? board.summary.pending_checkout ?? 0], ['需处理', workbench?.summary?.attention || 0]].map(([label, value]) => <Col xs={12} md={6} key={String(label)}><div style={{ ...sectionStyle, padding: '16px 18px' }}><Statistic title={label} value={value} valueStyle={label === '需处理' && Number(value) > 0 ? { color: 'var(--hxy-warning)' } : undefined} /></div></Col>)}</Row>
-    {Number(workbench?.summary?.attention || 0) > 0 && <Text type="secondary" style={{ marginTop: -8, display: 'block' }}>需处理可能包含历史未完成事项，请按列表逐项核实。</Text>}
-    {Boolean(workbench?.attention?.length) && <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>待处理</Text><div style={{ marginTop: 10 }}>{workbench?.attention?.map((item) => <Button key={item.key} type="link" danger={item.key === 'low_review'} style={{ paddingInline: 0, minHeight: 44 }} onClick={() => navigate(item.key === 'low_review' ? '/feedback' : '/selection-sessions')}>{item.label} {item.count}</Button>)}</div></section>}
-    <section style={sectionStyle}>
-      <Space size={10} wrap>
-        <Text strong style={{ fontSize: 16 }}>选单/订单对账</Text>
-        {Number(reconciliation?.summary?.anomaly_count || 0) > 0 ? <Tag color="warning">{reconciliation?.summary?.anomaly_count} 条待核对</Tag> : <Tag color="green">近 30 天无异常</Tag>}
-        <Text type="secondary">检查订单 {reconciliation?.summary?.orders_checked ?? 0} 条、选单 {reconciliation?.summary?.selections_checked ?? 0} 条</Text>
-        <Button type="link" style={{ paddingInline: 0 }} onClick={() => navigate('/exceptions')}>查看异常队列</Button>
-      </Space>
-    </section>
-    <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>在店服务流</Text>{loading ? <Spin style={{ display: 'block', margin: '32px auto' }} /> : <Table<LiveVisit> rowKey="id" columns={columns} dataSource={board.visits} pagination={false} locale={{ emptyText: <Empty description="当前没有在店服务" /> }} scroll={{ x: 760 }} />}</section>
-    <section style={sectionStyle}><Text strong style={{ fontSize: 16 }}>资源状态</Text><Row gutter={[12, 12]} style={{ marginTop: 12 }}><Col span={24}><Text type="secondary">技师</Text><div>{board.resources.technicians.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col><Col span={24}><Text type="secondary">房间 / 沙发</Text><div>{board.resources.rooms.map((item) => <Tag key={item.id} color={getResourceStatus(item.status).color}>{item.name} · {getResourceStatus(item.status).text}</Tag>)}</div></Col></Row></section>
-  </Space>;
+  useEffect(() => { void load(); return () => { version.current++; }; }, [load]);
+  const metric = (key: string) => loading ? '—' : displayCount(workbench?.summary[key]);
+  return <div className="daily-page">
+    <div className="page-heading"><div><h2>今日工作台</h2><div className="page-kicker">{readOnly ? '查看本店待跟进选单（最近100条）' : '先处理待办，再跟进门店服务。今日按北京时间统计。'}</div></div><Space wrap>{workbench?.generated_at && <Typography.Text type="secondary">更新于 {operationTime(workbench.generated_at)}</Typography.Text>}<Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新工作台</Button></Space></div>
+    {errors.length > 0 && <Alert type="warning" showIcon message={errors.join('；')} description="未获取的数据不计为0，也不表示没有待办。其他已加载内容可继续查看。" action={<Button onClick={() => void load()}>重试加载</Button>} />}
+    {readOnly ? <section className="daily-panel"><h3>待跟进选单</h3>{loading ? <Spin /> : !errors.length && <Table rowKey="id" dataSource={appointments} pagination={{ pageSize: 10 }} columns={[{ title: '项目', render: (_, row) => itemNames(row.items || []) || '到店服务' }, { title: '安排时间', render: (_, row) => operationTime(row.submitted_at) }, { title: '进度', render: (_, row) => serviceStatus(row.position?.status || row.status) }]} />}</section> : <>
+    <div className="daily-metrics">{[['今日选单', 'today_orders'], ['待服务', 'waiting_service'], ['服务中', 'in_service'], ['今日完成', 'completed_today']].map(([label, key]) => <Statistic key={key} title={label} value={metric(key)} />)}</div>
+    <div className="daily-columns">
+      <section className="daily-panel"><div className="daily-panel-heading"><h3>门店待处理</h3><Typography.Text type="secondary">包含历史未完成事项</Typography.Text></div>
+        {loading ? <Spin /> : !workbench ? <p className="daily-muted">待办暂未加载，请重试后核对。</p> : workbench.attention.length ? workbench.attention.map(item => {
+          const copy = taskCopy[item.key] || { label: '门店事项待核实', hint: '请联系当班负责人核对。', action: '' };
+          const target = attentionDestination(item.key);
+          return <div className="daily-task" key={item.key}><div><strong>{copy.label}</strong><span>{copy.hint}</span></div><Tag color={item.key === 'exception_overdue' ? 'error' : 'default'}>{displayCount(item.count)}</Tag>{(target || item.key === 'record_pending') && <Button type="link" onClick={() => target ? navigate(target) : setRecordsOpen(true)}>{copy.action}<RightOutlined /></Button>}</div>;
+        }) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有已登记的待办" />}
+      </section>
+      <section className="daily-panel daily-check"><h3>服务信息核对</h3><p>检查近30天选单是否有关联服务，以及已关联订单的信息是否一致。</p>
+        {loading ? <Spin /> : !reconciliation ? <Alert type="warning" message="本次未完成核对" description="不能据此判断没有异常。" /> : <><Tag color={reconciliation.summary.anomaly_count ? 'warning' : 'success'}>{reconciliation.summary.anomaly_count ? `${reconciliation.summary.anomaly_count} 项差异待核对` : '本次核对未发现差异'}</Tag><p>已检查 {displayCount(reconciliation.summary.selections_checked)} 份选单。</p></>}
+        <Button block onClick={() => navigate('/exceptions')}>进入服务待办</Button><p className="daily-muted">进入后点击“核对最新服务”更新待办。</p>
+      </section>
+    </div>
+    <section className="daily-panel"><div className="daily-panel-heading"><h3>在店服务</h3><Button onClick={() => navigate('/service-positions')}>查看服务位</Button></div>{loading ? <Spin /> : !board ? <p className="daily-muted">服务列表暂未加载。</p> : <Table<ServicePosition> rowKey="id" dataSource={board.positions.filter(position => position.selection && !['available', 'unavailable', 'released'].includes(position.state))} pagination={{ pageSize: 10 }} scroll={{ x: 650 }} columns={[
+      { title: '服务项目', render: (_, row) => <Space direction="vertical" size={2}><Typography.Text strong>{itemNames(row.selection?.items || []) || '到店服务'}</Typography.Text><Typography.Text type="secondary">{row.selection?.id}</Typography.Text></Space> },
+      { title: '进度', width: 130, render: (_, row) => <Tag>{serviceStatus(row.state)}</Tag> },
+      { title: '服务位置', width: 150, render: (_, row) => row.customer_label || row.name },
+      { title: '下一步', width: 140, render: () => <Button onClick={() => navigate('/service-positions')}>查看现场安排</Button> },
+    ]} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已安排服务位的服务，未入座选单请在到店选单查看" /> }} />}</section>
+    </>}
+    <Drawer rootClassName="daily-drawer" title="服务记录待补填" width={460} open={recordsOpen} onClose={() => setRecordsOpen(false)}>
+      <p>请对应技师进入技师端“历史服务”，选择“只看待填写”补齐记录。店长查看进度，不代写技师私人记录。</p>
+      {workbench?.record_follow_up ? <><p>近 {workbench.record_follow_up.window_days} 天共 {workbench.record_follow_up.pending_count} 次服务待填写。</p><Descriptions column={1} items={workbench.record_follow_up.technicians.map(item => ({ key: item.technician_id, label: item.name, children: `${item.count} 次待填写` }))} /></> : <Alert type="warning" message="暂未获取明细，请刷新工作台后重试。" />}
+    </Drawer>
+  </div>;
 }

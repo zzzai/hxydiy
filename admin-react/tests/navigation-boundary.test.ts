@@ -12,7 +12,7 @@ test('新管理端不暴露预约看板或派单入口', () => {
   assert.doesNotMatch(navigation, /预约看板|\/reservations/);
   assert.doesNotMatch(permissions, /\/reservations/);
   assert.doesNotMatch(today, /预约看板|派钟|assignVisit/);
-  assert.match(today, /getTodayAppointments/);
+  assert.doesNotMatch(today, /getTodayAppointments|getTodayStats|getLiveBoard/);
 });
 
 test('新管理端不从房间或服务位调用物理资源操作', () => {
