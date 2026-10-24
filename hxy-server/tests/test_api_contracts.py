@@ -876,7 +876,7 @@ class AdminV2ContractTests(unittest.TestCase):
             second = Technician(store_id=self.other_store_id, code="HQ-WF-2", name="二号技师", status="available")
             db.add_all([first, second])
             db.flush()
-            today = datetime.now(timezone.utc).date()
+            today = datetime(2026, 10, 24, tzinfo=timezone.utc).date()
             db.add(TechnicianLeaveRequest(
                 store_id=store_id,
                 technician_id=first.id,
@@ -899,9 +899,10 @@ class AdminV2ContractTests(unittest.TestCase):
         self.__class__.current_staff_id = self.headquarters_admin_id
         headers = {"Authorization": f"Bearer {create_staff_token(self.headquarters_admin_id, 'admin')}"}
         try:
-            response = self.client.get("/api/v1/admin/v2/brand/workforce", headers=headers)
+            response = self.client.get("/api/v1/admin/v2/brand/workforce", params={"day": today.isoformat()}, headers=headers)
             self.assertEqual(response.status_code, 200, response.text)
             body = response.json()
+            self.assertEqual(body["date"], today.isoformat())
             self.assertGreaterEqual(body["summary"]["technicians"], 2)
             self.assertGreaterEqual(body["summary"]["on_leave"], 1)
             self.assertGreaterEqual(body["summary"]["on_duty"], 1)
