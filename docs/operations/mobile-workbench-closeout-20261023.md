@@ -21,7 +21,7 @@
 
 ### P0：先纠正运营待办口径
 
-- `admin_v2.py` 的旧 `stale_orders` 只检查选单 submitted/confirmed 和创建时间，未排除已开始或已结束的履约。`SelectionSession` 不使用通用 in_service/completed 状态，不能据此判断履约；需统一数量、列表与筛选的有效占用/真实开始结束口径。
+- 已修正：`admin_v2.py` 的 `stale_orders` 与 `selection-sessions?stale_only=true` 共用有效履约口径。`SelectionSession` 仍不使用通用 in_service/completed 状态，改由关联 `PositionOccupancy` 的实际开始/结束时间或服务中/待离位/清洁状态排除已开始、已结束履约；等待服务仍计入未开始。计数、列表与筛选使用同一条件，并补了“已开始/已结束不计入、等待服务计入”的回归测试。剩余自动同步与合法无座边界仍需单独验证。
 - `_order_reconciliation_result` 把 `fulfillment_order_id` 为空当缺订单，而当前合法无座选单及 PositionOccupancy 履约不要求旧支付 Order。因此不能直接开启旧 sync 或自动扫描，更不能批量修旧数据来消提示。
 - 验收须覆盖合法无座、等待安排、未分配、已开始、已结束、释放/替代占用及跨店隔离；数量和列表一致，同一问题不因逾期重复计数。
 

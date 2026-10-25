@@ -19,7 +19,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, field_validator, model_validator
-from sqlalchemy import delete, select, func as sa_func, and_, literal, or_, union, union_all
+from sqlalchemy import delete, select, func as sa_func, and_, exists, literal, or_, union, union_all
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.models.membership import MembershipCard
@@ -1651,6 +1651,31 @@ def brand_workforce(
     }
 
 
+def _stale_selection_condition(now: datetime | None = None):
+    """Submitted/confirmed orders older than 30 minutes that have not started service.
+
+    SelectionSession has no trustworthy in-service/completed state; the linked
+    PositionOccupancy is the authority. Waiting for service still counts as not
+    started, while any real start/end timestamp or active service status removes
+    the order from this queue.
+    """
+    cutoff = (now or datetime.now(UTC)) - timedelta(minutes=30)
+    served = exists(select(PositionOccupancy.id).where(
+        PositionOccupancy.store_id == SelectionSession.store_id,
+        PositionOccupancy.selection_session_id == SelectionSession.id,
+        or_(
+            PositionOccupancy.status.in_(("in_service", "post_service_present", "cleaning")),
+            PositionOccupancy.actual_start_at.isnot(None),
+            PositionOccupancy.actual_service_end_at.isnot(None),
+        ),
+    ))
+    return and_(
+        SelectionSession.status.in_(("submitted", "confirmed")),
+        SelectionSession.created_at < cutoff,
+        ~served,
+    )
+
+
 @router.get("/selection-sessions")
 def list_selection_sessions(
     status: str | None = Query(None),
@@ -1669,10 +1694,7 @@ def list_selection_sessions(
     if active_only:
         q = q.where(SelectionSession.status.in_(("submitted", "confirmed")))
     if stale_only:
-        q = q.where(
-            SelectionSession.status.in_(("submitted", "confirmed")),
-            SelectionSession.created_at < datetime.now(UTC) - timedelta(minutes=30),
-        )
+        q = q.where(_stale_selection_condition())
     if period != "all":
         local_now = datetime.now(ZoneInfo("Asia/Shanghai"))
         if period == "today":
@@ -1788,8 +1810,7 @@ def manager_workbench(
     )) or 0
     stale_orders = db.scalar(select(sa_func.count()).select_from(SelectionSession).where(
         SelectionSession.store_id == store_id,
-        SelectionSession.status.in_(("submitted", "confirmed")),
-        SelectionSession.created_at < datetime.now(UTC) - timedelta(minutes=30),
+        _stale_selection_condition(),
     )) or 0
     pending_checkout = db.scalar(select(sa_func.count()).select_from(Order).where(
         Order.store_id == store_id,
