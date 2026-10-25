@@ -1928,6 +1928,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/service-anomalies/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Manager Service Anomalies
+         * @description Upsert current service anomalies into the persistent exception queue.
+         *
+         *     Only provable DIY associations are synced. Existing resolved rows reopen if
+         *     the same anomaly is still detected; nothing is auto-resolved here.
+         */
+        post: operations["sync_manager_service_anomalies_api_v1_admin_v2_service_anomalies_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/service-orders": {
         parameters: {
             query?: never;
@@ -11614,6 +11637,37 @@ export interface operations {
         };
     };
     manager_service_anomalies_api_v1_admin_v2_service_anomalies_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_manager_service_anomalies_api_v1_admin_v2_service_anomalies_sync_post: {
         parameters: {
             query?: never;
             header?: {

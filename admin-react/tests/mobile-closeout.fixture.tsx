@@ -35,6 +35,7 @@ client.defaults.adapter = async config => {
     return ok(data);
   }
   if (path === '/admin/v2/service-anomalies' && method === 'get') return ok({ items: [], total: 0 });
+  if (path === '/admin/v2/service-anomalies/sync' && method === 'post') return ok({ detected: 0, created: 0, updated: 0, reopened: 0 });
   if (path === '/admin/exceptions' && method === 'get') {
     if (config.params.status !== 'unresolved') throw Error('Unresolved status required');
     return ok({ items: [{ id: 1, status, exception_type: 'missing_order', title: 'INTERNAL-STATE', due_at: null, assigned_to: null }] });

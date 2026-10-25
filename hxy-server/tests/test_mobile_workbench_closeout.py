@@ -280,6 +280,16 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
         self.assertEqual(workbench.status_code, 200, workbench.text)
         anomaly_attention = next(item for item in workbench.json()['attention'] if item['key'] == 'service_anomaly')
         self.assertEqual(anomaly_attention['count'], 1)
+        first_sync = self.client.post('/api/v1/admin/v2/service-anomalies/sync', headers=self.headers)
+        self.assertEqual(first_sync.status_code, 200, first_sync.text)
+        self.assertEqual(first_sync.json()['created'], 1)
+        second_sync = self.client.post('/api/v1/admin/v2/service-anomalies/sync', headers=self.headers)
+        self.assertEqual(second_sync.json()['created'], 0)
+        self.assertEqual(second_sync.json()['updated'], 1)
+        unresolved = self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.headers).json()
+        matching = [row for row in unresolved['items'] if row['exception_type'] == 'service_inactive_selection']
+        self.assertEqual(len(matching), 1)
+        self.assertIn('选单', matching[0]['title'])
         self.assertEqual(workbench.json()['summary']['service_anomalies'], 1)
         self.assertEqual(self.client.get('/api/v1/admin/v2/service-anomalies', headers=self.worker_headers).status_code, 403)
 

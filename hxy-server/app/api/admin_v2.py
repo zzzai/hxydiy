@@ -1777,15 +1777,7 @@ def _service_anomaly_query(store_id: int):
     )
 
 
-@router.get("/service-anomalies")
-def manager_service_anomalies(
-    db: Session = Depends(get_db),
-    authorization: str | None = Header(None),
-):
-    """Provable current-model anomalies only; no payment/order inference."""
-    staff = _current_staff(authorization, db)
-    _require_admin(staff)
-    store_id = _staff_store_id(staff)
+def _service_anomaly_items(db: Session, store_id: int) -> list[dict]:
     rows = db.execute(
         _service_anomaly_query(store_id)
         .order_by(PositionOccupancy.id.desc())
@@ -1815,7 +1807,89 @@ def manager_service_anomalies(
             "selection_session_id": occupancy.selection_session_id if selection is not None else None,
             "selection_status": selection.status if selection is not None else None,
         })
+    return items
+
+
+@router.get("/service-anomalies")
+def manager_service_anomalies(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Provable current-model anomalies only; no payment/order inference."""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    items = _service_anomaly_items(db, store_id)
     return {"items": items, "total": len(items)}
+
+
+@router.post("/service-anomalies/sync")
+def sync_manager_service_anomalies(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Upsert current service anomalies into the persistent exception queue.
+
+    Only provable DIY associations are synced. Existing resolved rows reopen if
+    the same anomaly is still detected; nothing is auto-resolved here.
+    """
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    items = _service_anomaly_items(db, store_id)
+    existing = list(db.scalars(select(OperationalException).where(
+        OperationalException.store_id == store_id,
+        OperationalException.exception_type.like("service_%"),
+    )))
+    by_key = {row.dedupe_key: row for row in existing}
+    now = datetime.now(UTC)
+    created = updated = reopened = 0
+    for item in items:
+        exception_type = f"service_{item['reason']}"
+        dedupe_key = f"service_anomaly:{item['id']}:{item['reason']}"[:160]
+        title = f"{item['label']}（{item['room_name']}）"
+        detail = {
+            "occupancy_id": item["id"],
+            "room_id": item["room_id"],
+            "room_name": item["room_name"],
+            "occupancy_status": item["occupancy_status"],
+            "selection_session_id": item["selection_session_id"],
+            "selection_status": item["selection_status"],
+            "detector": "position_occupancy_link_v1",
+        }
+        row = by_key.get(dedupe_key)
+        if row is None:
+            db.add(OperationalException(
+                store_id=store_id,
+                exception_type=exception_type,
+                severity="warning",
+                status="open",
+                dedupe_key=dedupe_key,
+                title=title[:160],
+                detail=detail,
+                entity_type="position_occupancy",
+                entity_id=str(item["id"]),
+                due_at=now + timedelta(hours=24),
+            ))
+            created += 1
+            continue
+        if row.status == "resolved":
+            row.status = "open"
+            row.resolved_at = None
+            row.resolution_note = ""
+            reopened += 1
+        row.title = title[:160]
+        row.detail = detail
+        updated += 1
+    if created or reopened:
+        db.add(AuditLog(
+            actor_type="staff", actor_id=str(staff.id), store_id=store_id,
+            action="sync_service_anomalies", entity_type="operational_exception",
+            entity_id=str(store_id),
+            detail={"detected": len(items), "created": created, "updated": updated, "reopened": reopened},
+        ))
+    db.commit()
+    return {"detected": len(items), "created": created, "updated": updated, "reopened": reopened}
 
 
 @router.get("/access")
