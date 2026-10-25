@@ -215,6 +215,42 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
                 else:
                     self.assertIn(history.status_code, (401, 403))
 
+    def test_stale_orders_exclude_started_or_finished_fulfillment(self):
+        old = datetime.now(timezone.utc) - timedelta(hours=1)
+        with self.Session() as db:
+            for key, occupancy_status, actual_start, actual_end in [
+                ('stale-unstarted', None, None, None),
+                ('stale-waiting', 'waiting_service', None, None),
+                ('stale-started', 'in_service', old, None),
+                ('stale-finished', 'released', old, old),
+            ]:
+                db.add(SelectionSession(
+                    id=key, access_token_hash='synthetic', store_id=self.store.id,
+                    customer_id=self.user.id, status='confirmed', source='personal_qr',
+                    items=[{'name': 'Test service'}], diy_preferences={}, created_at=old,
+                ))
+                db.flush()
+                if occupancy_status:
+                    db.add(PositionOccupancy(
+                        store_id=self.store.id, room_id=self.room.id, selection_session_id=key,
+                        serviced_by_technician_id=self.tech.id, status=occupancy_status,
+                        actual_start_at=actual_start, actual_service_end_at=actual_end,
+                    ))
+            db.add(SelectionSession(
+                id='fresh-order', access_token_hash='synthetic', store_id=self.store.id,
+                customer_id=self.user.id, status='confirmed', source='personal_qr',
+                items=[{'name': 'Test service'}], diy_preferences={},
+            ))
+            db.commit()
+
+        workbench = self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.headers)
+        self.assertEqual(workbench.status_code, 200, workbench.text)
+        stale_attention = next(item for item in workbench.json()['attention'] if item['key'] == 'stale_order')
+        self.assertEqual(stale_attention['count'], 2)
+        listing = self.client.get('/api/v1/admin/v2/selection-sessions?stale_only=true&active_only=true', headers=self.headers)
+        self.assertEqual(listing.status_code, 200, listing.text)
+        self.assertEqual({item['id'] for item in listing.json()['items']}, {'stale-unstarted', 'stale-waiting'})
+
     def test_manager_cannot_use_technician_history_and_worker_cannot_read_manager_todos(self):
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.worker_headers).status_code, 403)
         self.assertEqual(self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.worker_headers).status_code, 403)
