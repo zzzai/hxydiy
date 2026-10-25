@@ -13047,6 +13047,69 @@
         ]
       }
     },
+    "/api/v1/admin/v2/manager/service-orders": {
+      "get": {
+        "description": "Store-wide service occupancy list for the manager mobile board.",
+        "operationId": "manager_service_orders_api_v1_admin_v2_manager_service_orders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "waiting_service",
+              "enum": [
+                "waiting_service",
+                "in_service",
+                "completed"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Manager Service Orders",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/manager/unassigned-services": {
       "get": {
         "description": "Waiting services that have no assigned technician, with room context.",

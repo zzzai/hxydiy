@@ -27,6 +27,7 @@ client.defaults.adapter = async config => {
   const fail = () => { throw new AxiosError('Synthetic network failure', 'ERR_NETWORK', config); };
   if (method === 'get') stats.reads++;
   if (path === '/admin/v2/feedback' && method === 'get') return ok({ items: [] });
+  if (path === '/admin/v2/manager/service-orders' && method === 'get') return ok({ status: config.params?.status, items: [], total: 0 });
   if (path === '/admin/v2/manager/unassigned-services' && method === 'get') return ok({ items: [], total: 0 });
   if (path === '/admin/v2/manager/workbench' && method === 'get') {
     if (mode === 'load-error') return fail();

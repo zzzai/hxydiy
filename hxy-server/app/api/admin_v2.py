@@ -1944,6 +1944,52 @@ def manager_unassigned_services(
     return {"items": items, "total": len(items)}
 
 
+@router.get("/manager/service-orders")
+def manager_service_orders(
+    status: Literal["waiting_service", "in_service", "completed"] = Query("waiting_service"),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Store-wide service occupancy list for the manager mobile board."""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    local_now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+    query = (
+        select(PositionOccupancy, Room, SelectionSession, Technician)
+        .join(Room, Room.id == PositionOccupancy.room_id)
+        .join(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
+        .outerjoin(Technician, Technician.id == PositionOccupancy.serviced_by_technician_id)
+        .where(PositionOccupancy.store_id == store_id)
+    )
+    if status == "completed":
+        query = query.where(
+            PositionOccupancy.actual_service_end_at.isnot(None),
+            PositionOccupancy.actual_service_end_at >= day_start,
+        ).order_by(PositionOccupancy.actual_service_end_at.desc())
+    else:
+        query = query.where(PositionOccupancy.status == status).order_by(PositionOccupancy.created_at)
+    rows = db.execute(query.limit(200)).all()
+    items = [{
+        "occupancy_id": occupancy.id,
+        "room_id": room.id,
+        "room_name": room.customer_label or room.name,
+        "occupancy_status": occupancy.status,
+        "technician_name": technician.name if technician else None,
+        "selection_session_id": selection.id,
+        "items": [
+            {"name": str(item.get("name") or item.get("project_name") or "服务项目"), "quantity": int(item.get("quantity") or 1)}
+            for item in (selection.items or []) if isinstance(item, dict)
+        ],
+        "actual_start_at": occupancy.actual_start_at.isoformat() if occupancy.actual_start_at else None,
+        "actual_end_at": occupancy.actual_service_end_at.isoformat() if occupancy.actual_service_end_at else None,
+        "expected_end_at": occupancy.expected_end_at.isoformat() if occupancy.expected_end_at else None,
+        "created_at": occupancy.created_at.isoformat() if occupancy.created_at else None,
+    } for occupancy, room, selection, technician in rows]
+    return {"status": status, "items": items, "total": len(items)}
+
+
 @router.get("/manager/workbench")
 def manager_workbench(
     db: Session = Depends(get_db),

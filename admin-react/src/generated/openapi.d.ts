@@ -1186,6 +1186,26 @@ export interface paths {
         patch: operations["update_feedback_follow_up_by_type_api_v1_admin_v2_feedback__feedback_type___feedback_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/service-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manager Service Orders
+         * @description Store-wide service occupancy list for the manager mobile board.
+         */
+        get: operations["manager_service_orders_api_v1_admin_v2_manager_service_orders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/unassigned-services": {
         parameters: {
             query?: never;
@@ -9823,6 +9843,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manager_service_orders_api_v1_admin_v2_manager_service_orders_get: {
+        parameters: {
+            query?: {
+                status?: "waiting_service" | "in_service" | "completed";
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
