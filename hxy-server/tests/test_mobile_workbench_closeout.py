@@ -276,6 +276,11 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
         self.assertEqual(body['items'][0]['selection_session_id'], 'anomaly-cancelled')
         self.assertEqual(body['items'][0]['reason'], 'inactive_selection')
         self.assertIn('选单', body['items'][0]['label'])
+        workbench = self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.headers)
+        self.assertEqual(workbench.status_code, 200, workbench.text)
+        anomaly_attention = next(item for item in workbench.json()['attention'] if item['key'] == 'service_anomaly')
+        self.assertEqual(anomaly_attention['count'], 1)
+        self.assertEqual(workbench.json()['summary']['service_anomalies'], 1)
         self.assertEqual(self.client.get('/api/v1/admin/v2/service-anomalies', headers=self.worker_headers).status_code, 403)
 
     def test_manager_cannot_use_technician_history_and_worker_cannot_read_manager_todos(self):
