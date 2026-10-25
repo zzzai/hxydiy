@@ -5,6 +5,7 @@ import { getTechnicianMyTasks } from '../api';
 import type { TechnicianCustomerTask } from '../technicianCustomer';
 import { technicianOrderItemLabel, technicianPriceLabel, technicianPriceMode, technicianPriceModeLabel, technicianPriceTotalValue, technicianPricedItemRows, technicianStatusLabel } from './technicianMobile';
 import TechnicianCustomerPanel from './TechnicianCustomerPanel';
+import TechnicianProfileSheet from './TechnicianProfileSheet';
 import { useTechnicianSession } from './useTechnicianSession';
 import './technician-customer.css';
 
@@ -15,6 +16,7 @@ export default function TechnicianMyServicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [customer, setCustomer] = useState<number>();
+  const [recordTask, setRecordTask] = useState<any>();
   const loadingRef = useRef(false);
   const closeCustomer = useCallback(() => setCustomer(undefined), []);
   const load = useCallback(async () => {
@@ -72,11 +74,13 @@ export default function TechnicianMyServicesPage() {
         </section>}
         <div className="technician-my-service-actions">
           <Button onClick={() => setCustomer(task.occupancy_id)}>顾客标签与资料</Button>
+          {task.occupancy_status === 'post_service_present' && !task.record_completed && task.user_id && <Button type="primary" onClick={() => setRecordTask(task)}>填写服务记录</Button>}
           <Button disabled={!task.user_id} onClick={() => navigate('/history')}>查看服务记录</Button>
         </div>
         {!task.user_id && <p>匿名服务可正常完成，暂未关联顾客资料。</p>}
       </article>;
     }) : <Empty description="目前没有本人正在服务的顾客" />}
     {customer !== undefined && <TechnicianCustomerPanel key={customer} occupancyId={customer} onClose={closeCustomer} />}
+    <TechnicianProfileSheet task={recordTask} onClose={() => setRecordTask(undefined)} onSaved={() => { setRecordTask(undefined); void load(); }} />
   </section>;
 }

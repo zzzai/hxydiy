@@ -6,6 +6,7 @@ export type TechnicianCustomerTask = {
   occupancy_status: 'in_service' | 'post_service_present';
   room_id: number; room_name: string; items: { name?: string; quantity?: number; project_id?: number }[];
   pricing?: TechnicianOrderPricing | null;
+  record_completed?: boolean;
 };
 export type CustomerSummary = {
   occupancy_id: number; customer_id: number | null; customer_name: string | null;

@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.admin import create_staff_token
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import AuditLog, PositionOccupancy, SelectionSession, Staff, Store, User
+from app.models import AuditLog, CustomerProfileRecord, PositionOccupancy, SelectionSession, Staff, Store, User
 from app.models.operations import Room, Technician
 
 
@@ -86,6 +86,23 @@ def test_my_tasks_only_owned_present_and_minimal_items(dossier):
     assert [row["occupancy_id"] for row in result.json()["items"]] == [ids["occupancies"][5], ids["occupancies"][4], ids["occupancies"][0]]
     assert result.json()["items"][0]["items"] == [{"id": 7, "type": "project", "name": "Synthetic service", "quantity": 1}]
 
+
+def test_my_tasks_exposes_owned_record_completion(dossier):
+    client, factory, ids, headers, *_ = dossier
+    with factory() as db:
+        db.add(CustomerProfileRecord(
+            store_id=ids["store_id"], user_id=ids["user_id"],
+            selection_session_id="dossier-session-5", technician_id=ids["technician_id"],
+            created_by_staff_id=ids["staff_id"], schema_version=7,
+            taxonomy_version="service_handoff_v1", customer_confirmed=False,
+            profile={"recording_outcome": "no_additional_notes"},
+        ))
+        db.commit()
+    result = client.get("/api/v1/technician/my-tasks", headers=headers)
+    assert result.status_code == 200, result.text
+    by_occupancy = {row["occupancy_id"]: row for row in result.json()["items"]}
+    assert by_occupancy[ids["occupancies"][5]]["record_completed"] is True
+    assert by_occupancy[ids["occupancies"][0]]["record_completed"] is False
 
 def test_my_tasks_expose_member_and_non_member_prices(dossier):
     client, factory, ids, headers, *_ = dossier

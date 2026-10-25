@@ -128,6 +128,13 @@ test('移动技师今日看板在展示期间每 3 秒静默同步顾客新提�
   assert.doesNotMatch(source, /background[\s\S]{0,300}setTasks\(\[\]\)/);
 });
 
+test('技师可从我的服务为已结束服务补填记录', () => {
+  const source = readFileSync(new URL('../src/technician/TechnicianMyServicesPage.tsx', import.meta.url), 'utf8');
+  assert.match(source, /record_completed/);
+  assert.match(source, /填写服务记录/);
+  assert.match(source, /TechnicianProfileSheet/);
+});
+
 test('店长待处理与服务概览在页面可见时定时刷新', () => {
   const tasks = readFileSync(new URL('../src/technician/ManagerTasksView.tsx', import.meta.url), 'utf8');
   const store = readFileSync(new URL('../src/technician/ManagerStorePage.tsx', import.meta.url), 'utf8');
