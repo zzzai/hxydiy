@@ -1810,6 +1810,51 @@ def _service_anomaly_items(db: Session, store_id: int) -> list[dict]:
     return items
 
 
+def _position_conflict_items(db: Session, store_id: int) -> list[dict]:
+    rows = db.execute(
+        select(PositionOccupancy, Room, SelectionSession)
+        .join(Room, Room.id == PositionOccupancy.room_id)
+        .join(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
+        .where(
+            PositionOccupancy.store_id == store_id,
+            PositionOccupancy.active_room_id.is_not(None),
+            PositionOccupancy.status.in_(("waiting_service", "in_service", "post_service_present")),
+            SelectionSession.status.in_(("submitted", "confirmed")),
+        )
+        .order_by(PositionOccupancy.id)
+    ).all()
+    grouped: dict[int, list] = {}
+    for occupancy, room, _selection in rows:
+        grouped.setdefault(room.parent_room_id or room.id, []).append((occupancy, room))
+    if not grouped:
+        return []
+    display_rooms = {
+        room.id: room for room in db.scalars(select(Room).where(Room.id.in_(grouped.keys())))
+    }
+    items = []
+    for display_id, group in grouped.items():
+        if len(group) <= 1:
+            continue
+        display_room = display_rooms.get(display_id) or group[0][1]
+        occupancy_ids = [occupancy.id for occupancy, _room in group]
+        items.append({
+            "id": min(occupancy_ids),
+            "reason": "position_conflict",
+            "label": "同一服务区存在多个活动服务，需要核对",
+            "occupancy_status": "conflict",
+            "room_id": display_id,
+            "room_name": display_room.customer_label or display_room.name,
+            "selection_session_id": None,
+            "selection_status": None,
+            "occupancy_ids": occupancy_ids,
+        })
+    return items
+
+
+def _all_service_anomaly_items(db: Session, store_id: int) -> list[dict]:
+    return [*_service_anomaly_items(db, store_id), *_position_conflict_items(db, store_id)]
+
+
 @router.get("/service-anomalies")
 def manager_service_anomalies(
     db: Session = Depends(get_db),
@@ -1819,7 +1864,7 @@ def manager_service_anomalies(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     store_id = _staff_store_id(staff)
-    items = _service_anomaly_items(db, store_id)
+    items = _all_service_anomaly_items(db, store_id)
     return {"items": items, "total": len(items)}
 
 
@@ -1836,7 +1881,7 @@ def sync_manager_service_anomalies(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     store_id = _staff_store_id(staff)
-    items = _service_anomaly_items(db, store_id)
+    items = _all_service_anomaly_items(db, store_id)
     existing = list(db.scalars(select(OperationalException).where(
         OperationalException.store_id == store_id,
         OperationalException.exception_type.like("service_%"),
@@ -1855,6 +1900,7 @@ def sync_manager_service_anomalies(
             "occupancy_status": item["occupancy_status"],
             "selection_session_id": item["selection_session_id"],
             "selection_status": item["selection_status"],
+            "occupancy_ids": item.get("occupancy_ids", [item["id"]]),
             "detector": "position_occupancy_link_v1",
         }
         row = by_key.get(dedupe_key)
@@ -2028,7 +2074,7 @@ def manager_workbench(
         SelectionSession.store_id == store_id,
         _stale_selection_condition(),
     )) or 0
-    service_anomalies = db.scalar(select(sa_func.count()).select_from(_service_anomaly_query(store_id).subquery())) or 0
+    service_anomalies = len(_all_service_anomaly_items(db, store_id))
     pending_checkout = db.scalar(select(sa_func.count()).select_from(Order).where(
         Order.store_id == store_id,
         Order.status == "pending_checkout",

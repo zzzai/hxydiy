@@ -16,6 +16,7 @@ const labels: Record<string, string> = {
   service_inactive_selection: '服务位关联选单已取消或过期',
   service_store_mismatch: '服务位与选单跨店',
   service_room_store_mismatch: '服务位房间跨店',
+  service_position_conflict: '同一服务区存在多个活动服务',
 };
 
 export function readUnresolvedTasks(payload: unknown): UnresolvedTask[] {
