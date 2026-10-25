@@ -16417,6 +16417,54 @@
         ]
       }
     },
+    "/api/v1/admin/v2/service-anomalies/sync": {
+      "post": {
+        "description": "Upsert current service anomalies into the persistent exception queue.\n\nOnly provable DIY associations are synced. Existing resolved rows reopen if\nthe same anomaly is still detected; nothing is auto-resolved here.",
+        "operationId": "sync_manager_service_anomalies_api_v1_admin_v2_service_anomalies_sync_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sync Manager Service Anomalies",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/service-orders": {
       "get": {
         "operationId": "list_technician_service_orders_api_v1_admin_v2_service_orders_get",

@@ -12,6 +12,10 @@ const labels: Record<string, string> = {
   missing_order: '选单缺履约订单',
   amount_mismatch: '选单与订单金额需要核对',
   status_mismatch: '服务进度需要核对',
+  service_missing_selection: '服务位关联选单缺失',
+  service_inactive_selection: '服务位关联选单已取消或过期',
+  service_store_mismatch: '服务位与选单跨店',
+  service_room_store_mismatch: '服务位房间跨店',
 };
 
 export function readUnresolvedTasks(payload: unknown): UnresolvedTask[] {
