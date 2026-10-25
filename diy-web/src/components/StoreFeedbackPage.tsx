@@ -117,7 +117,7 @@ export default function StoreFeedbackPage() {
           <h1 id="store-feedback-success-title">感谢您的评价</h1>
           <p>您的反馈已收到，我们会认真查看。</p>
           <div className="store-feedback-success-actions">
-            <a className="primary-action" href={serviceAccountEntry(window.location.origin, storeId)}>返回菜单</a>
+            <a className="primary-action" href={serviceAccountEntry(window.location.origin, storeId, 'projects')}>返回菜单</a>
             <a className="secondary-action" href={reportEntryUrl(window.location.origin, storeId)}>查看检测报告</a>
           </div>
         </section>

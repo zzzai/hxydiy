@@ -134,7 +134,7 @@ test('success alone reveals clean menu and report-center links without login or 
     await page.click('4星'); await page.note('谢谢'); await page.click('提交评价');
     assert.match(page.text(), /感谢您的评价/);
     assert.deepEqual(page.app.root.findAllByType('a').map((link: any) => [link.children.join(''), link.props.href]), [
-      ['返回菜单', 'https://synthetic.invalid/?store=1&view=menu'],
+      ['返回菜单', 'https://synthetic.invalid/?store=1&view=menu&page=projects'],
       ['查看检测报告', 'https://synthetic.invalid/?store=1&view=reports'],
     ]);
     assert.equal(page.app.root.findAllByType('textarea').length, 0);
