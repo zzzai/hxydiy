@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { acknowledgeOperationalException, getFeedback, getManagerWorkbench, getOperationalExceptions } from '../api';
+import { acknowledgeOperationalException, getFeedback, getManagerWorkbench, getOperationalExceptions, getServiceAnomalies } from '../api';
 import { readUnresolvedTasks, type UnresolvedTask } from './managerTasks';
 import { useTechnicianSession } from './useTechnicianSession';
 
@@ -16,6 +16,7 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
   const [unassignedServices, setUnassignedServices] = useState(0);
   const [exceptions, setExceptions] = useState<UnresolvedTask[]>([]);
   const [recordFollowUp, setRecordFollowUp] = useState({ pending_count: 0, window_days: 30, technicians: [] as Array<{ technician_id: number; name: string; count: number }> });
+  const [serviceAnomalies, setServiceAnomalies] = useState<Array<{ id: number; label: string; room_name: string }>>([]);
   const [acknowledging, setAcknowledging] = useState<number>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,10 +32,11 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
     loadingRef.current = true;
     setLoading(true);
     try {
-      const [reviewsResponse, workbenchResponse, exceptionsResponse] = await Promise.all([
+      const [reviewsResponse, workbenchResponse, exceptionsResponse, anomaliesResponse] = await Promise.all([
         getFeedback({ feedback_type: 'service_review', follow_up_status: 'open', page: 1, page_size: 20 }),
         getManagerWorkbench(),
         getOperationalExceptions('unresolved'),
+        getServiceAnomalies(),
       ]);
       if (!current() || request.current !== version) return;
       const unresolved = readUnresolvedTasks(exceptionsResponse.data);
@@ -45,6 +47,7 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
       setUnassignedServices(Number(workbenchResponse.data?.attention?.find((item: { key: string }) => item.key === 'unassigned_service')?.count) || 0);
       setExceptions(unresolved);
       setRecordFollowUp(followUp);
+      setServiceAnomalies(Array.isArray(anomaliesResponse.data?.items) ? anomaliesResponse.data.items : []);
       setError('');
     } catch {
       if (current() && request.current === version) setError('待处理事项加载失败，请重试');
@@ -87,7 +90,7 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [load]);
-  const count = reviews.length + staleOrders + unassignedServices + exceptions.length + recordFollowUp.pending_count;
+  const count = reviews.length + staleOrders + unassignedServices + exceptions.length + recordFollowUp.pending_count + serviceAnomalies.length;
 
   return <section className="manager-tasks-view">
     <div className="manager-tasks-heading">
@@ -113,6 +116,14 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
           </div>)}
           <p>知悉不代表问题已解决，事项仍会保留。请先核对本店服务单；处理结果由异常中心记录。</p>
           <Button block onClick={() => onOpenOrders?.(false)}>查看本店服务单</Button>
+        </div>}
+        {serviceAnomalies.length > 0 && <div className="manager-review-tasks">
+          <div className="manager-task-top"><span>服务位关联异常</span><Tag color="red">{serviceAnomalies.length}</Tag></div>
+          {serviceAnomalies.map(item => <div className="manager-review-task-row" key={item.id}>
+            <span><strong>{item.label}</strong> {item.room_name}</span>
+            <Button size="small" onClick={onOpenPositions}>查看服务位</Button>
+          </div>)}
+          <p>由店长到现场核对服务位与选单；本项只读检测，不自动修改服务状态。</p>
         </div>}
         {recordFollowUp.pending_count > 0 && <div className="manager-review-tasks">
           <div className="manager-task-top"><span>近 {recordFollowUp.window_days} 天服务记录待补填</span><Tag color="orange">{recordFollowUp.pending_count}</Tag></div>

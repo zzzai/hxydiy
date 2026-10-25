@@ -1759,6 +1759,59 @@ def list_selection_sessions(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
+@router.get("/service-anomalies")
+def manager_service_anomalies(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Provable current-model anomalies only; no payment/order inference."""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    rows = db.execute(
+        select(PositionOccupancy, Room, SelectionSession)
+        .join(Room, Room.id == PositionOccupancy.room_id)
+        .outerjoin(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
+        .where(
+            PositionOccupancy.store_id == store_id,
+            PositionOccupancy.status.in_(("waiting_service", "in_service", "post_service_present")),
+            or_(
+                SelectionSession.id.is_(None),
+                SelectionSession.status.in_(("cancelled", "expired")),
+                SelectionSession.store_id != PositionOccupancy.store_id,
+                Room.store_id != PositionOccupancy.store_id,
+            ),
+        )
+        .order_by(PositionOccupancy.id.desc())
+        .limit(200)
+    ).all()
+    items = []
+    for occupancy, room, selection in rows:
+        if selection is None:
+            reason = "missing_selection"
+            label = "服务位有活动服务，但关联选单不存在"
+        elif selection.store_id != occupancy.store_id:
+            reason = "store_mismatch"
+            label = "服务位与选单不属于同一门店"
+        elif room.store_id != occupancy.store_id:
+            reason = "room_store_mismatch"
+            label = "服务位房间不属于当前门店"
+        else:
+            reason = "inactive_selection"
+            label = "服务位关联的选单已取消或过期"
+        items.append({
+            "id": occupancy.id,
+            "reason": reason,
+            "label": label,
+            "occupancy_status": occupancy.status,
+            "room_id": room.id,
+            "room_name": room.customer_label or room.name,
+            "selection_session_id": occupancy.selection_session_id if selection is not None else None,
+            "selection_status": selection.status if selection is not None else None,
+        })
+    return {"items": items, "total": len(items)}
+
+
 @router.get("/access")
 def get_staff_access(
     db: Session = Depends(get_db),

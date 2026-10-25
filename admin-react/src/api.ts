@@ -135,6 +135,7 @@ export const getOrderDetail = (orderId: number) => client.get(`/admin/orders/${o
 export const getOrderReconciliation = (days = 30) => client.get('/admin/order-reconciliation', { params: { days } });
 export const syncOrderReconciliation = (days = 30) => client.post('/admin/order-reconciliation/sync', null, { params: { days } });
 export const getOperationalExceptions = (status = 'open') => client.get('/admin/exceptions', { params: { status } });
+export const getServiceAnomalies = () => client.get('/admin/v2/service-anomalies');
 export const resolveOperationalException = (id: number, resolution_note: string) => client.post(`/admin/exceptions/${id}/resolve`, { resolution_note });
 export const assignOperationalException = (id: number, staff_id?: number) => client.post(`/admin/exceptions/${id}/assign`, { staff_id });
 export const acknowledgeOperationalException = (id: number) => client.post(`/admin/exceptions/${id}/acknowledge`);

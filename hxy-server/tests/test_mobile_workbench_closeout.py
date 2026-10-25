@@ -251,6 +251,33 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
         self.assertEqual(listing.status_code, 200, listing.text)
         self.assertEqual({item['id'] for item in listing.json()['items']}, {'stale-unstarted', 'stale-waiting'})
 
+    def test_service_anomalies_only_report_provable_current_model_breaks(self):
+        with self.Session() as db:
+            db.add(SelectionSession(
+                id='anomaly-cancelled', access_token_hash='synthetic', store_id=self.store.id,
+                customer_id=self.user.id, status='cancelled', source='personal_qr',
+                items=[], diy_preferences={},
+            ))
+            db.add(SelectionSession(
+                id='anomaly-valid', access_token_hash='synthetic', store_id=self.store.id,
+                customer_id=self.user.id, status='confirmed', source='personal_qr',
+                items=[], diy_preferences={},
+            ))
+            db.flush()
+            db.add_all([
+                PositionOccupancy(store_id=self.store.id, room_id=self.room.id, selection_session_id='anomaly-cancelled', status='waiting_service'),
+                PositionOccupancy(store_id=self.store.id, room_id=self.room.id, selection_session_id='anomaly-valid', status='waiting_service'),
+            ])
+            db.commit()
+        response = self.client.get('/api/v1/admin/v2/service-anomalies', headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body['total'], 1)
+        self.assertEqual(body['items'][0]['selection_session_id'], 'anomaly-cancelled')
+        self.assertEqual(body['items'][0]['reason'], 'inactive_selection')
+        self.assertIn('选单', body['items'][0]['label'])
+        self.assertEqual(self.client.get('/api/v1/admin/v2/service-anomalies', headers=self.worker_headers).status_code, 403)
+
     def test_manager_cannot_use_technician_history_and_worker_cannot_read_manager_todos(self):
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.worker_headers).status_code, 403)
         self.assertEqual(self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.worker_headers).status_code, 403)
