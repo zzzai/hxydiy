@@ -4,7 +4,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { MEMBERSHIP_STORE_CONFIRMATION } from '../profile';
 import { returnBannerKey, safeStoreContact, STORE_CONTACTS } from '../returnEntry';
 
-type Panel = 'save' | 'contact' | null;
+type Panel = 'save' | 'contact' | 'tuesday' | null;
 
 function StoreContactQr({ value, name }: { value: string; name: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -16,7 +16,7 @@ function StoreContactQr({ value, name }: { value: string; name: string }) {
   return <><QRCodeCanvas ref={canvas} value={value} size={512} level="M" marginSize={4} style={{ display: 'none' }} />{image && <img className="store-contact-qr" src={image} alt={`${name}企微联系二维码`} />}</>;
 }
 
-function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: number; onClose: () => void }) {
+export function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: number; onClose: () => void }) {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const closeButton = useRef<HTMLButtonElement>(null);
   const contact = safeStoreContact(STORE_CONTACTS[storeId]);
@@ -38,10 +38,10 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
   }, [panel, onClose]);
   if (!panel) return null;
   return <div className={`return-dialog-backdrop ${panel === 'save' ? 'service-account-backdrop' : ''}`} onClick={onClose}>
-    <section className={`return-dialog ${panel === 'save' ? 'service-account-sheet' : ''}`} role="dialog" aria-modal="true" aria-label={panel === 'save' ? '服务号入口' : '联系门店'} onClick={event => event.stopPropagation()}>
+    <section className={`return-dialog ${panel === 'save' ? 'service-account-sheet' : ''}`} role="dialog" aria-modal="true" aria-label={panel === 'save' ? '服务号入口' : panel === 'tuesday' ? '超级星期二' : '联系门店'} onClick={event => event.stopPropagation()}>
       {panel === 'save' && <img className="service-account-mascot" src="/assets/service-account-peeking-v2.png" alt="" />}
       {panel === 'save' && <img className="service-account-mint-marks" src="/assets/service-account-mint-marks-v2.png" alt="" />}
-      <header><h2>{panel === 'save' ? '下次来，不用找沙发码' : contact ? '周二会员福利' : '联系门店'}</h2><button ref={closeButton} type="button" aria-label="关闭入口提示" onClick={onClose}><X size={20} /></button></header>
+      <header><h2>{panel === 'save' ? '下次来，不用找沙发码' : panel === 'tuesday' ? '超级星期二' : '联系门店'}</h2><button ref={closeButton} type="button" aria-label="关闭入口提示" onClick={onClose}><X size={20} /></button></header>
       {panel === 'save' ? <>
         <div className="service-account-body">
         <div className="service-account-identity"><img src="/assets/service-account-avatar-v2.png" alt="" /><div><h3>荷小悦草本轻养</h3><p>荷小悦服务号</p></div></div>
@@ -57,11 +57,15 @@ function ReturnDialog({ panel, storeId, onClose }: { panel: Panel; storeId: numb
         {copyState !== 'idle' && <p role="status" className="service-account-copy-status">{copyState === 'copied' ? '名称已复制，可到微信搜索。' : '无法自动复制，可在微信搜索「荷小悦草本轻养」。'}</p>}
         <small className="service-account-note">自愿关注，不影响正常服务。<br />报告需本人登录并授权查看。</small>
         </div>
+      </> : panel === 'tuesday' ? <>
+        <h3>周二会员活动</h3>
+        <p>每周二，有效会员按门店价消费任意主项，买一赠一。</p>
+        <p>适用主项、赠送搭配、补差和叠加规则，请到店由门店人工确认。</p>
+        <small>{MEMBERSHIP_STORE_CONFIRMATION}</small>
       </> : <>
         <h3>{contact?.name || '荷小悦门店联系'}</h3>
         {contact ? <>
-          <p>会员周二按门店价消费任意主项，买一赠一。</p>
-          <small>添加店长企微，了解门店活动。</small>
+          <p>咨询项目、预约到店，可联系门店工作人员。</p>
           {contact.qrImage && <img className="store-contact-qr" src={contact.qrImage} alt={`${contact.name}官方企微联系我二维码`} />}
           {!contact.qrImage && contact.addUrl && <StoreContactQr value={contact.addUrl} name={contact.name} />}
           <p className="store-contact-instruction">长按二维码，添加店长企微</p>
@@ -82,12 +86,12 @@ export function ReturnEntryBanner({ storeId }: { storeId: number }) {
   </>;
 }
 
-export function ProfileReturnTools({ storeId }: { storeId: number }) {
+export function ProfileReturnTools({ storeId, compact = false, showContact = true }: { storeId: number; compact?: boolean; showContact?: boolean }) {
   const [panel, setPanel] = useState<Panel>(null);
   const contact = safeStoreContact(STORE_CONTACTS[storeId]);
-  return <section className="profile-return-tools" aria-label="门店回访入口">
+  return <section className={`profile-return-tools ${compact ? 'is-compact' : ''}`} aria-label="门店回访入口">
     <div className="profile-return-card return-save-card"><Bookmark size={23} aria-hidden="true" /><div><h3>下次从服务号进入</h3><p>荷小悦草本轻养 · 底部菜单</p></div><button type="button" onClick={() => setPanel('save')}>查看入口</button></div>
-    <div className="profile-return-card return-contact-card"><MessageSquareText size={23} aria-hidden="true" /><div><small>门店联系</small><h3>{contact?.name || '荷小悦门店联系'}</h3><p>{contact ? '自愿添加，不影响报告和服务。' : '线上联系方式尚未配置'}</p></div><button type="button" onClick={() => setPanel('contact')}>{contact ? '查看联系' : '查看说明'}<ChevronRight size={14} /></button></div>
+    {showContact && <div className="profile-return-card return-contact-card"><MessageSquareText size={23} aria-hidden="true" /><div><small>门店联系</small><h3>{contact?.name || '荷小悦门店联系'}</h3><p>{contact ? '自愿添加，不影响报告和服务。' : '线上联系方式尚未配置'}</p></div><button type="button" onClick={() => setPanel('contact')}>{contact ? '查看联系' : '查看说明'}<ChevronRight size={14} /></button></div>}
     <details className="profile-tuesday-card"><summary><CalendarDays size={21} aria-hidden="true" /><div><h3>超级星期二</h3><p>有效会员按门店价消费主项，买一赠一。</p></div><span>查看活动</span></summary><div><p>每周二，有效会员按门店价消费任意主项，买一赠一。</p><p>适用主项、赠送搭配、补差和叠加规则，请到店由门店人工确认。</p><p>{MEMBERSHIP_STORE_CONFIRMATION}</p></div></details>
     <ReturnDialog panel={panel} storeId={storeId} onClose={() => setPanel(null)} />
   </section>;

@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Ticket, UserRound, X } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Store, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -6,11 +6,12 @@ import { ApiError, cancelOrder, enrollTrustedDevice, getMyCoupons, getMySelectio
 import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth, type CustomerUser } from '../customerAuth';
 import { formatMoney } from '../domain';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
-import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipSavingCents, membershipState, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
+import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipState, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
 import MembershipBanner from './MembershipBanner';
 import FeedbackDialog from './FeedbackDialog';
 import MyReports from './MyReports';
-import { ProfileReturnTools } from './CustomerReturnTools';
+import { ProfileReturnTools, ReturnDialog } from './CustomerReturnTools';
+import './profile-home.css';
 
 type TabKey = 'records' | 'coupons';
 
@@ -36,6 +37,15 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   const [selectedRecord, setSelectedRecord] = useState<SelectionSession | null>(null);
   const [feedbackRecord, setFeedbackRecord] = useState<SelectionSession | null>(null);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState('');
+  const feedbackRequest = useRef<object | null>(null);
+  const [dataOwner, setDataOwner] = useState<string | null>(null);
+  const [returnPanel, setReturnPanel] = useState<'save' | 'contact' | 'tuesday' | null>(null);
+  const [recordsOpen, setRecordsOpen] = useState(false);
+  const recordTrigger = useRef<HTMLButtonElement | null>(null);
+  const [recordLimit, setRecordLimit] = useState(3);
+  const [recordNavigation, setRecordNavigation] = useState(0);
+  const recordSection = useRef<HTMLElement>(null);
   const [memberCodeOpen, setMemberCodeOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sessions, setSessions] = useState<Awaited<ReturnType<typeof getMySelectionSessions>>>([]);
@@ -62,6 +72,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
       isMember ? Promise.resolve([] as MyCoupon[]) : getMyCoupons(token),
     ]).then(([orderItems, sessionItems, couponItems]) => {
       if (!isCurrent()) return;
+      setDataOwner(token);
       setOrders(orderItems);
       setSessions(sessionItems);
       setCoupons(couponItems);
@@ -72,7 +83,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
         loadContext.current.onAuthChange(null);
         return;
       }
-      setLoadError(reason instanceof Error ? reason.message : '加载失败，请稍后重试');
+      setLoadError(reason instanceof TypeError ? '网络暂时不稳定，请检查网络后重试。' : reason instanceof Error ? reason.message : '服务记录加载失败，请稍后重试');
     }).finally(() => { if (isCurrent()) setLoading(false); });
   }, []);
 
@@ -83,6 +94,57 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   }, [open, auth?.token, auth?.user.is_member, reportsOpen, loadData, refreshKey]);
 
   useEffect(() => { if (auth?.user.is_member && tab === 'coupons') setTab('records'); }, [auth?.user.is_member, tab]);
+
+  // Never render one account's cached records or dialogs under another identity.
+  useEffect(() => {
+    setSelectedRecord(null); setFeedbackRecord(null); setFeedbackError('');
+    setFeedbackSubmitting(false); feedbackRequest.current = null;
+    setMemberCodeOpen(false); setReturnPanel(null); setRecordsOpen(false); setRecordState('all');
+    setRecordLimit(3); setRecordNavigation(0); setTab('records');
+  }, [auth?.token]);
+
+  useEffect(() => {
+    if (!recordNavigation) return;
+    recordSection.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    recordSection.current?.focus({ preventScroll: true });
+  }, [recordNavigation]);
+
+  const ownsData = Boolean(auth && dataOwner === auth.token);
+  const visibleSessions = ownsData ? sessions : [];
+  const visibleCoupons = ownsData ? coupons : [];
+  const filteredSessions = recordFilter(visibleSessions, recordState);
+  const pendingCount = visibleSessions.filter(item => item.can_evaluate && !item.evaluated).length;
+  const showRecords = (filter: RecordFilter = 'all', trigger?: HTMLButtonElement) => {
+    recordTrigger.current = trigger || null; setRecordsOpen(true);
+    setTab('records'); setRecordState(filter); setRecordLimit(3);
+    setRecordNavigation(value => value + 1);
+  };
+  const openFeedback = (record: SelectionSession) => {
+    setFeedbackError(''); setFeedbackRecord(record);
+  };
+  const saveFeedback = async (input: { rating: number; tags: string[]; note: string }) => {
+    if (!auth || !ownsData || !feedbackRecord || feedbackRequest.current) return;
+    const request = {}; const token = auth.token; const recordId = feedbackRecord.id;
+    feedbackRequest.current = request; setFeedbackSubmitting(true); setFeedbackError('');
+    const isCurrent = () => loadContext.current.open && loadContext.current.auth?.token === token && feedbackRequest.current === request;
+    try {
+      await submitCustomerFeedback(recordId, token, input);
+      if (!isCurrent()) return;
+      setFeedbackRecord({ ...feedbackRecord, evaluated: true });
+      setSessions(items => items.map(item => item.id === recordId ? { ...item, evaluated: true } : item));
+      loadData(token, auth.user.is_member);
+    } catch (reason) {
+      if (!isCurrent()) return;
+      if (['reauthenticate', 'session-replaced'].includes(authFailureAction(reason))) {
+        clearCustomerAuth(); loadContext.current.onAuthChange(null); return;
+      }
+      setFeedbackError(reason instanceof TypeError ? '网络暂时不稳定，请重试。已保留填写内容。' : reason instanceof Error ? reason.message : '评价未提交成功，请重试');
+    } finally {
+      if (feedbackRequest.current === request) {
+        feedbackRequest.current = null; setFeedbackSubmitting(false);
+      }
+    }
+  };
 
   const handleCancelOrder = async (order: Order) => {
     if (!auth || cancelling) return;
@@ -106,7 +168,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   if (!open) return null;
 
   return (
-    <div className={`profile-page ${reportsOpen ? 'profile-report-view' : ''}`} role="dialog" aria-modal="true" aria-label="个人中心">
+    <div className={`profile-page ${reportsOpen ? 'profile-report-view' : 'profile-home'}`} role="dialog" aria-modal="true" aria-label="个人中心">
       <header>
         <button type="button" aria-label={reportsOpen ? onReportsBack ? '返回首页' : '返回我的' : '返回'} onClick={reportsOpen ? onReportsBack || (() => setReportsOpen(false)) : onClose}><ArrowLeft size={22} /></button>
         <strong>{reportsOpen ? '我的检测报告' : '我的'}</strong>
@@ -114,26 +176,35 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
       </header>
 
       {!auth
-        ? <div className="profile-anonymous-body">{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={openReports}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} />{!reportsOpen && <ProfileReturnTools storeId={storeId} />}</div>
+        ? <div className="profile-anonymous-body">{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={openReports}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} />{!reportsOpen && <ProfileReturnTools storeId={storeId} compact />}</div>
         : reportsOpen ? <MyReports key={auth.token} token={auth.token} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
           <main className="profile-body">
-            <ProfileCard user={auth.user} savingCents={membershipSavingCents(sessions)} completedCount={sessions.filter((item) => item.service_completed_at).length} onShowCode={() => setMemberCodeOpen(true)} />
-            <button className="profile-pending-task" type="button" onClick={openReports}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>使用检测时的手机号查看本人结果</small></span><ChevronRight size={18} /></button>
-            {SHOW_PROFILE_HISTORY && sessions.some((item) => item.can_evaluate && !item.evaluated) && <button className="profile-pending-task" type="button" onClick={() => { setTab('records'); setRecordState('pending-feedback'); }}><span><MessageSquareText size={19} /><strong>待评价 {sessions.filter((item) => item.can_evaluate && !item.evaluated).length}</strong><small>完成评价，帮助我们改进服务</small></span><ChevronRight size={18} /></button>}
-            <ProfileReturnTools storeId={storeId} />
+            <ProfileCard user={auth.user} onShowCode={() => setMemberCodeOpen(true)} />
+            <nav className="profile-shortcuts" aria-label="常用功能">
+              <button type="button" aria-expanded={recordsOpen && recordState !== 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('all', event.currentTarget)}><Clock3 size={23} aria-hidden="true" /><span>服务记录</span></button>
+              <button type="button" aria-label={`待评价，${pendingCount}条`} aria-expanded={recordsOpen && recordState === 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('pending-feedback', event.currentTarget)}><span className="profile-shortcut-icon"><MessageSquareText size={23} aria-hidden="true" />{pendingCount > 0 && <em aria-hidden="true">{pendingCount}</em>}</span><span>待评价</span></button>
+              <button type="button" onClick={openReports}><ReceiptText size={23} aria-hidden="true" /><span>检测报告</span></button>
+              <button type="button" onClick={() => setReturnPanel('save')}><Bookmark size={23} aria-hidden="true" /><span>服务号</span></button>
+              <button type="button" onClick={() => setReturnPanel('contact')}><Store size={23} aria-hidden="true" /><span>联系门店</span></button>
+              <button type="button" onClick={() => setReturnPanel('tuesday')}><CalendarDays size={23} aria-hidden="true" /><span>超级星期二</span></button>
+            </nav>
+            {!recordsOpen && loadError && <div className="profile-load-error" role="alert"><p>{loadError}</p><button type="button" onClick={() => loadData(auth.token, auth.user.is_member)}>重新加载</button></div>}
+            {recordsOpen && <section id="profile-records" className="profile-records-section" ref={recordSection} tabIndex={-1} aria-label="我的服务记录">
+              <div className="profile-section-heading"><h2>{tab === 'records' ? '服务记录' : '我的券'}</h2>{tab === 'records' && <span>{visibleSessions.length >= 50 ? '最近50条' : '最近到店'}</span>}{shouldShowCouponTab(auth.user.is_member) && <button type="button" onClick={() => { setTab(tab === 'records' ? 'coupons' : 'records'); }}>{tab === 'records' ? '我的券' : '服务记录'}<ChevronRight size={14} /></button>}<button className="profile-collapse-records" type="button" onClick={() => { setRecordsOpen(false); recordTrigger.current?.focus(); }}>收起<X size={14} /></button></div>
+              {SHOW_PROFILE_HISTORY && tab === 'records' && <RecordFilters value={recordState} onChange={value => { setRecordState(value); setRecordLimit(3); }} />}
+              {loadError && <div className="profile-load-error" role="alert"><p>{loadError}</p><button type="button" onClick={() => loadData(auth.token, auth.user.is_member)}>重新加载</button></div>}
+              {loading && <p className="profile-empty" role="status">正在加载服务记录…</p>}
+              {!loading && !loadError && (
+                SHOW_PROFILE_HISTORY && tab === 'records' ? <>
+                  <SelectionList sessions={filteredSessions.slice(0, recordLimit)} filter={recordState} onContinue={onClose} onOpen={setSelectedRecord} onFeedback={openFeedback} />
+                  {filteredSessions.length > recordLimit && <button className="profile-more-records" type="button" onClick={() => setRecordLimit(value => value + 5)}>查看更多记录<ChevronRight size={15} /></button>}
+                </> : shouldShowCouponTab(auth.user.is_member) ? <CouponList coupons={visibleCoupons} /> : SHOW_PROFILE_HISTORY ? <OrderList orders={ownsData ? orders : []} cancelling={cancelling} onCancel={handleCancelOrder} /> : null
+              )}
+            </section>}
             {!auth.user.is_member && <MembershipBanner />}
-            {(SHOW_PROFILE_HISTORY || shouldShowCouponTab(auth.user.is_member)) && <nav className="profile-tabs" aria-label="个人中心板块">
-              {SHOW_PROFILE_HISTORY && <TabButton active={tab === 'records'} onClick={() => setTab('records')} icon={<Clock3 size={15} />} label="下单记录" count={sessions.length} />}
-              {shouldShowCouponTab(auth.user.is_member) && <TabButton active={!SHOW_PROFILE_HISTORY || tab === 'coupons'} onClick={() => setTab('coupons')} icon={<Ticket size={15} />} label="我的券" count={coupons.length} />}
-            </nav>}
-            {loadError && <p className="profile-error">{loadError}</p>}
-            {loading && <p className="profile-empty">正在加载…</p>}
-            {!loading && !loadError && (
-              SHOW_PROFILE_HISTORY && tab === 'records' ? <><RecordFilters value={recordState} onChange={setRecordState} /><SelectionList sessions={recordFilter(sessions, recordState)} onContinue={onClose} onOpen={setSelectedRecord} onFeedback={setFeedbackRecord} /></>
-                : shouldShowCouponTab(auth.user.is_member) ? <CouponList coupons={coupons} /> : SHOW_PROFILE_HISTORY ? <OrderList orders={orders} cancelling={cancelling} onCancel={handleCancelOrder} /> : null
-            )}
-            {selectedRecord && <RecordDetail record={selectedRecord} onClose={() => setSelectedRecord(null)} onFeedback={() => { setFeedbackRecord(selectedRecord); setSelectedRecord(null); }} />}
-            <FeedbackDialog open={Boolean(feedbackRecord)} submitting={feedbackSubmitting} submitted={Boolean(feedbackRecord?.evaluated)} onClose={() => setFeedbackRecord(null)} onSubmit={async (input) => { if (!auth || !feedbackRecord) return; setFeedbackSubmitting(true); try { await submitCustomerFeedback(feedbackRecord.id, auth.token, input); setFeedbackRecord(null); loadData(auth.token, auth.user.is_member); } finally { setFeedbackSubmitting(false); } }} />
+            {ownsData && selectedRecord && <RecordDetail record={selectedRecord} onClose={() => setSelectedRecord(null)} onFeedback={() => { openFeedback(selectedRecord); setSelectedRecord(null); }} />}
+            <FeedbackDialog key={auth.token} open={ownsData && Boolean(feedbackRecord)} submitting={feedbackSubmitting} submitted={Boolean(feedbackRecord?.evaluated)} error={feedbackError} onClose={() => { setFeedbackRecord(null); setFeedbackError(''); }} onSubmit={saveFeedback} />
+            <ReturnDialog panel={returnPanel} storeId={storeId} onClose={() => setReturnPanel(null)} />
             {SHOW_DYNAMIC_MEMBER_CODE && memberCodeOpen && <MemberCodeDialog token={auth.token} phone={auth.user.phone} onTokenReplaced={(token) => { const next = { ...auth, token }; writeCustomerAuth(next); onAuthChange(next); }} onClose={() => setMemberCodeOpen(false)} />}
           </main>
         )}
@@ -200,39 +271,22 @@ function ProfileLogin({ onAuthChange }: { onAuthChange: (auth: CustomerAuth) => 
   );
 }
 
-function ProfileCard({ user, savingCents, completedCount, onShowCode }: { user: CustomerUser; savingCents: number; completedCount: number; onShowCode: () => void }) {
+function ProfileCard({ user, onShowCode }: { user: CustomerUser; onShowCode: () => void }) {
   const state = membershipState(user.member_expire_at);
   const expiry = user.member_expire_at ? formatDateTime(user.member_expire_at).slice(0, 10) : '';
-  return (
-    <section className={`profile-card ${user.is_member ? 'is-member' : 'is-guest'}`}>
-      <div className="profile-avatar"><UserRound size={22} /></div>
-      <div className="profile-account">
-        <strong>{user.nickname || (user.is_member ? '荷小悦年度会员' : '荷小悦顾客')}</strong>
-        <small>{maskPhone(user.phone)} · {user.is_member ? '年度权益卡会员' : '普通顾客'}</small>
-      </div>
-      <div className="profile-identity">
-        {user.is_member ? <><BadgeCheck size={17} /><span>会员价</span></> : <span>到店服务</span>}
-      </div>
-      {user.is_member && <div className="profile-member-value"><div><small>{state.kind === 'expired' ? '会员权益已到期' : `有效期至 ${expiry || '以门店记录为准'}`}</small>{state.kind === 'expiring' && <em>还有 {state.daysLeft} 天到期</em>}</div>{SHOW_PROFILE_HISTORY && <div><small>累计会员省</small><strong>{completedCount ? formatMoney(savingCents) : '完成首次服务后可查看'}</strong><span>{completedCount ? `已完成 ${completedCount} 次服务` : '按已完成服务价格快照计算'}</span></div>}</div>}
-      {SHOW_DYNAMIC_MEMBER_CODE && user.is_member && state.kind !== 'expired' && <button className="profile-member-code-button" type="button" onClick={onShowCode}>出示动态会员码</button>}
-      {!user.is_member && <p className="profile-card-benefit">到店办理年度权益卡，开通后享会员价</p>}
-    </section>
-  );
+  const memberLabel = user.member_type === 'annual' ? '年度权益卡' : user.member_type === 'stored' ? '储值会员卡' : '会员身份';
+  return <section className={`profile-identity-card ${user.is_member ? 'is-member' : 'is-guest'}`} aria-label="我的会员信息">
+    {user.is_member && <div className="profile-card-heading"><strong>荷小悦会员</strong><span className="profile-member-label"><BadgeCheck size={15} aria-hidden="true" />{memberLabel}</span></div>}
+    <div className="profile-avatar"><UserRound size={24} aria-hidden="true" /></div>
+    <div className="profile-identity-copy"><h1>{user.nickname || '荷小悦顾客'}</h1><p>{maskPhone(user.phone)}</p></div>
+    {user.is_member && <p className="profile-membership-expiry">{state.kind === 'expired' ? '会员权益已到期' : expiry ? `权益有效期至 ${expiry}` : '会员有效期以门店记录为准'}{state.kind === 'expiring' && <span> · 还有 {state.daysLeft} 天</span>}</p>}
+    {SHOW_DYNAMIC_MEMBER_CODE && user.is_member && state.kind !== 'expired' && <button className="profile-member-code-button" type="button" onClick={onShowCode}>出示动态会员码</button>}
+  </section>;
 }
 
 function maskPhone(phone: string) {
   const normalized = phone.replace(/\D/g, '');
   return normalized.length === 11 ? `${normalized.slice(0, 3)}****${normalized.slice(-4)}` : '手机号已绑定';
-}
-
-function TabButton({ active, onClick, icon, label, count }: {
-  active: boolean; onClick: () => void; icon: React.ReactNode; label: string; count: number;
-}) {
-  return (
-    <button type="button" className={active ? 'active' : ''} onClick={onClick}>
-      {icon}<span>{label}</span>{count > 0 && <em>{count}</em>}
-    </button>
-  );
 }
 
 function OrderList({ orders, cancelling, onCancel }: {
@@ -265,7 +319,7 @@ function OrderList({ orders, cancelling, onCancel }: {
 }
 
 function RecordFilters({ value, onChange }: { value: RecordFilter; onChange: (value: RecordFilter) => void }) {
-  return <div className="profile-record-filters" aria-label="下单记录筛选">{([['all', '全部'], ['pending-feedback', '待评价'], ['in-service', '服务中'], ['completed', '已完成']] as const).map(([key, label]) => <button key={key} type="button" className={value === key ? 'active' : ''} aria-pressed={value === key} onClick={() => onChange(key)}>{label}</button>)}</div>;
+  return <div className="profile-record-filters" aria-label="服务记录筛选">{([['all', '全部'], ['pending-feedback', '待评价'], ['in-service', '服务中'], ['completed', '已完成']] as const).map(([key, label]) => <button key={key} type="button" className={value === key ? 'active' : ''} aria-pressed={value === key} onClick={() => onChange(key)}>{label}</button>)}</div>;
 }
 
 function MemberCodeDialog({ token, phone, onTokenReplaced, onClose }: { token: string; phone: string; onTokenReplaced: (token: string) => void; onClose: () => void }) {
@@ -292,30 +346,15 @@ function MemberCodeDialog({ token, phone, onTokenReplaced, onClose }: { token: s
   return <div className="profile-detail-backdrop" role="presentation" onClick={onClose}><section className="profile-member-code-dialog" role="dialog" aria-modal="true" aria-labelledby="member-code-title" onClick={(event) => event.stopPropagation()}><header><strong id="member-code-title">会员本人核验</strong><button type="button" aria-label="关闭会员码" onClick={onClose}><X size={20} /></button></header>{code ? <><QRCodeSVG value={code} size={220} level="M" /><strong>请向技师或店长出示</strong><p>{seconds} 秒后自动刷新</p><small>动态码每 30 秒更新，仅限本机当次使用，请勿截图或转发。</small></> : <><p>{error || '正在生成会员码…'}</p>{rebindMode ? <><small>验证手机号后将在此浏览器启用会员核验，原入口立即失效。</small><button type="button" onClick={() => void sendPhoneCode(phone).then(() => setRebindMode(true))}>获取验证码</button><input aria-label="短信验证码" inputMode="numeric" maxLength={6} value={rebindCode} onChange={(event) => setRebindCode(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="输入 6 位验证码" /><button type="button" disabled={rebindCode.length !== 6} onClick={() => void enableHere()}>验证并在此浏览器启用</button></> : error && <button type="button" onClick={() => void load()}>重新生成</button>}</>}</section></div>;
 }
 
-function SelectionList({ sessions, onContinue, onOpen, onFeedback }: { sessions: Awaited<ReturnType<typeof getMySelectionSessions>>; onContinue: () => void; onOpen: (record: SelectionSession) => void; onFeedback: (record: SelectionSession) => void }) {
-  if (!sessions.length) return <p className="profile-empty">还没有下单记录。选一份服务提交后会在这里看到。</p>;
-  return (
-    <ul className="profile-list">
-      {sessions.map((session) => (
-        <li key={session.id} className="profile-order profile-selection-record" tabIndex={0} role="button" onClick={() => onOpen(session)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(session); } }}>
-          <div className="profile-list-head profile-record-store">
-            <strong><span className="profile-record-badge">到店</span>荷小悦草本服务</strong>
-            <span className={`profile-status status-${session.status}`}>{session.can_evaluate && !session.evaluated ? '待评价' : session.service_completed_at ? '已完成' : selectionStatusLabel(session.status)}</span>
-          </div>
-          <div className="profile-record-product">
-            <div className="profile-record-thumb"><ReceiptText size={22} /></div>
-            <div className="profile-record-product-copy">
-              <strong>{session.items[0]?.name || '本次到店服务'}</strong>
-              <small>{session.items.length > 1 ? `${session.items[0]?.name || '服务项目'}等 ${session.items.length} 项` : '按本次服务清单记录'}</small>
-            </div>
-            <span className="profile-record-quantity">×{session.items.reduce((sum, item) => sum + Math.max(1, item.quantity || 1), 0)}</span>
-          </div>
-          <div className="profile-record-meta"><span>{formatDateTime(session.submitted_at) || '到店扫码选购'}</span><strong>共计 {formatMoney(selectionDisplayAmount(session))}</strong></div>
-          <div className="profile-record-actions">{session.can_evaluate && !session.evaluated && <button type="button" onClick={(event) => { event.stopPropagation(); onFeedback(session); }}>去评价</button>}<button type="button" onClick={(event) => { event.stopPropagation(); onContinue(); }}>再次选购</button><span aria-hidden="true"><ChevronRight size={17} /></span></div>
-        </li>
-      ))}
-    </ul>
-  );
+function SelectionList({ sessions, filter, onContinue, onOpen, onFeedback }: { sessions: SelectionSession[]; filter: RecordFilter; onContinue: () => void; onOpen: (record: SelectionSession) => void; onFeedback: (record: SelectionSession) => void }) {
+  if (!sessions.length) return <div className="profile-record-empty" role="status"><ReceiptText size={27} aria-hidden="true" /><p>{filter === 'pending-feedback' ? '目前没有待评价的服务' : filter === 'in-service' ? '目前没有进行中的服务' : filter === 'completed' ? '还没有已完成的服务' : '还没有服务记录'}</p><small>{filter === 'pending-feedback' ? '可评价的服务会出现在这里。' : '到店选择项目后，可在这里查看服务进展。'}</small><button type="button" onClick={onContinue}>去选项目<ChevronRight size={14} /></button></div>;
+  return <ul className="profile-service-list">{sessions.map(session => <li key={session.id}>
+    <button className="profile-record-main" type="button" onClick={() => onOpen(session)} aria-label={`查看${session.items[0]?.name || '到店服务'}详情`}>
+      <span className="profile-record-title"><strong>{session.items[0]?.name || '本次到店服务'}{session.items.length > 1 && <small>等{session.items.length}项</small>}</strong><span className={session.can_evaluate && !session.evaluated ? 'needs-feedback' : ''}>{session.can_evaluate && !session.evaluated ? '待评价' : session.service_completed_at ? '已完成' : selectionStatusLabel(session.status)}</span></span>
+      <span className="profile-record-summary"><time>{formatDateTime(session.submitted_at) || '到店选购'}</time><span>{formatMoney(selectionDisplayAmount(session))}<ChevronRight size={15} aria-hidden="true" /></span></span>
+    </button>
+    {session.can_evaluate && !session.evaluated && <div className="profile-record-action"><span>这次体验如何？</span><button type="button" onClick={() => onFeedback(session)}>去评价</button></div>}
+  </li>)}</ul>;
 }
 
 function RecordDetail({ record, onClose, onFeedback }: { record: SelectionSession; onClose: () => void; onFeedback: () => void }) {

@@ -165,7 +165,7 @@ const profile = app => app.root.find(node => typeof node.type === 'function' && 
 const loginProps = app => app.root.find(node => typeof node.type === 'function' && node.type.name === 'RecordLoginDialog').props;
 async function mount() {
   let app;
-  await act(async () => { app = create(React.createElement(App), { createNodeMock: () => ({ scrollTo() {}, focus() {}, addEventListener() {}, removeEventListener() {}, querySelectorAll: () => [], getBoundingClientRect: () => ({ width: 390, height: 844 }) }) }); });
+  await act(async () => { app = create(React.createElement(App), { createNodeMock: () => ({ scrollTo() {}, scrollIntoView() {}, focus() {}, addEventListener() {}, removeEventListener() {}, querySelectorAll: () => [], getBoundingClientRect: () => ({ width: 390, height: 844 }) }) }); });
   await settle();
   return app;
 }
@@ -428,7 +428,7 @@ test('menu draft 409 recreates a private draft instead of showing the seat-relea
   env.cleanup();
 });
 
-test('my page shows order history after logging in on the seat-free menu', async () => {
+test('my page opens service history on demand after login on the seat-free menu', async () => {
   const env = environment(
     'http://synthetic.invalid/?store=1&view=menu&page=projects',
     new Map([[privateKey, JSON.stringify(record())]]),
@@ -439,8 +439,11 @@ test('my page shows order history after logging in on the seat-free menu', async
   await settle();
   await act(async () => app.root.findByProps({ className: 'miniapp-profile-entry' }).props.onClick());
   await settle();
+  assert.equal(app.root.findAllByProps({ id: 'profile-records' }).length, 0, 'history must stay collapsed initially');
+  const historyButton = app.root.find(node => node.type === 'button' && node.props['aria-controls'] === 'profile-records' && !node.props['aria-label']);
+  await act(async () => historyButton.props.onClick({ currentTarget: { focus() {} } }));
+  assert.equal(app.root.findAllByProps({ id: 'profile-records' }).length, 1, 'history shortcut must expose the service list');
   const text = JSON.stringify(app.toJSON());
-  assert.ok(text.includes('下单记录'), 'profile must expose the order history tab');
   assert.ok(text.includes('待前台确认') || text.includes('Synthetic project'), 'submitted selection must be listed');
   await unmount(app);
   env.cleanup();
