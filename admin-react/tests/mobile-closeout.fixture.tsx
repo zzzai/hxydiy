@@ -27,6 +27,7 @@ client.defaults.adapter = async config => {
   const fail = () => { throw new AxiosError('Synthetic network failure', 'ERR_NETWORK', config); };
   if (method === 'get') stats.reads++;
   if (path === '/admin/v2/feedback' && method === 'get') return ok({ items: [] });
+  if (path === '/admin/v2/manager/unassigned-services' && method === 'get') return ok({ items: [], total: 0 });
   if (path === '/admin/v2/manager/workbench' && method === 'get') {
     if (mode === 'load-error') return fail();
     const data = { attention: [], record_follow_up: { pending_count: stats.pending, window_days: 30, technicians: stats.pending ? [{ technician_id: 7, name: '合成技师', count: stats.pending }] : [] } };
