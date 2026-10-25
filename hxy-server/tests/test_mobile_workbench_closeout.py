@@ -349,6 +349,50 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
                 self.assertEqual(body['items'][0]['technician_name'], self.tech.name)
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/service-orders', headers=self.worker_headers).status_code, 403)
 
+    def test_position_conflicts_are_detected_once_per_display_room(self):
+        with self.Session() as db:
+            container = Room(
+                store_id=self.store.id, code='conflict-container', name='Conflict room',
+                room_type='room', is_space_container=True, is_service_position=False,
+            )
+            db.add(container)
+            db.flush()
+            children = [
+                Room(store_id=self.store.id, parent_room_id=container.id, code=f'conflict-bed-{index}', name=f'Bed {index}', room_type='bed')
+                for index in range(2)
+            ]
+            db.add_all(children)
+            db.flush()
+            for index, child in enumerate(children):
+                key = f'conflict-session-{index}'
+                db.add(SelectionSession(
+                    id=key, access_token_hash='synthetic', store_id=self.store.id,
+                    customer_id=self.user.id, status='confirmed', source='personal_qr',
+                    items=[{'name': '合成项目'}], diy_preferences={},
+                ))
+                db.flush()
+                db.add(PositionOccupancy(
+                    store_id=self.store.id, room_id=child.id, selection_session_id=key,
+                    serviced_by_technician_id=self.tech.id, status='in_service',
+                    active_room_id=child.id, active_session_id=key,
+                ))
+            db.commit()
+            occupancy_ids = sorted(db.scalars(select(PositionOccupancy.id).where(
+                PositionOccupancy.selection_session_id.like('conflict-session-%')
+            )))
+        response = self.client.get('/api/v1/admin/v2/service-anomalies', headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body['total'], 1)
+        self.assertEqual(body['items'][0]['reason'], 'position_conflict')
+        self.assertEqual(body['items'][0]['occupancy_ids'], occupancy_ids)
+        workbench = self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.headers).json()
+        self.assertEqual(workbench['summary']['service_anomalies'], 1)
+        sync = self.client.post('/api/v1/admin/v2/service-anomalies/sync', headers=self.headers)
+        self.assertEqual(sync.json()['created'], 1)
+        unresolved = self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.headers).json()
+        self.assertEqual(len([row for row in unresolved['items'] if row['exception_type'] == 'service_position_conflict']), 1)
+
     def test_manager_cannot_use_technician_history_and_worker_cannot_read_manager_todos(self):
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.worker_headers).status_code, 403)
         self.assertEqual(self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.worker_headers).status_code, 403)
