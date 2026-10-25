@@ -9,6 +9,7 @@ import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, ma
 import type { ManagerSelection, ManagerSelectionItem } from './managerMobile';
 import ManagerPositionView from './ManagerPositionView';
 import ManagerReviewsView from './ManagerReviewsView';
+import ManagerServiceOrdersView from './ManagerServiceOrdersView';
 import ManagerTasksView from './ManagerTasksView';
 import './manager-mobile.css';
 
@@ -28,7 +29,8 @@ function ItemList({ items }: { items: ManagerSelectionItem[] }) {
 export default function ManagerStorePage() {
   const current = useTechnicianSession();
   const storeId = getStaff()?.store_id;
-  const [view, setView] = useState<'tasks' | 'selections' | 'positions' | 'reviews'>('selections');
+  const [view, setView] = useState<'tasks' | 'orders' | 'selections' | 'positions' | 'reviews'>('selections');
+  const [ordersRefresh, setOrdersRefresh] = useState(0);
   const [mapRefresh, setMapRefresh] = useState(0);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -164,7 +166,7 @@ export default function ManagerStorePage() {
         <h1>门店工作台</h1>
         <p>{view === 'tasks' ? '未分配、超时与评价跟进' : view === 'selections' ? '订单只读，确认与超时由系统处理' : view === 'positions' ? '按沙发、房间查看当前订单' : '查看本店评价并记录跟进'}</p>
       </div>
-      <Button aria-label={view === 'tasks' ? '刷新待处理' : view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
+      <Button aria-label={view === 'tasks' ? '刷新待处理' : view === 'orders' ? '刷新服务单' : view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'orders') setOrdersRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
     </header>
     {deepLinkError && <Alert type="warning" showIcon closable message={deepLinkError} onClose={() => setDeepLinkError('')} />}
     <div className="manager-workbench-summary" aria-label="今日门店概览">
@@ -176,12 +178,14 @@ export default function ManagerStorePage() {
     </div>
     <nav className="manager-view-tabs" aria-label="工作台视图">
       <button type="button" aria-pressed={view === 'tasks'} onClick={() => { setDetail(null); setView('tasks'); }}>待处理</button>
+      <button type="button" aria-pressed={view === 'orders'} onClick={() => { setDetail(null); setView('orders'); }}>服务单</button>
       <button type="button" aria-pressed={view === 'selections'} onClick={() => { setDetail(null); setStaleOnly(false); setView('selections'); }}>订单</button>
       <button type="button" aria-pressed={view === 'positions'} onClick={() => { setDetail(null); setView('positions'); }}>座位</button>
       <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button>
     </nav>
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
-    {view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenPositions={() => setView('positions')} onOpenOrders={(onlyStale = false) => { setStaleOnly(onlyStale); setPage(1); setPeriod('all'); setView('selections'); }} />
+    {view === 'orders' ? <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => setView('positions')} />
+      : view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenPositions={() => setView('positions')} onOpenOrders={(onlyStale = false) => { setStaleOnly(onlyStale); setPage(1); setPeriod('all'); setView('selections'); }} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
       : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} onFocusError={() => setDeepLinkError('评价链接已失效或无权查看，已返回评价列表。')} />
         : <>

@@ -317,6 +317,38 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
         self.assertEqual(workbench['summary']['unassigned_service'], body['total'])
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/unassigned-services', headers=self.worker_headers).status_code, 403)
 
+    def test_manager_service_orders_filter_by_current_status(self):
+        now = datetime.now(timezone.utc)
+        with self.Session() as db:
+            for key, occupancy_status, tech_id, ended in [
+                ('orders-waiting', 'waiting_service', None, None),
+                ('orders-in-service', 'in_service', self.tech.id, None),
+                ('orders-completed', 'post_service_present', self.tech.id, now),
+            ]:
+                db.add(SelectionSession(
+                    id=key, access_token_hash='synthetic', store_id=self.store.id,
+                    customer_id=self.user.id, status='confirmed', source='personal_qr',
+                    items=[{'name': '合成项目', 'quantity': 1}], diy_preferences={},
+                ))
+                db.flush()
+                db.add(PositionOccupancy(
+                    store_id=self.store.id, room_id=self.room.id, selection_session_id=key,
+                    serviced_by_technician_id=tech_id, status=occupancy_status,
+                    actual_service_end_at=ended,
+                ))
+            db.commit()
+        for status, expected in [('waiting_service', 1), ('in_service', 1), ('completed', 1)]:
+            response = self.client.get(f'/api/v1/admin/v2/manager/service-orders?status={status}', headers=self.headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            body = response.json()
+            self.assertEqual(body['status'], status)
+            self.assertEqual(body['total'], expected)
+            if status == 'waiting_service':
+                self.assertIsNone(body['items'][0]['technician_name'])
+            if status == 'in_service':
+                self.assertEqual(body['items'][0]['technician_name'], self.tech.name)
+        self.assertEqual(self.client.get('/api/v1/admin/v2/manager/service-orders', headers=self.worker_headers).status_code, 403)
+
     def test_manager_cannot_use_technician_history_and_worker_cannot_read_manager_todos(self):
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.worker_headers).status_code, 403)
         self.assertEqual(self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.worker_headers).status_code, 403)

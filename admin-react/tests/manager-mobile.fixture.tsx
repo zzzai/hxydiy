@@ -91,6 +91,7 @@ client.defaults.adapter = async config => {
   if (method === 'get' && path === '/admin/v2/service-anomalies') return ok({ items: [], total: 0 });
   if (method === 'post' && path === '/admin/v2/service-anomalies/sync') return ok({ detected: 0, created: 0, updated: 0, reopened: 0 });
   if (method === 'get' && ['/admin/exceptions', '/admin/v2/feedback'].includes(path)) return ok({ items: [] });
+  if (method === 'get' && path === '/admin/v2/manager/service-orders') return ok({ status: config.params?.status, items: [], total: 0 });
   if (method === 'get' && path === '/admin/v2/manager/unassigned-services') return ok({ items: [], total: 0 });
   if (method === 'get' && path === '/admin/v2/manager/workbench') return ok({
     record_follow_up: { window_days: 30, pending_count: 0, technicians: [] },
