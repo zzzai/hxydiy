@@ -46,12 +46,20 @@ export default function ManagerStorePage() {
   const detailRef = useRef(detail);
   detailRef.current = detail;
 
+  const loadWorkbench = useCallback(async () => {
+    if (!current() || !isMobileManager(getStaff()) || document.visibilityState !== 'visible') return;
+    try {
+      const response = await getManagerWorkbench();
+      if (current()) setWorkbench(response.data);
+    } catch { /* keep last successful summary */ }
+  }, [current]);
+
   const load = useCallback(async (silent = false, force = false) => {
     if (!current() || !isMobileManager(getStaff())) return;
     const version = ++listVersion.current;
     if (!silent) setLoading(true);
     try {
-      void getManagerWorkbench().then(response => { if (current()) setWorkbench(response.data); }).catch(() => undefined);
+      void loadWorkbench();
       const query = managerListParams('all', page);
       const response = await getSelectionSessions(query.status, query.needs_position_assignment, { page: query.page, page_size: query.page_size }, true, staleOnly, period);
       if (!current() || version !== listVersion.current) return;
@@ -70,7 +78,20 @@ export default function ManagerStorePage() {
     } finally {
       if (current() && version === listVersion.current) setLoading(false);
     }
-  }, [current, page, storeId, staleOnly, period]);
+  }, [current, loadWorkbench, page, storeId, staleOnly, period]);
+
+  useEffect(() => {
+    void loadWorkbench();
+    const refresh = () => { if (document.visibilityState === 'visible') void loadWorkbench(); };
+    const timer = window.setInterval(refresh, 10000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [loadWorkbench]);
 
   useEffect(() => { if (view === 'selections') void load(); return () => { ++listVersion.current; }; }, [load, view]);
   useEffect(() => {
