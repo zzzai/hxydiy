@@ -283,6 +283,30 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
         self.assertEqual(workbench.json()['summary']['service_anomalies'], 1)
         self.assertEqual(self.client.get('/api/v1/admin/v2/service-anomalies', headers=self.worker_headers).status_code, 403)
 
+    def test_unassigned_services_list_matches_workbench_count(self):
+        with self.Session() as db:
+            db.add(SelectionSession(
+                id='unassigned-list-1', access_token_hash='synthetic', store_id=self.store.id,
+                customer_id=self.user.id, status='confirmed', source='personal_qr',
+                items=[{'name': '合成项目', 'quantity': 2}], diy_preferences={},
+            ))
+            db.flush()
+            db.add(PositionOccupancy(
+                store_id=self.store.id, room_id=self.room.id, selection_session_id='unassigned-list-1',
+                status='waiting_service',
+            ))
+            db.commit()
+        response = self.client.get('/api/v1/admin/v2/manager/unassigned-services', headers=self.headers)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body['total'], 1)
+        self.assertEqual(body['items'][0]['room_name'], self.room.customer_label or self.room.name)
+        self.assertEqual(body['items'][0]['items'][0]['name'], '合成项目')
+        self.assertEqual(body['items'][0]['items'][0]['quantity'], 2)
+        workbench = self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.headers).json()
+        self.assertEqual(workbench['summary']['unassigned_service'], body['total'])
+        self.assertEqual(self.client.get('/api/v1/admin/v2/manager/unassigned-services', headers=self.worker_headers).status_code, 403)
+
     def test_manager_cannot_use_technician_history_and_worker_cannot_read_manager_todos(self):
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.worker_headers).status_code, 403)
         self.assertEqual(self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.worker_headers).status_code, 403)

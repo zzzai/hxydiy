@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { acknowledgeOperationalException, getFeedback, getManagerWorkbench, getOperationalExceptions, getServiceAnomalies } from '../api';
+import { acknowledgeOperationalException, getFeedback, getManagerUnassignedServices, getManagerWorkbench, getOperationalExceptions, getServiceAnomalies } from '../api';
 import { readUnresolvedTasks, type UnresolvedTask } from './managerTasks';
 import { useTechnicianSession } from './useTechnicianSession';
 
@@ -14,6 +14,7 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
   const [reviews, setReviews] = useState<Array<{ id: number; rating: number; note: string; created_at: string | null; customer_phone?: string | null }>>([]);
   const [staleOrders, setStaleOrders] = useState(0);
   const [unassignedServices, setUnassignedServices] = useState(0);
+  const [unassignedItems, setUnassignedItems] = useState<Array<{ occupancy_id: number; room_name: string; items: Array<{ name: string; quantity: number }> }>>([]);
   const [exceptions, setExceptions] = useState<UnresolvedTask[]>([]);
   const [recordFollowUp, setRecordFollowUp] = useState({ pending_count: 0, window_days: 30, technicians: [] as Array<{ technician_id: number; name: string; count: number }> });
   const [serviceAnomalies, setServiceAnomalies] = useState<Array<{ id: number; label: string; room_name: string }>>([]);
@@ -32,11 +33,12 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
     loadingRef.current = true;
     setLoading(true);
     try {
-      const [reviewsResponse, workbenchResponse, exceptionsResponse, anomaliesResponse] = await Promise.all([
+      const [reviewsResponse, workbenchResponse, exceptionsResponse, anomaliesResponse, unassignedResponse] = await Promise.all([
         getFeedback({ feedback_type: 'service_review', follow_up_status: 'open', page: 1, page_size: 20 }),
         getManagerWorkbench(),
         getOperationalExceptions('unresolved'),
         getServiceAnomalies(),
+        getManagerUnassignedServices(),
       ]);
       if (!current() || request.current !== version) return;
       const unresolved = readUnresolvedTasks(exceptionsResponse.data);
@@ -45,6 +47,7 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
       setReviews(Array.isArray(reviewsResponse.data?.items) ? reviewsResponse.data.items.filter((item: { rating: number }) => item.rating <= 2) : []);
       setStaleOrders(Number(workbenchResponse.data?.attention?.find((item: { key: string }) => item.key === 'stale_order')?.count) || 0);
       setUnassignedServices(Number(workbenchResponse.data?.attention?.find((item: { key: string }) => item.key === 'unassigned_service')?.count) || 0);
+      setUnassignedItems(Array.isArray(unassignedResponse.data?.items) ? unassignedResponse.data.items : []);
       setExceptions(unresolved);
       setRecordFollowUp(followUp);
       setServiceAnomalies(Array.isArray(anomaliesResponse.data?.items) ? anomaliesResponse.data.items : []);
@@ -105,6 +108,10 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
         {unassignedServices > 0 && <div className="manager-task-stale">
           <div className="manager-task-top"><span>待服务订单尚未分配技师</span><Tag color="orange">{unassignedServices}</Tag></div>
           <p>由店长现场核对服务位并安排技师；安排后状态会同步到技师端。</p>
+          {unassignedItems.length > 0 && <div className="manager-unassigned-list">{unassignedItems.map(item => <div className="manager-review-task-row" key={item.occupancy_id}>
+            <span><strong>{item.room_name}</strong> · {item.items.map(line => `${line.name}${line.quantity > 1 ? ` ×${line.quantity}` : ''}`).join('、') || '未填写项目'}</span>
+            <Button size="small" onClick={onOpenPositions}>查看服务位</Button>
+          </div>)}</div>}
           <Button block onClick={onOpenPositions}>查看服务位</Button>
         </div>}
         {exceptions.length > 0 && <div className="manager-review-tasks">

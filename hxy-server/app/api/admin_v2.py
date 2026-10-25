@@ -1833,6 +1833,43 @@ def get_staff_access(
     }
 
 
+@router.get("/manager/unassigned-services")
+def manager_unassigned_services(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Waiting services that have no assigned technician, with room context."""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    rows = db.execute(
+        select(PositionOccupancy, Room, SelectionSession)
+        .join(Room, Room.id == PositionOccupancy.room_id)
+        .join(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
+        .where(
+            PositionOccupancy.store_id == store_id,
+            PositionOccupancy.status == "waiting_service",
+            PositionOccupancy.serviced_by_technician_id.is_(None),
+        )
+        .order_by(PositionOccupancy.id)
+        .limit(100)
+    ).all()
+    items = []
+    for occupancy, room, selection in rows:
+        items.append({
+            "occupancy_id": occupancy.id,
+            "room_id": room.id,
+            "room_name": room.customer_label or room.name,
+            "selection_session_id": selection.id,
+            "items": [
+                {"name": str(item.get("name") or item.get("project_name") or "服务项目"), "quantity": int(item.get("quantity") or 1)}
+                for item in (selection.items or []) if isinstance(item, dict)
+            ],
+            "waiting_since": occupancy.created_at.isoformat() if occupancy.created_at else None,
+        })
+    return {"items": items, "total": len(items)}
+
+
 @router.get("/manager/workbench")
 def manager_workbench(
     db: Session = Depends(get_db),

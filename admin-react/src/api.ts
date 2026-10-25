@@ -143,6 +143,7 @@ export const getSelectionSessions = (status?: string, needsPositionAssignment?: 
   client.get('/admin/v2/selection-sessions', { params: { status, needs_position_assignment: needsPositionAssignment, active_only: activeOnly, stale_only: staleOnly, period, ...pagination } });
 export const getSelectionSession = (sessionId: string) => client.get(`/admin/v2/selection-sessions/${sessionId}`);
 export const getManagerWorkbench = () => client.get('/admin/v2/manager/workbench');
+export const getManagerUnassignedServices = () => client.get('/admin/v2/manager/unassigned-services');
 export const assignSelectionPosition = (sessionId: string, roomId: number) =>
   client.post<PositionOccupancy>(`/admin/v2/selection-sessions/${sessionId}/assign-position`, { room_id: roomId });
 export const getCustomerProfileRecords = (userId: number) => client.get(`/admin/v2/users/${userId}/customer-profile-records`);
