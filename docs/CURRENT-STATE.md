@@ -6,6 +6,14 @@
 
 ## 当前生产
 
+- `CUSTOMER-ACCOUNT-FEEDBACK-20261025` 已上线：[PR #384](https://github.com/zzzai/hxydiy/pull/384)，候选 `9794f9fb9db42018a6df21706a8d55b56855c681`，合并/生产 `96d26e118f1af3936e86707861607448961fd95c`；精确 [CI 40153564705](https://github.com/zzzai/hxydiy/actions/runs/40153564705) 与唯一 [Deploy 40153790913](https://github.com/zzzai/hxydiy/actions/runs/40153790913) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-96d26e118f1a-40153790913`。
+- “我的”保留会员身份大卡片，常用入口两行三列：服务记录、待评价、检测报告、服务号、联系门店、超级星期二。服务记录默认收起；点击记录或待评价后展开对应列表并定位。服务号和周二活动使用说明弹层，沿用原活动规则。
+- 独立评价成功后的“返回菜单”直达 `?store=1&view=menu&page=projects`，不再先经过菜单/报告导航页。评价失败保留输入并提示重试，连续点击有即时请求门禁，换号后不展示前一身份记录或接收迟到结果；删除了由最近50条数据推算的累计展示，没有删除历史记录。
+- 生产核验 519 项 MANIFEST、169 个安装 Python 文件、3 个运行源文件和 113 个公网入口/资源哈希一致，health=`ok/production`；备份 checksum 通过，迁移集合及内容未变，后台首页与 API 主入口源文件和前版一致。本次不含数据库迁移、历史数据清理、会员/价格规则或其他未验收功能。
+- 合成 React、完整 App 身份隔离测试、TypeScript/构建、375/390px 浏览器验收与必需 CI 通过；生产核验业务API调用0、数据库查询0、业务写入0。真实微信手机验收交由人员完成，不以合成测试替代。详见 `operations/customer-account-feedback-release-20261025.md`；事实文档收尾不再次部署。
+
+### 2026-10-25 管理后台既往发布（包含于当前版本）
+
 - `ADMIN-DAILY-OPERATIONS-20261024` 已上线：[PR #382](https://github.com/zzzai/hxydiy/pull/382)，候选 `25565e39ab0782b25eed03ee645af111e689f5f9`，合并/生产 `f705ff522c8498d3d83f44a58ab54f595086b16f`；精确 [CI 40111030635](https://github.com/zzzai/hxydiy/actions/runs/40111030635) 与唯一 [Deploy 40111537521](https://github.com/zzzai/hxydiy/actions/runs/40111537521) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-f705ff522c84-40111537521`。
 - 今日工作台读取现行服务位/选单，正常执行项目不再误报缺旧订单；到店选单保留无座提交及失败恢复。待办知悉后继续保留，指派/关闭具备行锁与重复保护；评价状态和说明一次保存，失败保留草稿；总部员工姓名、登录名、角色、门店和状态组合筛选生效。
 - 生产核验 511 项 MANIFEST、169 个安装 Python 文件、3 个运行源文件和 10 个公网入口/资源哈希一致，health=`ok/production`；发布备份 checksum 通过，迁移集合及内容与前一版一致。本批没有数据迁移、清理、充值、退款、发券或外发消息。
