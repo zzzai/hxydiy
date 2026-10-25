@@ -1759,16 +1759,8 @@ def list_selection_sessions(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
-@router.get("/service-anomalies")
-def manager_service_anomalies(
-    db: Session = Depends(get_db),
-    authorization: str | None = Header(None),
-):
-    """Provable current-model anomalies only; no payment/order inference."""
-    staff = _current_staff(authorization, db)
-    _require_admin(staff)
-    store_id = _staff_store_id(staff)
-    rows = db.execute(
+def _service_anomaly_query(store_id: int):
+    return (
         select(PositionOccupancy, Room, SelectionSession)
         .join(Room, Room.id == PositionOccupancy.room_id)
         .outerjoin(SelectionSession, SelectionSession.id == PositionOccupancy.selection_session_id)
@@ -1782,6 +1774,20 @@ def manager_service_anomalies(
                 Room.store_id != PositionOccupancy.store_id,
             ),
         )
+    )
+
+
+@router.get("/service-anomalies")
+def manager_service_anomalies(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Provable current-model anomalies only; no payment/order inference."""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _staff_store_id(staff)
+    rows = db.execute(
+        _service_anomaly_query(store_id)
         .order_by(PositionOccupancy.id.desc())
         .limit(200)
     ).all()
@@ -1865,6 +1871,7 @@ def manager_workbench(
         SelectionSession.store_id == store_id,
         _stale_selection_condition(),
     )) or 0
+    service_anomalies = db.scalar(select(sa_func.count()).select_from(_service_anomaly_query(store_id).subquery())) or 0
     pending_checkout = db.scalar(select(sa_func.count()).select_from(Order).where(
         Order.store_id == store_id,
         Order.status == "pending_checkout",
@@ -1894,6 +1901,8 @@ def manager_workbench(
         attention.append({"key": "low_review", "label": "低分评价待跟进", "count": low_reviews})
     if unassigned_service:
         attention.append({"key": "unassigned_service", "label": "待服务订单尚未分配技师", "count": unassigned_service})
+    if service_anomalies:
+        attention.append({"key": "service_anomaly", "label": "服务位与选单关联异常", "count": service_anomalies})
     if open_exceptions:
         attention.append({"key": "exception_queue", "label": "异常待处理", "count": open_exceptions})
     if overdue_exceptions:
@@ -1908,6 +1917,7 @@ def manager_workbench(
             "unassigned_service": unassigned_service,
             "in_service": in_service,
             "completed_today": completed_today,
+            "service_anomalies": service_anomalies,
             "pending_checkout": pending_checkout,
             "open_exceptions": open_exceptions,
             "overdue_exceptions": overdue_exceptions,
