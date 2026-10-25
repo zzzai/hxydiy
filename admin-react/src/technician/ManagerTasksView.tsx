@@ -85,11 +85,15 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
     const refresh = () => {
       if (document.visibilityState === 'visible' && !loadingRef.current && !acknowledgingRef.current) void load();
     };
+    const timer = window.setInterval(refresh, 10000);
     window.addEventListener('pageshow', refresh);
+    window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => {
       request.current++;
+      window.clearInterval(timer);
       window.removeEventListener('pageshow', refresh);
+      window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [load]);
