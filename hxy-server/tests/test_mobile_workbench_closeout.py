@@ -393,6 +393,39 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
         unresolved = self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.headers).json()
         self.assertEqual(len([row for row in unresolved['items'] if row['exception_type'] == 'service_position_conflict']), 1)
 
+    def test_service_anomaly_closes_only_after_five_missed_scans(self):
+        with self.Session() as db:
+            db.add(SelectionSession(
+                id='autoclose-cancelled', access_token_hash='synthetic', store_id=self.store.id,
+                customer_id=self.user.id, status='cancelled', source='personal_qr',
+                items=[], diy_preferences={},
+            ))
+            db.flush()
+            db.add(PositionOccupancy(
+                store_id=self.store.id, room_id=self.room.id,
+                selection_session_id='autoclose-cancelled', status='waiting_service',
+            ))
+            db.commit()
+        first = self.client.post('/api/v1/admin/v2/service-anomalies/sync', headers=self.headers)
+        self.assertEqual(first.json()['created'], 1)
+        with self.Session() as db:
+            db.get(SelectionSession, 'autoclose-cancelled').status = 'confirmed'
+            db.commit()
+        for scan in range(1, 6):
+            response = self.client.post('/api/v1/admin/v2/service-anomalies/sync', headers=self.headers)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()['detected'], 0)
+            if scan < 5:
+                self.assertEqual(response.json()['resolved'], 0)
+                unresolved = self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.headers).json()
+                self.assertEqual(unresolved['total'], 1)
+            else:
+                self.assertEqual(response.json()['resolved'], 1)
+        unresolved = self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.headers).json()
+        self.assertEqual(unresolved['total'], 0)
+        with self.Session() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.action == 'auto_resolve_service_anomaly')), 1)
+
     def test_manager_cannot_use_technician_history_and_worker_cannot_read_manager_todos(self):
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/workbench', headers=self.worker_headers).status_code, 403)
         self.assertEqual(self.client.get('/api/v1/admin/exceptions?status=unresolved', headers=self.worker_headers).status_code, 403)

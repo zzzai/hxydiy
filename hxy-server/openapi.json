@@ -16482,7 +16482,7 @@
     },
     "/api/v1/admin/v2/service-anomalies/sync": {
       "post": {
-        "description": "Upsert current service anomalies into the persistent exception queue.\n\nOnly provable DIY associations are synced. Existing resolved rows reopen if\nthe same anomaly is still detected; nothing is auto-resolved here.",
+        "description": "Upsert current service anomalies into the persistent exception queue.\n\nOnly provable DIY associations are synced. Existing resolved rows reopen if\nthe same anomaly is still detected. A row is auto-resolved only after five\nconsecutive scans no longer detect it, and the close is audited.",
         "operationId": "sync_manager_service_anomalies_api_v1_admin_v2_service_anomalies_sync_post",
         "parameters": [
           {
