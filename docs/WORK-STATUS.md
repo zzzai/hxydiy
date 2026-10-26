@@ -1,6 +1,15 @@
 # hxy-diy 工作状态
 
-## 2026-10-27 评价闭环修复已上线，新增扫码企微提醒尚未启用
+## 2026-10-27 店长评价通知已启用（企微受理，终端待人工确认）
+
+- [PR #401](https://github.com/zzzai/hxydiy/pull/401) 已合并，候选 `a3414fce2464cd59d4bd7baf22bffde941f23276`，合并/运行 `a4459b52a8947ab6b4e3ee0770e5521b271c1262`；精确 [CI 40368092274](https://github.com/zzzai/hxydiy/actions/runs/40368092274) 和唯一 [Deploy 40368846317](https://github.com/zzzai/hxydiy/actions/runs/40368846317) success，备份、恢复演练、部署和验证 job 通过。actual current=`github-a4459b52a894-40368846317`。
+- 只读核验 520 项 MANIFEST、170 个安装 Python 文件、7 个运行文件及 10 项公网入口/资源哈希通过，health=`ok/production`。迁移集合与前版相同，发布备份 checksum 通过。
+- 发现原订单收件名单仍指向张震测试账号后，新增独立 `WECOM_FEEDBACK_NOTIFY_USERIDS`，两类评价可单独配置；空值兼容旧行为，显式无效名单不回退。22 项隔离合成通知合同通过。未改变原订单通知名单、权限或 UI。
+- 按用户本轮明确授权，核验紫薇壹号店马文静当前有效绑定及企微姓名后，仅发出 1 条标注“测试”的卡片；企微接口 accepted=1、invalid=0。真实终端送达、点击与手机显示仍由店长人工确认，不能写为已读或真机验收通过。
+- 生产 `WECOM_VISIT_FEEDBACK_NOTIFY_ENABLED=true`，评价专用名单精确匹配马文静；在发布锁下备份配置，只调整上述两个评价设置，用同镜像重建 API。数据库容器、应用版本和其他环境值保持；无历史补发、无顾客外发、无操作脚本生产业务写入。
+- 服务器脱敏回执：`/root/hxy-diy-private-operations/wecom-review-enable-20261027/activation-v2/enable-result.json`；本机 `output/wecom-review-enable-20261027/` 保存发布核验及脱敏回执。完整配置备份与个人 UserID 不入 Git。店长每日必做/两入口改版仍仅在原独立预览，本次事实补录不再次发布应用。
+
+## 2026-10-27 #399 既往发布核验（通知启用前）
 
 - [PR #399](https://github.com/zzzai/hxydiy/pull/399) 已合并；候选 `cf884537f4ce972df51ec5c063e9807692f09900`，合并/运行版本 `abbdbd9aa20c767dc13259c7504fa75a28481c62`。精确 [CI 40357711435](https://github.com/zzzai/hxydiy/actions/runs/40357711435) 与唯一 [Deploy 40358856792](https://github.com/zzzai/hxydiy/actions/runs/40358856792) 成功，备份、恢复演练、部署和验证 job 通过；实际 current=`github-abbdbd9aa20c-40358856792`。
 - 服务评价与独立扫码评价共同进入店长评价列表和低分待办；类型与 ID 共同定位，OAuth 回跳保留正确来源。跟进连续点击只保存一次，失败保留输入，可重试并回读。审计以中文结果和数量展示。
