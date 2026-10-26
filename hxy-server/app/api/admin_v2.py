@@ -1868,20 +1868,9 @@ def manager_service_anomalies(
     return {"items": items, "total": len(items)}
 
 
-@router.post("/service-anomalies/sync")
-def sync_manager_service_anomalies(
-    db: Session = Depends(get_db),
-    authorization: str | None = Header(None),
-):
-    """Upsert current service anomalies into the persistent exception queue.
+def _sync_service_anomalies_for_store(db: Session, store_id: int, actor_staff_id: int | None = None) -> dict:
+    """Pure store-scoped sync used by the manager endpoint and the scheduler."""
 
-    Only provable DIY associations are synced. Existing resolved rows reopen if
-    the same anomaly is still detected. A row is auto-resolved only after five
-    consecutive scans no longer detect it, and the close is audited.
-    """
-    staff = _current_staff(authorization, db)
-    _require_admin(staff)
-    store_id = _staff_store_id(staff)
     items = _all_service_anomaly_items(db, store_id)
     existing = list(db.scalars(select(OperationalException).where(
         OperationalException.store_id == store_id,
@@ -1950,13 +1939,27 @@ def sync_manager_service_anomalies(
             ))
     if created or reopened or resolved:
         db.add(AuditLog(
-            actor_type="staff", actor_id=str(staff.id), store_id=store_id,
+            actor_type="staff" if actor_staff_id is not None else "system",
+            actor_id=str(actor_staff_id) if actor_staff_id is not None else "service_anomaly_detector",
+            store_id=store_id,
             action="sync_service_anomalies", entity_type="operational_exception",
             entity_id=str(store_id),
             detail={"detected": len(items), "created": created, "updated": updated, "reopened": reopened, "resolved": resolved},
         ))
-    db.commit()
     return {"detected": len(items), "created": created, "updated": updated, "reopened": reopened, "resolved": resolved}
+
+
+@router.post("/service-anomalies/sync")
+def sync_manager_service_anomalies(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Upsert current service anomalies into the persistent exception queue."""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    result = _sync_service_anomalies_for_store(db, _staff_store_id(staff), staff.id)
+    db.commit()
+    return result
 
 
 @router.get("/access")

@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     occupancy_scheduler_interval_seconds: int = 60
     occupancy_closing_hour: int = 3
     occupancy_timezone: str = "Asia/Shanghai"
+    service_anomaly_scheduler_enabled: bool = True
+    service_anomaly_scheduler_interval_seconds: int = 300
     h5_public_base_url: str = "https://diy.hexiaoyue.com/"
 
     # 媒体存储：local 供开发/测试使用；production 使用 qiniu。

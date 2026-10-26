@@ -10,14 +10,17 @@ from app.core.staff_access import bind_staff_request_scope, reset_staff_request_
 from app.openapi import install_admin_catalog_openapi
 from app.release_static import mount_release_static_files
 from app.services.occupancy_scheduler import start_occupancy_scheduler, stop_occupancy_scheduler
+from app.services.service_anomaly_scheduler import start_service_anomaly_scheduler, stop_service_anomaly_scheduler
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     start_occupancy_scheduler()
+    start_service_anomaly_scheduler()
     try:
         yield
     finally:
+        stop_service_anomaly_scheduler()
         stop_occupancy_scheduler()
 
 app = FastAPI(
