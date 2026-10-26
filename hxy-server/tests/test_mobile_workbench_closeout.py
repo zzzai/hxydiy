@@ -336,6 +336,13 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
                     serviced_by_technician_id=tech_id, status=occupancy_status,
                     actual_service_end_at=ended,
                 ))
+            db.add(CustomerProfileRecord(
+                store_id=self.store.id, user_id=self.user.id,
+                selection_session_id='orders-completed', technician_id=self.tech.id,
+                created_by_staff_id=self.worker.id, schema_version=7,
+                taxonomy_version='service_handoff_v1', customer_confirmed=False,
+                profile={'recording_outcome': 'no_additional_notes'},
+            ))
             db.commit()
         for status, expected in [('waiting_service', 1), ('in_service', 1), ('completed', 1)]:
             response = self.client.get(f'/api/v1/admin/v2/manager/service-orders?status={status}', headers=self.headers)
@@ -347,6 +354,8 @@ class MobileWorkbenchCloseoutTests(unittest.TestCase):
                 self.assertIsNone(body['items'][0]['technician_name'])
             if status == 'in_service':
                 self.assertEqual(body['items'][0]['technician_name'], self.tech.name)
+            if status == 'completed':
+                self.assertTrue(body['items'][0]['record_completed'])
         self.assertEqual(self.client.get('/api/v1/admin/v2/manager/service-orders', headers=self.worker_headers).status_code, 403)
 
     def test_position_conflicts_are_detected_once_per_display_room(self):

@@ -9,6 +9,7 @@ type ServiceOrder = {
   room_name: string;
   occupancy_status: string;
   technician_name: string | null;
+  record_completed?: boolean;
   items: Array<{ name: string; quantity: number }>;
   actual_start_at: string | null;
   actual_end_at: string | null;
@@ -98,6 +99,7 @@ export default function ManagerServiceOrdersView({ onOpenPositions, refreshKey =
             <div className="manager-card-meta">
               <span>{item.technician_name || '待安排技师'}</span>
               <span>{status === 'completed' ? `结束 ${timeText(item.actual_end_at)}` : `进入 ${timeText(item.created_at)}`}</span>
+              {status === 'completed' && <Tag color={item.record_completed ? 'green' : 'orange'}>{item.record_completed ? '记录已填' : '记录待补'}</Tag>}
             </div>
             {(status === 'waiting_service' || status === 'in_service') && onOpenPositions && <Button block onClick={onOpenPositions}>查看服务位</Button>}
           </article>)}
