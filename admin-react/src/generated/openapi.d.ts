@@ -1962,7 +1962,8 @@ export interface paths {
          * @description Upsert current service anomalies into the persistent exception queue.
          *
          *     Only provable DIY associations are synced. Existing resolved rows reopen if
-         *     the same anomaly is still detected; nothing is auto-resolved here.
+         *     the same anomaly is still detected. A row is auto-resolved only after five
+         *     consecutive scans no longer detect it, and the close is audited.
          */
         post: operations["sync_manager_service_anomalies_api_v1_admin_v2_service_anomalies_sync_post"];
         delete?: never;

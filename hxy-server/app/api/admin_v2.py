@@ -1876,7 +1876,8 @@ def sync_manager_service_anomalies(
     """Upsert current service anomalies into the persistent exception queue.
 
     Only provable DIY associations are synced. Existing resolved rows reopen if
-    the same anomaly is still detected; nothing is auto-resolved here.
+    the same anomaly is still detected. A row is auto-resolved only after five
+    consecutive scans no longer detect it, and the close is audited.
     """
     staff = _current_staff(authorization, db)
     _require_admin(staff)
@@ -1888,7 +1889,8 @@ def sync_manager_service_anomalies(
     )))
     by_key = {row.dedupe_key: row for row in existing}
     now = datetime.now(UTC)
-    created = updated = reopened = 0
+    created = updated = reopened = resolved = 0
+    detected_keys = {f"service_anomaly:{item['id']}:{item['reason']}"[:160] for item in items}
     for item in items:
         exception_type = f"service_{item['reason']}"
         dedupe_key = f"service_anomaly:{item['id']}:{item['reason']}"[:160]
@@ -1901,6 +1903,7 @@ def sync_manager_service_anomalies(
             "selection_session_id": item["selection_session_id"],
             "selection_status": item["selection_status"],
             "occupancy_ids": item.get("occupancy_ids", [item["id"]]),
+            "missing_scans": 0,
             "detector": "position_occupancy_link_v1",
         }
         row = by_key.get(dedupe_key)
@@ -1927,15 +1930,33 @@ def sync_manager_service_anomalies(
         row.title = title[:160]
         row.detail = detail
         updated += 1
-    if created or reopened:
+    for row in existing:
+        if row.dedupe_key in detected_keys or row.status == "resolved":
+            continue
+        detail = dict(row.detail or {})
+        misses = int(detail.get("missing_scans") or 0) + 1
+        detail["missing_scans"] = misses
+        row.detail = detail
+        if misses >= 5:
+            row.status = "resolved"
+            row.resolved_at = now
+            row.resolution_note = "连续 5 次检测未再发现，系统自动关闭"
+            resolved += 1
+            db.add(AuditLog(
+                actor_type="system", actor_id="service_anomaly_detector", store_id=store_id,
+                action="auto_resolve_service_anomaly", entity_type="operational_exception",
+                entity_id=str(row.id),
+                detail={"dedupe_key": row.dedupe_key, "missing_scans": misses},
+            ))
+    if created or reopened or resolved:
         db.add(AuditLog(
             actor_type="staff", actor_id=str(staff.id), store_id=store_id,
             action="sync_service_anomalies", entity_type="operational_exception",
             entity_id=str(store_id),
-            detail={"detected": len(items), "created": created, "updated": updated, "reopened": reopened},
+            detail={"detected": len(items), "created": created, "updated": updated, "reopened": reopened, "resolved": resolved},
         ))
     db.commit()
-    return {"detected": len(items), "created": created, "updated": updated, "reopened": reopened}
+    return {"detected": len(items), "created": created, "updated": updated, "reopened": reopened, "resolved": resolved}
 
 
 @router.get("/access")
