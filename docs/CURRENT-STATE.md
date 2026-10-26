@@ -1,18 +1,27 @@
 # hxy-diy 当前状态
 
+## 2026-10-27 评价闭环修复已上线，新增扫码企微提醒尚未启用
+
+- [PR #399](https://github.com/zzzai/hxydiy/pull/399) 已合并；候选 `cf884537f4ce972df51ec5c063e9807692f09900`，合并/运行版本 `abbdbd9aa20c767dc13259c7504fa75a28481c62`。精确 [CI 40357711435](https://github.com/zzzai/hxydiy/actions/runs/40357711435) 与唯一 [Deploy 40358856792](https://github.com/zzzai/hxydiy/actions/runs/40358856792) 成功，备份、恢复演练、部署和验证 job 通过；实际 current=`github-abbdbd9aa20c-40358856792`。
+- 服务评价与独立扫码评价共同进入店长评价列表和低分待办；类型与 ID 共同定位，OAuth 回跳保留正确来源。跟进连续点击只保存一次，失败保留输入，可重试并回读。审计以中文结果和数量展示。
+- 新增扫码评价通知开关在生产实际为 false，未发送本批真实测试卡，未补发历史评价。启用和一条店长验收卡等待用户明确外发授权；原服务评价触发范围保留。API accepted 仅表示受理，不代表送达/已读；进程内 best-effort 不等于可靠队列。
+- 只读验收通过 520 项 MANIFEST、170 个安装 Python 文件、7 个运行文件及 10 个公网入口/资源哈希；health=`ok/production`，备份 checksum 通过。迁移集合与前一版完全一致；未新增数据库迁移或清理旧数据。核验业务 API 调用、数据库查询和业务写入均为 0。
+- 隔离后端 74 项、前端定向 19 项、真实 React 合成浏览器 6 组及类型/构建/必需 CI 通过；真实企微/门店验收交由人员。店长每日必做及两入口简化界面仍仅在原独立预览工作区，未混入本批。
+- 证据：`output/takeover-20261026/production-verification-abbdbd9aa20c-40358856792.json`、`deployment-result.json`、`production-notification-flag.json`；操作边界见 `operations/takeover-feedback-20261026.md`。此次事实文档补录不再次部署应用。
+
 ## 2026-10-26 总控接管核验：PR #398 已上线
 
 - DeepSeek 目标已暂停；最后 PR [#398](https://github.com/zzzai/hxydiy/pull/398) 的服务记录状态功能已发布。候选 `97efa631a33cf89f1036d7be368d36611e9a7165`，合并及运行版本 `a6ab7bf0d8d06949db407777edc82016a1002407`。
-- 精确 CI [40341341317](https://github.com/zzzai/hxydiy/actions/runs/40341341317) 与 Deploy [40342184822](https://github.com/zzzai/hxydiy/actions/runs/40342184822) success；备份、恢复演练、部署、验证 job 均成功。当前 `current` 实际指向 `github-a6ab7bf0d8d0-40342184822`。
+- 精确 CI [40341341317](https://github.com/zzzai/hxydiy/actions/runs/40341341317) 与 Deploy [40342184822](https://github.com/zzzai/hxydiy/actions/runs/40342184822) success；备份、恢复演练、部署、验证 job 均成功。接管时 `current` 实际指向 `github-a6ab7bf0d8d0-40342184822`。
 - 总控只读复核 520 项 MANIFEST、170 个安装 Python 文件、3 个运行文件、10 个公网入口/资源哈希；健康检查 `ok/production`。与前一版 `github-6da97254fbf1-40294434239` 的迁移集合及内容一致，发布备份 checksum 通过。核验过程无业务 API 调用、无数据库查询/写入、无重复部署。
-- 现场使用仍由人验收。店长每日必做及两入口简化界面仍在独立预览工作区，未混入此版本。下一批评价闭环修复仅在分支隔离验证，不代表已发布。
+- 现场使用仍由人验收。店长每日必做及两入口简化界面仍在独立预览工作区，未混入此版本。评价闭环修复当时处于分支隔离验证；当前结果以上方 2026-10-27 记录为准。
 - 本机证据：`output/takeover-20261026/github-handoff-snapshot.json`、`output/takeover-20261026/production-verification-a6ab7bf0d8d0-40342184822.json`。接管记录见 `operations/takeover-feedback-20261026.md`。
 
-更新时间：2026-10-25（Asia/Shanghai）
+更新时间：2026-10-27（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。
 
-## 当前生产
+## 2026-10-25 顾客个人中心既往发布（包含于当前版本）
 
 - `CUSTOMER-ACCOUNT-FEEDBACK-20261025` 已上线：[PR #384](https://github.com/zzzai/hxydiy/pull/384)，候选 `9794f9fb9db42018a6df21706a8d55b56855c681`，合并/生产 `96d26e118f1af3936e86707861607448961fd95c`；精确 [CI 40153564705](https://github.com/zzzai/hxydiy/actions/runs/40153564705) 与唯一 [Deploy 40153790913](https://github.com/zzzai/hxydiy/actions/runs/40153790913) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-96d26e118f1a-40153790913`。
 - “我的”保留会员身份大卡片，常用入口两行三列：服务记录、待评价、检测报告、服务号、联系门店、超级星期二。服务记录默认收起；点击记录或待评价后展开对应列表并定位。服务号和周二活动使用说明弹层，沿用原活动规则。
