@@ -143,6 +143,8 @@ test('店长服务单按状态查看并可跳转服务位', () => {
   assert.match(source, /in_service/);
   assert.match(source, /completed/);
   assert.match(source, /查看服务位/);
+  assert.match(source, /记录已填/);
+  assert.match(source, /记录待补/);
   assert.match(source, /setInterval\(refresh,\s*10000\)/);
 });
 

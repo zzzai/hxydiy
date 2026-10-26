@@ -2041,6 +2041,12 @@ def manager_service_orders(
     else:
         query = query.where(PositionOccupancy.status == status).order_by(PositionOccupancy.created_at)
     rows = db.execute(query.limit(200)).all()
+    selection_ids = [selection.id for _occupancy, _room, selection, _technician in rows]
+    recorded = set(db.scalars(select(CustomerProfileRecord.selection_session_id).where(
+        CustomerProfileRecord.store_id == store_id,
+        CustomerProfileRecord.schema_version == 7,
+        CustomerProfileRecord.selection_session_id.in_(selection_ids),
+    ))) if selection_ids else set()
     items = [{
         "occupancy_id": occupancy.id,
         "room_id": room.id,
@@ -2052,6 +2058,7 @@ def manager_service_orders(
             {"name": str(item.get("name") or item.get("project_name") or "服务项目"), "quantity": int(item.get("quantity") or 1)}
             for item in (selection.items or []) if isinstance(item, dict)
         ],
+        "record_completed": selection.id in recorded,
         "actual_start_at": occupancy.actual_start_at.isoformat() if occupancy.actual_start_at else None,
         "actual_end_at": occupancy.actual_service_end_at.isoformat() if occupancy.actual_service_end_at else None,
         "expected_end_at": occupancy.expected_end_at.isoformat() if occupancy.expected_end_at else None,
