@@ -53,7 +53,7 @@ def _items_text(items: list[dict] | None) -> str:
     return "、".join(names) or "未填写项目"
 
 
-def manager_userids(db: Session, store_id: int) -> list[str]:
+def manager_userids(db: Session, store_id: int, *, allowlist: str | None = None) -> list[str]:
     """Active store managers with a verified WeCom binding and exactly one store grant."""
     active_grant = select(StaffScopeAssignment.id).where(
         StaffScopeAssignment.staff_id == Staff.id,
@@ -86,7 +86,10 @@ def manager_userids(db: Session, store_id: int) -> list[str]:
             continue
         userids.append(identity.userid.lower())
     userids = sorted(set(userids))
-    configured = [value.strip().lower() for value in settings.wecom_order_notify_userids.split(",") if value.strip()]
+    configured_value = settings.wecom_order_notify_userids if allowlist is None else allowlist
+    configured = [value.strip().lower() for value in configured_value.split(",") if value.strip()]
+    if allowlist is not None and not configured:
+        return []
     return [userid for userid in userids if not configured or userid in configured]
 
 
@@ -178,7 +181,9 @@ def _notify_review(feedback_id: int, feedback_type: str) -> None:
                 if not session or session.store_id != feedback.store_id:
                     return
             store_id = store.id
-            userids = manager_userids(db, store_id)
+            userids = manager_userids(
+                db, store_id, allowlist=settings.wecom_feedback_notify_userids.strip() or None,
+            )
             description = "\n".join([
                 f"门店：{escape(store.name)}",
                 "来源：" + ("服务评价" if feedback_type == "service_review" else "到店扫码评价"),
