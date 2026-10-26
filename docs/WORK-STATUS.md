@@ -1,4 +1,13 @@
-# 2026-10-25 顾客个人中心与评价返回菜单上线
+# hxy-diy 工作状态
+
+## 2026-10-27 评价闭环修复已上线，新增扫码企微提醒尚未启用
+
+- [PR #399](https://github.com/zzzai/hxydiy/pull/399) 已合并；候选 `cf884537f4ce972df51ec5c063e9807692f09900`，合并/运行版本 `abbdbd9aa20c767dc13259c7504fa75a28481c62`。精确 [CI 40357711435](https://github.com/zzzai/hxydiy/actions/runs/40357711435) 与唯一 [Deploy 40358856792](https://github.com/zzzai/hxydiy/actions/runs/40358856792) 成功，备份、恢复演练、部署和验证 job 通过；实际 current=`github-abbdbd9aa20c-40358856792`。
+- 服务评价与独立扫码评价共同进入店长评价列表和低分待办；类型与 ID 共同定位，OAuth 回跳保留正确来源。跟进连续点击只保存一次，失败保留输入，可重试并回读。审计以中文结果和数量展示。
+- 新增扫码评价通知开关在生产实际为 false，未发送本批真实测试卡，未补发历史评价。启用和一条店长验收卡等待用户明确外发授权；原服务评价触发范围保留。API accepted 仅表示受理，不代表送达/已读；进程内 best-effort 不等于可靠队列。
+- 只读验收通过 520 项 MANIFEST、170 个安装 Python 文件、7 个运行文件及 10 个公网入口/资源哈希；health=`ok/production`，备份 checksum 通过。迁移集合与前一版完全一致；未新增数据库迁移或清理旧数据。核验业务 API 调用、数据库查询和业务写入均为 0。
+- 隔离后端 74 项、前端定向 19 项、真实 React 合成浏览器 6 组及类型/构建/必需 CI 通过；真实企微/门店验收交由人员。店长每日必做及两入口简化界面仍仅在原独立预览工作区，未混入本批。
+- 证据：`output/takeover-20261026/production-verification-abbdbd9aa20c-40358856792.json`、`deployment-result.json`、`production-notification-flag.json`；操作边界见 `operations/takeover-feedback-20261026.md`。此次事实文档补录不再次部署应用。
 
 ## 2026-10-26 总控接管核验：PR #398 已上线
 
