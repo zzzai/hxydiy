@@ -20,7 +20,7 @@ def notifications(feedback_client, monkeypatch):
     for key, value in {
         "wecom_staff_enabled": True, "wecom_corp_id": "synthetic-corp",
         "wecom_agent_id": "1000001", "wecom_order_notify_userids": "",
-        "wecom_visit_feedback_notify_enabled": True,
+        "wecom_visit_feedback_notify_enabled": True, "wecom_feedback_notify_userids": "",
         "h5_public_base_url": "https://synthetic.invalid/",
     }.items():
         monkeypatch.setattr(settings, key, value)
@@ -136,3 +136,30 @@ def test_malformed_receipt_is_not_success(notifications, monkeypatch, payload):
     monkeypatch.setattr(provider, "_post", lambda *args: payload)
     with pytest.raises(WecomProviderError):
         provider.send_textcard(["manager-1"], "Title", "Body", "https://synthetic.invalid/review")
+
+
+def test_review_allowlist_is_independent_and_does_not_change_order_recipients(notifications, monkeypatch):
+    client, sessions, calls, _ = notifications
+    monkeypatch.setattr(settings, "wecom_order_notify_userids", "manager-2")
+    monkeypatch.setattr(settings, "wecom_feedback_notify_userids", " MANAGER-1 ")
+    saved = submit(client, enter(client)).json()
+    assert len(calls) == 1 and calls[0][0] == ["manager-1"]
+    with sessions.begin() as db:
+        db.add(SelectionSession(id="review-allowlist-service", access_token_hash="y" * 64, store_id=1, status="confirmed"))
+        db.flush()
+        db.add(ServiceFeedback(id=saved["id"], store_id=1, selection_session_id="review-allowlist-service", rating=4))
+    wecom_notify.notify_feedback(saved["id"])
+    assert len(calls) == 2 and calls[1][0] == ["manager-1"]
+    with sessions() as db:
+        assert wecom_notify.manager_userids(db, 1) == []
+        assert wecom_notify.manager_userids(db, 2) == ["manager-2"]
+
+
+@pytest.mark.parametrize("review_targets", ["manager-2", " , "])
+def test_review_allowlist_does_not_fall_back_when_target_is_ineligible(notifications, monkeypatch, review_targets):
+    client, sessions, calls, _ = notifications
+    monkeypatch.setattr(settings, "wecom_order_notify_userids", "manager-1")
+    monkeypatch.setattr(settings, "wecom_feedback_notify_userids", review_targets)
+    assert submit(client, enter(client)).status_code == 200
+    assert calls == []
+    assert [row[2]["status"] for row in audits(sessions)] == ["no_recipient"]
