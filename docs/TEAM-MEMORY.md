@@ -1,5 +1,13 @@
 # hxy-diy 共享记忆
 
+## 2026-10-26 评价闭环接管分支约定（尚未上线）
+
+- 两类评价 `service_review` / `visit_feedback` 必须在店长评价列表、低分待办和企微回跳中完整保留；ID 必须连同类型使用，避免跨表同号串单。详情和跟进仍经现有本店权限接口。
+- 新扫码通知 `WECOM_VISIT_FEEDBACK_NOTIFY_ENABLED` 默认 false；只通知具备同店有效企微绑定、有效唯一门店管理工作区且符合现有允许名单的店长。沿用服务评价提交成功后的通知机制，不产生服务单、不发送顾客营销消息。
+- `wecom_feedback_notify` 审计分开记录 started 和结果；accepted 仅指企微 API 受理，不代表终端送达或已读。unknown 不自动重试，结果中不存令牌、完整接收人、顾客原文或手机号。
+- 此分支无数据库迁移。通知仍为进程内 best-effort；进程崩溃窗口及可靠补偿列入后续独立设计，不声称可靠队列已完成。
+- PRD/契约见 `product/PRD-manager-review-notification-v1-20261026.md`、`contracts/manager-review-notification-v1.md`。
+
 2026-10-25 日常作业修复已生产验收，准确版本及边界如下。
 
 - `ADMIN-DAILY-OPERATIONS-20261024` 已上线：[PR #382](https://github.com/zzzai/hxydiy/pull/382)，候选 `25565e39ab0782b25eed03ee645af111e689f5f9`，合并/生产 `f705ff522c8498d3d83f44a58ab54f595086b16f`；精确 [CI 40111030635](https://github.com/zzzai/hxydiy/actions/runs/40111030635) 与唯一 [Deploy 40111537521](https://github.com/zzzai/hxydiy/actions/runs/40111537521) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-f705ff522c84-40111537521`。

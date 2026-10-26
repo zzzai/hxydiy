@@ -91,7 +91,7 @@ export default function AuditLogsPage() {
             { title: '动作', dataIndex: 'action', width: 190, render: (value: string) => <Tag>{AUDIT_ACTIONS[value] || '其他操作'}</Tag> },
             { title: '操作者', dataIndex: 'actor_id', width: 90 },
             { title: '对象', width: 160, render: (_: unknown, row: AuditRow) => `${ENTITY_LABELS[row.entity_type] || '业务记录'} · ${row.entity_id}` },
-            { title: '操作摘要', dataIndex: 'detail', render: (value: Record<string, unknown>, row: AuditRow) => { const fields = auditDetailRows(value); return fields.length ? <Descriptions size="small" column={1} items={fields.map(field => ({ key: field.label, label: field.label, children: field.value }))} /> : <span>已记录 · 记录编号 {row.id}</span>; } },
+            { title: '操作摘要', dataIndex: 'detail', render: (value: Record<string, unknown>, row: AuditRow) => { const fields = auditDetailRows(value, row.action); return fields.length ? <Descriptions size="small" column={1} items={fields.map(field => ({ key: field.label, label: field.label, children: field.value }))} /> : <span>已记录 · 记录编号 {row.id}</span>; } },
           ]}
         />
       </Card>

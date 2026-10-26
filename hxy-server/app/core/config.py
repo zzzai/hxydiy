@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     wecom_callback_url: str = ""
     # 可选：只向指定店长企微 UserID 推送订单/评价（逗号分隔）；为空时推给全部有效店长。
     wecom_order_notify_userids: str = ""
+    wecom_visit_feedback_notify_enabled: bool = False
 
     @property
     def wechat_official_enabled(self) -> bool:

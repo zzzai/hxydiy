@@ -4,7 +4,7 @@ import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -20,6 +20,7 @@ from app.domain.visit_feedback_tokens import (
     resolve_store_visit_feedback_token, resolve_visit_feedback_token,
 )
 from app.models import EventLog, Room, Store, VisitFeedback
+from app.services.wecom_notify import notify_visit_feedback
 
 
 router = APIRouter(tags=["visit-feedback"])
@@ -167,6 +168,7 @@ def enter_visit_feedback(
 def submit_visit_feedback(
     body: VisitFeedbackIn,
     request: Request,
+    background_tasks: BackgroundTasks,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -265,4 +267,5 @@ def submit_visit_feedback(
     ))
     db.commit()
     db.refresh(feedback)
+    background_tasks.add_task(notify_visit_feedback, feedback.id)
     return _result(feedback)

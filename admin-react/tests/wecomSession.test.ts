@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { beginWecomEntry, clearStaffSession, commitStaffSession, completeWecomEntry, getSessionEpoch, hasManagerPendingDeepLink, isWecomEntryPending, isWecomSession, subscribeSessionEpoch, takeManagerPendingOrder, takeManagerPendingReview } from '../src/wecomSession.ts';
+import { beginWecomEntry, clearStaffSession, commitStaffSession, completeWecomEntry, getSessionEpoch, parseManagerReview, hasManagerPendingDeepLink, isWecomEntryPending, isWecomSession, subscribeSessionEpoch, takeManagerPendingOrder, takeManagerPendingReview } from '../src/wecomSession.ts';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -164,4 +164,29 @@ test('manager deep links survive OAuth and choose the store destination', async 
   tabStorage.setItem('hxy_manager_pending_review', JSON.stringify({ type: 'service_review', id: 9 }));
   assert.equal(hasManagerPendingDeepLink(), true);
   assert.deepEqual(takeManagerPendingReview(), { type: 'service_review', id: 9 });
+});
+
+
+test('review deep links validate both source types without rounding IDs', () => {
+  assert.deepEqual(parseManagerReview('visit_feedback:17'), { type: 'visit_feedback', id: 17 });
+  assert.deepEqual(parseManagerReview('service_review:17'), { type: 'service_review', id: 17 });
+  for (const value of ['visit_feedback:0', 'visit_feedback:01', 'visit_feedback:-1', 'visit_feedback:9007199254740993', 'unknown:1', 'visit_feedback:2x', null]) {
+    assert.equal(parseManagerReview(value), null);
+  }
+});
+
+test('QR review survives the real OAuth entry and consumes the pending target once', async () => {
+  reset();
+  const location = window.location;
+  Object.assign(location, { pathname: '/technician/store/wecom', search: '?review=visit_feedback%3A17' });
+  globalThis.fetch = async () => reply({ attempt_id: 'review-entry', authorization_url: 'https://open.weixin.qq.com/connect/oauth2/authorize?state=synthetic', expires_in: 300 });
+  await beginWecomEntry();
+  assert.deepEqual(takeManagerPendingReview(), { type: 'visit_feedback', id: 17 });
+  assert.equal(takeManagerPendingReview(), null);
+  tabStorage.setItem('hxy_manager_pending_review', JSON.stringify({ type: 'service_review', id: 9 }));
+  Object.assign(location, { search: '?review=not-valid' });
+  await beginWecomEntry();
+  assert.equal(takeManagerPendingReview(), null);
+  Object.assign(location, { pathname: '/technician/today', search: '' });
+  reset();
 });
