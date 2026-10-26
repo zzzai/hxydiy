@@ -128,6 +128,14 @@ test('移动技师今日看板在展示期间每 3 秒静默同步顾客新提�
   assert.doesNotMatch(source, /background[\s\S]{0,300}setTasks\(\[\]\)/);
 });
 
+test('店长评价跟进定时刷新、失败提示并保护未保存修改', () => {
+  const source = readFileSync(new URL('../src/technician/ManagerReviewsView.tsx', import.meta.url), 'utf8');
+  assert.match(source, /setInterval\(refresh,\s*10000\)/);
+  assert.match(source, /跟进保存失败，请重试/);
+  assert.match(source, /跟进还没有保存/);
+  assert.match(source, /disabled=\{saving \|\| !dirty\}/);
+});
+
 test('店长服务单按状态查看并可跳转服务位', () => {
   const source = readFileSync(new URL('../src/technician/ManagerServiceOrdersView.tsx', import.meta.url), 'utf8');
   assert.match(source, /getManagerServiceOrders/);
