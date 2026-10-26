@@ -11,7 +11,7 @@ function timeText(value?: string | null) {
 }
 
 export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPositions }: { onOpenReviews?: () => void; onOpenOrders?: (staleOnly?: boolean) => void; onOpenPositions?: () => void }) {
-  const [reviews, setReviews] = useState<Array<{ id: number; rating: number; note: string; created_at: string | null; customer_phone?: string | null }>>([]);
+  const [reviews, setReviews] = useState<Array<{ id: number; feedback_type: 'service_review' | 'visit_feedback'; rating: number; note: string; created_at: string | null; customer_phone?: string | null }>>([]);
   const [staleOrders, setStaleOrders] = useState(0);
   const [unassignedServices, setUnassignedServices] = useState(0);
   const [unassignedItems, setUnassignedItems] = useState<Array<{ occupancy_id: number; room_name: string; items: Array<{ name: string; quantity: number }> }>>([]);
@@ -34,7 +34,7 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
     try {
       await syncServiceAnomalies().catch(() => undefined);
       const [reviewsResponse, workbenchResponse, exceptionsResponse, unassignedResponse] = await Promise.all([
-        getFeedback({ feedback_type: 'service_review', follow_up_status: 'open', page: 1, page_size: 20 }),
+        getFeedback({ low_rating_only: true, follow_up_status: 'open', page: 1, page_size: 20 }),
         getManagerWorkbench(),
         getOperationalExceptions('unresolved'),
         getManagerUnassignedServices(),
@@ -140,7 +140,7 @@ export default function ManagerTasksView({ onOpenReviews, onOpenOrders, onOpenPo
         </div>}
         {reviews.length > 0 && <div className="manager-review-tasks">
           <div className="manager-task-top"><span>低分评价待跟进</span><Tag color="red">{reviews.length}</Tag></div>
-          {reviews.map(review => <button type="button" className="manager-review-task-row" key={review.id} onClick={onOpenReviews}>
+          {reviews.map(review => <button type="button" className="manager-review-task-row" key={`${review.feedback_type}:${review.id}`} onClick={onOpenReviews}>
             <span><strong>{review.rating} 星</strong> {review.note || '顾客未填写文字'}{review.customer_phone ? ' · ' + review.customer_phone : ''}</span><time>{timeText(review.created_at)}</time>
           </button>)}
           <Button block onClick={onOpenReviews}>去处理评价</Button>

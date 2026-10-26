@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff } from '../api';
-import { takeManagerPendingOrder, takeManagerPendingReview } from '../wecomSession';
+import { parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
 import { MANAGER_PAGE_SIZE, isMobileManager, managerError, managerListParams, managerPrice, managerSourceLabel, managerWorkflowColor, managerWorkflowLabel, readManagerPage, readManagerSelection } from './managerMobile';
@@ -40,7 +40,7 @@ export default function ManagerStorePage() {
   const [forbidden, setForbidden] = useState(false);
   const [detail, setDetail] = useState<ManagerSelection | null>(null);
   const [workbench, setWorkbench] = useState<{ summary?: Record<string, number>; attention?: Array<{ key: string; label: string; count: number }> }>();
-  const [reviewFocus, setReviewFocus] = useState<{ type: 'service_review'; id: number } | null>(null);
+  const [reviewFocus, setReviewFocus] = useState<PendingReview | null>(null);
   const [deepLinkError, setDeepLinkError] = useState('');
   const [staleOnly, setStaleOnly] = useState(false);
   const [period, setPeriod] = useState<'all' | 'today' | '7d'>('all');
@@ -115,10 +115,8 @@ export default function ManagerStorePage() {
     if (!current() || !isMobileManager(getStaff()) || !storeId) return;
     setDeepLinkError('');
     const directReview = new URLSearchParams(window.location.search).get('review');
-    const directReviewMatch = directReview?.match(/^service_review:([1-9][0-9]{0,17})$/);
-    const review = directReviewMatch
-      ? { type: 'service_review' as const, id: Number(directReviewMatch[1]) }
-      : takeManagerPendingReview();
+    const pendingReview = takeManagerPendingReview();
+    const review = parseManagerReview(directReview) || pendingReview;
     if (review) {
       setDetail(null);
       setReviewFocus(review);

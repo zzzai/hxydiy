@@ -3,7 +3,12 @@ import { ADMIN_TOKEN_KEY, TECHNICIAN_TOKEN_KEY, clearActiveStaffSession, readAct
 
 type StaffSessionResponse = { token: string; staff: object; auth_method?: 'wecom' };
 type PendingEntry = { entry_nonce: string; attempt_id?: string; entry_path?: string };
-type PendingReview = { type: 'service_review'; id: number };
+export type PendingReview = { type: 'service_review' | 'visit_feedback'; id: number };
+export function parseManagerReview(raw: string | null): PendingReview | null {
+  const match = raw?.match(/^(service_review|visit_feedback):([1-9][0-9]{0,15})$/);
+  if (!match || !Number.isSafeInteger(Number(match[2]))) return null;
+  return { type: match[1] as PendingReview['type'], id: Number(match[2]) };
+}
 const PENDING_KEY = 'hxy_wecom_pending';
 const MANAGER_ORDER_KEY = 'hxy_manager_pending_order';
 const MANAGER_REVIEW_KEY = 'hxy_manager_pending_review';
@@ -51,8 +56,9 @@ function rememberManagerOrder(): void {
 function rememberManagerReview(): void {
   try {
     const raw = new URLSearchParams(window.location.search).get('review');
-    const match = raw?.match(/^service_review:([1-9][0-9]{0,17})$/);
-    if (match) sessionStorage.setItem(MANAGER_REVIEW_KEY, JSON.stringify({ type: 'service_review', id: Number(match[1]) }));
+    const review = parseManagerReview(raw);
+    sessionStorage.removeItem(MANAGER_REVIEW_KEY);
+    if (review) sessionStorage.setItem(MANAGER_REVIEW_KEY, JSON.stringify(review));
   } catch { /* Ignore malformed deep links. */ }
 }
 export function takeManagerPendingReview(): PendingReview | null {
@@ -60,7 +66,7 @@ export function takeManagerPendingReview(): PendingReview | null {
     const stored = sessionStorage.getItem(MANAGER_REVIEW_KEY);
     sessionStorage.removeItem(MANAGER_REVIEW_KEY);
     const parsed = JSON.parse(stored || 'null') as PendingReview | null;
-    return parsed?.type === 'service_review' && Number.isInteger(parsed.id) && parsed.id > 0 ? parsed : null;
+    return parsed ? parseManagerReview(`${parsed.type}:${parsed.id}`) : null;
   } catch { return null; }
 }
 export function takeManagerPendingOrder(): string | null {

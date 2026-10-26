@@ -1,5 +1,13 @@
 # hxy-diy 当前状态
 
+## 2026-10-26 总控接管核验：PR #398 已上线
+
+- DeepSeek 目标已暂停；最后 PR [#398](https://github.com/zzzai/hxydiy/pull/398) 的服务记录状态功能已发布。候选 `97efa631a33cf89f1036d7be368d36611e9a7165`，合并及运行版本 `a6ab7bf0d8d06949db407777edc82016a1002407`。
+- 精确 CI [40341341317](https://github.com/zzzai/hxydiy/actions/runs/40341341317) 与 Deploy [40342184822](https://github.com/zzzai/hxydiy/actions/runs/40342184822) success；备份、恢复演练、部署、验证 job 均成功。当前 `current` 实际指向 `github-a6ab7bf0d8d0-40342184822`。
+- 总控只读复核 520 项 MANIFEST、170 个安装 Python 文件、3 个运行文件、10 个公网入口/资源哈希；健康检查 `ok/production`。与前一版 `github-6da97254fbf1-40294434239` 的迁移集合及内容一致，发布备份 checksum 通过。核验过程无业务 API 调用、无数据库查询/写入、无重复部署。
+- 现场使用仍由人验收。店长每日必做及两入口简化界面仍在独立预览工作区，未混入此版本。下一批评价闭环修复仅在分支隔离验证，不代表已发布。
+- 本机证据：`output/takeover-20261026/github-handoff-snapshot.json`、`output/takeover-20261026/production-verification-a6ab7bf0d8d0-40342184822.json`。接管记录见 `operations/takeover-feedback-20261026.md`。
+
 更新时间：2026-10-25（Asia/Shanghai）
 
 本文件只记录三个开发窗口开始任务时需要知道的当前事实。发布和回滚历史保存在 `docs/WORK-STATUS.md`。

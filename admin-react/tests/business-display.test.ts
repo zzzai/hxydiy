@@ -21,3 +21,9 @@ test('automation presentation never falls back to raw objects or unknown enum va
   assert.equal(automationActionText({ type: 'internal_debug', raw: 'private' }), '旧版动作待核验');
   assert.equal(automationActionText({ type: 'add_tag', tag_id: 2 }), '添加顾客标签 · 标签编号 2');
 });
+
+test('notification audit explains API acceptance without exposing raw payloads', () => {
+  const rows = auditDetailRows({status:'accepted',recipient_count:1,accepted_count:1,invalid_count:0,attempt_id:'opaque',token:'hidden',note:'private'}, 'wecom_feedback_notify');
+  assert.deepEqual(rows, [{label:'通知结果',value:'企微已受理（不代表已读）'},{label:'目标人数',value:'1'},{label:'企微受理人数',value:'1'},{label:'未受理人数',value:'0'}]);
+  assert.deepEqual(auditDetailRows({status:'unexpected',raw:{token:'hidden'}}, 'wecom_feedback_notify'), [{label:'通知结果',value:'结果待核验'}]);
+});

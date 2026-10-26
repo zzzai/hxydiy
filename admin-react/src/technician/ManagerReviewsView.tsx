@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Drawer, Input, Select, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
+import type { PendingReview } from '../wecomSession';
 import { getFeedback, getFeedbackDetail, updateFeedbackFollowUp } from '../api';
 
 type Review = {
@@ -26,13 +27,14 @@ function timeText(value: string | null) {
 }
 
 /** 店长查看本店评价并记录跟进；不能修改顾客原文。 */
-export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, onFocusError }: { focus?: { type: 'service_review'; id: number } | null; onFocusConsumed?: () => void; onChanged?: () => void; onFocusError?: () => void }) {
+export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, onFocusError }: { focus?: PendingReview | null; onFocusConsumed?: () => void; onChanged?: () => void; onFocusError?: () => void }) {
   const [rows, setRows] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Review | null>(null);
   const [initial, setInitial] = useState<Review | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [saveError, setSaveError] = useState('');
   const selectedRef = useRef<Review | null>(null);
   selectedRef.current = selected;
@@ -41,7 +43,7 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const response = await getFeedback({ feedback_type: 'service_review', page: 1, page_size: 50 });
+      const response = await getFeedback({ page: 1, page_size: 50 });
       const items = Array.isArray(response.data?.items) ? response.data.items : [];
       setRows(items.sort((left: Review, right: Review) => {
         const leftAttention = left.follow_up_status === 'open' ? 1 : 0;
@@ -83,7 +85,8 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
   }, [focus?.id, focus?.type, onFocusConsumed, onFocusError]);
 
   const save = async () => {
-    if (!selected || saving) return;
+    if (!selected || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const response = await updateFeedbackFollowUp(selected.feedback_type, selected.id, {
@@ -98,6 +101,7 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
     } catch {
       setSaveError('跟进保存失败，请重试');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -107,7 +111,7 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
     selected.follow_up_note !== initial?.follow_up_note
   ));
   const close = () => {
-    if (saving) return;
+    if (savingRef.current) return;
     if (!dirty) { setSelected(null); setInitial(null); return; }
     modal.confirm({
       title: '跟进还没有保存',
@@ -125,8 +129,8 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     {loading && !rows.length ? <div className="manager-empty"><Spin size="small" /><span>正在加载评价</span></div>
-      : !rows.length ? <div className="manager-empty"><strong>暂无评价</strong><span>顾客完成服务后会在这里显示</span></div>
-        : <div className="manager-review-list">{rows.map(row => <button type="button" className="manager-review-card" key={row.id} onClick={() => { setSelected(row); setInitial(row); setSaveError(''); }}>
+      : !rows.length ? <div className="manager-empty"><strong>暂无评价</strong><span>顾客提交的服务评价和到店扫码评价会在这里显示</span></div>
+        : <div className="manager-review-list">{rows.map(row => <button type="button" className="manager-review-card" key={`${row.feedback_type}:${row.id}`} onClick={() => { setSelected(row); setInitial(row); setSaveError(''); }}>
           <div className="manager-review-top"><Tag color={row.rating <= 2 ? 'red' : 'gold'}>{row.rating} 星</Tag><Tag color={statusColor[row.follow_up_status]}>{statusText[row.follow_up_status] || row.follow_up_status}</Tag></div>
           <p>{row.note || row.tags.join('、') || '顾客未填写文字'}</p>
           <div className="manager-review-meta"><span>{row.tags.join('、') || '未选择标签'}{row.customer_phone ? ' · ' + row.customer_phone : ''}</span><time>{timeText(row.created_at)}</time></div>
@@ -137,6 +141,7 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
         <div className="manager-detail-intro"><span><Tag color={selected.rating <= 2 ? 'red' : 'gold'}>{selected.rating} 星</Tag></span><Tag color={statusColor[selected.follow_up_status]}>{statusText[selected.follow_up_status]}</Tag></div>
         <p className="manager-review-note">{selected.note || '顾客未填写文字评价'}</p>
         <dl className="manager-detail-meta">
+          <div><dt>来源</dt><dd>{selected.feedback_type === 'visit_feedback' ? '到店扫码评价' : '服务评价'}</dd></div>
           <div><dt>标签</dt><dd>{selected.tags.join('、') || '未选择标签'}</dd></div>
           <div><dt>手机号</dt><dd>{selected.customer_phone || '未手机号登录'}</dd></div>
           <div><dt>时间</dt><dd>{timeText(selected.created_at)}</dd></div>

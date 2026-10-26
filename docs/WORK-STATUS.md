@@ -1,5 +1,13 @@
 # 2026-10-25 顾客个人中心与评价返回菜单上线
 
+## 2026-10-26 总控接管核验：PR #398 已上线
+
+- DeepSeek 目标已暂停；最后 PR [#398](https://github.com/zzzai/hxydiy/pull/398) 的服务记录状态功能已发布。候选 `97efa631a33cf89f1036d7be368d36611e9a7165`，合并及运行版本 `a6ab7bf0d8d06949db407777edc82016a1002407`。
+- 精确 CI [40341341317](https://github.com/zzzai/hxydiy/actions/runs/40341341317) 与 Deploy [40342184822](https://github.com/zzzai/hxydiy/actions/runs/40342184822) success；备份、恢复演练、部署、验证 job 均成功。当前 `current` 实际指向 `github-a6ab7bf0d8d0-40342184822`。
+- 总控只读复核 520 项 MANIFEST、170 个安装 Python 文件、3 个运行文件、10 个公网入口/资源哈希；健康检查 `ok/production`。与前一版 `github-6da97254fbf1-40294434239` 的迁移集合及内容一致，发布备份 checksum 通过。核验过程无业务 API 调用、无数据库查询/写入、无重复部署。
+- 现场使用仍由人验收。店长每日必做及两入口简化界面仍在独立预览工作区，未混入此版本。下一批评价闭环修复仅在分支隔离验证，不代表已发布。
+- 本机证据：`output/takeover-20261026/github-handoff-snapshot.json`、`output/takeover-20261026/production-verification-a6ab7bf0d8d0-40342184822.json`。接管记录见 `operations/takeover-feedback-20261026.md`。
+
 - `CUSTOMER-ACCOUNT-FEEDBACK-20261025` 已上线：[PR #384](https://github.com/zzzai/hxydiy/pull/384)，候选 `9794f9fb9db42018a6df21706a8d55b56855c681`，合并/生产 `96d26e118f1af3936e86707861607448961fd95c`；精确 [CI 40153564705](https://github.com/zzzai/hxydiy/actions/runs/40153564705) 与唯一 [Deploy 40153790913](https://github.com/zzzai/hxydiy/actions/runs/40153790913) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-96d26e118f1a-40153790913`。
 - “我的”保留会员身份大卡片，常用入口两行三列：服务记录、待评价、检测报告、服务号、联系门店、超级星期二。服务记录默认收起；点击记录或待评价后展开对应列表并定位。服务号和周二活动使用说明弹层，沿用原活动规则。
 - 独立评价成功后的“返回菜单”直达 `?store=1&view=menu&page=projects`，不再先经过菜单/报告导航页。评价失败保留输入并提示重试，连续点击有即时请求门禁，换号后不展示前一身份记录或接收迟到结果；删除了由最近50条数据推算的累计展示，没有删除历史记录。

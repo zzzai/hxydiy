@@ -1,4 +1,5 @@
 import hashlib
+from dataclasses import dataclass
 import json
 import secrets
 import threading
@@ -23,6 +24,13 @@ ATTEMPT_TTL = 300
 CALLBACK_PATH = "/api/v1/auth/wecom/callback"
 COMPLETE_PATH = "/technician/wecom/complete"
 COOKIE_PATH = "/api/v1/auth/wecom"
+
+
+@dataclass(frozen=True)
+class WecomMessageReceipt:
+    status: str
+    accepted_count: int
+    invalid_count: int
 
 
 class WecomProviderError(Exception):
@@ -135,7 +143,7 @@ class WecomProvider:
             "safe": 0,
         })
 
-    def send_textcard(self, userids: list[str], title: str, description: str, url: str, button: str = "查看订单") -> None:
+    def send_textcard(self, userids: list[str], title: str, description: str, url: str, button: str = "查看订单") -> WecomMessageReceipt:
         targets = sorted({canonical_userid(userid) for userid in userids})
         if not targets or not title.strip() or not description.strip() or not url.startswith("https://"):
             raise WecomProviderError()
@@ -145,7 +153,7 @@ class WecomProvider:
             agentid = int(settings.wecom_agent_id)
         except ValueError:
             raise WecomProviderError() from None
-        self._post("message/send", {"access_token": self._access_token()}, {
+        payload = self._post("message/send", {"access_token": self._access_token()}, {
             "touser": "|".join(targets),
             "msgtype": "textcard",
             "agentid": agentid,
@@ -157,6 +165,23 @@ class WecomProvider:
             },
             "safe": 0,
         })
+
+        # API acceptance is not device delivery or a read receipt.
+        if payload.get("errcode") != 0 or payload.get("invalidparty") or payload.get("invalidtag"):
+            raise WecomProviderError()
+        invalid = set()
+        for field in ("invaliduser", "unlicenseduser"):
+            value = payload.get(field, "")
+            if not isinstance(value, str):
+                raise WecomProviderError()
+            invalid.update(canonical_userid(item) for item in value.split("|") if item)
+        if not invalid.issubset(targets):
+            raise WecomProviderError()
+        accepted = len(targets) - len(invalid)
+        return WecomMessageReceipt(
+            "accepted" if not invalid else "partial" if accepted else "rejected",
+            accepted, len(invalid),
+        )
 
 
 _provider = WecomProvider()
