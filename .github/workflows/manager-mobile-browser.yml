@@ -28,7 +28,8 @@ concurrency:
 jobs:
   browser:
     name: Manager mobile browser gate
-    runs-on: ubuntu-latest
+    # Pin to the runner image supported by the pinned Playwright browser.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       MANAGER_TEST_HEAD: ${{ github.event.pull_request.head.sha }}

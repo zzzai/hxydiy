@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Drawer, Input, Select, Spin, Tag } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, App, Button, Drawer, Input, Select, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getFeedback, getFeedbackDetail, updateFeedbackFollowUp } from '../api';
 
@@ -31,10 +31,15 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Review | null>(null);
+  const [initial, setInitial] = useState<Review | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const selectedRef = useRef<Review | null>(null);
+  selectedRef.current = selected;
+  const { modal } = App.useApp();
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const response = await getFeedback({ feedback_type: 'service_review', page: 1, page_size: 50 });
       const items = Array.isArray(response.data?.items) ? response.data.items : [];
@@ -49,16 +54,29 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
     } catch {
       setError('评价加载失败，请重试');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const refresh = () => {
+      if (document.visibilityState === 'visible' && !selectedRef.current) void load(true);
+    };
+    const timer = window.setInterval(refresh, 10000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [load]);
   useEffect(() => {
     if (!focus) return;
     let active = true;
     void getFeedbackDetail(focus.type, focus.id)
-      .then(response => { if (active) setSelected(response.data); })
+      .then(response => { if (active) { setSelected(response.data); setInitial(response.data); setSaveError(''); } })
       .catch(() => { if (active) onFocusError?.(); })
       .finally(() => { if (active) onFocusConsumed?.(); });
     return () => { active = false; };
@@ -73,11 +91,31 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
         follow_up_note: selected.follow_up_note,
       });
       setSelected(response.data);
-      await load();
+      setInitial(response.data);
+      setSaveError('');
+      await load(true);
       onChanged?.();
+    } catch {
+      setSaveError('跟进保存失败，请重试');
     } finally {
       setSaving(false);
     }
+  };
+
+  const dirty = Boolean(selected && (
+    selected.follow_up_status !== initial?.follow_up_status ||
+    selected.follow_up_note !== initial?.follow_up_note
+  ));
+  const close = () => {
+    if (saving) return;
+    if (!dirty) { setSelected(null); setInitial(null); return; }
+    modal.confirm({
+      title: '跟进还没有保存',
+      content: '继续编辑，或放弃本次未保存的跟进。',
+      okText: '继续编辑', cancelText: '放弃修改', maskClosable: false, closable: false,
+      onOk: () => undefined,
+      onCancel: () => { setSelected(null); setInitial(null); setSaveError(''); },
+    });
   };
 
   return <section className="manager-reviews-view">
@@ -88,13 +126,14 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     {loading && !rows.length ? <div className="manager-empty"><Spin size="small" /><span>正在加载评价</span></div>
       : !rows.length ? <div className="manager-empty"><strong>暂无评价</strong><span>顾客完成服务后会在这里显示</span></div>
-        : <div className="manager-review-list">{rows.map(row => <button type="button" className="manager-review-card" key={row.id} onClick={() => setSelected(row)}>
+        : <div className="manager-review-list">{rows.map(row => <button type="button" className="manager-review-card" key={row.id} onClick={() => { setSelected(row); setInitial(row); setSaveError(''); }}>
           <div className="manager-review-top"><Tag color={row.rating <= 2 ? 'red' : 'gold'}>{row.rating} 星</Tag><Tag color={statusColor[row.follow_up_status]}>{statusText[row.follow_up_status] || row.follow_up_status}</Tag></div>
           <p>{row.note || row.tags.join('、') || '顾客未填写文字'}</p>
           <div className="manager-review-meta"><span>{row.tags.join('、') || '未选择标签'}{row.customer_phone ? ' · ' + row.customer_phone : ''}</span><time>{timeText(row.created_at)}</time></div>
         </button>)}</div>}
-    <Drawer title="评价详情" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(selected)} onClose={() => setSelected(null)} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" onClick={() => setSelected(null)}>关闭详情</Button><Button size="large" type="primary" loading={saving} onClick={() => void save()}>保存跟进</Button></div>}>
+    <Drawer title="评价详情" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(selected)} onClose={close} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" onClick={close}>关闭详情</Button><Button size="large" type="primary" loading={saving} disabled={saving || !dirty} onClick={() => void save()}>保存跟进</Button></div>}>
       {selected && <>
+        {saveError && <Alert type="error" showIcon message={saveError} />}
         <div className="manager-detail-intro"><span><Tag color={selected.rating <= 2 ? 'red' : 'gold'}>{selected.rating} 星</Tag></span><Tag color={statusColor[selected.follow_up_status]}>{statusText[selected.follow_up_status]}</Tag></div>
         <p className="manager-review-note">{selected.note || '顾客未填写文字评价'}</p>
         <dl className="manager-detail-meta">
