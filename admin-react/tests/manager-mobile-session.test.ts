@@ -35,7 +35,8 @@ test('manager logout and login do not fall back to a retained technician identit
   assert.equal(getEntryLoginPath(true, '/technician/store'), '/technician/store/login');
 });
 
-test('manager OAuth completion reports the verified role while retaining the other session', async () => {
+for (const technicianId of [null, 2]) {
+test(`manager OAuth completion defaults to store with technician profile ${technicianId} while retaining the other session`, async () => {
   const local = memory(), tab = memory();
   const location = { pathname: '/technician/store', assign: (_url: string) => {} };
   Object.assign(globalThis, { localStorage: local, sessionStorage: tab, window: { location, addEventListener: () => {} } });
@@ -50,16 +51,20 @@ test('manager OAuth completion reports the verified role while retaining the oth
   assert.equal(wecomLoginPath(), '/store/login');
   globalThis.fetch = async () => reply({
     token: 'verified-manager', auth_method: 'wecom', selector_token: null,
-    staff: { id: 3, role: 'store_manager', technician_id: null, store_id: 1 },
+    staff: { id: 3, role: 'store_manager', technician_id: technicianId, store_id: 1 },
     workspaces: [{ assignment_id: 3, role: 'store_manager', scope_type: 'store', scope_id: 1 }],
   });
   let verifiedRole = '';
   assert.equal(await completeWecomEntry(role => { verifiedRole = role; }), true);
   assert.equal(verifiedRole, 'manager');
-  assert.equal(technicianMobileHome(verifiedRole), '/store');
+  const verifiedStaff = readActiveStaff(local, '/technician/store');
+  assert.equal(verifiedStaff?.technician_id, technicianId);
+  assert.equal(technicianMobileHome(verifiedRole, verifiedStaff?.technician_id), '/store');
   assert.equal(readActiveToken(local, '/technician/store'), 'verified-manager');
   assert.equal(readActiveToken(local, '/technician/today'), 'retained-technician');
 });
+
+}
 
 test('leaving a pending manager callback never clears the retained WeCom technician', async () => {
   const local = memory(), tab = memory();

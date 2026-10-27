@@ -70,3 +70,9 @@
 正式工具：`python -m scripts.provision_wecom_staff --input /private/batch.json`。应用追加 `--apply --expect-preview-sha256 <完整摘要>`。顶层为 `corp_id/store_id/members`；最多三名成员，每人明确 `label/userid/username/name/role`，label 仅用 `manager_1` 或 `technician_1` 等非个人编号；技师另需 `phone/code`，店长禁止技师字段。仅复用本工具同一完整请求审计确认的整批结果；部分已存在、旧身份停用、角色改变或资料冲突均拒绝，不自动修复旧人。手机号来自已批准私有清单；官方未返回手机号时不宣称已官方核验手机号。
 
 既有单人绑定 CLI 支持明确 `technician_id:null` 的合法单店店长，仍需完整 Staff/门店指定和唯一授权；不经 `create_test` 路径创建正式员工。随机密码不可知，仅哈希保存；后续任何重设须走原有受控流程。
+
+### 2026-10-27 店长默认入口修复
+
+- 店长企微登录成功后统一默认进入 `/technician/store`，不因同时保留技师档案而进入 `/technician/today`。既有评价待办深链继续进入门店工作台。
+- 兼有技师档案的店长仍可主动切换本人今日服务、服务记录、我的；普通技师默认今日服务。只修默认落点，不改角色、会话槽隔离、接口权限、门店范围或绑定。
+- 无技师档案店长仍不得加载技师业务接口；合成 OAuth 回调、手动切换和电脑后台交接分别验收，真实企微终端由人工确认。

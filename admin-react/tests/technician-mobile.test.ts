@@ -43,10 +43,10 @@ test('服务状态只显示允许的主操作', () => {
   assert.deepEqual(technicianActions('released'), []);
 });
 
-test('店长有技师档案时进入技师端并额外拥有门店权限', () => {
+test('店长默认进入门店工作台并保留自己的服务入口', () => {
   assert.equal(technicianMobile.technicianMobileHome('manager', null), '/store');
   assert.deepEqual(technicianMobile.technicianMobileTabs('manager', null), []);
-  assert.equal(technicianMobile.technicianMobileHome('manager', 2), '/today');
+  assert.equal(technicianMobile.technicianMobileHome('manager', 2), '/store');
   assert.deepEqual(technicianMobile.technicianMobileTabs('manager', 2), ['/today', '/history', '/me']);
   assert.equal(technicianMobile.technicianMobileHome('technician'), '/today');
   assert.deepEqual(technicianMobile.technicianMobileTabs('technician'), ['/today', '/history', '/me']);

@@ -1,5 +1,10 @@
 # hxy-diy 共享记忆
 
+## 2026-10-27 店长登录默认进入门店工作台（候选，待发布）
+
+- 修复 `technicianMobileHome` 根据是否有技师档案误选首页的问题。店长均默认 `/technician/store`，普通技师仍 `/technician/today`。兼任技师的店长保留主动切换本人服务入口。
+- 不改员工资料、企微身份绑定、门店权限、订单或数据库；不夹带每日必做预览。回归包含保留另一角色会话时的企微回调及有/无技师档案的店长。生产以发布后的 current 和验收记录为准。
+
 ## 2026-10-27 店长评价通知已启用（企微受理，终端待人工确认）
 
 - [PR #401](https://github.com/zzzai/hxydiy/pull/401) 已合并，候选 `a3414fce2464cd59d4bd7baf22bffde941f23276`，合并/运行 `a4459b52a8947ab6b4e3ee0770e5521b271c1262`；精确 [CI 40368092274](https://github.com/zzzai/hxydiy/actions/runs/40368092274) 和唯一 [Deploy 40368846317](https://github.com/zzzai/hxydiy/actions/runs/40368846317) success，备份、恢复演练、部署和验证 job 通过。actual current=`github-a4459b52a894-40368846317`。
