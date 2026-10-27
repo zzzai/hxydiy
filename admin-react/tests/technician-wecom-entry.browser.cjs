@@ -7,13 +7,15 @@ const { startDenyProxy, createBrowserGuard } = require(process.env.TECHNICIAN_TE
 const origin = process.env.TECHNICIAN_TEST_ORIGIN || 'http://127.0.0.1:18331';
 const actor = { id: 1, technician_id: 1, store_id: 1, role: 'technician', name: '测试技师甲' };
 async function verifyRoleHandoffs(browser, events, report, diagnostics) {
-  for (const manager of [true, false]) {
+  for (const scenario of ['manager', 'manager-with-technician', 'technician']) {
+    const manager = scenario !== 'technician';
+    const technicianId = scenario === 'manager-with-technician' ? 2 : null;
     const guard = await createBrowserGuard(browser, new Set([origin]), events);
-    report.phase = manager ? 'manager-entry' : 'technician-entry';
+    report.phase = scenario + '-entry';
     try {
       const requests = [];
       const staff = manager
-        ? { id: 3, technician_id: null, store_id: 1, role: 'store_manager', name: '合成店长', store_name: '合成门店' }
+        ? { id: 3, technician_id: technicianId, store_id: 1, role: 'store_manager', name: '合成店长', store_name: '合成门店' }
         : actor;
       const response = { token: 'synthetic-role-token', staff, auth_method: 'wecom',
         ...(manager ? { selector_token: null, workspaces: [{ assignment_id: 7, role: 'store_manager', scope_type: 'store', scope_id: 1, scope_name: '合成门店' }] } : {}) };
@@ -30,7 +32,7 @@ async function verifyRoleHandoffs(browser, events, report, diagnostics) {
         if (diagnostics.requests.length < 64) diagnostics.requests.push(pathname);
         const body = pathname.endsWith('/auth/wecom/exchange') ? response
           : pathname.endsWith('/admin/v2/selection-sessions') ? { items: [], total: 0, page: 1, page_size: 20 }
-          : pathname.endsWith('/technician/me') ? { staff: actor, technician: { id: 1, name: actor.name } } : { items: [] };
+          : pathname.endsWith('/technician/me') ? { staff: manager ? { ...staff, role: 'manager' } : actor, technician: { id: technicianId || 1, name: staff.name } } : { items: [] };
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
       });
       await guard.context.route(origin + '/admin/', route => route.fulfill({
@@ -51,6 +53,13 @@ async function verifyRoleHandoffs(browser, events, report, diagnostics) {
       if (manager) {
         await rolePage.waitForURL(origin + '/technician/store');
         await rolePage.getByRole('heading', { name: '门店工作台', exact: true }).waitFor();
+        if (technicianId) {
+          await rolePage.getByRole('button', { name: '今日服务', exact: true }).click();
+          await rolePage.waitForURL(origin + '/technician/today');
+          await rolePage.getByText('目前没有本人正在服务的顾客', { exact: true }).waitFor();
+          await rolePage.getByRole('button', { name: '门店', exact: true }).click();
+          await rolePage.waitForURL(origin + '/technician/store');
+        }
         await rolePage.getByText('更多', { exact: true }).click();
         await rolePage.getByRole('button', { name: '电脑后台', exact: true }).click();
       } else {
@@ -61,26 +70,26 @@ async function verifyRoleHandoffs(browser, events, report, diagnostics) {
       }
       await rolePage.waitForURL(origin + '/admin/#/today');
       await rolePage.getByRole('heading', { name: '合成管理交接页', exact: true }).waitFor();
-      const observed = await rolePage.evaluate(() => {
+      const observed = await rolePage.evaluate(expectedTechnicianId => {
         const current = JSON.parse(localStorage.getItem('hxy_admin_staff') || 'null');
         return {
           tokenPresent: Boolean(localStorage.getItem('hxy_admin_token')),
           roleMatchesManager: current?.role === 'manager',
           storeMatches: current?.store_id === 1,
-          noTechnician: current?.technician_id === null,
+          technicianMatches: current?.technician_id === expectedTechnicianId,
           wecomMethod: localStorage.getItem('hxy_staff_auth_method') === 'wecom',
           trustedPagehide: sessionStorage.getItem('synthetic-role-pagehide') === 'trusted',
         };
-      });
+      }, technicianId);
       assert.equal(observed.trustedPagehide, true, 'The role handoff must traverse an actual document pagehide');
       assert.equal(observed.tokenPresent, manager);
       assert.equal(observed.wecomMethod, manager);
       if (manager) {
-        assert.equal(observed.roleMatchesManager && observed.storeMatches && observed.noTechnician, true);
-        assert.equal(requests.some(pathname => pathname.startsWith('/api/v1/technician/')), false);
+        assert.equal(observed.roleMatchesManager && observed.storeMatches && observed.technicianMatches, true);
+        if (!technicianId) assert.equal(requests.some(pathname => pathname.startsWith('/api/v1/technician/')), false);
       }
-      report.cases.push({ name: manager ? 'manager defaults to mobile and keeps its scoped session on explicit desktop handoff without technician requests'
-        : 'technician still reaches its own tasks and clears its session on actual document departure', status: 'passed', actualPagehide: true });
+      report.cases.push({ name: scenario + ': ' + (manager ? 'manager defaults to mobile and keeps its scoped session on explicit desktop handoff with role-appropriate technician access'
+        : 'technician still reaches its own tasks and clears its session on actual document departure'), status: 'passed', actualPagehide: true });
     } finally { await guard.context.close(); }
   }
 }

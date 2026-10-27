@@ -1,8 +1,8 @@
 export const TECHNICIAN_MOBILE_ROUTES = ['/technician/today', '/technician/history', '/technician/me'] as const;
 export const TECHNICIAN_MOBILE_TAB_PATHS = ['/today', '/history', '/me'] as const;
 
-export function technicianMobileHome(role?: string, technicianId?: number | null): '/store' | '/today' {
-  return role === 'manager' && !technicianId ? '/store' : '/today';
+export function technicianMobileHome(role?: string, _technicianId?: number | null): '/store' | '/today' {
+  return role === 'manager' ? '/store' : '/today';
 }
 
 export function technicianMobileTabs(role?: string, technicianId?: number | null): readonly string[] {
