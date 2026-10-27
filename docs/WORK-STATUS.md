@@ -1,5 +1,12 @@
 # hxy-diy 工作状态
 
+## 2026-10-27 店长默认进入门店工作台（已上线，真机待人工确认）
+
+- [PR #403](https://github.com/zzzai/hxydiy/pull/403) 已合并；候选 `1ce705b095e4bd4452b25848219dd3239fe5d8a3`，合并/运行 `0d85f98eaa7d2937bec0cb1554ef00505ca2e0b1`。精确 [CI 40446323341](https://github.com/zzzai/hxydiy/actions/runs/40446323341) 和唯一 [Deploy 40446641527](https://github.com/zzzai/hxydiy/actions/runs/40446641527) 成功，备份、恢复演练、部署和验证 job 通过；actual current=`github-0d85f98eaa7d-40446641527`。
+- 根因是默认首页把有技师档案的店长送到本人服务页。现按店长角色统一默认 `/technician/store`，普通技师仍 `/technician/today`；兼任技师的店长保留主动切换本人服务入口。无身份、权限、门店范围或数据库变更，不混入每日必做/两入口预览。
+- 服务器定向37项和类型检查通过；新增预期在修复前失败2项。内置浏览器使用哈希核验源码及合成HTTP，核验兼任店长、纯店长、普通技师的实际React回调落点及本人服务/门店往返。独立Playwright脚本受工具限制未执行；不宣称真实企微、手机或BFCache通过。
+- 发布后只读核验 520 项MANIFEST、170 个安装Python文件、7个运行文件、编译后的默认入口逻辑及10项公网资源哈希；health正常、迁移集合不变、备份校验通过。验收未调用生产业务API或写业务数据。证据保存在 `output/manager-default-entry-20261027/`。
+
 ## 2026-10-27 店长评价通知已启用（企微受理，终端待人工确认）
 
 - [PR #401](https://github.com/zzzai/hxydiy/pull/401) 已合并，候选 `a3414fce2464cd59d4bd7baf22bffde941f23276`，合并/运行 `a4459b52a8947ab6b4e3ee0770e5521b271c1262`；精确 [CI 40368092274](https://github.com/zzzai/hxydiy/actions/runs/40368092274) 和唯一 [Deploy 40368846317](https://github.com/zzzai/hxydiy/actions/runs/40368846317) success，备份、恢复演练、部署和验证 job 通过。actual current=`github-a4459b52a894-40368846317`。
