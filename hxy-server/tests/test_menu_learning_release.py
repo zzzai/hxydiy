@@ -39,6 +39,7 @@ def db():
     with Session(engine) as db:
         db.add(Store(id=1, store_code="hxy-anyang-ziwei-001", name="Synthetic store", address="Synthetic"))
         db.add(Store(id=2, store_code="menu-other", name="Other synthetic", address="Synthetic"))
+        db.flush()
         for row in load_menu()["items"]:
             if row["existing_code"]:
                 db.add(Project(store_id=1, code=row["code"], name="Old name", category=row["project_category"],
