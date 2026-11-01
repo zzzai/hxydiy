@@ -1,5 +1,7 @@
 # 顾客端工作流
 
+2026-11-02 新菜单与员工学习发布候选（顾客端）：工作区保持未合并状态，门店1菜单14项、套盒1280元/10次、12课36题及受控导入已实现；生产状态必须以发布回执为准。契约 `docs/contracts/menu-20261101.md`、`docs/contracts/staff-learning-v1.md`；发布与回退 `docs/release/menu-learning-20261102.md`。未纳入巡检、画像、AI视频等预览。
+
 ## 2026-10-20 CUSTOMER-SCALP-GROUP（已生产发布）
 
 - 基于主干 `a6b7ecfd3856049f1b5238521bd10b49a8c3207c`，服务器独立工作区 `/root/hxy-diy-development/customer-scalp-group-20261020`。仅将现煮草本泡的头疗移入“重点多按一会”，保留原卡片内容、价格、时长和选中路径；其他项目、旧版独立“头部放松”加购均不变。

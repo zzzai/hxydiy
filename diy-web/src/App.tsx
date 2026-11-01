@@ -268,6 +268,10 @@ function ProjectPrice({ project, auth }: {
   project: Project;
   auth: { is_member: boolean } | null;
 }) {
+  if (project.category === 'kit' && project.content_version === 'menu-20261101') {
+    const amount = project.prices.find((item) => item.price_type === 'store')?.amount_cents;
+    return <div className="project-meta"><div><strong><small>套盒价</small>{amount == null ? '到店咨询' : formatMoney(amount)}<small> / 10次</small></strong></div></div>;
+  }
   const price = projectListPricePresentation(project, auth);
   const memberOnly = !project.prices.some((item) => item.price_type === 'store') && project.prices.some((item) => item.price_type === 'member');
   const unit = project.price_label?.includes('套') ? '/套' : '';

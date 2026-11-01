@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "status": "pilot_not_approved_for_production",
+  "content_file": "culture-hxy-20260908-v2-pilot.json",
+  "content_sha256": "74a387c646d6c30fc4c26193384da22c8b52999f95471c422f821795f4bfb634",
+  "courses": 6,
+  "questions": 18,
+  "document_sha256": "20bcd0484533575c6daa654cca5a2850fe475efca492874ae9e51ca5951107a7",
+  "question_document_sha256": "60de70f627798d499b50a8340b78a68151b98fd97224f19eda83f2640db18a3d",
+  "production_approval_reference": null
+}

@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "status": "approved",
+  "content_file": "culture-and-menu-20261102-v1.json",
+  "content_sha256": "62ce65d1469c79da37b9c99742b6ba81b23710b470f7c4be0ff9fba69d564407",
+  "courses": 12,
+  "questions": 36,
+  "production_approval_reference": "user-20261102-learning-tables-and-12-courses-approved",
+  "sources": [
+    {
+      "reference_kind": "pdf_metadata_date",
+      "document_sha256": "20bcd0484533575c6daa654cca5a2850fe475efca492874ae9e51ca5951107a7",
+      "question_document_sha256": "60de70f627798d499b50a8340b78a68151b98fd97224f19eda83f2640db18a3d"
+    },
+    {
+      "reference_kind": "user_menu_image",
+      "document_sha256": "1e0be09e050781316a23ff2054967d71af141a177b7da7dc477f144ef2f7d715"
+    }
+  ]
+}

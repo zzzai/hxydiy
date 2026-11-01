@@ -20,6 +20,7 @@ export type Project = {
   display_order?: number;
   price_label: string;
   prices: Price[];
+  content_version?: string;
   catalog_version_id?: number | null;
   catalog_version?: number | null;
   option_groups?: CatalogOptionGroup[];
@@ -222,11 +223,11 @@ export const LOCAL_DETAIL_PROFILES: Record<(typeof LOCAL_PARTS)[number], { descr
 };
 
 export const CATALOG_SECTIONS = [
-  { id: 'bath', mark: '泡', label: '泡脚沐足', categories: ['bath'] },
+  { id: 'bath', mark: '泡', label: '草本泡脚', categories: ['bath'] },
   { id: 'balance', mark: '调', label: '推拿', categories: ['balance'] },
   { id: 'care', mark: '补', label: '精油SPA', categories: ['care'] },
-  { id: 'small', mark: '辅', label: '更多服务', categories: ['small', 'local-strength'] },
-  { id: 'kit', mark: '养', label: '功夫套盒', categories: ['kit'] },
+  { id: 'small', mark: '辅', label: '荷小项', categories: ['small', 'local-strength'] },
+  { id: 'kit', mark: '养', label: '调理套盒', categories: ['kit'] },
 ] as const;
 
 export function displayProjectName(project: Pick<Project, 'code' | 'name'>): string {
@@ -419,7 +420,7 @@ export function projectTagLabel(tag: string): string {
   return normalized;
 }
 
-type CustomerProjectTagInput = Pick<Project, 'code' | 'category' | 'tags'> & Partial<Pick<Project, 'name' | 'summary' | 'duration_min'>>;
+type CustomerProjectTagInput = Pick<Project, 'code' | 'category' | 'tags'> & Partial<Pick<Project, 'name' | 'summary' | 'duration_min' | 'content_version'>>;
 
 /** 顾客端项目标签统一入口，屏蔽经营内部分类词和历史写法。 */
 export function customerProjectTags(project: CustomerProjectTagInput): string[] {
@@ -544,6 +545,13 @@ function fallbackProjectSummaryTags(project: CustomerProjectTagInput): string[] 
 
 /** 三类标签统一去重，避免同一概念在不同职责组重复出现。 */
 export function customerProjectTagGroups(project: CustomerProjectTagInput): CustomerProjectTagGroups {
+  if (project.content_version === 'menu-20261101') {
+    return {
+      highlights: (project.tags || []).filter((tag) => ['招牌', '推荐', '特色'].includes(tag)),
+      summary: project.duration_min ? [project.duration_min + '分钟服务'] : ['按次服务'],
+      purchase: isDetailOnlyProject(project) ? ['10次/套'] : project.category === 'local-strength' ? ['每项一个部位'] : [],
+    };
+  }
   const used = new Set<string>();
   const takeUnique = (values: string[]) => values.filter((value) => {
     const label = projectTagLabel(value);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff } from '../api';
@@ -26,7 +26,7 @@ function ItemList({ items }: { items: ManagerSelectionItem[] }) {
  * 店长移动工作台只负责查看订单。
  * 顾客提交后由系统归单，店长不再需要逐单确认或真实分配座位。
  */
-export default function ManagerStorePage() {
+export default function ManagerStorePage({ learningEntry }: { learningEntry?: ReactNode } = {}) {
   const current = useTechnicianSession();
   const storeId = getStaff()?.store_id;
   const [view, setView] = useState<'tasks' | 'orders' | 'selections' | 'positions' | 'reviews'>('selections');
@@ -174,6 +174,7 @@ export default function ManagerStorePage() {
       <span><strong>{workbench?.summary?.completed_today ?? '—'}</strong>已完成</span>
       <button type="button" className={workbench?.summary?.attention ? 'has-attention' : ''} onClick={() => setView('tasks')}><strong>{workbench?.summary?.attention ?? '—'}</strong>需处理</button>
     </div>
+    {learningEntry}
     <nav className="manager-view-tabs" aria-label="工作台视图">
       <button type="button" aria-pressed={view === 'tasks'} onClick={() => { setDetail(null); setView('tasks'); }}>待处理</button>
       <button type="button" aria-pressed={view === 'orders'} onClick={() => { setDetail(null); setView('orders'); }}>服务单</button>
