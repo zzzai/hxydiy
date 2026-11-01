@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./hxy_dev.db"
     # 暂停新增发券；已领券的查询、有效期和使用规则保持不变。
     coupon_issuance_enabled: bool = False
+    staff_learning_enabled: bool = False
 
     # JWT
     jwt_secret: str = "CHANGE_ME_TO_A_LONG_RANDOM_STRING"

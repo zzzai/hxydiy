@@ -101,7 +101,11 @@ jobs:
       - name: TypeScript and production build
         if: steps.detect.outputs.available == 'true'
         working-directory: admin-react
-        run: npm run build
+        env:
+          VITE_STAFF_LEARNING_ENABLED: ${{ vars.STAFF_LEARNING_FRONTEND_ENABLED == 'true' && 'true' || 'false' }}
+        run: |
+          npm run build
+          node -e "require('fs').writeFileSync('dist/staff-learning-build.json', JSON.stringify({ enabled: process.env.VITE_STAFF_LEARNING_ENABLED === 'true', commit: process.env.GITHUB_SHA }) + '\n')"
       - uses: actions/upload-artifact@v4
         if: github.event_name != 'pull_request' && steps.detect.outputs.available == 'true'
         with:

@@ -1,5 +1,9 @@
 # 管理后台与员工工作台工作流
 
+2026-11-02 新菜单与员工学习发布候选（管理端）：工作区保持未合并状态，门店1菜单14项、套盒1280元/10次、12课36题及受控导入已实现；生产状态必须以发布回执为准。契约 `docs/contracts/menu-20261101.md`、`docs/contracts/staff-learning-v1.md`；发布与回退 `docs/release/menu-learning-20261102.md`。未纳入巡检、画像、AI视频等预览。
+
+2026-10-30 `STAFF-LEARNING-FORMAL`：仅学习与辅导代码接入，独立候选工作区隔离验收，未提交/合并/发布。真实 HTTP + PostgreSQL 验证；六门文化试讲课保留审核门禁。PRD `docs/product/PRD-learning-formal-20261030.md`，发布/回退 `docs/release/staff-learning-20261030.md`。不含巡检、画像或订单功能改动，生产库未操作。
+
 ## 2026-10-25 门店日常作业已生产验收
 
 - `ADMIN-DAILY-OPERATIONS-20261024` 已上线：[PR #382](https://github.com/zzzai/hxydiy/pull/382)，候选 `25565e39ab0782b25eed03ee645af111e689f5f9`，合并/生产 `f705ff522c8498d3d83f44a58ab54f595086b16f`；精确 [CI 40111030635](https://github.com/zzzai/hxydiy/actions/runs/40111030635) 与唯一 [Deploy 40111537521](https://github.com/zzzai/hxydiy/actions/runs/40111537521) 成功，备份/恢复演练/部署/验证 job 成功。实际 current=`github-f705ff522c84-40111537521`。

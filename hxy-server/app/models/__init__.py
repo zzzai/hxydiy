@@ -52,3 +52,5 @@ __all__ = [
     "CHARGE_MODES", "CHOICE_TYPES", "OptionChoicePrice", "ProjectCatalogVersion",
     "ProjectOptionChoice", "ProjectOptionGroup",
 ]
+
+from app.models.staff_learning import LearningCourseVersion, StaffLearningAssignment, StaffLearningEvent

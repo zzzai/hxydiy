@@ -264,7 +264,7 @@ def _project_to_out(db: Session, p: Project) -> ProjectOut:
         name=p.name, duration_min=p.duration_min, summary=p.summary,
         image_url=p.image_url, tags=p.tags, detail_modules=p.detail_modules,
         diy_options=p.diy_options, display_order=p.display_order, price_label=p.price_label,
-        prices=_current_project_prices(db, p.id),
+        prices=_current_project_prices(db, p.id), content_version=p.content_version,
         catalog_version=catalog_version, catalog_version_id=catalog_version_id, option_groups=option_groups,
     )
 

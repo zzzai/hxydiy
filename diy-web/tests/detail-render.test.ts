@@ -124,3 +124,39 @@ test('详情价格渲染：匿名与非会员参考价不划线，同价合并�
     assert.match(sameMember, /门店价 \/ 会员价<\/span><strong>¥19.9<\/strong>/);
   } finally { await server.close(); }
 });
+
+
+test('新菜单套盒显示整套价格，匿名与会员均不能加入选单', async () => {
+  const server = await createServer({ optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const { default: ProjectDetailPage } = await server.ssrLoadModule('/src/components/ProjectDetailPage.tsx');
+    const project = { id: 999, code: 'hxy-waist-kit-10', name: '腰臀舒理疗', category: 'kit', duration_min: 60,
+      content_version: 'menu-20261101', summary: '十次套盒', image_url: '', tags: ['特色'], price_label: '10次/套',
+      prices: [{ price_type: 'store', amount_cents: 128000 }], diy_options: [], detail_modules: [] };
+    const render = (isMember: boolean) => renderToStaticMarkup(createElement(ProjectDetailPage, {
+      project, projects: [project], addons: [], selectedProjectIds: [], selectedAddonIds: [], preferences: [], localParts: [],
+      coupon: null, positionLabel: '由门店安排', isMember, onClose() {}, onConfirm() {}, onCouponInfo() {}, onShare() {},
+    }));
+    for (const member of [false, true]) {
+      const markup = render(member);
+      assert.match(markup, /套盒价/);
+      assert.match(markup, /¥1,?280/);
+      assert.match(markup, /10次\/套/);
+      assert.doesNotMatch(markup, /会员价|加入选单|¥128<|¥0</);
+    }
+  } finally { await server.close(); }
+});
+
+
+test('新菜单按次小项不虚构十五分钟', async () => {
+  const server = await createServer({ optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true }, appType: 'custom' });
+  try {
+    const { default: RelaxProjectGroup } = await server.ssrLoadModule('/src/components/project-options/RelaxProjectGroup.tsx');
+    const projects = ['足部精修', '拔罐/刮痧'].map((name, i) => ({ id: i + 1, code: i ? 'hxy-cupping-scraping-1' : 'hxy-foot-refine-1', name,
+      category: 'small', duration_min: 0, content_version: 'menu-20261101', summary: name, tags: [], image_url: '',
+      prices: [{ price_type: 'store', amount_cents: i ? 5900 : 6900 }, { price_type: 'member', amount_cents: i ? 2900 : 3900 }] }));
+    const markup = renderToStaticMarkup(createElement(RelaxProjectGroup, { projects, catalogChoices: [], selectedChoiceIds: [], selectedProjectIds: [], onToggleChoice() {}, onToggleProject() {}, isMember: false }));
+    assert.equal((markup.match(/按次服务/g) || []).length, 2);
+    assert.doesNotMatch(markup, /15分钟/);
+  } finally { await server.close(); }
+});

@@ -1,5 +1,9 @@
 # hxy-diy 共享记忆
 
+2026-11-02 新菜单与员工学习发布候选（跨端契约）：工作区保持未合并状态，门店1菜单14项、套盒1280元/10次、12课36题及受控导入已实现；生产状态必须以发布回执为准。契约 `docs/contracts/menu-20261101.md`、`docs/contracts/staff-learning-v1.md`；发布与回退 `docs/release/menu-learning-20261102.md`。未纳入巡检、画像、AI视频等预览。
+
+2026-10-30 `STAFF-LEARNING-FORMAL`：仅学习与辅导代码接入，独立候选工作区隔离验收，未提交/合并/发布。真实 HTTP + PostgreSQL 验证；六门文化试讲课保留审核门禁。PRD `docs/product/PRD-learning-formal-20261030.md`，发布/回退 `docs/release/staff-learning-20261030.md`。不含巡检、画像或订单功能改动，生产库未操作。
+
 ## 2026-10-27 店长默认进入门店工作台（已上线，真机待人工确认）
 
 - [PR #403](https://github.com/zzzai/hxydiy/pull/403) 已合并；候选 `1ce705b095e4bd4452b25848219dd3239fe5d8a3`，合并/运行 `0d85f98eaa7d2937bec0cb1554ef00505ca2e0b1`。精确 [CI 40446323341](https://github.com/zzzai/hxydiy/actions/runs/40446323341) 和唯一 [Deploy 40446641527](https://github.com/zzzai/hxydiy/actions/runs/40446641527) 成功，备份、恢复演练、部署和验证 job 通过；actual current=`github-0d85f98eaa7d-40446641527`。

@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20261026_coupon_budget"])
+        self.assertEqual(scripts.get_heads(), ["20261027_staff_learning"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -87,6 +87,7 @@ class AlembicContractTests(unittest.TestCase):
         project_root = Path(__file__).resolve().parents[1]
         previous_metadata = MetaData()
         excluded_tables = {
+            "learning_course_versions", "staff_learning_assignments", "staff_learning_events",
             "service_position_qrs", "customer_profile_records", "customer_profile_consents",
             "customer_profile_current", "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
             "staff_scope_assignments", "membership_cards",
@@ -270,6 +271,7 @@ class AlembicContractTests(unittest.TestCase):
     def test_catalog_option_migration_upgrades_the_previous_schema(self):
         project_root = Path(__file__).resolve().parents[1]
         new_tables = {
+            "learning_course_versions", "staff_learning_assignments", "staff_learning_events",
             "project_catalog_versions",
             "project_option_groups",
             "project_option_choices",

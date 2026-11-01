@@ -259,7 +259,7 @@ export default function ProjectDetailPage({
   const memberOnly = !project.prices.some((item) => item.price_type === 'store') && project.prices.some((item) => item.price_type === 'member');
   const packageUnit = project.price_label?.includes('套') ? project.price_label : undefined;
   const configuredPrices = detailPriceComparison(preview, isMember);
-  const detailVisualSections = projectDetailVisuals(project.code);
+  const detailVisualSections = project.content_version === 'menu-20261101' ? [] : projectDetailVisuals(project.code);
   const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
   const hasAdditions = !detailOnly && (catalogPublished
     ? isCatalogOptions && (relaxProjects.length > 0 || catalogLocalChoices.length > 0)
@@ -279,7 +279,9 @@ export default function ProjectDetailPage({
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
           <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={project.code === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
-          <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} memberOnly={memberOnly} unit={packageUnit} />
+          {detailOnly && project.content_version === 'menu-20261101'
+            ? <div className="mini-detail-price"><span className="detail-price-primary"><span className="detail-price-label">套盒价</span><strong>{project.prices.some((item) => item.price_type === 'store') ? formatMoney(project.prices.find((item) => item.price_type === 'store')!.amount_cents) : '到店咨询'}</strong></span><span className="detail-price-unit">10次/套</span></div>
+            : <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} memberOnly={memberOnly} unit={packageUnit} />}
           {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
 

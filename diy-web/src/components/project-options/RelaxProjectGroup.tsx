@@ -39,7 +39,7 @@ export default function RelaxProjectGroup({
       }
     };
     const button = <button key={project.code} type="button" aria-pressed={active} disabled={readOnly} className={active ? 'active' : ''} onClick={toggle}>
-      <span><strong>{displayProjectName(project)}</strong><small>约{project.duration_min || 15}分钟</small></span>
+      <span><strong>{displayProjectName(project)}</strong><small>{project.content_version === 'menu-20261101' && !project.duration_min ? '按次服务' : `约${project.duration_min || 15}分钟`}</small></span>
       <span className="addon-price"><em>+{formatMoney(priceCents)}</em>{guidance.memberHintCents !== null && guidance.memberHintCents < guidance.primaryCents && <small>{guidance.hintText.replace('登录享', '登录后享')}</small>}</span>
     </button>;
     return embedded ? <div key={project.code} className={active ? 'active' : ''}>{button}</div> : button;

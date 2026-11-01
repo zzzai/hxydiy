@@ -131,6 +131,7 @@ def calculate_selection_pricing(
             if price_context is not None and (
                 project is None
                 or project.publication_status != "published"
+                or project.category == "kit"
                 or (
                     price_context.store_id is not None
                     and project.store_id != price_context.store_id

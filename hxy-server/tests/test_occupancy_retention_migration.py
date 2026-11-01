@@ -27,6 +27,7 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                 "page_content_versions",
                 "operational_exceptions",
                 "technician_shifts",
+                "learning_course_versions", "staff_learning_assignments", "staff_learning_events",
             }:
                 continue
             copied = table.to_metadata(previous_metadata)
