@@ -65,12 +65,18 @@ def _seed(db) -> dict:
         summary="C", publication_status="published", content_version="menu-test",
         independently_visible=True, display_order=3, price_label="60分钟",
     )
-    db.add_all([project_a, project_b, project_c])
+    project_d = Project(
+        store_id=source.id, code="hxy-d", category="local-strength", name="局部项目D", duration_min=30,
+        summary="D", publication_status="published", content_version="menu-test",
+        independently_visible=True, display_order=4, price_label="30分钟",
+    )
+    db.add_all([project_a, project_b, project_c, project_d])
     db.flush()
     _price(db, project_a.id, "store", 10000)
     _price(db, project_a.id, "member", 8000)
     _price(db, project_b.id, "store", 5000)
     _price(db, project_c.id, "store", 7000)
+    _price(db, project_d.id, "store", 7900)
 
     version = ProjectCatalogVersion(project_id=project_a.id, version=1, status="draft")
     db.add(version)
@@ -86,6 +92,19 @@ def _seed(db) -> dict:
         linked_project_id=project_b.id, charge_mode="inherit_linked_price",
         display_order=0, status="active",
     ))
+    db.flush()
+    local_group = ProjectOptionGroup(
+        catalog_version_id=version.id, code="local-strength", name="局部加强",
+        selection_mode="multiple", required=False, min_select=0, max_select=2, display_order=2,
+    )
+    db.add(local_group)
+    db.flush()
+    for order, (code, name) in enumerate((("local-shoulder-neck", "肩颈"), ("local-waist-hip", "腰臀"))):
+        db.add(ProjectOptionChoice(
+            option_group_id=local_group.id, code=code, name=name, choice_type="linked_project",
+            linked_project_id=project_d.id, charge_mode="inherit_linked_price",
+            qualifies_for_foot_bath_bundle=True, display_order=order, status="active",
+        ))
     db.flush()
     publish_catalog_version(db, project_a.id, admin.id)
 
@@ -110,7 +129,7 @@ def _seed(db) -> dict:
     db.commit()
     return {
         "source": source, "target": target, "admin": admin,
-        "project_a": project_a, "project_b": project_b, "project_c": project_c,
+        "project_a": project_a, "project_b": project_b, "project_c": project_c, "project_d": project_d,
         "container": container, "bed": bed, "sofa": sofa,
     }
 
@@ -120,10 +139,10 @@ def test_preview_is_read_only_and_reports_expected_counts(db):
     plan = build_clone_plan(db, source_store_id=seeded["source"].id, target_store_id=seeded["target"].id, code_prefix="s2-")
 
     assert plan["conflicts"] == []
-    assert plan["counts"]["projects"] == 3
+    assert plan["counts"]["projects"] == 4
     assert plan["counts"]["catalog_versions"] == 1
-    assert plan["counts"]["option_groups"] == 1
-    assert plan["counts"]["option_choices"] == 1
+    assert plan["counts"]["option_groups"] == 2
+    assert plan["counts"]["option_choices"] == 3
     assert plan["counts"]["addons"] == 1
     assert plan["counts"]["rooms"] == 3
     assert plan["counts"]["service_positions"] == 2
@@ -140,7 +159,7 @@ def test_apply_clones_and_remaps_tenant_references(db):
     created = apply_clone_plan(db, plan, actor_staff_id=seeded["admin"].id, publish_page=True)
     db.commit()
 
-    assert created["created"]["projects"] == 3
+    assert created["created"]["projects"] == 4
     assert created["created"]["catalog_versions"] == 1
     assert created["created"]["addons"] == 1
     assert created["created"]["pages"] == 1
@@ -151,18 +170,33 @@ def test_apply_clones_and_remaps_tenant_references(db):
             select(Project).where(Project.store_id == seeded["target"].id)
         )
     }
-    assert set(target_projects) == {"s2-hxy-a", "s2-hxy-b", "s2-hxy-c"}
+    assert set(target_projects) == {"s2-hxy-a", "s2-hxy-b", "s2-hxy-c", "s2-hxy-d"}
     target_a = target_projects["s2-hxy-a"]
     target_b = target_projects["s2-hxy-b"]
+    target_d = target_projects["s2-hxy-d"]
     assert target_a.publication_status == "published"
     assert target_a.current_published_version_id is not None
     assert target_b.current_published_version_id is None
+    assert target_d.current_published_version_id is None
 
     version = db.get(ProjectCatalogVersion, target_a.current_published_version_id)
-    group = db.scalar(select(ProjectOptionGroup).where(ProjectOptionGroup.catalog_version_id == version.id))
+    group = db.scalar(select(ProjectOptionGroup).where(
+        ProjectOptionGroup.catalog_version_id == version.id,
+        ProjectOptionGroup.code == "addons",
+    ))
     choice = db.scalar(select(ProjectOptionChoice).where(ProjectOptionChoice.option_group_id == group.id))
     assert choice.linked_project_id == target_b.id
     assert choice.linked_project_id != seeded["project_b"].id
+
+    local_group = db.scalar(select(ProjectOptionGroup).where(
+        ProjectOptionGroup.catalog_version_id == version.id,
+        ProjectOptionGroup.code == "local-strength",
+    ))
+    local_choices = list(db.scalars(select(ProjectOptionChoice).where(
+        ProjectOptionChoice.option_group_id == local_group.id,
+    ).order_by(ProjectOptionChoice.display_order)))
+    assert [choice.name for choice in local_choices] == ["肩颈", "腰臀"]
+    assert {choice.linked_project_id for choice in local_choices} == {target_d.id}
 
     target_addon = db.scalar(select(Addon).where(Addon.store_id == seeded["target"].id))
     assert target_addon.code == "s2-hxy-addon"
@@ -177,7 +211,7 @@ def test_apply_clones_and_remaps_tenant_references(db):
     assert target_rooms["s2-bed-01a"].parent_room_id == target_rooms["s2-room-01"].id
 
     # Source remains the single source of truth.
-    assert db.scalar(select(func.count(Project.id)).where(Project.store_id == seeded["source"].id)) == 3
+    assert db.scalar(select(func.count(Project.id)).where(Project.store_id == seeded["source"].id)) == 4
     assert db.scalar(select(func.count(Room.id)).where(Room.store_id == seeded["source"].id)) == 3
     assert seeded["project_a"].current_published_version_id is not None
 
@@ -193,7 +227,7 @@ def test_apply_is_idempotent(db):
     created = apply_clone_plan(db, second_plan, actor_staff_id=seeded["admin"].id, publish_page=True)
     db.commit()
     assert created["created"] == {"projects": 0, "catalog_versions": 0, "addons": 0, "pages": 0, "rooms": 0}
-    assert db.scalar(select(func.count(Project.id)).where(Project.store_id == seeded["target"].id)) == 3
+    assert db.scalar(select(func.count(Project.id)).where(Project.store_id == seeded["target"].id)) == 4
     assert db.scalar(select(func.count(Room.id)).where(Room.store_id == seeded["target"].id)) == 3
 
 
