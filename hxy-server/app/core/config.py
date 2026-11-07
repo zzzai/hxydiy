@@ -1,4 +1,4 @@
-from functools import lru_cache
+﻿from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,6 +12,24 @@ class Settings(BaseSettings):
     # 暂停新增发券；已领券的查询、有效期和使用规则保持不变。
     coupon_issuance_enabled: bool = False
     staff_learning_enabled: bool = False
+    # AI learning coach / weekly plan. Disabled until an operator supplies a key.
+    learning_ai_enabled: bool = False
+    learning_ai_base_url: str = "https://api.deepseek.com"
+    learning_ai_api_key: str = ""
+    learning_ai_model: str = "deepseek-flash"
+    learning_ai_timeout_seconds: float = 25.0
+    learning_ai_max_output_tokens: int = 800
+    learning_ai_coach_daily_limit: int = 30
+    learning_ai_plan_daily_limit: int = 5
+
+    @property
+    def learning_ai_ready(self) -> bool:
+        return bool(
+            self.learning_ai_enabled
+            and self.learning_ai_base_url.strip()
+            and self.learning_ai_api_key.strip()
+            and self.learning_ai_model.strip()
+        )
 
     # JWT
     jwt_secret: str = "CHANGE_ME_TO_A_LONG_RANDOM_STRING"

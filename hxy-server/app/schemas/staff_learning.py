@@ -32,3 +32,22 @@ class LearningActionIn(BaseModel):
         if self.answers is not None and len(self.answers) > 100:
             raise ValueError("too many answers")
         return self
+
+
+class LearningCoachIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    assignment_id: str = Field(min_length=1, max_length=36)
+    question: str = Field(min_length=1, max_length=500)
+    section_id: str | None = Field(default=None, min_length=1, max_length=64)
+    request_id: str = Field(min_length=8, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_question(self):
+        if not self.question.strip():
+            raise ValueError("question must not be blank")
+        return self
+
+
+class LearningWeeklyPlanIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    lookback_days: int = Field(default=14, ge=7, le=30)

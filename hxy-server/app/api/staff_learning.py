@@ -1,10 +1,11 @@
 import hashlib
 import json
+import time
 import uuid
-from datetime import timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,10 +13,19 @@ from app.api.admin import _current_staff, normalize_staff_role
 from app.api.technician import current_technician
 from app.core.config import settings
 from app.db.session import get_db
-from app.models import Staff
+from app.domain.service_record_status import pending_record_summary
+from app.models import AuditLog, ServiceFeedback, Staff, Store
 from app.models.operations import Technician
 from app.models.staff_learning import LearningCourseVersion, StaffLearningAssignment, StaffLearningEvent
-from app.schemas.staff_learning import LearningActionIn, LearningAssignmentIn
+from app.schemas.staff_learning import LearningActionIn, LearningAssignmentIn, LearningCoachIn, LearningWeeklyPlanIn
+from app.services.learning_ai import (
+    LearningAIError,
+    LearningAIProvider,
+    coach_messages,
+    parse_coach_reply,
+    parse_weekly_plan_reply,
+    weekly_plan_messages,
+)
 
 router = APIRouter(prefix="/staff-learning", tags=["staff-learning"])
 
@@ -136,7 +146,11 @@ def record(db, staff, assignment, kind, request_id, fingerprint, payload):
 @router.get("/status")
 def status(request: Request, authorization: str | None = Header(None), db: Session = Depends(get_db)):
     actor(authorization, db, request, enabled=False)
-    return {"enabled": settings.staff_learning_enabled}
+    return {
+        "enabled": settings.staff_learning_enabled,
+        "ai_coach_enabled": settings.learning_ai_ready,
+        "ai_plan_enabled": settings.learning_ai_ready,
+    }
 
 
 @router.get("/bootstrap")
@@ -229,3 +243,275 @@ def action(assignment_id: str, body: LearningActionIn, request: Request, authori
     record(db, staff, item, body.kind, body.request_id, fingerprint, payload)
     db.commit()
     return snapshot(db, staff, role)
+
+
+def _ai_count(db, action: str, *, staff_id: int | None = None, store_id: int | None = None) -> int:
+    since = datetime.now(UTC) - timedelta(hours=24)
+    query = select(func.count(AuditLog.id)).where(AuditLog.action == action, AuditLog.created_at >= since)
+    if staff_id is not None:
+        query = query.where(AuditLog.actor_type == "staff", AuditLog.actor_id == str(staff_id))
+    if store_id is not None:
+        query = query.where(AuditLog.store_id == store_id)
+    return int(db.scalar(query) or 0)
+
+
+def _ai_audit(
+    db,
+    staff,
+    action: str,
+    status: str,
+    *,
+    entity_id: str,
+    code: str = "",
+    course_code: str = "",
+    latency_ms: int = 0,
+    usage: dict | None = None,
+    question_chars: int = 0,
+    grounded: bool | None = None,
+) -> None:
+    detail = {
+        "status": status,
+        "code": code,
+        "course_code": course_code,
+        "latency_ms": latency_ms,
+        "usage": usage or {},
+        "question_chars": question_chars,
+    }
+    if grounded is not None:
+        detail["grounded"] = grounded
+    db.add(AuditLog(
+        actor_type="staff",
+        actor_id=str(staff.id),
+        action=action,
+        entity_type="staff_learning",
+        entity_id=entity_id,
+        store_id=staff.store_id,
+        detail=detail,
+    ))
+
+
+def _ai_unavailable(exc: LearningAIError):
+    return error(exc.status_code, exc.code, exc.message)
+
+
+@router.post("/coach")
+def coach(
+    body: LearningCoachIn,
+    request: Request,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    staff, role = actor(authorization, db, request)
+    if role != "technician":
+        raise error(403, "LEARNING_COACH_FORBIDDEN", "AI 学习教练只对学习中的技师开放")
+    if not settings.learning_ai_ready:
+        raise error(503, "LEARNING_AI_DISABLED", "AI 学习教练暂未启用")
+    item = db.scalar(select(StaffLearningAssignment).where(
+        StaffLearningAssignment.id == body.assignment_id,
+        StaffLearningAssignment.store_id == staff.store_id,
+        StaffLearningAssignment.staff_id == staff.id,
+    ))
+    if item is None:
+        raise error(404, "LEARNING_TASK_NOT_FOUND", "学习任务不存在或不属于当前身份")
+    course = db.get(LearningCourseVersion, item.course_version_id)
+    if not course or not available(course):
+        raise error(409, "LEARNING_COURSE_UNAVAILABLE", "课程已停止新的学习操作")
+    content = checked_content(course)
+    section_ids = {section.get("id") for section in content.get("sections") or [] if isinstance(section, dict)}
+    if body.section_id is not None and body.section_id not in section_ids:
+        raise error(422, "LEARNING_SECTION_UNKNOWN", "章节不属于当前课程")
+    if _ai_count(db, "learning_ai_coach", staff_id=staff.id) >= settings.learning_ai_coach_daily_limit:
+        raise error(429, "LEARNING_AI_RATE_LIMITED", "今天的 AI 提问次数已用完，请明天再试")
+
+    started = time.monotonic()
+    try:
+        reply = LearningAIProvider().chat(coach_messages(
+            content.get("title") or course.code, content, body.section_id, body.question.strip(),
+        ))
+        parsed = parse_coach_reply(reply.content, content)
+    except LearningAIError as exc:
+        _ai_audit(
+            db, staff, "learning_ai_coach", "error", entity_id=body.assignment_id, code=exc.code,
+            course_code=course.code, latency_ms=int((time.monotonic() - started) * 1000),
+            question_chars=len(body.question),
+        )
+        db.commit()
+        raise _ai_unavailable(exc) from exc
+    _ai_audit(
+        db, staff, "learning_ai_coach", "success", entity_id=body.assignment_id,
+        course_code=course.code, latency_ms=int((time.monotonic() - started) * 1000),
+        usage=reply.usage, question_chars=len(body.question), grounded=parsed["grounded"],
+    )
+    db.commit()
+    return {
+        "answer": parsed["answer"],
+        "citations": parsed["citations"],
+        "grounded": parsed["grounded"],
+        "usage": reply.usage,
+    }
+
+
+def _weekly_plan_payload(db, staff: Staff, lookback_days: int) -> dict:
+    now = datetime.now(UTC)
+    roster = list(db.scalars(roster_query(staff.store_id)))
+    courses = [course for course in db.scalars(
+        select(LearningCourseVersion).order_by(LearningCourseVersion.code, LearningCourseVersion.version)
+    ) if available(course)]
+    if not roster or not courses:
+        return {"roster": roster, "courses": courses, "payload": None}
+
+    assignments = list(db.scalars(select(StaffLearningAssignment).where(
+        StaffLearningAssignment.store_id == staff.store_id,
+    )))
+    assignment_ids = [item.id for item in assignments]
+    events = list(db.scalars(select(StaffLearningEvent).where(
+        StaffLearningEvent.store_id == staff.store_id,
+        StaffLearningEvent.assignment_id.in_(assignment_ids),
+    ).order_by(StaffLearningEvent.created_at, StaffLearningEvent.id))) if assignment_ids else []
+    latest_submit: dict[str, StaffLearningEvent] = {}
+    for event in events:
+        if event.kind == "submit":
+            latest_submit[event.assignment_id] = event
+    assignment_by_staff: dict[int, list[StaffLearningAssignment]] = {}
+    for item in assignments:
+        assignment_by_staff.setdefault(item.staff_id, []).append(item)
+
+    pending = pending_record_summary(db, staff.store_id, now)
+    pending_by_technician = {
+        row["technician_id"]: int(row["count"]) for row in pending.get("technicians") or []
+    }
+    since = now - timedelta(days=lookback_days)
+    feedback_rows = list(db.scalars(select(ServiceFeedback).where(
+        ServiceFeedback.store_id == staff.store_id,
+        ServiceFeedback.rating <= 3,
+        ServiceFeedback.created_at >= since,
+    ).order_by(ServiceFeedback.created_at.desc()).limit(200)))
+    tag_counts: dict[str, int] = {}
+    for feedback in feedback_rows:
+        for tag in feedback.tags or []:
+            if isinstance(tag, str) and tag.strip():
+                tag_counts[tag.strip()] = tag_counts.get(tag.strip(), 0) + 1
+
+    course_by_id = {course.id: course for course in courses}
+    technicians = []
+    for member in roster:
+        learning = []
+        for item in assignment_by_staff.get(member.id, []):
+            course = course_by_id.get(item.course_version_id)
+            if course is None:
+                continue
+            latest = latest_submit.get(item.id)
+            payload = latest.payload if latest is not None else {}
+            correct = int(payload.get("correct") or 0)
+            total = int(payload.get("total") or 0)
+            learning.append({
+                "course_id": course.code,
+                "course_version": course.version,
+                "sections_read": len(item.sections_read or []),
+                "latest_correct": correct,
+                "latest_total": total,
+                "wrong_count": max(total - correct, 0),
+            })
+        technicians.append({
+            "staff_id": member.id,
+            "name": member.name,
+            "learning": learning,
+            "pending_record_count": pending_by_technician.get(member.technician_id, 0),
+        })
+    store = db.get(Store, staff.store_id)
+    payload = {
+        "store": {"id": staff.store_id, "name": store.name if store else ""},
+        "courses": [
+            {"course_id": course.code, "course_version": course.version,
+             "title": course.content.get("title") or course.code,
+             "category": course.content.get("category") or "", "minutes": course.content.get("minutes") or ""}
+            for course in courses
+        ],
+        "technicians": technicians,
+        "low_score_reviews": {
+            "window_days": lookback_days,
+            "count": len(feedback_rows),
+            "tags": [{"tag": tag, "count": count} for tag, count in sorted(tag_counts.items(), key=lambda item: (-item[1], item[0]))[:10]],
+        },
+    }
+    return {"roster": roster, "courses": courses, "payload": payload}
+
+
+@router.post("/weekly-plan")
+def weekly_plan(
+    body: LearningWeeklyPlanIn,
+    request: Request,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    staff, role = actor(authorization, db, request)
+    if role != "manager":
+        raise error(403, "LEARNING_PLAN_FORBIDDEN", "只有店长可以生成周计划")
+    if not settings.learning_ai_ready:
+        raise error(503, "LEARNING_AI_DISABLED", "AI 周计划暂未启用")
+    data = _weekly_plan_payload(db, staff, body.lookback_days)
+    if not data["roster"] or not data["courses"] or data["payload"] is None:
+        return {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "lookback_days": body.lookback_days,
+            "suggestions": [],
+            "data_basis": {"technicians": 0, "courses": len(data["courses"]), "low_score_reviews": 0},
+            "disclaimer": "当前没有可安排的技师或课程，未调用 AI。",
+        }
+    if _ai_count(db, "learning_ai_weekly_plan", store_id=staff.store_id) >= settings.learning_ai_plan_daily_limit:
+        raise error(429, "LEARNING_AI_RATE_LIMITED", "今天的周计划生成次数已用完，请明天再试")
+
+    started = time.monotonic()
+    try:
+        reply = LearningAIProvider().chat(weekly_plan_messages(data["payload"]))
+        suggestions = parse_weekly_plan_reply(reply.content)
+    except LearningAIError as exc:
+        _ai_audit(
+            db, staff, "learning_ai_weekly_plan", "error", entity_id=str(staff.store_id), code=exc.code,
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )
+        db.commit()
+        raise _ai_unavailable(exc) from exc
+
+    roster_by_id = {member.id: member for member in data["roster"]}
+    course_by_key = {(course.code, course.version): course for course in data["courses"]}
+    validated = []
+    seen = set()
+    for suggestion in suggestions:
+        member = roster_by_id.get(suggestion["staff_id"])
+        course = course_by_key.get((suggestion["course_id"], suggestion["course_version"]))
+        if member is None or course is None:
+            continue
+        key = (member.id, course.code, course.version)
+        if key in seen:
+            continue
+        seen.add(key)
+        validated.append({
+            **suggestion,
+            "staff_name": member.name,
+            "title": course.content.get("title") or course.code,
+            "priority": int(suggestion["priority"]),
+        })
+    if not validated:
+        _ai_audit(
+            db, staff, "learning_ai_weekly_plan", "invalid", entity_id=str(staff.store_id),
+            code="LEARNING_AI_INVALID_PLAN", latency_ms=int((time.monotonic() - started) * 1000),
+        )
+        db.commit()
+        raise error(502, "LEARNING_AI_INVALID_PLAN", "AI 没有生成可用的周计划，请重试")
+    _ai_audit(
+        db, staff, "learning_ai_weekly_plan", "success", entity_id=str(staff.store_id),
+        latency_ms=int((time.monotonic() - started) * 1000), usage=reply.usage,
+    )
+    db.commit()
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "lookback_days": body.lookback_days,
+        "suggestions": validated[:8],
+        "data_basis": {
+            "technicians": len(data["roster"]),
+            "courses": len(data["courses"]),
+            "low_score_reviews": data["payload"]["low_score_reviews"]["count"],
+        },
+        "disclaimer": "AI 生成草稿，请店长确认后再安排；不会自动分配。",
+    }

@@ -1,27 +1,33 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeftOutlined, ArrowRightOutlined, CheckOutlined, ReadOutlined } from '@ant-design/icons';
+import { client } from '../../api';
+import { requestErrorMessage } from '../../requestError';
 import type { LearningActor, LearningAssignment, LearningCommand, LearningCourse, LearningGateway } from './learningModel';
 import { learningIdentity } from './learningModel';
 import { isComplete, latestAttempt, orderedLessons, progressLabel, needsCoaching } from './dailyLearningModel';
 
 import './dailyLearning.css';
 import { managerGuide } from './cultureManagerGuide';
-type Props={actor:LearningActor;courses:LearningCourse[];gateway:LearningGateway;arrange?:ReactNode;storeName?:string};
+type CoachReply={answer:string;citations:Array<{section_id:string;title:string}>;grounded:boolean};
+type PlanSuggestion={staff_id:number;staff_name:string;course_id:string;course_version:string;title:string;reason:string;priority:number};
+type Props={actor:LearningActor;courses:LearningCourse[];gateway:LearningGateway;arrange?:ReactNode;storeName?:string;aiCoachEnabled?:boolean;aiPlanEnabled?:boolean};
 const stamp=(value:string)=>new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
 const key=(actor:LearningActor,item:LearningAssignment)=>`hxy_learning_draft:v1:${learningIdentity(actor)}:${item.id}:${item.courseVersion}:${latestAttempt(item)?.id||'first'}`;
 function readDraft(actor:LearningActor,item:LearningAssignment,course:LearningCourse){try{const draft=JSON.parse(sessionStorage.getItem(key(actor,item))||'{}');return Object.fromEntries(course.questions.filter(q=>Number.isInteger(draft[q.id])&&draft[q.id]>=0&&draft[q.id]<q.choices.length).map(q=>[q.id,draft[q.id]]));}catch{return {};}}
-export default function DailyLearning({actor,courses,gateway,arrange,storeName}:Props){
+export default function DailyLearning({actor,courses,gateway,arrange,storeName,aiCoachEnabled=false,aiPlanEnabled=false}:Props){
  const navigate=useNavigate();const [params,setParams]=useSearchParams();
  const [items,setItems]=useState<LearningAssignment[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [busy,setBusy]=useState(false);
  const [phase,setPhase]=useState<'read'|'quiz'|'result'>('read');const [step,setStep]=useState(0);const [question,setQuestion]=useState(0);const [answers,setAnswers]=useState<Record<string,number>>({});
  const [note,setNote]=useState('');const [saved,setSaved]=useState(false);const [managerFilter,setManagerFilter]=useState<'coach'|'pending'|'all'>('coach');
+ const [askOpen,setAskOpen]=useState(false);const [ask,setAsk]=useState('');const [askBusy,setAskBusy]=useState(false);const [askAnswer,setAskAnswer]=useState<CoachReply|null>(null);const [askError,setAskError]=useState('');
+ const [plan,setPlan]=useState<PlanSuggestion[]|null>(null);const [planBusy,setPlanBusy]=useState(false);const [planError,setPlanError]=useState('');
  const alive=useRef(false);const lock=useRef(false);const pending=useRef<{payload:string;command:LearningCommand}>();const opened=useRef('');
  const selected=params.get('lesson');const item=items.find(value=>value.id===selected);const course=courses.find(c=>c.id===item?.courseId&&c.version===item?.courseVersion);const manager=actor.role==='manager';
  const current=()=>alive.current&&!!gateway.currentActor()&&learningIdentity(gateway.currentActor()!)===learningIdentity(actor);
  const load=async()=>{setLoading(true);setError('');try{const list=await gateway.list(actor);if(current()){opened.current='';pending.current=undefined;setItems(list);}}catch(e){if(current())setError(e instanceof Error?e.message:'学习进度暂未读取成功');}finally{if(current())setLoading(false);}};
  useEffect(()=>{alive.current=true;void load();return()=>{alive.current=false;};},[actor,gateway]);
- useEffect(()=>{if(!item||!course||opened.current===item.id)return;opened.current=item.id;const index=course.sections.findIndex(s=>!item.sectionsRead.includes(s.id));setStep(index<0?0:index);setPhase(item.attempts.length?'result':index<0?'quiz':'read');const restored=readDraft(actor,item,course);setAnswers(restored);const blank=course.questions.findIndex(q=>restored[q.id]===undefined);setQuestion(blank<0?0:blank);setNote('');setSaved(false);},[item,course]);
+ useEffect(()=>{if(!item||!course||opened.current===item.id)return;opened.current=item.id;const index=course.sections.findIndex(s=>!item.sectionsRead.includes(s.id));setStep(index<0?0:index);setPhase(item.attempts.length?'result':index<0?'quiz':'read');const restored=readDraft(actor,item,course);setAnswers(restored);const blank=course.questions.findIndex(q=>restored[q.id]===undefined);setQuestion(blank<0?0:blank);setNote('');setSaved(false);setAskAnswer(null);setAsk('');setAskError('');},[item,course]);
  const top=()=>window.scrollTo({top:0});
  const open=(value:LearningAssignment)=>{setParams(p=>{p.set('lesson',value.id);return p;});setError('');pending.current=undefined;top();};
  const back=()=>{if(lock.current)return;opened.current='';setParams(p=>{p.delete('lesson');return p;});setError('');pending.current=undefined;top();};
@@ -38,6 +44,55 @@ export default function DailyLearning({actor,courses,gateway,arrange,storeName}:
  const last=item&&latestAttempt(item);const section=course?.sections[step];const visual=section&&{scene:section.paragraphs[0],action:section.paragraphs[1],remember:section.paragraphs[2],say:section.paragraphs[3]};const q=course?.questions[question];
  const review=course?.questions.map(question=>{const r=last?.review?.find(r=>r.questionId===question.id);return {...question,answer:r?.answer,explanation:r?.explanation};})||[];
  const wrong=last?review.filter(q=>q.answer!==undefined&&last.answers[q.id]!==q.answer):[];
+ const askCoach=async()=>{
+  if(!item||!ask.trim()||askBusy||!aiCoachEnabled)return;
+  setAskBusy(true);setAskError('');setAskAnswer(null);
+  try{const {data}=await client.post<CoachReply>('/staff-learning/coach',{assignment_id:item.id,question:ask.trim(),section_id:section?.id,request_id:crypto.randomUUID()});setAskAnswer(data);}
+  catch(failure){setAskError(requestErrorMessage(failure));}
+  finally{setAskBusy(false);}
+ };
+ const generatePlan=async()=>{
+  if(!aiPlanEnabled||planBusy)return;
+  setPlanBusy(true);setPlanError('');setPlan(null);
+  try{const {data}=await client.post<{suggestions:PlanSuggestion[]}>('/staff-learning/weekly-plan',{lookback_days:14});setPlan(data.suggestions);}
+  catch(failure){setPlanError(requestErrorMessage(failure));}
+  finally{setPlanBusy(false);}
+ };
+ const assignPlan=async(suggestion:PlanSuggestion)=>{
+  if(planBusy)return;
+  setPlanBusy(true);setPlanError('');
+  try{
+   await client.post('/staff-learning/assignments',{staff_id:suggestion.staff_id,course_id:suggestion.course_id,course_version:suggestion.course_version,request_id:crypto.randomUUID()});
+   setPlan(current=>current?.filter(value=>!(value.staff_id===suggestion.staff_id&&value.course_id===suggestion.course_id&&value.course_version===suggestion.course_version))||null);
+   await load();
+  }catch(failure){setPlanError(requestErrorMessage(failure));}
+  finally{setPlanBusy(false);}
+ };
+ const coachSection=aiCoachEnabled&&!manager&&phase==='read'?<section className="dl-ai-coach">
+  <button type="button" className="dl-secondary" aria-expanded={askOpen} onClick={()=>setAskOpen(value=>!value)}>问 AI 教练</button>
+  {askOpen&&<div className="dl-ai-reply">
+   <p className="dl-muted">只根据当前课程内容回答，不诊断、不编疗效。</p>
+   <textarea value={ask} maxLength={500} disabled={askBusy} onChange={event=>{setAsk(event.target.value);setAskAnswer(null);setAskError('');}} placeholder="例如：顾客说轻一点，我应该怎么回应？"/>
+   <div className="dl-actions"><button type="button" className="dl-primary" disabled={askBusy||!ask.trim()} onClick={()=>void askCoach()}>{askBusy?'正在问…':'发送问题'}</button></div>
+   {askError&&<p role="alert">{askError}</p>}
+   {askAnswer&&<article>
+    <p>{askAnswer.answer}</p>
+    {askAnswer.citations.length>0?<small>依据：{askAnswer.citations.map(citation=>citation.title||citation.section_id).join('、')}</small>:<small className="dl-amber">课程未明确覆盖，请店长补充。</small>}
+    <small>AI 生成，请结合课程与现场判断。</small>
+   </article>}
+  </div>}
+ </section>:null;
+ const planSection=aiPlanEnabled&&manager?<section className="dl-ai-plan">
+  <div className="dl-ai-head"><strong>AI 周计划草稿</strong><small>只生成建议，不会自动分配</small></div>
+  <button type="button" className="dl-secondary" disabled={planBusy} onClick={()=>void generatePlan()}>{planBusy?'正在生成…':'生成本周计划'}</button>
+  {planError&&<p role="alert">{planError}</p>}
+  {plan&&plan.length===0&&<p className="dl-muted">本周没有需要优先安排的课程。</p>}
+  {plan?.map(suggestion=><article className="dl-ai-suggestion" key={`${suggestion.staff_id}:${suggestion.course_id}:${suggestion.course_version}`}>
+   <div><strong>{suggestion.staff_name}</strong> · {suggestion.title} <small>优先级 {suggestion.priority}</small></div>
+   <p>{suggestion.reason}</p>
+   <button type="button" className="dl-secondary" disabled={planBusy} onClick={()=>void assignPlan(suggestion)}>安排这门课</button>
+  </article>)}
+ </section>:null;
  const notes=(value:LearningAssignment)=>value.followUps.length>0&&<section className="dl-notes"><h3>{manager?'辅导记录':'店长给你的建议'}</h3>{value.followUps.slice().reverse().map(n=><article key={n.id}><p>{n.note}</p><small>{n.managerName} · {stamp(n.createdAt)}</small></article>)}</section>;
  const summary=()=>last&&<><div className="dl-result"><span>{manager?'最近一次练习':last.correct===last.total?'这课练习全对了':'先把这点弄明白'}</span><strong>{last.correct}<small> / {last.total} 题</small></strong><p>{last.correct===last.total?course!.sections.slice(-1)[0]?.paragraphs.slice(-1)[0]:`${last.total-last.correct} 道题需要复习`}</p></div>{last.correct<last.total&&wrong.length===0&&<p role="alert">错题解析暂不可用，请重新读取。</p>}{wrong.map(q=><article className="dl-mistake" key={q.id}><h3>{q.prompt}</h3><p className="dl-muted">{manager?'本次选择':'你选了'}：{q.choices[last.answers[q.id]]}</p><p><strong>可以这样理解</strong><br/>{q.explanation}</p><p>参考答案：{q.choices[q.answer!]}</p></article>)}</>;
  const row=(value:LearningAssignment)=>{const c=courses.find(c=>c.id===value.courseId&&c.version===value.courseVersion);return c&&<button className="dl-row" key={value.id} onClick={()=>open(value)}><span className="dl-row-icon">{isComplete(value)?<CheckOutlined/>:<ReadOutlined/>}</span><span><small>{c.category} · {c.minutes}</small><strong>{c.title}</strong><span className={needsCoaching(value)?'dl-amber':'dl-muted'}>{progressLabel(value)}</span></span><ArrowRightOutlined/></button>;};
@@ -46,7 +101,7 @@ export default function DailyLearning({actor,courses,gateway,arrange,storeName}:
  {error&&<div className="dl-error" role="alert">{error}{!busy&&<button onClick={()=>void load()}>重新读取</button>}</div>}
  {loading?<p role="status">正在读取学习进度…</p>:selected&&!item?<div className="dl-empty"><p>当前身份下没有这项学习任务。</p><button onClick={back}>返回学习列表</button></div>:!selected?(manager?<>
  <div className="dl-lead"><h2>先看错题，再做辅导</h2><p>从具体错题开始，留下辅导建议。</p></div>
- {arrange}<div className="dl-filters" aria-label="团队学习筛选">{([['coach','需辅导'],['pending','待学习'],['all','全部']] as const).map(([k,t])=><button key={k} aria-pressed={managerFilter===k} onClick={()=>setManagerFilter(k)}>{t}{k!=='all'&&<b>{new Set(items.filter(k==='coach'?needsCoaching:i=>!i.attempts.length).map(i=>i.staffId)).size}</b>}</button>)}</div>
+ {arrange}{planSection}<div className="dl-filters" aria-label="团队学习筛选">{([['coach','需辅导'],['pending','待学习'],['all','全部']] as const).map(([k,t])=><button key={k} aria-pressed={managerFilter===k} onClick={()=>setManagerFilter(k)}>{t}{k!=='all'&&<b>{new Set(items.filter(k==='coach'?needsCoaching:i=>!i.attempts.length).map(i=>i.staffId)).size}</b>}</button>)}</div>
  {Array.from(new Set(items.map(i=>i.staffId))).map(id=>{const person=sorted.filter(i=>i.staffId===id&&(managerFilter==='all'||(managerFilter==='coach'?needsCoaching(i):!i.attempts.length)));return person.length?<section className="dl-person" key={id}><h2>{person[0].staffName}</h2>{person.map(row)}</section>:null;})}
  {!sorted.some(i=>managerFilter==='all'||(managerFilter==='coach'?needsCoaching(i):!i.attempts.length))&&<p className="dl-empty">这里暂时没有需要跟进的学习任务。</p>}
  <details className="dl-history dl-manager-guide"><summary>店长辅导参考 · 6 个情境</summary><p className="dl-muted">用于自学和带教讨论，不计考试成绩。</p>{managerGuide.map(unit=><section key={unit.title}><h2>{unit.title}</h2><p>{unit.intro}</p>{unit.questions.map(q=><article className="dl-mistake" key={q.id}><h3>{q.prompt}</h3><ol type="A">{q.choices.map(c=><li key={c}>{c}</li>)}</ol><details><summary>展开参考做法</summary><p>{q.choices[q.answer]}</p><p>{q.explanation}</p></details></article>)}</section>)}</details><p className="dl-footnote">辅导要看实际服务中的改变，答题不能代替现场观察。</p>
@@ -61,7 +116,7 @@ export default function DailyLearning({actor,courses,gateway,arrange,storeName}:
  <form className="dl-coach" onSubmit={async e=>{e.preventDefault();if(await run({kind:'follow_up',note})){setNote('');setSaved(true);}}}><label htmlFor="coach-note">这次怎么辅导</label><textarea id="coach-note" value={note} maxLength={500} disabled={busy} onChange={e=>{setNote(e.target.value);setSaved(false);pending.current=undefined;}} placeholder="例如：一起练了“轻一点”的回应；下次先调整，再简短确认。"/><button className="dl-primary" disabled={busy||!note.trim()}>{busy?'正在保存…':'保存辅导建议'}</button>{saved&&<p role="status">已保存，技师打开本课可看到。</p>}</form>{notes(item)}
  </>:<>
  {notes(item)}
- {phase==='read'&&visual?<><div className="dl-step"><span>要点 {step+1}/{course.sections.length}</span><progress max={course.sections.length} value={step+1}/></div><h2 className="dl-lesson-title">{course.sections[step].title}</h2><article className="dl-scene"><small>{course.category==='经络穴位'?'知识例子':'服务情境'}</small><p>{visual.scene}</p></article><section className="dl-action"><h3>{course.category==='经络穴位'?'这样理解':'你要做的'}</h3><p>{visual.action}</p>{section?.paragraphs.slice(4).map((p,index)=><p key={index}>{p}</p>)}{visual.say&&<blockquote>{visual.say}</blockquote>}</section><div className="dl-remember"><CheckOutlined/><p>{visual.remember}</p></div><div className="dl-actions">{step>0&&<button disabled={busy} className="dl-secondary" onClick={()=>{setStep(s=>s-1);top();}}>上一页</button>}<button className="dl-primary" disabled={busy} onClick={()=>void nextSection()}>{busy?'正在保存…':step===course.sections.length-1?`做 ${course.questions.length} 道练习`:'下一要点'}<ArrowRightOutlined/></button></div></>:phase==='quiz'&&q?<>
+ {phase==='read'&&visual?<><div className="dl-step"><span>要点 {step+1}/{course.sections.length}</span><progress max={course.sections.length} value={step+1}/></div><h2 className="dl-lesson-title">{course.sections[step].title}</h2><article className="dl-scene"><small>{course.category==='经络穴位'?'知识例子':'服务情境'}</small><p>{visual.scene}</p></article><section className="dl-action"><h3>{course.category==='经络穴位'?'这样理解':'你要做的'}</h3><p>{visual.action}</p>{section?.paragraphs.slice(4).map((p,index)=><p key={index}>{p}</p>)}{visual.say&&<blockquote>{visual.say}</blockquote>}</section><div className="dl-remember"><CheckOutlined/><p>{visual.remember}</p></div><div className="dl-actions">{step>0&&<button disabled={busy} className="dl-secondary" onClick={()=>{setStep(s=>s-1);top();}}>上一页</button>}<button className="dl-primary" disabled={busy} onClick={()=>void nextSection()}>{busy?'正在保存…':step===course.sections.length-1?`做 ${course.questions.length} 道练习`:'下一要点'}<ArrowRightOutlined/></button></div>{coachSection}</>:phase==='quiz'&&q?<>
  <div className="dl-step"><span>练习 {question+1}/{course.questions.length}</span><progress max={course.questions.length} value={question+1}/></div><fieldset className="dl-question" disabled={busy}><legend>{q.prompt}</legend>{q.choices.map((choice,index)=><label key={index} className={answers[q.id]===index?'is-selected':''}><input type="radio" name={q.id} checked={answers[q.id]===index} onChange={()=>answer(q.id,index)}/><span>{choice}</span></label>)}</fieldset><div className="dl-actions">{question>0&&<button className="dl-secondary" disabled={busy} onClick={()=>{setQuestion(q=>q-1);top();}}>上一题</button>}<button className="dl-primary" disabled={busy||answers[q.id]===undefined} onClick={()=>{if(question<course.questions.length-1){setQuestion(q=>q+1);top();}else void submit();}}>{busy?'正在提交…':question===course.questions.length-1?'提交练习':'下一题'}</button></div><p className="dl-footnote">提交后保存练习结果。</p>
  </>:<>{summary()}<div className="dl-actions"><button className="dl-secondary" onClick={()=>{setStep(0);setPhase('read');top();}}>复习要点</button>{last&&last.correct<last.total?<button className="dl-primary" onClick={retry}>再练一次</button>:<button className="dl-primary" onClick={back}>回到学习</button>}</div><p className="dl-footnote">知识练习不代替现场实操考核。</p></>}
  {course.sources.length>0&&<details className="dl-sources"><summary>课程依据</summary>{course.sources.map(s=><p key={s.url}><span>{s.title}</span></p>)}</details>}

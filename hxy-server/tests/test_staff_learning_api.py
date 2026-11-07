@@ -1,4 +1,5 @@
 import copy
+import json
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -14,8 +15,9 @@ from app.api.staff_learning import content_hash
 from app.core.config import settings
 from app.db.session import Base, get_db
 from app.main import app
-from app.models import Staff, Store, Technician
+from app.models import AuditLog, Staff, Store, Technician
 from app.models.staff_learning import LearningCourseVersion, StaffLearningAssignment, StaffLearningEvent
+from app.services.learning_ai import LearningAIReply
 
 PREFIX = "/api/v1/staff-learning"
 COURSE = {"id": "S01", "version": "test-v1", "title": "Synthetic lesson", "category": "Service",
@@ -103,7 +105,9 @@ def test_feature_off_and_anonymous(learning, monkeypatch):
     client, _, _, headers, *_ = learning
     assert client.get(PREFIX + "/bootstrap").status_code == 401
     monkeypatch.setattr(settings, "staff_learning_enabled", False)
-    assert client.get(PREFIX + "/status", headers=headers["a"]).json() == {"enabled": False}
+    assert client.get(PREFIX + "/status", headers=headers["a"]).json() == {
+        "enabled": False, "ai_coach_enabled": False, "ai_plan_enabled": False,
+    }
     assert client.get(PREFIX + "/bootstrap", headers=headers["a"]).status_code == 404
 
 
@@ -237,3 +241,95 @@ def test_learning_migration_roundtrip_preserves_existing_rows(learning):
         after = [(s.id, s.username, s.role, s.store_id, s.credentials_version) for s in db.scalars(select(Staff).order_by(Staff.id))]
         assert after == before
         assert db.scalar(select(func.count()).select_from(Store)) == 2
+
+
+def enable_ai(monkeypatch):
+    monkeypatch.setattr(settings, "learning_ai_enabled", True)
+    monkeypatch.setattr(settings, "learning_ai_base_url", "https://example.invalid")
+    monkeypatch.setattr(settings, "learning_ai_api_key", "test-key")
+    monkeypatch.setattr(settings, "learning_ai_model", "test-model")
+
+
+def test_coach_is_grounded_and_does_not_leak_quiz_answers(learning, monkeypatch):
+    from app.services.learning_ai import LearningAIProvider
+
+    client, factory, ids, headers, *_ = learning
+    enable_ai(monkeypatch)
+    captured = {}
+
+    def fake_chat(self, messages, *, response_format=None):
+        captured["messages"] = messages
+        return LearningAIReply(
+            content=json.dumps({"answer": "先听清楚顾客的需求。", "citations": ["one", "unknown"]}),
+            usage={"total_tokens": 12},
+        )
+
+    monkeypatch.setattr(LearningAIProvider, "chat", fake_chat)
+    task = arrange(learning).json()["assignments"][0]
+    response = client.post(PREFIX + "/coach", headers=headers["a"], json={
+        "assignment_id": task["id"], "question": "顾客说轻一点怎么回应？",
+        "section_id": "one", "request_id": str(uuid.uuid4()),
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["grounded"] is True
+    assert [item["section_id"] for item in response.json()["citations"]] == ["one"]
+    prompt = json.dumps(captured["messages"], ensure_ascii=False)
+    assert "Listen first" in prompt
+    assert "Synthetic answer" not in prompt
+    assert "Synthetic explanation" not in prompt
+    with factory() as db:
+        audit = db.scalar(select(AuditLog).where(AuditLog.action == "learning_ai_coach"))
+        assert audit is not None and audit.detail["status"] == "success"
+
+    assert client.post(PREFIX + "/coach", headers=headers["manager"], json={
+        "assignment_id": task["id"], "question": "test", "request_id": str(uuid.uuid4()),
+    }).status_code == 403
+    assert client.post(PREFIX + "/coach", headers=headers["other"], json={
+        "assignment_id": task["id"], "question": "test", "request_id": str(uuid.uuid4()),
+    }).status_code == 404
+
+
+def test_coach_disabled_and_rate_limited(learning, monkeypatch):
+    client, _, _, headers, *_ = learning
+    task = arrange(learning).json()["assignments"][0]
+    body = {"assignment_id": task["id"], "question": "test", "request_id": str(uuid.uuid4())}
+    monkeypatch.setattr(settings, "learning_ai_enabled", False)
+    assert client.post(PREFIX + "/coach", headers=headers["a"], json=body).status_code == 503
+
+    enable_ai(monkeypatch)
+    monkeypatch.setattr(settings, "learning_ai_coach_daily_limit", 1)
+    from app.services.learning_ai import LearningAIProvider
+    monkeypatch.setattr(LearningAIProvider, "chat", lambda self, messages, response_format=None: LearningAIReply(
+        content=json.dumps({"answer": "ok", "citations": ["one"]}), usage={},
+    ))
+    assert client.post(PREFIX + "/coach", headers=headers["a"], json=body).status_code == 200
+    second = client.post(PREFIX + "/coach", headers=headers["a"], json={
+        "assignment_id": task["id"], "question": "again", "request_id": str(uuid.uuid4()),
+    })
+    assert second.status_code == 429
+    assert second.json()["detail"]["code"] == "LEARNING_AI_RATE_LIMITED"
+
+
+def test_weekly_plan_only_returns_valid_store_scope(learning, monkeypatch):
+    from app.services.learning_ai import LearningAIProvider
+
+    client, _, ids, headers, *_ = learning
+    enable_ai(monkeypatch)
+
+    def fake_chat(self, messages, *, response_format=None):
+        return LearningAIReply(content=json.dumps({"suggestions": [
+            {"staff_id": ids["a"], "course_id": COURSE["id"], "course_version": COURSE["version"],
+             "reason": "有 1 道错题", "priority": 1},
+            {"staff_id": 999999, "course_id": COURSE["id"], "course_version": COURSE["version"],
+             "reason": "不存在的技师", "priority": 2},
+        ]}), usage={"total_tokens": 20})
+
+    monkeypatch.setattr(LearningAIProvider, "chat", fake_chat)
+    response = client.post(PREFIX + "/weekly-plan", headers=headers["manager"], json={"lookback_days": 14})
+    assert response.status_code == 200, response.text
+    suggestions = response.json()["suggestions"]
+    assert len(suggestions) == 1
+    assert suggestions[0]["staff_id"] == ids["a"]
+    assert suggestions[0]["staff_name"] == "Tech 0"
+    assert suggestions[0]["title"] == "Synthetic lesson"
+    assert client.post(PREFIX + "/weekly-plan", headers=headers["a"], json={"lookback_days": 14}).status_code == 403

@@ -46,20 +46,22 @@ export default function LearningLive({ entry = false }: {entry?:boolean}) {
   const [courseKey,setCourseKey] = useState('');
   const [busy,setBusy] = useState(false);
   const [assigned,setAssigned] = useState(false);
+ const [ai,setAi] = useState({coach:false,plan:false});
   const saving = useRef(false);
   const pending = useRef<{payload:string;key:string}>();
   const alive = useRef(true);
   useEffect(()=>{
     alive.current=true; let active=true;
-    setData(null);setError('');setDisabled(false);
+    setData(null);setError('');setDisabled(false);setAi({coach:false,plan:false});
     if (!identity) return;
     const expected=identity;
     void (async()=>{
       try {
-        const status=await client.get<{enabled:boolean}>('/staff-learning/status');
+        const status=await client.get<{enabled:boolean;ai_coach_enabled?:boolean;ai_plan_enabled?:boolean}>('/staff-learning/status');
         assertIdentity(expected);
         if (!active) return;
         if (!status.data.enabled) {setDisabled(true);return;}
+        setAi({coach:!!status.data.ai_coach_enabled,plan:!!status.data.ai_plan_enabled});
         const snapshot=await readSnapshot(expected);
         if(active)setData(snapshot);
       } catch(failure) {if(active)setError(requestErrorMessage(failure));}
@@ -112,5 +114,5 @@ export default function LearningLive({ entry = false }: {entry?:boolean}) {
         {error&&<p role="alert">{error}</p>}
       </form>}
     </section>;
-  return <DailyLearningPage key={identityKey+':'+data.assignments.map(a=>a.id).join(':')} actor={data.actor} courses={data.courses} gateway={gateway} arrange={arrangeForm} storeName={getStaff()?.store_name}/>;
+  return <DailyLearningPage key={identityKey+':'+data.assignments.map(a=>a.id).join(':')} actor={data.actor} courses={data.courses} gateway={gateway} arrange={arrangeForm} storeName={getStaff()?.store_name} aiCoachEnabled={ai.coach} aiPlanEnabled={ai.plan}/>;
 }
