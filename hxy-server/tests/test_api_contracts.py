@@ -538,6 +538,13 @@ class AdminV2ContractTests(unittest.TestCase):
             self.assertEqual(created.status_code, 200, created.text)
             created_id = created.json()["id"]
             with self.SessionLocal() as db:
+                project = Project(
+                    store_id=created_id,
+                    code=f"milestone-project-{created_id}",
+                    category="bath",
+                    name="里程碑项目",
+                    publication_status="published",
+                )
                 db.add_all([
                     Room(
                         store_id=created_id,
@@ -548,15 +555,28 @@ class AdminV2ContractTests(unittest.TestCase):
                         is_space_container=False,
                         operational_status="active",
                     ),
-                    Project(
-                        store_id=created_id,
-                        code=f"milestone-project-{created_id}",
-                        category="bath",
-                        name="里程碑项目",
-                        publication_status="published",
-                    ),
+                    project,
                     PageContent(store_id=created_id, page_key="diy-home", published=True),
                 ])
+                db.flush()
+                technician = Technician(
+                    store_id=created_id,
+                    code=f"milestone-tech-{created_id}",
+                    name="里程碑技师",
+                    status="available",
+                )
+                db.add(technician)
+                db.flush()
+                db.add(Staff(
+                    username=f"milestone-manager-{created_id}",
+                    password_hash="x",
+                    name="里程碑店长",
+                    role="manager",
+                    store_id=created_id,
+                    technician_id=technician.id,
+                    status="active",
+                ))
+                db.add(PriceBook(project_id=project.id, price_type="store", amount_cents=10000))
                 db.commit()
 
             updated = self.client.patch(
@@ -570,6 +590,11 @@ class AdminV2ContractTests(unittest.TestCase):
             self.__class__.current_staff_id = self.staff_id
             if created_id:
                 with self.SessionLocal() as db:
+                    db.query(PriceBook).filter(PriceBook.project_id.in_(
+                        db.query(Project.id).filter(Project.store_id == created_id)
+                    )).delete(synchronize_session=False)
+                    db.query(Staff).filter(Staff.store_id == created_id).delete()
+                    db.query(Technician).filter(Technician.store_id == created_id).delete()
                     db.query(PageContent).filter(PageContent.store_id == created_id).delete()
                     db.query(Project).filter(Project.store_id == created_id).delete()
                     db.query(Room).filter(Room.store_id == created_id).delete()
@@ -592,6 +617,13 @@ class AdminV2ContractTests(unittest.TestCase):
                 user = User(openid="lifecycle-guard-user", phone="13800008888")
                 db.add_all([store, user])
                 db.flush()
+                project = Project(
+                    store_id=store.id,
+                    code=f"lifecycle-project-{store.id}",
+                    category="bath",
+                    name="生命周期项目",
+                    publication_status="published",
+                )
                 db.add_all([
                     Room(
                         store_id=store.id,
@@ -602,15 +634,28 @@ class AdminV2ContractTests(unittest.TestCase):
                         is_space_container=False,
                         operational_status="active",
                     ),
-                    Project(
-                        store_id=store.id,
-                        code=f"lifecycle-project-{store.id}",
-                        category="bath",
-                        name="生命周期项目",
-                        publication_status="published",
-                    ),
+                    project,
                     PageContent(store_id=store.id, page_key="diy-home", published=True),
                 ])
+                db.flush()
+                technician = Technician(
+                    store_id=store.id,
+                    code=f"lifecycle-tech-{store.id}",
+                    name="生命周期技师",
+                    status="available",
+                )
+                db.add(technician)
+                db.flush()
+                db.add(Staff(
+                    username=f"lifecycle-manager-{store.id}",
+                    password_hash="x",
+                    name="生命周期店长",
+                    role="manager",
+                    store_id=store.id,
+                    technician_id=technician.id,
+                    status="active",
+                ))
+                db.add(PriceBook(project_id=project.id, price_type="store", amount_cents=10000))
                 order = Order(
                     store_id=store.id,
                     user_id=user.id,
@@ -665,6 +710,11 @@ class AdminV2ContractTests(unittest.TestCase):
                 if order_id:
                     db.query(Order).filter(Order.id == order_id).delete()
                 if store_id:
+                    db.query(PriceBook).filter(PriceBook.project_id.in_(
+                        db.query(Project.id).filter(Project.store_id == store_id)
+                    )).delete(synchronize_session=False)
+                    db.query(Staff).filter(Staff.store_id == store_id).delete()
+                    db.query(Technician).filter(Technician.store_id == store_id).delete()
                     db.query(PageContent).filter(PageContent.store_id == store_id).delete()
                     db.query(Project).filter(Project.store_id == store_id).delete()
                     db.query(Room).filter(Room.store_id == store_id).delete()
@@ -696,7 +746,7 @@ class AdminV2ContractTests(unittest.TestCase):
             self.assertFalse(check.json()["ready"])
             self.assertEqual(
                 {item["key"] for item in check.json()["checks"] if not item["passed"]},
-                {"service_position", "published_project", "published_page"},
+                {"manager", "technician", "service_position", "published_project", "project_price", "published_page"},
             )
 
             blocked = self.client.patch(

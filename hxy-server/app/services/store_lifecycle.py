@@ -1,10 +1,12 @@
 """Store lifecycle guards shared by customer-facing transaction endpoints."""
 
+from datetime import UTC, datetime
+
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Order, PageContent, PositionOccupancy, Project, Room, Store
+from app.models import Order, PageContent, PositionOccupancy, PriceBook, Project, Room, Staff, Store, Technician
 
 OPEN_STORE_STATUSES = frozenset({"open", "trial_open"})
 STORE_STATUS_LABELS = {
@@ -58,6 +60,20 @@ def require_store_open(store: Store | None, action: str = "到店服务") -> Sto
 
 def build_store_opening_check(db: Session, store: Store) -> dict:
     """Return the minimum operational readiness checklist for opening a store."""
+    manager_count = db.scalar(
+        select(Staff.id).where(
+            Staff.store_id == store.id,
+            Staff.role == "manager",
+            Staff.status == "active",
+            Staff.technician_id.is_not(None),
+        ).limit(1)
+    )
+    technician_count = db.scalar(
+        select(Technician.id).where(
+            Technician.store_id == store.id,
+            Technician.status != "resigned",
+        ).limit(1)
+    )
     position_count = db.scalar(
         select(Room.id).where(
             Room.store_id == store.id,
@@ -71,6 +87,18 @@ def build_store_opening_check(db: Session, store: Store) -> dict:
             Project.store_id == store.id,
             Project.publication_status == "published",
         ).limit(1)
+    )
+    priced_project_count = db.scalar(
+        select(Project.id)
+        .join(PriceBook, PriceBook.project_id == Project.id)
+        .where(
+            Project.store_id == store.id,
+            Project.publication_status == "published",
+            PriceBook.price_type == "store",
+            PriceBook.amount_cents >= 0,
+            or_(PriceBook.effective_to.is_(None), PriceBook.effective_to > datetime.now(UTC)),
+        )
+        .limit(1)
     )
     page_published = db.scalar(
         select(PageContent.id).where(
@@ -87,6 +115,18 @@ def build_store_opening_check(db: Session, store: Store) -> dict:
             "detail": "名称、地址和营业时间必须完整",
         },
         {
+            "key": "manager",
+            "label": "负责人",
+            "passed": manager_count is not None,
+            "detail": "至少一个在职店长，且已绑定技师档案",
+        },
+        {
+            "key": "technician",
+            "label": "技师",
+            "passed": technician_count is not None,
+            "detail": "至少一个未离职技师",
+        },
+        {
             "key": "service_position",
             "label": "服务位",
             "passed": position_count is not None,
@@ -97,6 +137,12 @@ def build_store_opening_check(db: Session, store: Store) -> dict:
             "label": "已发布项目",
             "passed": project_count is not None,
             "detail": "至少一个已发布服务项目",
+        },
+        {
+            "key": "project_price",
+            "label": "有效门店价",
+            "passed": priced_project_count is not None,
+            "detail": "至少一个已发布项目配置当前有效的门店价",
         },
         {
             "key": "published_page",
