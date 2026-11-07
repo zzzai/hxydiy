@@ -492,7 +492,7 @@ def weekly_plan(
             "title": course.content.get("title") or course.code,
             "priority": int(suggestion["priority"]),
         })
-    if not validated:
+    if not validated and suggestions:
         _ai_audit(
             db, staff, "learning_ai_weekly_plan", "invalid", entity_id=str(staff.store_id),
             code="LEARNING_AI_INVALID_PLAN", latency_ms=int((time.monotonic() - started) * 1000),
@@ -513,5 +513,5 @@ def weekly_plan(
             "courses": len(data["courses"]),
             "low_score_reviews": data["payload"]["low_score_reviews"]["count"],
         },
-        "disclaimer": "AI 生成草稿，请店长确认后再安排；不会自动分配。",
+        "disclaimer": "AI 生成草稿，请店长确认后再安排；不会自动分配。" if validated else "AI 未发现本周需要优先安排的课程。",
     }

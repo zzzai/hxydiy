@@ -333,3 +333,17 @@ def test_weekly_plan_only_returns_valid_store_scope(learning, monkeypatch):
     assert suggestions[0]["staff_name"] == "Tech 0"
     assert suggestions[0]["title"] == "Synthetic lesson"
     assert client.post(PREFIX + "/weekly-plan", headers=headers["a"], json={"lookback_days": 14}).status_code == 403
+
+
+def test_weekly_plan_allows_empty_recommendations(learning, monkeypatch):
+    from app.services.learning_ai import LearningAIProvider
+
+    client, _, _, headers, *_ = learning
+    enable_ai(monkeypatch)
+    monkeypatch.setattr(LearningAIProvider, "chat", lambda self, messages, response_format=None: LearningAIReply(
+        content=json.dumps({"suggestions": []}), usage={},
+    ))
+    response = client.post(PREFIX + "/weekly-plan", headers=headers["manager"], json={"lookback_days": 14})
+    assert response.status_code == 200, response.text
+    assert response.json()["suggestions"] == []
+    assert "没有" in response.json()["disclaimer"] or "未发现" in response.json()["disclaimer"]

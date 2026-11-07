@@ -232,6 +232,6 @@ def parse_weekly_plan_reply(text: str) -> list[dict]:
             "reason": reason.strip()[:200],
             "priority": priority,
         })
-    if not parsed:
+    if not isinstance(parsed, list):
         raise LearningAIInvalidResponse()
     return parsed
