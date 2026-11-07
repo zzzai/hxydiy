@@ -1,5 +1,15 @@
 # hxy-diy 工作状态
 
+## 2026-11-07 新店开业工具与开业检查已上线（店 2 待建档）
+
+- [PR #407](https://github.com/zzzai/hxydiy/pull/407) 合并 `e14dc2bd07b0155627fec59dd66a190afef55163`，[PR #408](https://github.com/zzzai/hxydiy/pull/408) 合并 `9ffb81c89a155132ad96e9ae3acd13853d610058`；最终 main 为 `9ffb81c8`。精确 [CI 42343983827](https://github.com/zzzai/hxydiy/actions/runs/42343983827) 与唯一 [Deploy 42344217202](https://github.com/zzzai/hxydiy/actions/runs/42344217202) 成功，实际 current=`github-9ffb81c89a15-42344217202`。
+- 发布后 health=`ok/production`，`/`、`/admin/`、`/technician/` 均 200；容器内两个新脚本存在，`python -m scripts.provision_store --help` 与 `python -m scripts.link_staff_technician --help` 可运行；可用磁盘约 3.4GiB。
+- `provision_store.py` 提供门店配置受控复制：预览/应用、preview hash、总部管理员 actor、PGDMP 备份摘要；复制 16 个已发布项目、当前价格、目录版本/选项组/选项、5 个加购、首页、24 个空间；编码加前缀并重映射选项跨店引用；幂等且不改源门店。
+- `link_staff_technician.py` 提供店长绑定同店技师档案：预览、备份、审计；只允许在职店长、同店、一对一；不改角色或权限。
+- 开业检查新增负责人、未离职技师、有效门店价；定向测试 11 项通过，CI 全绿。店 1 只读核对全部通过，未被新检查阻挡。
+- 本批无迁移、无店 1 业务写入、无外部消息；店 2 未建档。下一批需要开业日期、门店资料、布局、店长/技师/企微名单和价格确认，先生产 dry-run 再应用。
+- 运维注意：容器内须在 `/app` 用 `python -m scripts...` 运行，直接按路径执行会缺 `app` 包路径。
+
 ## 2026-11-02 新菜单与员工学习已上线（真机待人工验收）
 
 - [PR #405](https://github.com/zzzai/hxydiy/pull/405) 已合并，候选 `10fdde70b6431b5454b1286c1d86fbe89309e2d7`，运行提交 `1b90b4bf52c86ce32d723c71ada7ec2715f53099`。精确 [CI 41334021818](https://github.com/zzzai/hxydiy/actions/runs/41334021818) 与唯一 [Deploy 41334455709](https://github.com/zzzai/hxydiy/actions/runs/41334455709) 成功；实际 current=`github-1b90b4bf52c8-41334455709`。本次事实文档补录不再次部署应用。
