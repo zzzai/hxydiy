@@ -3792,6 +3792,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staff-learning/coach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Coach */
+        post: operations["coach_api_v1_staff_learning_coach_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff-learning/status": {
         parameters: {
             query?: never;
@@ -3803,6 +3820,23 @@ export interface paths {
         get: operations["status_api_v1_staff_learning_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff-learning/weekly-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Weekly Plan */
+        post: operations["weekly_plan_api_v1_staff_learning_weekly_plan_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5172,6 +5206,25 @@ export interface components {
             request_id: string;
             /** Staff Id */
             staff_id: number;
+        };
+        /** LearningCoachIn */
+        LearningCoachIn: {
+            /** Assignment Id */
+            assignment_id: string;
+            /** Question */
+            question: string;
+            /** Request Id */
+            request_id: string;
+            /** Section Id */
+            section_id?: string | null;
+        };
+        /** LearningWeeklyPlanIn */
+        LearningWeeklyPlanIn: {
+            /**
+             * Lookback Days
+             * @default 14
+             */
+            lookback_days: number;
         };
         /** LeaveRequestIn */
         LeaveRequestIn: {
@@ -15919,6 +15972,41 @@ export interface operations {
             };
         };
     };
+    coach_api_v1_staff_learning_coach_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningCoachIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     status_api_v1_staff_learning_status_get: {
         parameters: {
             query?: never;
@@ -15929,6 +16017,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    weekly_plan_api_v1_staff_learning_weekly_plan_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningWeeklyPlanIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

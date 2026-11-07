@@ -2070,6 +2070,63 @@
         "title": "LearningAssignmentIn",
         "type": "object"
       },
+      "LearningCoachIn": {
+        "additionalProperties": false,
+        "properties": {
+          "assignment_id": {
+            "maxLength": 36,
+            "minLength": 1,
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 100,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "section_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Id"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "question",
+          "request_id"
+        ],
+        "title": "LearningCoachIn",
+        "type": "object"
+      },
+      "LearningWeeklyPlanIn": {
+        "additionalProperties": false,
+        "properties": {
+          "lookback_days": {
+            "default": 14,
+            "maximum": 30.0,
+            "minimum": 7.0,
+            "title": "Lookback Days",
+            "type": "integer"
+          }
+        },
+        "title": "LearningWeeklyPlanIn",
+        "type": "object"
+      },
       "LeaveRequestIn": {
         "properties": {
           "end_date": {
@@ -24023,6 +24080,63 @@
         ]
       }
     },
+    "/api/v1/staff-learning/coach": {
+      "post": {
+        "operationId": "coach_api_v1_staff_learning_coach_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearningCoachIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coach",
+        "tags": [
+          "staff-learning"
+        ]
+      }
+    },
     "/api/v1/staff-learning/status": {
       "get": {
         "operationId": "status_api_v1_staff_learning_status_get",
@@ -24065,6 +24179,63 @@
           }
         },
         "summary": "Status",
+        "tags": [
+          "staff-learning"
+        ]
+      }
+    },
+    "/api/v1/staff-learning/weekly-plan": {
+      "post": {
+        "operationId": "weekly_plan_api_v1_staff_learning_weekly_plan_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearningWeeklyPlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Weekly Plan",
         "tags": [
           "staff-learning"
         ]
