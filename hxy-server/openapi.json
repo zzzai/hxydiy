@@ -1967,6 +1967,33 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "IssueByPhoneIn": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "phone": {
+            "maxLength": 20,
+            "minLength": 11,
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "title": "IssueByPhoneIn",
+        "type": "object"
+      },
       "IssueCouponIn": {
         "properties": {
           "user_id": {
@@ -13321,6 +13348,64 @@
           }
         },
         "summary": "Issue Half Price Coupon",
+        "tags": [
+          "manager-coupons"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/coupons/half-price/issue-by-phone": {
+      "post": {
+        "description": "店长给微信好友发券：按手机号找到或创建顾客，不要求有订单。",
+        "operationId": "issue_half_price_by_phone_api_v1_admin_v2_manager_coupons_half_price_issue_by_phone_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueByPhoneIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue Half Price By Phone",
         "tags": [
           "manager-coupons"
         ]

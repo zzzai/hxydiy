@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Alert, Button, Drawer, Input, Modal, Pagination, Spin, Tag, Typography, message } from 'antd';
 import QRCode from 'qrcode';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff, issueHalfPriceCoupon } from '../api';
+import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff, issueHalfPriceCoupon, issueHalfPriceCouponByPhone } from '../api';
 import { parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
@@ -37,6 +37,9 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   const [couponToken, setCouponToken] = useState('');
   const [couponShare, setCouponShare] = useState<{ link: string; qr: string; name: string } | null>(null);
   const [issueOpen, setIssueOpen] = useState(false);
+  const [issuePhone, setIssuePhone] = useState('');
+  const [issueName, setIssueName] = useState('');
+  const [phoneBusy, setPhoneBusy] = useState(false);
   const [mapRefresh, setMapRefresh] = useState(0);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -84,6 +87,36 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       message.error(detailMessage || '发券失败，请重试');
     } finally {
       setCouponBusy(false);
+    }
+  };
+
+  const issueByPhone = async () => {
+    const phone = issuePhone.replace(/\s/g, '');
+    if (!/^1\d{10}$/.test(phone)) {
+      message.error('请输入 11 位手机号');
+      return;
+    }
+    if (phoneBusy) return;
+    setPhoneBusy(true);
+    try {
+      const response = await issueHalfPriceCouponByPhone(phone, issueName.trim() || undefined);
+      const storeId = Number(getStaff()?.store_id || 0);
+      const url = new URL('/', window.location.origin);
+      if (storeId > 0) url.searchParams.set('store', String(storeId));
+      url.searchParams.set('view', 'return');
+      const link = url.toString();
+      let qr = '';
+      try { qr = await QRCode.toDataURL(link, { width: 240, margin: 1 }); } catch { /* link sharing still works */ }
+      setIssueOpen(false);
+      setIssuePhone('');
+      setIssueName('');
+      setCouponShare({ link, qr, name: response.data.customer_name || issueName || '顾客' });
+      message.success(`已给${response.data.customer_name || '顾客'}发半价券`);
+    } catch (failure) {
+      const detailMessage = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message;
+      message.error(detailMessage || '发券失败，请检查手机号或重试');
+    } finally {
+      setPhoneBusy(false);
     }
   };
 
@@ -296,7 +329,14 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     <Modal open={issueOpen} title="给顾客发半价券" footer={null} onCancel={() => setIssueOpen(false)}>
       <div className="manager-issue-coupon">
         <p>选择一位本店顾客，发无门槛全单 5 折券；每人最多 1 张未使用。</p>
-        {issueCustomers.length === 0 ? <p className="manager-empty-copy">当前订单列表里没有可发券顾客，请先在「订单」中打开顾客订单。</p>
+        <div className="manager-issue-phone">
+          <strong>不在订单里？按手机号发</strong>
+          <Input value={issuePhone} inputMode="numeric" maxLength={11} placeholder="顾客手机号" onChange={(event) => setIssuePhone(event.target.value.replace(/\D/g, ''))} />
+          <Input value={issueName} maxLength={32} placeholder="顾客称呼（可选）" onChange={(event) => setIssueName(event.target.value)} />
+          <Button type="primary" block loading={phoneBusy} disabled={issuePhone.length !== 11} onClick={() => void issueByPhone()}>发给这个手机号</Button>
+          <small>没有账号也可以发；顾客用这个手机号登录后就能看到券。</small>
+        </div>
+        {issueCustomers.length === 0 ? <p className="manager-empty-copy">当前订单列表里没有可发券顾客，也可以直接输入手机号发券。</p>
           : issueCustomers.map((customer) => <div className="manager-issue-customer" key={customer.id}>
             <div><strong>{customer.nickname || '顾客'}</strong><small>{customer.phone || '未留手机号'}</small></div>
             <Button size="small" loading={couponBusy} onClick={() => void issueCoupon(customer)}>发半价券</Button>

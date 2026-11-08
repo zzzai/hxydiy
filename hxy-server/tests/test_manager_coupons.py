@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.admin import create_staff_token
 from app.core.security import create_access_token
+from app.core.security import create_access_token
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import SelectionSession, Staff, Store, User, UserCoupon
@@ -104,3 +105,24 @@ def test_store_scope_and_one_unused_coupon(coupons):
     denied = client.post(PREFIX + "/validate", headers=headers["other_manager"], json={"token": token})
     assert denied.status_code == 403
     assert denied.json()["detail"]["code"] == "COUPON_STORE_MISMATCH"
+
+
+def test_issue_by_phone_creates_wechat_customer_without_order(coupons):
+    client, factory, _, headers = coupons
+    issued = client.post(PREFIX + "/half-price/issue-by-phone", headers=headers["manager"],
+                         json={"phone": "13700137000", "name": "微信新客"})
+    assert issued.status_code == 200, issued.text
+    body = issued.json()
+    assert body["created_customer"] is True
+    assert body["customer_name"] == "微信新客"
+    assert body["percent_off"] == 50
+    with factory() as db:
+        user = db.get(User, body["user_id"])
+        assert user and user.phone == "13700137000"
+        customer_token = create_access_token(str(user.id), user.openid, user.customer_login_version)
+    mine = client.get("/api/v1/coupons", headers={"Authorization": f"Bearer {customer_token}"})
+    assert mine.status_code == 200, mine.text
+    assert [item["id"] for item in mine.json()["items"]] == [body["coupon_id"]]
+    again = client.post(PREFIX + "/half-price/issue-by-phone", headers=headers["manager"],
+                        json={"phone": "13700137000"})
+    assert again.status_code == 409

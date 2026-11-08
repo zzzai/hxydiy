@@ -438,3 +438,4 @@ export { getToken, getStaff };
 export const issueHalfPriceCoupon = (userId: number) => client.post('/admin/v2/manager/coupons/half-price/issue', { user_id: userId });
 export const validateManagerCoupon = (token: string) => client.post('/admin/v2/manager/coupons/validate', { token });
 export const redeemManagerCoupon = (token: string, requestId: string) => client.post('/admin/v2/manager/coupons/redeem', { token, request_id: requestId });
+export const issueHalfPriceCouponByPhone = (phone: string, name?: string) => client.post('/admin/v2/manager/coupons/half-price/issue-by-phone', { phone, name: name || undefined });

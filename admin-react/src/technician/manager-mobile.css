@@ -174,3 +174,5 @@
 .manager-quick-actions{display:flex;gap:8px;margin:10px 0}.manager-quick-actions button{flex:1;min-height:46px;border:1px solid #cfe0d5;border-radius:12px;background:#fff;color:#164f3c;font:inherit;font-weight:600}
 .manager-issue-coupon{display:grid;gap:10px}.manager-issue-coupon p{margin:0;color:#53665a}.manager-issue-customer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #edf1ee}.manager-issue-customer div{display:grid;gap:2px}.manager-issue-customer small{color:#66766d}.manager-empty-copy{color:#66766d;padding:12px 0}
 .manager-coupon-back{margin-bottom:8px}
+
+.manager-issue-phone{display:grid;gap:8px;padding:12px;border:1px solid #dce8df;border-radius:12px;background:#f7fbf8}.manager-issue-phone strong{font-size:14px;color:#164f3c}.manager-issue-phone small{color:#66766d;font-size:11px}

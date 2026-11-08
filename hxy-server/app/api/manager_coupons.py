@@ -6,6 +6,8 @@ the manager endpoint re-checks the coupon, store and customer on every call.
 """
 
 from datetime import UTC, datetime, timedelta
+import re
+import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -63,6 +65,11 @@ class IssueHalfPriceIn(BaseModel):
     user_id: int = Field(gt=0)
 
 
+class IssueByPhoneIn(BaseModel):
+    phone: str = Field(min_length=11, max_length=20)
+    name: str | None = Field(default=None, max_length=32)
+
+
 @router.post("/half-price/issue")
 def issue_half_price_coupon(
     body: IssueHalfPriceIn,
@@ -108,6 +115,77 @@ def issue_half_price_coupon(
     return {
         "coupon_id": coupon.id,
         "user_id": user.id,
+        "template_id": template.id,
+        "name": template.name,
+        "percent_off": template.percent_off,
+        "expire_at": coupon.expire_at.isoformat(),
+        "status": coupon.status,
+    }
+
+
+@router.post("/half-price/issue-by-phone")
+def issue_half_price_by_phone(
+    body: IssueByPhoneIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """店长给微信好友发券：按手机号找到或创建顾客，不要求有订单。"""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _resolve_target_store_id(db, staff, None)
+    phone = body.phone.strip().replace(" ", "")
+    if not re.fullmatch(r"1\d{10}", phone):
+        raise HTTPException(status_code=422, detail={"code": "PHONE_INVALID", "message": "请输入 11 位手机号"})
+    user = db.scalar(select(User).where(User.phone == phone).with_for_update())
+    created_customer = False
+    if user is None:
+        nickname = (body.name or "").strip()[:32] or "微信顾客"
+        user = User(
+            openid=f"wechat-coupon-{uuid.uuid4().hex}",
+            nickname=nickname,
+            phone=phone,
+            is_member=False,
+        )
+        db.add(user)
+        db.flush()
+        created_customer = True
+        _audit(db, staff, "manager_create_coupon_customer", "user", str(user.id), {
+            "store_id": store_id,
+            "phone_masked": _masked_phone(phone),
+        })
+    template = _half_price_template(db, store_id)
+    unused = db.scalar(select(sa_func.count()).select_from(UserCoupon).where(
+        UserCoupon.user_id == user.id,
+        UserCoupon.template_id == template.id,
+        UserCoupon.status == "unused",
+    )) or 0
+    if unused >= (template.claim_limit or 1):
+        raise HTTPException(status_code=409, detail={
+            "code": "COUPON_CLAIM_LIMIT_REACHED",
+            "message": "该顾客已有一张未使用的半价券",
+        })
+    now = datetime.now(UTC)
+    coupon = try_issue_coupon(
+        db, template, user.id, now + timedelta(days=template.validity_days or HALF_PRICE_VALIDITY_DAYS),
+        claimed_at=now,
+    )
+    if coupon is None:
+        raise coupon_budget_exhausted()
+    _audit(db, staff, "manager_issue_half_price_coupon", "user_coupon", str(coupon.id), {
+        "store_id": store_id,
+        "user_id": user.id,
+        "template_id": template.id,
+        "template_code": template.code,
+        "expire_at": coupon.expire_at.isoformat(),
+        "channel": "wechat_phone",
+    })
+    db.commit()
+    return {
+        "coupon_id": coupon.id,
+        "user_id": user.id,
+        "customer_name": _customer_display_name(user),
+        "phone_masked": _masked_phone(phone),
+        "created_customer": created_customer,
         "template_id": template.id,
         "name": template.name,
         "percent_off": template.percent_off,
