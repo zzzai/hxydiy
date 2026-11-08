@@ -69,11 +69,10 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       const storeId = Number(getStaff()?.store_id || 0);
       const url = new URL('/', window.location.origin);
       if (storeId > 0) url.searchParams.set('store', String(storeId));
-      url.searchParams.set('view', 'coupon-claim');
-      url.searchParams.set('token', response.data.token);
+      url.searchParams.set('c', response.data.code || response.data.token);
       const link = url.toString();
       let qr = '';
-      try { qr = await QRCode.toDataURL(link, { width: 240, margin: 1 }); } catch { /* link sharing still works */ }
+      try { qr = await QRCode.toDataURL(link, { width: 220, margin: 1, errorCorrectionLevel: 'L' }); } catch { /* link sharing still works */ }
       setCouponShare({ link, qr });
     } catch (failure) {
       const detailMessage = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message;

@@ -4993,8 +4993,10 @@ export interface components {
         };
         /** ClaimHalfPriceIn */
         ClaimHalfPriceIn: {
+            /** Code */
+            code?: string | null;
             /** Token */
-            token: string;
+            token?: string | null;
         };
         /** ClaimRequest */
         ClaimRequest: {

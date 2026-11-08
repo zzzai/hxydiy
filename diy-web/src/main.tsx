@@ -11,7 +11,7 @@ const StoreFeedbackPage = React.lazy(() => import('./components/StoreFeedbackPag
 const CouponClaimPage = React.lazy(() => import('./components/CouponClaimPage'));
 const params = new URLSearchParams(window.location.search);
 const feedbackEntry = params.get('view') === 'feedback';
-const couponClaimEntry = params.get('view') === 'coupon-claim';
+const couponClaimEntry = params.has('c') || params.get('view') === 'coupon-claim';
 const reportEntry = isReportEntry(params);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
