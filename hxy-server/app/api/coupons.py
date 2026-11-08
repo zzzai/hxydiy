@@ -254,7 +254,8 @@ def my_coupons(
 
 
 class ClaimHalfPriceIn(BaseModel):
-    token: str
+    code: str | None = None
+    token: str | None = None
 
 
 @router.post("/claim-half-price")
@@ -267,7 +268,10 @@ def claim_half_price(
     user_id = _user_id(authorization, db)
     if user_id is None:
         raise HTTPException(status_code=401, detail="请先登录")
-    payload = decode_claim_token(body.token)
+    value = (body.code or body.token or "").strip()
+    if not value:
+        raise HTTPException(status_code=422, detail={"code": "COUPON_LINK_INVALID", "message": "领券链接无效或已过期"})
+    payload = decode_claim_token(value)
     template = lock_coupon_template(
         db, CouponTemplate.id == payload["template_id"],
         CouponTemplate.store_id == payload["store_id"],

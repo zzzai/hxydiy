@@ -9,7 +9,7 @@ type ClaimedCoupon = { id: number; name: string; percent_off: number; expire_at:
 
 export default function CouponClaimPage() {
   const params = new URLSearchParams(window.location.search);
-  const token = params.get('token') || '';
+  const token = params.get('c') || params.get('token') || '';
   const storeId = Number(params.get('store') || 1);
   const [auth, setAuth] = useState<CustomerAuth | null>(() => readCustomerAuth());
   const [phone, setPhone] = useState('');
@@ -97,10 +97,10 @@ export default function CouponClaimPage() {
           : error ? <><p className="coupon-claim-error">{error}</p><a className="coupon-claim-link" href={couponUrl}>打开我的券</a></>
             : coupon ? <>
               <div className="coupon-claim-value"><strong>5折</strong><span>全单可用</span></div>
-              {qrToken && <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qrToken)}`} size={220} />}
+              {qrToken && <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qrToken)}`} size={220} level="L" />}
               <p className="coupon-claim-hint">请店长扫码核销</p>
               <p className="coupon-claim-meta">有效期至 {coupon.expire_at ? new Date(coupon.expire_at).toLocaleDateString('zh-CN') : '60 天后'}</p>
-              <p className="coupon-claim-hint">登录后也能在「我的券」看到，还能查看项目菜单。</p>
+              <p className="coupon-claim-hint">也可以在我的券看到，还能查看项目菜单。</p>
               <div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券</a></div>
             </> : null}
     </section>

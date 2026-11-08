@@ -99,6 +99,7 @@ def create_half_price_link(
     db.commit()
     return {
         "token": token,
+        "code": token,
         "expires_at": expires_at.isoformat(),
         "limit": HALF_PRICE_ISSUE_LIMIT,
         "issued": issued,
