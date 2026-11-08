@@ -1,4 +1,4 @@
-﻿"""Signed, short-lived coupon redemption tokens.
+"""Signed, short-lived coupon redemption tokens.
 
 The token is a bearer credential for one coupon and one customer. It contains
 no customer identity beyond the internal IDs, expires quickly, and is only
@@ -44,4 +44,3 @@ def decode_redeem_token(token: str) -> dict:
     if type(coupon_id) is not int or type(user_id) is not int:
         raise HTTPException(status_code=400, detail={"code": "COUPON_CODE_INVALID", "message": "核销码无效或已过期"})
     return {"coupon_id": coupon_id, "user_id": user_id}
-
