@@ -36,6 +36,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponToken, setCouponToken] = useState('');
   const [couponShare, setCouponShare] = useState<{ link: string; qr: string; name: string } | null>(null);
+  const [issueOpen, setIssueOpen] = useState(false);
   const [mapRefresh, setMapRefresh] = useState(0);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -61,8 +62,8 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     } catch { /* keep last successful summary */ }
   }, [current]);
 
-  const issueCoupon = async () => {
-    const userId = detail?.customer?.id;
+  const issueCoupon = async (customer = detail?.customer) => {
+    const userId = customer?.id;
     if (!userId || couponBusy) return;
     setCouponBusy(true);
     try {
@@ -74,8 +75,10 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       const link = url.toString();
       let qr = '';
       try { qr = await QRCode.toDataURL(link, { width: 240, margin: 1 }); } catch { /* link sharing still works */ }
-      setCouponShare({ link, qr, name: detail?.customer?.nickname || '顾客' });
-      message.success(`已给${detail?.customer?.nickname || '顾客'}发半价券，有效期至 ${new Date(response.data.expire_at).toLocaleDateString('zh-CN')}`);
+      setIssueOpen(false);
+      setDetail(null);
+      setCouponShare({ link, qr, name: customer?.nickname || '顾客' });
+      message.success(`已给${customer?.nickname || '顾客'}发半价券，有效期至 ${new Date(response.data.expire_at).toLocaleDateString('zh-CN')}`);
     } catch (failure) {
       const detailMessage = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message;
       message.error(detailMessage || '发券失败，请重试');
@@ -214,6 +217,11 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     </div>;
   };
 
+  const issueCustomers = items.reduce<Array<NonNullable<ManagerSelection['customer']>>>((result, item) => {
+    if (item.customer?.id && !result.some((customer) => customer.id === item.customer!.id)) result.push(item.customer);
+    return result;
+  }, []);
+
   return <section className="manager-store-page">
     <header className="manager-page-heading">
       <div>
@@ -227,23 +235,24 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       <span><strong>{workbench?.summary?.today_orders ?? '—'}</strong>今日订单</span>
       <span><strong>{workbench?.summary?.waiting_service ?? '—'}</strong>待服务</span>
       <span><strong>{workbench?.summary?.in_service ?? '—'}</strong>服务中</span>
-      <span><strong>{workbench?.summary?.completed_today ?? '—'}</strong>已完成</span>
       <button type="button" className={workbench?.summary?.attention ? 'has-attention' : ''} onClick={() => setView('tasks')}><strong>{workbench?.summary?.attention ?? '—'}</strong>需处理</button>
     </div>
-    {learningEntry}
+    <div className="manager-quick-actions" aria-label="常用操作">
+      <button type="button" onClick={() => { setDetail(null); setView('coupons'); }}>扫码核销</button>
+      <button type="button" onClick={() => { setDetail(null); setView('selections'); setIssueOpen(true); }}>给顾客发券</button>
+    </div>
     <nav className="manager-view-tabs" aria-label="工作台视图">
       <button type="button" aria-pressed={view === 'tasks'} onClick={() => { setDetail(null); setView('tasks'); }}>待处理</button>
-      <button type="button" aria-pressed={view === 'orders'} onClick={() => { setDetail(null); setView('orders'); }}>服务单</button>
       <button type="button" aria-pressed={view === 'selections'} onClick={() => { setDetail(null); setStaleOnly(false); setView('selections'); }}>订单</button>
       <button type="button" aria-pressed={view === 'positions'} onClick={() => { setDetail(null); setView('positions'); }}>座位</button>
-      <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button><button type="button" aria-pressed={view === 'coupons'} onClick={() => { setDetail(null); setView('coupons'); }}>核销</button>
+      <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button>
     </nav>
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
     {view === 'orders' ? <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => setView('positions')} />
       : view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenPositions={() => setView('positions')} onOpenOrders={(onlyStale = false) => { setStaleOnly(onlyStale); setPage(1); setPeriod('all'); setView('selections'); }} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
       : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} onFocusError={() => setDeepLinkError('评价链接已失效或无权查看，已返回评价列表。')} />
-: view === 'coupons' ? <ManagerCouponRedeemView initialToken={couponToken} />
+: view === 'coupons' ? <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setView('selections')} />
         : <>
       {!staleOnly && <div className="manager-order-period" role="group" aria-label="订单时间范围">
         {([['today', '今天'], ['7d', '近 7 天'], ['all', '全部']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={period === value} onClick={() => { setPage(1); setItems([]); setPeriod(value); }}>{label}</button>)}
@@ -282,6 +291,16 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
           <Button type="primary" onClick={() => void shareCouponLink()}>微信发给顾客</Button>
         </div>
         <small>链接只打开顾客自己的账户，不会把券发给别人。</small>
+      </div>
+    </Modal>
+    <Modal open={issueOpen} title="给顾客发半价券" footer={null} onCancel={() => setIssueOpen(false)}>
+      <div className="manager-issue-coupon">
+        <p>选择一位本店顾客，发无门槛全单 5 折券；每人最多 1 张未使用。</p>
+        {issueCustomers.length === 0 ? <p className="manager-empty-copy">当前订单列表里没有可发券顾客，请先在「订单」中打开顾客订单。</p>
+          : issueCustomers.map((customer) => <div className="manager-issue-customer" key={customer.id}>
+            <div><strong>{customer.nickname || '顾客'}</strong><small>{customer.phone || '未留手机号'}</small></div>
+            <Button size="small" loading={couponBusy} onClick={() => void issueCoupon(customer)}>发半价券</Button>
+          </div>)}
       </div>
     </Modal>
   </section>;

@@ -15,7 +15,7 @@ type CouponPreview = {
   status: string;
 };
 
-export default function ManagerCouponRedeemView({ initialToken = '' }: { initialToken?: string }) {
+export default function ManagerCouponRedeemView({ initialToken = '', onBack }: { initialToken?: string; onBack?: () => void }) {
   const [token, setToken] = useState('');
   const [preview, setPreview] = useState<CouponPreview | null>(null);
   const [error, setError] = useState('');
@@ -111,6 +111,7 @@ export default function ManagerCouponRedeemView({ initialToken = '' }: { initial
   };
 
   return <section className="manager-coupon-redeem" aria-label="优惠券核销">
+    {onBack && <Button className="manager-coupon-back" onClick={onBack}>返回工作台</Button>}
     <div className="manager-tasks-heading">
       <div><h2>优惠券核销</h2><p>扫描顾客券码，确认后券立即失效；只核销，不改订单金额。</p></div>
       <Tag color="green">店长</Tag>
