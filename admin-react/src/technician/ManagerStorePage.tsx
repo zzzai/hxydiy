@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography, message } from 'antd';
+import { Alert, Button, Drawer, Input, Modal, Pagination, Spin, Tag, Typography, message } from 'antd';
+import QRCode from 'qrcode';
 import { ReloadOutlined } from '@ant-design/icons';
 import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff, issueHalfPriceCoupon } from '../api';
 import { parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
@@ -34,6 +35,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   const [ordersRefresh, setOrdersRefresh] = useState(0);
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponToken, setCouponToken] = useState('');
+  const [couponShare, setCouponShare] = useState<{ link: string; qr: string; name: string } | null>(null);
   const [mapRefresh, setMapRefresh] = useState(0);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -65,6 +67,14 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     setCouponBusy(true);
     try {
       const response = await issueHalfPriceCoupon(userId);
+      const storeId = Number(getStaff()?.store_id || 0);
+      const url = new URL('/', window.location.origin);
+      if (storeId > 0) url.searchParams.set('store', String(storeId));
+      url.searchParams.set('view', 'return');
+      const link = url.toString();
+      let qr = '';
+      try { qr = await QRCode.toDataURL(link, { width: 240, margin: 1 }); } catch { /* link sharing still works */ }
+      setCouponShare({ link, qr, name: detail?.customer?.nickname || '顾客' });
       message.success(`已给${detail?.customer?.nickname || '顾客'}发半价券，有效期至 ${new Date(response.data.expire_at).toLocaleDateString('zh-CN')}`);
     } catch (failure) {
       const detailMessage = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message;
@@ -72,6 +82,27 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     } finally {
       setCouponBusy(false);
     }
+  };
+
+  const copyCouponLink = async () => {
+    if (!couponShare) return;
+    try {
+      await navigator.clipboard.writeText(couponShare.link);
+      message.success('链接已复制，可粘贴到微信发给顾客');
+    } catch {
+      message.info(couponShare.link);
+    }
+  };
+
+  const shareCouponLink = async () => {
+    if (!couponShare) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: '荷小悦半价券', text: '打开后在「我的券」查看半价券', url: couponShare.link });
+        return;
+      } catch { /* fall back to copy */ }
+    }
+    await copyCouponLink();
   };
 
   const load = useCallback(async (silent = false, force = false) => {
@@ -241,5 +272,17 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
         <Typography.Text type="secondary">如需取消或调整，请联系门店负责人。</Typography.Text>
       </>}
     </Drawer>
+    <Modal open={Boolean(couponShare)} title="半价券已发到顾客账户" footer={null} onCancel={() => setCouponShare(null)}>
+      <div className="manager-coupon-share">
+        <p>把链接或二维码发给顾客，顾客在微信中打开并登录后，在「我的券」查看核销码。</p>
+        {couponShare?.qr && <img className="manager-coupon-share-qr" src={couponShare.qr} alt="半价券领取二维码" />}
+        <Input readOnly value={couponShare?.link || ''} onFocus={(event) => event.currentTarget.select()} />
+        <div className="manager-coupon-share-actions">
+          <Button onClick={() => void copyCouponLink()}>复制链接</Button>
+          <Button type="primary" onClick={() => void shareCouponLink()}>微信发给顾客</Button>
+        </div>
+        <small>链接只打开顾客自己的账户，不会把券发给别人。</small>
+      </div>
+    </Modal>
   </section>;
 }
