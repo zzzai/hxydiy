@@ -1142,6 +1142,28 @@
         "title": "CounterCheckoutIn",
         "type": "object"
       },
+      "CouponRedeemIn": {
+        "properties": {
+          "request_id": {
+            "maxLength": 100,
+            "minLength": 8,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 4096,
+            "minLength": 20,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "request_id"
+        ],
+        "title": "CouponRedeemIn",
+        "type": "object"
+      },
       "CouponTemplateIn": {
         "properties": {
           "amount_cents": {
@@ -1390,6 +1412,21 @@
           }
         },
         "title": "CouponTemplateUpdate",
+        "type": "object"
+      },
+      "CouponTokenIn": {
+        "properties": {
+          "token": {
+            "maxLength": 4096,
+            "minLength": 20,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "CouponTokenIn",
         "type": "object"
       },
       "CreateOrderResponse": {
@@ -1941,6 +1978,20 @@
           "user_id"
         ],
         "title": "IssueCouponIn",
+        "type": "object"
+      },
+      "IssueHalfPriceIn": {
+        "properties": {
+          "user_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "User Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "IssueHalfPriceIn",
         "type": "object"
       },
       "KioskSessionIn": {
@@ -13217,6 +13268,180 @@
         ]
       }
     },
+    "/api/v1/admin/v2/manager/coupons/half-price/issue": {
+      "post": {
+        "description": "店长给本店顾客发一张无门槛全单5折券（每人最多1张未使用）。",
+        "operationId": "issue_half_price_coupon_api_v1_admin_v2_manager_coupons_half_price_issue_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueHalfPriceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue Half Price Coupon",
+        "tags": [
+          "manager-coupons"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/coupons/redeem": {
+      "post": {
+        "description": "确认核销：原子把 unused 改为 used；重复请求不会二次消费。",
+        "operationId": "redeem_coupon_api_v1_admin_v2_manager_coupons_redeem_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponRedeemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redeem Coupon",
+        "tags": [
+          "manager-coupons"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/coupons/validate": {
+      "post": {
+        "description": "扫码预览：只返回脱敏顾客信息与券状态，不写库。",
+        "operationId": "validate_coupon_api_v1_admin_v2_manager_coupons_validate_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Coupon",
+        "tags": [
+          "manager-coupons"
+        ]
+      }
+    },
     "/api/v1/admin/v2/manager/service-orders": {
       "get": {
         "description": "Store-wide service occupancy list for the manager mobile board.",
@@ -21237,6 +21462,67 @@
           }
         },
         "summary": "Claimable Templates",
+        "tags": [
+          "coupons"
+        ]
+      }
+    },
+    "/api/v1/coupons/{coupon_id}/redeem-token": {
+      "post": {
+        "description": "顾客生成一次性核销码；只返回给券本人，已使用/过期/锁定券拒绝。",
+        "operationId": "coupon_redeem_token_api_v1_coupons__coupon_id__redeem_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "coupon_id",
+            "required": true,
+            "schema": {
+              "title": "Coupon Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Coupon Redeem Token Api V1 Coupons  Coupon Id  Redeem Token Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coupon Redeem Token",
         "tags": [
           "coupons"
         ]

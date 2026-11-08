@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Drawer, Pagination, Spin, Tag, Typography, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff } from '../api';
+import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff, issueHalfPriceCoupon } from '../api';
 import { parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
@@ -10,6 +10,7 @@ import type { ManagerSelection, ManagerSelectionItem } from './managerMobile';
 import ManagerPositionView from './ManagerPositionView';
 import ManagerReviewsView from './ManagerReviewsView';
 import ManagerServiceOrdersView from './ManagerServiceOrdersView';
+import ManagerCouponRedeemView from './ManagerCouponRedeemView';
 import ManagerTasksView from './ManagerTasksView';
 import './manager-mobile.css';
 
@@ -29,8 +30,10 @@ function ItemList({ items }: { items: ManagerSelectionItem[] }) {
 export default function ManagerStorePage({ learningEntry }: { learningEntry?: ReactNode } = {}) {
   const current = useTechnicianSession();
   const storeId = getStaff()?.store_id;
-  const [view, setView] = useState<'tasks' | 'orders' | 'selections' | 'positions' | 'reviews'>('selections');
+  const [view, setView] = useState<'tasks' | 'orders' | 'selections' | 'positions' | 'reviews' | 'coupons'>('selections');
   const [ordersRefresh, setOrdersRefresh] = useState(0);
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponToken, setCouponToken] = useState('');
   const [mapRefresh, setMapRefresh] = useState(0);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -55,6 +58,21 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       if (current()) setWorkbench(response.data);
     } catch { /* keep last successful summary */ }
   }, [current]);
+
+  const issueCoupon = async () => {
+    const userId = detail?.customer?.id;
+    if (!userId || couponBusy) return;
+    setCouponBusy(true);
+    try {
+      const response = await issueHalfPriceCoupon(userId);
+      message.success(`已给${detail?.customer?.nickname || '顾客'}发半价券，有效期至 ${new Date(response.data.expire_at).toLocaleDateString('zh-CN')}`);
+    } catch (failure) {
+      const detailMessage = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message;
+      message.error(detailMessage || '发券失败，请重试');
+    } finally {
+      setCouponBusy(false);
+    }
+  };
 
   const load = useCallback(async (silent = false, force = false) => {
     if (!current() || !isMobileManager(getStaff())) return;
@@ -114,6 +132,13 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   useEffect(() => {
     if (!current() || !isMobileManager(getStaff()) || !storeId) return;
     setDeepLinkError('');
+    const coupon = new URLSearchParams(window.location.search).get('coupon');
+    if (coupon) {
+      setDetail(null);
+      setCouponToken(coupon);
+      setView('coupons');
+      return;
+    }
     const directReview = new URLSearchParams(window.location.search).get('review');
     const pendingReview = takeManagerPendingReview();
     const review = parseManagerReview(directReview) || pendingReview;
@@ -162,9 +187,9 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     <header className="manager-page-heading">
       <div>
         <h1>门店工作台</h1>
-        <p>{view === 'tasks' ? '未分配、超时与评价跟进' : view === 'selections' ? '订单只读，确认与超时由系统处理' : view === 'positions' ? '按沙发、房间查看当前订单' : '查看本店评价并记录跟进'}</p>
+        <p>{view === 'tasks' ? '未分配、超时与评价跟进' : view === 'selections' ? '订单只读，确认与超时由系统处理' : view === 'positions' ? '按沙发、房间查看当前订单' : view === 'coupons' ? '扫码核销顾客券，核销后立即失效' : '查看本店评价并记录跟进'}</p>
       </div>
-      <Button aria-label={view === 'tasks' ? '刷新待处理' : view === 'orders' ? '刷新服务单' : view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'orders') setOrdersRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
+      <Button aria-label={view === 'tasks' ? '刷新待处理' : view === 'orders' ? '刷新服务单' : view === 'selections' ? '刷新门店订单' : view === 'positions' ? '刷新门店座位' : view === 'coupons' ? '刷新核销' : '刷新门店评价'} icon={<ReloadOutlined />} loading={view === 'selections' && loading} onClick={() => { if (view === 'positions') setMapRefresh(value => value + 1); else if (view === 'orders') setOrdersRefresh(value => value + 1); else if (view === 'selections') void load(true, true); }} />
     </header>
     {deepLinkError && <Alert type="warning" showIcon closable message={deepLinkError} onClose={() => setDeepLinkError('')} />}
     <div className="manager-workbench-summary" aria-label="今日门店概览">
@@ -180,13 +205,14 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       <button type="button" aria-pressed={view === 'orders'} onClick={() => { setDetail(null); setView('orders'); }}>服务单</button>
       <button type="button" aria-pressed={view === 'selections'} onClick={() => { setDetail(null); setStaleOnly(false); setView('selections'); }}>订单</button>
       <button type="button" aria-pressed={view === 'positions'} onClick={() => { setDetail(null); setView('positions'); }}>座位</button>
-      <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button>
+      <button type="button" aria-pressed={view === 'reviews'} onClick={() => { setDetail(null); setView('reviews'); }}>评价</button><button type="button" aria-pressed={view === 'coupons'} onClick={() => { setDetail(null); setView('coupons'); }}>核销</button>
     </nav>
     {forbidden && <Alert type="warning" message="当前账号不能查看门店订单，请联系管理员核对权限。" />}
     {view === 'orders' ? <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => setView('positions')} />
       : view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenPositions={() => setView('positions')} onOpenOrders={(onlyStale = false) => { setStaleOnly(onlyStale); setPage(1); setPeriod('all'); setView('selections'); }} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
       : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} onFocusError={() => setDeepLinkError('评价链接已失效或无权查看，已返回评价列表。')} />
+: view === 'coupons' ? <ManagerCouponRedeemView initialToken={couponToken} />
         : <>
       {!staleOnly && <div className="manager-order-period" role="group" aria-label="订单时间范围">
         {([['today', '今天'], ['7d', '近 7 天'], ['all', '全部']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={period === value} onClick={() => { setPage(1); setItems([]); setPeriod(value); }}>{label}</button>)}
@@ -195,7 +221,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       {content()}
       {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份订单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); setDetail(null); }} /></div>}
     </>}
-    <Drawer title="订单详情" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(detail)} onClose={() => setDetail(null)} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" onClick={() => setDetail(null)}>关闭详情</Button><Button size="large" loading={loading} onClick={() => void load(true, true)}>刷新订单</Button></div>}>
+    <Drawer title="订单详情" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(detail)} onClose={() => setDetail(null)} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" onClick={() => setDetail(null)}>关闭详情</Button><Button size="large" disabled={!detail?.customer?.id || couponBusy} loading={couponBusy} onClick={() => void issueCoupon()}>发半价券</Button><Button size="large" loading={loading} onClick={() => void load(true, true)}>刷新订单</Button></div>}>
       {detail && <>
         <div className="manager-detail-intro">
           <span>{detail.position?.name || (detail.needs_position_assignment ? '现场安排' : '未安排座位')}</span>

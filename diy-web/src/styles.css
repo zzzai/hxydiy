@@ -2057,3 +2057,9 @@ a.miniapp-store { text-decoration: none; }
   .feedback-backdrop { align-items: center; padding: 24px; }
   .feedback-dialog { border-radius: 8px; }
 }
+
+.profile-coupon-qr-button{margin-top:6px;border:1px solid #1f8f75;background:#fff;color:#176856;border-radius:8px;padding:3px 9px;font-size:12px}
+.profile-coupon-qr{display:grid;justify-items:center;gap:4px;margin-top:10px;padding:10px;background:#f7faf8;border-radius:10px}
+.profile-coupon-qr small{color:#66766d;font-size:11px}
+.profile-coupon-qr button{border:0;background:none;color:#176856;font-size:12px;text-decoration:underline}
+.profile-coupon-error{color:#a04a36;font-size:11px;display:block;margin-top:6px}

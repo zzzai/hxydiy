@@ -485,3 +485,9 @@ export function submitCustomerFeedback(sessionId: string, token: string, input: 
     method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(input),
   }));
 }
+export async function getCouponRedeemToken(couponId: number, token: string): Promise<{ coupon_id: number; name: string; token: string; expires_at: string }> {
+  return request(`/coupons/${couponId}/redeem-token`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

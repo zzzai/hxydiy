@@ -11,6 +11,7 @@ from app.core.customer_auth import current_customer_id
 from app.core.config import settings
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
+from app.domain.coupon_redeem import create_redeem_token
 from app.models import CouponTemplate, User, UserCoupon, SelectionSession
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
@@ -252,3 +253,36 @@ def my_coupons(
 
     items.sort(key=lambda x: 0 if x["status"] == "unused" else 1)
     return {"items": items, "total": len(items)}
+
+
+@router.post("/{coupon_id}/redeem-token")
+def coupon_redeem_token(
+    coupon_id: int,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """顾客生成一次性核销码；只返回给券本人，已使用/过期/锁定券拒绝。"""
+    user_id = _user_id(authorization, db)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    coupon = db.scalar(select(UserCoupon).where(
+        UserCoupon.id == coupon_id,
+        UserCoupon.user_id == user_id,
+    ))
+    if not coupon:
+        raise HTTPException(status_code=404, detail={"code": "COUPON_NOT_FOUND", "message": "券不存在"})
+    now = datetime.now(timezone.utc)
+    if coupon.status == "used":
+        raise HTTPException(status_code=409, detail={"code": "COUPON_ALREADY_USED", "message": "该券已核销"})
+    if coupon.status != "unused":
+        raise HTTPException(status_code=409, detail={"code": "COUPON_NOT_REDEEMABLE", "message": "该券当前不可核销"})
+    if coupon.expire_at and _aware(coupon.expire_at) <= now:
+        raise HTTPException(status_code=409, detail={"code": "COUPON_EXPIRED", "message": "该券已过期"})
+    template = db.get(CouponTemplate, coupon.template_id)
+    token, expires_at = create_redeem_token(coupon.id, user_id)
+    return {
+        "coupon_id": coupon.id,
+        "name": template.name if template else "优惠券",
+        "token": token,
+        "expires_at": expires_at.isoformat(),
+    }
