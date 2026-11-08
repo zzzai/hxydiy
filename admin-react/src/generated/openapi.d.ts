@@ -1206,6 +1206,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/coupons/half-price/issue-by-phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue Half Price By Phone
+         * @description 店长给微信好友发券：按手机号找到或创建顾客，不要求有订单。
+         */
+        post: operations["issue_half_price_by_phone_api_v1_admin_v2_manager_coupons_half_price_issue_by_phone_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/coupons/redeem": {
         parameters: {
             query?: never;
@@ -5252,6 +5272,13 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** IssueByPhoneIn */
+        IssueByPhoneIn: {
+            /** Name */
+            name?: string | null;
+            /** Phone */
+            phone: string;
         };
         /** IssueCouponIn */
         IssueCouponIn: {
@@ -10119,6 +10146,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["IssueHalfPriceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issue_half_price_by_phone_api_v1_admin_v2_manager_coupons_half_price_issue_by_phone_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueByPhoneIn"];
             };
         };
         responses: {

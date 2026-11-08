@@ -224,18 +224,16 @@ def my_coupons(
         .join(CouponTemplate, UserCoupon.template_id == CouponTemplate.id)
         .where(UserCoupon.user_id == user_id)
     )
-    trusted_store_id = _trusted_store_id(db, db.get(User, user_id))
-    if trusted_store_id is not None:
-        stmt = stmt.where((CouponTemplate.store_id == trusted_store_id) | CouponTemplate.store_id.is_(None))
-    else:
-        stmt = stmt.where(CouponTemplate.store_id.is_(None))
+    # Coupons are user-owned. A manager may issue a store coupon to a WeChat
+    # contact who has no order/store history yet; do not hide it behind the
+    # trusted-store filter.
     rows = db.execute(stmt).all()
     now = datetime.now(timezone.utc)
 
     items = []
     for uc, tpl in rows:
         c_status = uc.status
-        if c_status == "unused" and uc.expire_at and uc.expire_at < now:
+        if c_status == "unused" and uc.expire_at and _aware(uc.expire_at) < now:
             c_status = "expired"
         if status and c_status != status:
             continue
