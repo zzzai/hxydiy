@@ -15,7 +15,7 @@ type CouponPreview = {
   status: string;
 };
 
-export default function ManagerCouponRedeemView() {
+export default function ManagerCouponRedeemView({ initialToken = '' }: { initialToken?: string }) {
   const [token, setToken] = useState('');
   const [preview, setPreview] = useState<CouponPreview | null>(null);
   const [error, setError] = useState('');
@@ -36,6 +36,8 @@ export default function ManagerCouponRedeemView() {
   };
 
   useEffect(() => () => stopCamera(), []);
+
+  useEffect(() => { if (initialToken) void validate(initialToken); }, [initialToken]);
 
   const validate = async (raw = token) => {
     const value = raw.trim();

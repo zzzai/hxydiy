@@ -33,6 +33,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   const [view, setView] = useState<'tasks' | 'orders' | 'selections' | 'positions' | 'reviews' | 'coupons'>('selections');
   const [ordersRefresh, setOrdersRefresh] = useState(0);
   const [couponBusy, setCouponBusy] = useState(false);
+  const [couponToken, setCouponToken] = useState('');
   const [mapRefresh, setMapRefresh] = useState(0);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -131,6 +132,13 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   useEffect(() => {
     if (!current() || !isMobileManager(getStaff()) || !storeId) return;
     setDeepLinkError('');
+    const coupon = new URLSearchParams(window.location.search).get('coupon');
+    if (coupon) {
+      setDetail(null);
+      setCouponToken(coupon);
+      setView('coupons');
+      return;
+    }
     const directReview = new URLSearchParams(window.location.search).get('review');
     const pendingReview = takeManagerPendingReview();
     const review = parseManagerReview(directReview) || pendingReview;
@@ -204,7 +212,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       : view === 'tasks' ? <ManagerTasksView onOpenReviews={() => setView('reviews')} onOpenPositions={() => setView('positions')} onOpenOrders={(onlyStale = false) => { setStaleOnly(onlyStale); setPage(1); setPeriod('all'); setView('selections'); }} />
       : view === 'positions' ? <ManagerPositionView key={storeId} storeId={Number(storeId)} refreshKey={mapRefresh} />
       : view === 'reviews' ? <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true, true)} onFocusError={() => setDeepLinkError('评价链接已失效或无权查看，已返回评价列表。')} />
-: view === 'coupons' ? <ManagerCouponRedeemView />
+: view === 'coupons' ? <ManagerCouponRedeemView initialToken={couponToken} />
         : <>
       {!staleOnly && <div className="manager-order-period" role="group" aria-label="订单时间范围">
         {([['today', '今天'], ['7d', '近 7 天'], ['all', '全部']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={period === value} onClick={() => { setPage(1); setItems([]); setPeriod(value); }}>{label}</button>)}

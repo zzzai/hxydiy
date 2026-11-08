@@ -388,7 +388,7 @@ function CouponList({ coupons, token }: { coupons: MyCoupon[]; token: string }) 
             <small>{coupon.min_spend_cents > 0 ? `满 ${formatMoney(coupon.min_spend_cents)} 可用` : '无门槛'}{coupon.expire_at ? ` · ${formatDateTime(coupon.expire_at)} 前有效` : ''}</small>
             {coupon.status === 'unused' && <button type="button" className="profile-coupon-qr-button" disabled={qrBusy} onClick={() => void showQr(coupon)}>{qrBusy ? '生成中…' : '核销码'}</button>}
             {qr?.couponId === coupon.id && <div className="profile-coupon-qr">
-              <QRCodeSVG value={qr.token} size={168} />
+              <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qr.token)}`} size={168} />
               <small>请店长扫码，5 分钟内有效</small>
               <button type="button" onClick={() => setQr(null)}>收起</button>
             </div>}
