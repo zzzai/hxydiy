@@ -1091,14 +1091,29 @@
       },
       "ClaimHalfPriceIn": {
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "token": {
-            "title": "Token",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
           }
         },
-        "required": [
-          "token"
-        ],
         "title": "ClaimHalfPriceIn",
         "type": "object"
       },
