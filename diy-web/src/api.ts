@@ -491,3 +491,10 @@ export async function getCouponRedeemToken(couponId: number, token: string): Pro
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+export async function claimHalfPriceCoupon(token: string, authToken: string): Promise<{ coupon_id: number; name: string; percent_off: number; expire_at: string; remaining: number }> {
+  return request('/coupons/claim-half-price', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${authToken}` },
+    body: JSON.stringify({ token }),
+  });
+}
