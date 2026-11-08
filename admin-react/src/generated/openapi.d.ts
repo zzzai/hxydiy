@@ -1226,6 +1226,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/coupons/half-price/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Half Price Link
+         * @description 生成可发微信的领券链接；顾客登录后领取，最多 100 张。
+         */
+        post: operations["create_half_price_link_api_v1_admin_v2_manager_coupons_half_price_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/coupons/redeem": {
         parameters: {
             query?: never;
@@ -3066,6 +3086,26 @@ export interface paths {
          * @description 领取领券中心券（服务端校验：可领 / 每日限领 / 总限领）。
          */
         post: operations["claim_coupon_api_v1_coupons_claim_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coupons/claim-half-price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Half Price
+         * @description 通过店长分享的链接/二维码领取半价券；同一顾客最多一张。
+         */
+        post: operations["claim_half_price_api_v1_coupons_claim_half_price_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4950,6 +4990,11 @@ export interface components {
             occupancy_id: number;
             /** Version */
             version: number;
+        };
+        /** ClaimHalfPriceIn */
+        ClaimHalfPriceIn: {
+            /** Token */
+            token: string;
         };
         /** ClaimRequest */
         ClaimRequest: {
@@ -10204,6 +10249,37 @@ export interface operations {
             };
         };
     };
+    create_half_price_link_api_v1_admin_v2_manager_coupons_half_price_link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     redeem_coupon_api_v1_admin_v2_manager_coupons_redeem_post: {
         parameters: {
             query?: never;
@@ -14555,6 +14631,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_half_price_api_v1_coupons_claim_half_price_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimHalfPriceIn"];
             };
         };
         responses: {

@@ -1,0 +1,12 @@
+.coupon-claim-page{min-height:100dvh;display:grid;place-items:center;padding:24px 18px;background:#f3f8f4;color:#203a2e;font-family:inherit}
+.coupon-claim-card{width:min(100%,420px);background:#fff;border:1px solid #dce8df;border-radius:20px;padding:24px 20px;box-shadow:0 10px 30px #183c3410;text-align:center}
+.coupon-claim-card header span{color:#1f8f75;font-size:12px;font-weight:700;letter-spacing:.08em}.coupon-claim-card h1{margin:8px 0 4px;font-size:30px;color:#164f3c}.coupon-claim-card header p{margin:0 0 18px;color:#66766d;font-size:13px}
+.coupon-claim-hint{color:#53665a;font-size:13px;line-height:1.6;margin:12px 0}.coupon-claim-error{color:#a04a36;font-size:13px;margin:12px 0}
+.coupon-claim-card label{display:grid;gap:6px;text-align:left;font-size:13px;margin:12px 0}.coupon-claim-card input{min-height:46px;border:1px solid #cad8ce;border-radius:10px;padding:10px 12px;font:inherit;color:#203a2e;background:#fff}
+.coupon-claim-code{display:flex;gap:8px}.coupon-claim-code input{flex:1}.coupon-claim-code button{min-width:104px;border:1px solid #1f8f75;border-radius:10px;background:#fff;color:#176856;font:inherit;font-size:13px}
+.coupon-claim-primary{width:100%;min-height:48px;margin-top:12px;border:0;border-radius:12px;background:#1f8f75;color:#fff;font:inherit;font-weight:700}
+.coupon-claim-value{display:flex;align-items:baseline;justify-content:center;gap:8px;margin:4px 0 12px}.coupon-claim-value strong{font-size:44px;color:#1f8f75;line-height:1}.coupon-claim-value span{color:#53665a}
+.coupon-claim-card svg{display:block;max-width:100%;margin:0 auto}
+.coupon-claim-meta{color:#66766d;font-size:12px;margin:6px 0}
+.coupon-claim-actions{display:flex;gap:8px;margin-top:14px}.coupon-claim-actions a,.coupon-claim-link{flex:1;display:block;min-height:44px;line-height:44px;border-radius:10px;background:#eff6f1;color:#176856;text-decoration:none;font-weight:600;font-size:14px}
+.coupon-claim-link{margin-top:10px}

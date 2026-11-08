@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Alert, Button, Drawer, Input, Modal, Pagination, Spin, Tag, Typography, message } from 'antd';
 import QRCode from 'qrcode';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff, issueHalfPriceCoupon, issueHalfPriceCouponByPhone } from '../api';
+import { createHalfPriceCouponLink, getManagerWorkbench, getSelectionSession, getSelectionSessions, getStaff } from '../api';
 import { parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
 import { selectionChangeItemSummary } from '../selectionChanges';
 import { useTechnicianSession } from './useTechnicianSession';
@@ -35,11 +35,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   const [ordersRefresh, setOrdersRefresh] = useState(0);
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponToken, setCouponToken] = useState('');
-  const [couponShare, setCouponShare] = useState<{ link: string; qr: string; name: string } | null>(null);
-  const [issueOpen, setIssueOpen] = useState(false);
-  const [issuePhone, setIssuePhone] = useState('');
-  const [issueName, setIssueName] = useState('');
-  const [phoneBusy, setPhoneBusy] = useState(false);
+  const [couponShare, setCouponShare] = useState<{ link: string; qr: string } | null>(null);
   const [mapRefresh, setMapRefresh] = useState(0);
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<ManagerSelection[]>([]);
@@ -65,58 +61,25 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     } catch { /* keep last successful summary */ }
   }, [current]);
 
-  const issueCoupon = async (customer = detail?.customer) => {
-    const userId = customer?.id;
-    if (!userId || couponBusy) return;
+  const generateCouponLink = async () => {
+    if (couponBusy) return;
     setCouponBusy(true);
     try {
-      const response = await issueHalfPriceCoupon(userId);
+      const response = await createHalfPriceCouponLink();
       const storeId = Number(getStaff()?.store_id || 0);
       const url = new URL('/', window.location.origin);
       if (storeId > 0) url.searchParams.set('store', String(storeId));
-      url.searchParams.set('view', 'return');
+      url.searchParams.set('view', 'coupon-claim');
+      url.searchParams.set('token', response.data.token);
       const link = url.toString();
       let qr = '';
       try { qr = await QRCode.toDataURL(link, { width: 240, margin: 1 }); } catch { /* link sharing still works */ }
-      setIssueOpen(false);
-      setDetail(null);
-      setCouponShare({ link, qr, name: customer?.nickname || '顾客' });
-      message.success(`已给${customer?.nickname || '顾客'}发半价券，有效期至 ${new Date(response.data.expire_at).toLocaleDateString('zh-CN')}`);
+      setCouponShare({ link, qr });
     } catch (failure) {
       const detailMessage = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message;
-      message.error(detailMessage || '发券失败，请重试');
+      message.error(detailMessage || '生成失败，请重试');
     } finally {
       setCouponBusy(false);
-    }
-  };
-
-  const issueByPhone = async () => {
-    const phone = issuePhone.replace(/\s/g, '');
-    if (!/^1\d{10}$/.test(phone)) {
-      message.error('请输入 11 位手机号');
-      return;
-    }
-    if (phoneBusy) return;
-    setPhoneBusy(true);
-    try {
-      const response = await issueHalfPriceCouponByPhone(phone, issueName.trim() || undefined);
-      const storeId = Number(getStaff()?.store_id || 0);
-      const url = new URL('/', window.location.origin);
-      if (storeId > 0) url.searchParams.set('store', String(storeId));
-      url.searchParams.set('view', 'return');
-      const link = url.toString();
-      let qr = '';
-      try { qr = await QRCode.toDataURL(link, { width: 240, margin: 1 }); } catch { /* link sharing still works */ }
-      setIssueOpen(false);
-      setIssuePhone('');
-      setIssueName('');
-      setCouponShare({ link, qr, name: response.data.customer_name || issueName || '顾客' });
-      message.success(`已给${response.data.customer_name || '顾客'}发半价券`);
-    } catch (failure) {
-      const detailMessage = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message;
-      message.error(detailMessage || '发券失败，请检查手机号或重试');
-    } finally {
-      setPhoneBusy(false);
     }
   };
 
@@ -134,7 +97,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     if (!couponShare) return;
     if (navigator.share) {
       try {
-        await navigator.share({ title: '荷小悦半价券', text: '打开后在「我的券」查看半价券', url: couponShare.link });
+        await navigator.share({ title: '荷小悦半价券', text: '打开领取半价券', url: couponShare.link });
         return;
       } catch { /* fall back to copy */ }
     }
@@ -250,11 +213,6 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     </div>;
   };
 
-  const issueCustomers = items.reduce<Array<NonNullable<ManagerSelection['customer']>>>((result, item) => {
-    if (item.customer?.id && !result.some((customer) => customer.id === item.customer!.id)) result.push(item.customer);
-    return result;
-  }, []);
-
   return <section className="manager-store-page">
     <header className="manager-page-heading">
       <div>
@@ -272,7 +230,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
     </div>
     <div className="manager-quick-actions" aria-label="常用操作">
       <button type="button" onClick={() => { setDetail(null); setView('coupons'); }}>扫码核销</button>
-      <button type="button" onClick={() => { setDetail(null); setView('selections'); setIssueOpen(true); }}>给顾客发券</button>
+      <button type="button" onClick={() => { setDetail(null); void generateCouponLink(); }}>给顾客发券</button>
     </div>
     <nav className="manager-view-tabs" aria-label="工作台视图">
       <button type="button" aria-pressed={view === 'tasks'} onClick={() => { setDetail(null); setView('tasks'); }}>待处理</button>
@@ -294,7 +252,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       {content()}
       {!listError && total > 0 && <div className="manager-pagination"><span>共 {total} 份订单</span><Pagination simple current={page} pageSize={MANAGER_PAGE_SIZE} total={total} showSizeChanger={false} onChange={next => { setItems([]); setPage(next); setDetail(null); }} /></div>}
     </>}
-    <Drawer title="订单详情" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(detail)} onClose={() => setDetail(null)} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" onClick={() => setDetail(null)}>关闭详情</Button><Button size="large" disabled={!detail?.customer?.id || couponBusy} loading={couponBusy} onClick={() => void issueCoupon()}>发半价券</Button><Button size="large" loading={loading} onClick={() => void load(true, true)}>刷新订单</Button></div>}>
+    <Drawer title="订单详情" placement="bottom" height="min(90dvh, 760px)" rootClassName="manager-detail-drawer" open={Boolean(detail)} onClose={() => setDetail(null)} destroyOnClose footer={<div className="manager-detail-actions"><Button size="large" onClick={() => setDetail(null)}>关闭详情</Button><Button size="large" loading={loading} onClick={() => void load(true, true)}>刷新订单</Button></div>}>
       {detail && <>
         <div className="manager-detail-intro">
           <span>{detail.position?.name || (detail.needs_position_assignment ? '现场安排' : '未安排座位')}</span>
@@ -314,33 +272,15 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
         <Typography.Text type="secondary">如需取消或调整，请联系门店负责人。</Typography.Text>
       </>}
     </Drawer>
-    <Modal open={Boolean(couponShare)} title="半价券已发到顾客账户" footer={null} onCancel={() => setCouponShare(null)}>
+    <Modal open={Boolean(couponShare)} title="半价券链接" footer={null} onCancel={() => setCouponShare(null)}>
       <div className="manager-coupon-share">
-        <p>把链接或二维码发给顾客，顾客在微信中打开并登录后，在「我的券」查看核销码。</p>
+        <p>发给顾客，登录领取，60 天有效。</p>
         {couponShare?.qr && <img className="manager-coupon-share-qr" src={couponShare.qr} alt="半价券领取二维码" />}
         <Input readOnly value={couponShare?.link || ''} onFocus={(event) => event.currentTarget.select()} />
         <div className="manager-coupon-share-actions">
           <Button onClick={() => void copyCouponLink()}>复制链接</Button>
           <Button type="primary" onClick={() => void shareCouponLink()}>微信发给顾客</Button>
         </div>
-        <small>链接只打开顾客自己的账户，不会把券发给别人。</small>
-      </div>
-    </Modal>
-    <Modal open={issueOpen} title="给顾客发半价券" footer={null} onCancel={() => setIssueOpen(false)}>
-      <div className="manager-issue-coupon">
-        <p>选择一位本店顾客，发无门槛全单 5 折券；每人最多 1 张未使用。</p>
-        <div className="manager-issue-phone">
-          <strong>不在订单里？按手机号发</strong>
-          <Input value={issuePhone} inputMode="numeric" maxLength={11} placeholder="顾客手机号" onChange={(event) => setIssuePhone(event.target.value.replace(/\D/g, ''))} />
-          <Input value={issueName} maxLength={32} placeholder="顾客称呼（可选）" onChange={(event) => setIssueName(event.target.value)} />
-          <Button type="primary" block loading={phoneBusy} disabled={issuePhone.length !== 11} onClick={() => void issueByPhone()}>发给这个手机号</Button>
-          <small>没有账号也可以发；顾客用这个手机号登录后就能看到券。</small>
-        </div>
-        {issueCustomers.length === 0 ? <p className="manager-empty-copy">当前订单列表里没有可发券顾客，也可以直接输入手机号发券。</p>
-          : issueCustomers.map((customer) => <div className="manager-issue-customer" key={customer.id}>
-            <div><strong>{customer.nickname || '顾客'}</strong><small>{customer.phone || '未留手机号'}</small></div>
-            <Button size="small" loading={couponBusy} onClick={() => void issueCoupon(customer)}>发半价券</Button>
-          </div>)}
       </div>
     </Modal>
   </section>;

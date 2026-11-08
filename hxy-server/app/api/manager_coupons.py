@@ -25,13 +25,14 @@ from app.api.admin_v2 import (
 )
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
-from app.domain.coupon_redeem import decode_redeem_token
+from app.domain.coupon_redeem import create_claim_token, decode_redeem_token
 from app.models import CouponTemplate, Staff, User, UserCoupon
 
 router = APIRouter(prefix="/admin/v2/manager/coupons", tags=["manager-coupons"])
 
 HALF_PRICE_CODE_PREFIX = "half-price-50-s"
-HALF_PRICE_VALIDITY_DAYS = 7
+HALF_PRICE_VALIDITY_DAYS = 60
+HALF_PRICE_ISSUE_LIMIT = 100
 
 
 def _half_price_template(db: Session, store_id: int) -> CouponTemplate:
@@ -56,13 +57,55 @@ def _half_price_template(db: Session, store_id: int) -> CouponTemplate:
         )
         db.add(template)
         db.flush()
+    if template.validity_days != HALF_PRICE_VALIDITY_DAYS:
+        template.validity_days = HALF_PRICE_VALIDITY_DAYS
     if template.status != "published":
         raise HTTPException(status_code=409, detail={"code": "COUPON_NOT_PUBLISHED", "message": "半价券未上架"})
     return template
 
 
+def _issued_count(db: Session, template_id: int) -> int:
+    return int(db.scalar(select(sa_func.count()).select_from(UserCoupon).where(
+        UserCoupon.template_id == template_id,
+    )) or 0)
+
+
+def _ensure_issue_capacity(db: Session, template: CouponTemplate) -> None:
+    if _issued_count(db, template.id) >= HALF_PRICE_ISSUE_LIMIT:
+        raise HTTPException(status_code=409, detail={
+            "code": "COUPON_SOLD_OUT",
+            "message": "半价券 100 张已发完",
+        })
+
+
 class IssueHalfPriceIn(BaseModel):
     user_id: int = Field(gt=0)
+
+
+@router.post("/half-price/link")
+def create_half_price_link(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """生成可发微信的领券链接；顾客登录后领取，最多 100 张。"""
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _resolve_target_store_id(db, staff, None)
+    template = _half_price_template(db, store_id)
+    issued = _issued_count(db, template.id)
+    if issued >= HALF_PRICE_ISSUE_LIMIT:
+        raise HTTPException(status_code=409, detail={"code": "COUPON_SOLD_OUT", "message": "半价券 100 张已发完"})
+    token, expires_at = create_claim_token(store_id, template.id)
+    db.commit()
+    return {
+        "token": token,
+        "expires_at": expires_at.isoformat(),
+        "limit": HALF_PRICE_ISSUE_LIMIT,
+        "issued": issued,
+        "remaining": HALF_PRICE_ISSUE_LIMIT - issued,
+        "name": template.name,
+        "percent_off": template.percent_off,
+    }
 
 
 class IssueByPhoneIn(BaseModel):
@@ -87,6 +130,7 @@ def issue_half_price_coupon(
     if not user:
         raise HTTPException(status_code=404, detail={"code": "CUSTOMER_NOT_FOUND", "message": "顾客不属于当前门店"})
     template = _half_price_template(db, store_id)
+    _ensure_issue_capacity(db, template)
     unused = db.scalar(select(sa_func.count()).select_from(UserCoupon).where(
         UserCoupon.user_id == user.id,
         UserCoupon.template_id == template.id,
@@ -154,6 +198,7 @@ def issue_half_price_by_phone(
             "phone_masked": _masked_phone(phone),
         })
     template = _half_price_template(db, store_id)
+    _ensure_issue_capacity(db, template)
     unused = db.scalar(select(sa_func.count()).select_from(UserCoupon).where(
         UserCoupon.user_id == user.id,
         UserCoupon.template_id == template.id,

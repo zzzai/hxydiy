@@ -126,3 +126,22 @@ def test_issue_by_phone_creates_wechat_customer_without_order(coupons):
     again = client.post(PREFIX + "/half-price/issue-by-phone", headers=headers["manager"],
                         json={"phone": "13700137000"})
     assert again.status_code == 409
+
+
+def test_link_claim_needs_login_and_is_one_per_customer(coupons):
+    client, _, _, headers = coupons
+    link = client.post(PREFIX + "/half-price/link", headers=headers["manager"])
+    assert link.status_code == 200, link.text
+    body = link.json()
+    assert body["limit"] == 100
+    assert body["remaining"] == 100
+    token = body["token"]
+
+    unauthenticated = client.post("/api/v1/coupons/claim-half-price", json={"token": token})
+    assert unauthenticated.status_code == 401
+    claimed = client.post("/api/v1/coupons/claim-half-price", headers=headers["customer"], json={"token": token})
+    assert claimed.status_code == 200, claimed.text
+    assert claimed.json()["percent_off"] == 50
+    again = client.post("/api/v1/coupons/claim-half-price", headers=headers["customer"], json={"token": token})
+    assert again.status_code == 409
+    assert again.json()["detail"]["code"] == "COUPON_ALREADY_HELD"

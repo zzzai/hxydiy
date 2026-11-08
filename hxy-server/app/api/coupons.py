@@ -4,15 +4,15 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.customer_auth import current_customer_id
 from app.core.config import settings
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
-from app.domain.coupon_redeem import create_redeem_token
-from app.models import CouponTemplate, User, UserCoupon, SelectionSession
+from app.domain.coupon_redeem import create_redeem_token, decode_claim_token
+from app.models import AuditLog, CouponTemplate, User, UserCoupon, SelectionSession
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
 
@@ -251,6 +251,63 @@ def my_coupons(
 
     items.sort(key=lambda x: 0 if x["status"] == "unused" else 1)
     return {"items": items, "total": len(items)}
+
+
+class ClaimHalfPriceIn(BaseModel):
+    token: str
+
+
+@router.post("/claim-half-price")
+def claim_half_price(
+    body: ClaimHalfPriceIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """通过店长分享的链接/二维码领取半价券；同一顾客最多一张。"""
+    user_id = _user_id(authorization, db)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    payload = decode_claim_token(body.token)
+    template = lock_coupon_template(
+        db, CouponTemplate.id == payload["template_id"],
+        CouponTemplate.store_id == payload["store_id"],
+    )
+    if not template or template.status != "published":
+        raise HTTPException(status_code=404, detail={"code": "COUPON_LINK_INVALID", "message": "领券活动不存在或已结束"})
+    issued = int(db.scalar(select(func.count()).select_from(UserCoupon).where(
+        UserCoupon.template_id == template.id,
+    )) or 0)
+    if issued >= 100:
+        raise HTTPException(status_code=409, detail={"code": "COUPON_SOLD_OUT", "message": "半价券 100 张已发完"})
+    db.scalar(select(User.id).where(User.id == user_id).with_for_update())
+    existing = db.scalar(select(UserCoupon.id).where(
+        UserCoupon.user_id == user_id,
+        UserCoupon.template_id == template.id,
+        UserCoupon.status == "unused",
+    ))
+    if existing:
+        raise HTTPException(status_code=409, detail={"code": "COUPON_ALREADY_HELD", "message": "你已经有一张未使用的半价券"})
+    now = datetime.now(timezone.utc)
+    coupon = try_issue_coupon(
+        db, template, user_id, now + timedelta(days=template.validity_days or 60),
+        claimed_at=now,
+    )
+    if coupon is None:
+        raise coupon_budget_exhausted()
+    db.add(AuditLog(
+        actor_type="customer", actor_id=str(user_id),
+        action="customer_claim_half_price_coupon", entity_type="user_coupon",
+        entity_id=str(coupon.id), store_id=template.store_id,
+        detail={"template_id": template.id, "template_code": template.code, "link_claim": True},
+    ))
+    db.commit()
+    return {
+        "coupon_id": coupon.id,
+        "name": template.name,
+        "percent_off": template.percent_off,
+        "expire_at": coupon.expire_at.isoformat(),
+        "remaining": max(0, 100 - issued - 1),
+    }
 
 
 @router.post("/{coupon_id}/redeem-token")
