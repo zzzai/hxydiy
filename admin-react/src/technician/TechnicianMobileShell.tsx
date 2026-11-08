@@ -28,7 +28,9 @@ export default function TechnicianMobileShell({ children, onLogout, onOpenDeskto
   }, [manager, managerTechnician]);
   const staff = me?.staff || me?.technician?.staff || getStaff();
   const visiblePaths = technicianMobileTabs(staff?.role, staff?.technician_id);
-  const visibleTabs = tabs.filter((tab) => visiblePaths.includes(tab.path) || (manager && tab.path === '/store'));
+  // Managers work from the store workbench; technician-only tabs stay out of
+  // the manager shell. Desktop/logout remain in the header's “更多” menu.
+  const visibleTabs = manager ? [] : tabs.filter((tab) => visiblePaths.includes(tab.path));
   const logout = () => { onLogout(); message.success('已退出登录'); navigate(manager ? '/store/login' : '/login', { replace: true }); };
   return (
     <div className={'technician-mobile-app' + (manager ? ' manager-mobile-app' : '')}>
