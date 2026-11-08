@@ -2,7 +2,7 @@ import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, Lo
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-import { ApiError, cancelOrder, enrollTrustedDevice, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
+import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
 import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth, type CustomerUser } from '../customerAuth';
 import { formatMoney } from '../domain';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
@@ -198,7 +198,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
                 SHOW_PROFILE_HISTORY && tab === 'records' ? <>
                   <SelectionList sessions={filteredSessions.slice(0, recordLimit)} filter={recordState} onContinue={onClose} onOpen={setSelectedRecord} onFeedback={openFeedback} />
                   {filteredSessions.length > recordLimit && <button className="profile-more-records" type="button" onClick={() => setRecordLimit(value => value + 5)}>查看更多记录<ChevronRight size={15} /></button>}
-                </> : shouldShowCouponTab(auth.user.is_member) ? <CouponList coupons={visibleCoupons} /> : SHOW_PROFILE_HISTORY ? <OrderList orders={ownsData ? orders : []} cancelling={cancelling} onCancel={handleCancelOrder} /> : null
+                </> : shouldShowCouponTab(auth.user.is_member) ? <CouponList coupons={visibleCoupons} token={auth.token} /> : SHOW_PROFILE_HISTORY ? <OrderList orders={ownsData ? orders : []} cancelling={cancelling} onCancel={handleCancelOrder} /> : null
               )}
             </section>}
             {!auth.user.is_member && <MembershipBanner />}
@@ -361,18 +361,38 @@ function RecordDetail({ record, onClose, onFeedback }: { record: SelectionSessio
   return <div className="profile-detail-backdrop" role="presentation" onClick={onClose}><section className="profile-detail" role="dialog" aria-modal="true" aria-labelledby="record-detail-title" onClick={(event) => event.stopPropagation()}><header><button type="button" aria-label="关闭到店详情" onClick={onClose}><X size={20} /></button><strong id="record-detail-title">到店详情</strong><span /></header><div className="profile-detail-body"><div className="profile-detail-status"><BadgeCheck size={24} /><strong>{record.can_evaluate && !record.evaluated ? '服务已完成，待评价' : record.service_completed_at ? '本次服务已完成' : selectionStatusLabel(record.status)}</strong><small>{formatDateTime(record.service_completed_at || record.submitted_at)}</small></div><section><h3>服务项目</h3>{record.items.map((item, index) => <div className="profile-detail-item" key={`${item.project_id}-${index}`}><span>{item.name || '到店服务'}</span><strong>×{Math.max(1, item.quantity || 1)}</strong></div>)}</section><section><h3>价格记录</h3><div className="profile-detail-price"><span>门店价 {formatMoney(record.store_total_cents)}</span><span>会员价 {formatMoney(record.member_total_cents)}</span><strong>本次记录 {formatMoney(selectionDisplayAmount(record))}</strong></div></section><p className="profile-detail-note">金额以当次提交和门店确认的服务清单为准。</p></div>{record.can_evaluate && !record.evaluated && <footer><button type="button" onClick={onFeedback}>评价本次服务</button></footer>}</section></div>;
 }
 
-function CouponList({ coupons }: { coupons: MyCoupon[] }) {
+function CouponList({ coupons, token }: { coupons: MyCoupon[]; token: string }) {
+  const [qr, setQr] = useState<{ couponId: number; token: string; expiresAt: string } | null>(null);
+  const [qrBusy, setQrBusy] = useState(false);
+  const [qrError, setQrError] = useState('');
+  const showQr = async (coupon: MyCoupon) => {
+    if (qrBusy || !token) return;
+    setQrBusy(true); setQrError('');
+    try {
+      const result = await getCouponRedeemToken(coupon.id, token);
+      setQr({ couponId: coupon.id, token: result.token, expiresAt: result.expires_at });
+    } catch (failure) {
+      setQrError(failure instanceof Error ? failure.message : '核销码生成失败，请重试');
+    } finally { setQrBusy(false); }
+  };
   if (!coupons.length) return <p className="profile-empty">暂无优惠券</p>;
   return (
     <ul className="profile-list">
       {coupons.map((coupon) => (
         <li key={coupon.id} className={`profile-coupon ${coupon.status}`}>
           <div className="profile-coupon-amount">
-            {coupon.coupon_type === 'percent' ? `${coupon.percent_off}%` : formatMoney(coupon.amount_cents)}
+            {coupon.coupon_type === 'percent' ? `${(coupon.percent_off / 10)}折` : formatMoney(coupon.amount_cents)}
           </div>
           <div className="profile-coupon-copy">
             <strong>{coupon.name}</strong>
             <small>{coupon.min_spend_cents > 0 ? `满 ${formatMoney(coupon.min_spend_cents)} 可用` : '无门槛'}{coupon.expire_at ? ` · ${formatDateTime(coupon.expire_at)} 前有效` : ''}</small>
+            {coupon.status === 'unused' && <button type="button" className="profile-coupon-qr-button" disabled={qrBusy} onClick={() => void showQr(coupon)}>{qrBusy ? '生成中…' : '核销码'}</button>}
+            {qr?.couponId === coupon.id && <div className="profile-coupon-qr">
+              <QRCodeSVG value={qr.token} size={168} />
+              <small>请店长扫码，5 分钟内有效</small>
+              <button type="button" onClick={() => setQr(null)}>收起</button>
+            </div>}
+            {qrError && <small className="profile-coupon-error">{qrError}</small>}
           </div>
           <span className="profile-status">{couponStatusLabel(coupon.status)}</span>
         </li>

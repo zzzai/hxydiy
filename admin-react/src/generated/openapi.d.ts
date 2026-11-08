@@ -1186,6 +1186,66 @@ export interface paths {
         patch: operations["update_feedback_follow_up_by_type_api_v1_admin_v2_feedback__feedback_type___feedback_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/coupons/half-price/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue Half Price Coupon
+         * @description 店长给本店顾客发一张无门槛全单5折券（每人最多1张未使用）。
+         */
+        post: operations["issue_half_price_coupon_api_v1_admin_v2_manager_coupons_half_price_issue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/coupons/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem Coupon
+         * @description 确认核销：原子把 unused 改为 used；重复请求不会二次消费。
+         */
+        post: operations["redeem_coupon_api_v1_admin_v2_manager_coupons_redeem_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/coupons/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Coupon
+         * @description 扫码预览：只返回脱敏顾客信息与券状态，不写库。
+         */
+        post: operations["validate_coupon_api_v1_admin_v2_manager_coupons_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/service-orders": {
         parameters: {
             query?: never;
@@ -3026,6 +3086,26 @@ export interface paths {
         get: operations["claimable_templates_api_v1_coupons_templates_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coupons/{coupon_id}/redeem-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Coupon Redeem Token
+         * @description 顾客生成一次性核销码；只返回给券本人，已使用/过期/锁定券拒绝。
+         */
+        post: operations["coupon_redeem_token_api_v1_coupons__coupon_id__redeem_token_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4875,6 +4955,13 @@ export interface components {
             /** Received Amount Cents */
             received_amount_cents: number;
         };
+        /** CouponRedeemIn */
+        CouponRedeemIn: {
+            /** Request Id */
+            request_id: string;
+            /** Token */
+            token: string;
+        };
         /** CouponTemplateIn */
         CouponTemplateIn: {
             /**
@@ -4969,6 +5056,11 @@ export interface components {
             status?: string | null;
             /** Validity Days */
             validity_days?: number | null;
+        };
+        /** CouponTokenIn */
+        CouponTokenIn: {
+            /** Token */
+            token: string;
         };
         /** CreateOrderResponse */
         CreateOrderResponse: {
@@ -5163,6 +5255,11 @@ export interface components {
         };
         /** IssueCouponIn */
         IssueCouponIn: {
+            /** User Id */
+            user_id: number;
+        };
+        /** IssueHalfPriceIn */
+        IssueHalfPriceIn: {
             /** User Id */
             user_id: number;
         };
@@ -10010,6 +10107,111 @@ export interface operations {
             };
         };
     };
+    issue_half_price_coupon_api_v1_admin_v2_manager_coupons_half_price_issue_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueHalfPriceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeem_coupon_api_v1_admin_v2_manager_coupons_redeem_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CouponRedeemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_coupon_api_v1_admin_v2_manager_coupons_validate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CouponTokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     manager_service_orders_api_v1_admin_v2_manager_service_orders_get: {
         parameters: {
             query?: {
@@ -14356,6 +14558,41 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coupon_redeem_token_api_v1_coupons__coupon_id__redeem_token_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                coupon_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
