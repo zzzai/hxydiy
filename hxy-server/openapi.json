@@ -771,6 +771,85 @@
         "title": "ApiErrorResponse",
         "type": "object"
       },
+      "AreaPhotoIn": {
+        "properties": {
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured At"
+          },
+          "media_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Media Id",
+            "type": "integer"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "area",
+          "media_id"
+        ],
+        "title": "AreaPhotoIn",
+        "type": "object"
+      },
+      "AssessmentIn": {
+        "properties": {
+          "assignment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
+          },
+          "course_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Course Name",
+            "type": "string"
+          },
+          "kind": {
+            "default": "practical",
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          },
+          "result": {
+            "default": "passed",
+            "title": "Result",
+            "type": "string"
+          }
+        },
+        "required": [
+          "course_name"
+        ],
+        "title": "AssessmentIn",
+        "type": "object"
+      },
       "AssignIn": {
         "properties": {
           "idempotency_key": {
@@ -2372,6 +2451,39 @@
           "region"
         ],
         "title": "MassageRecord",
+        "type": "object"
+      },
+      "MeetingIn": {
+        "properties": {
+          "attendees": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Attendees",
+            "type": "string"
+          },
+          "duration_seconds": {
+            "maximum": 7200.0,
+            "minimum": 1.0,
+            "title": "Duration Seconds",
+            "type": "integer"
+          },
+          "media_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Media Id",
+            "type": "integer"
+          },
+          "title": {
+            "default": "晨会",
+            "maxLength": 80,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "media_id",
+          "duration_seconds"
+        ],
+        "title": "MeetingIn",
         "type": "object"
       },
       "MemberCardExplanation": {
@@ -6793,6 +6905,25 @@
           "received_amount_cents"
         ],
         "title": "SettleIn",
+        "type": "object"
+      },
+      "SpotCheckIn": {
+        "properties": {
+          "hq_status": {
+            "title": "Hq Status",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hq_status"
+        ],
+        "title": "SpotCheckIn",
         "type": "object"
       },
       "StaffAccountCreate": {
@@ -13323,6 +13454,129 @@
         ]
       }
     },
+    "/api/v1/admin/v2/headquarters/assessments": {
+      "get": {
+        "operationId": "hq_assessments_api_v1_admin_v2_headquarters_assessments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "pending",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hq Assessments",
+        "tags": [
+          "headquarters-assessments"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/headquarters/assessments/{assessment_id}/spot-check": {
+      "post": {
+        "operationId": "spot_check_api_v1_admin_v2_headquarters_assessments__assessment_id__spot_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "title": "Assessment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpotCheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spot Check",
+        "tags": [
+          "headquarters-assessments"
+        ]
+      }
+    },
     "/api/v1/admin/v2/manager/coupons/half-price/issue": {
       "post": {
         "description": "店长给本店顾客发一张无门槛全单5折券（每人最多1张未使用）。",
@@ -13600,6 +13854,458 @@
         "summary": "Validate Coupon",
         "tags": [
           "manager-coupons"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily": {
+      "get": {
+        "operationId": "get_daily_api_v1_admin_v2_manager_daily_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Daily",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/history": {
+      "get": {
+        "operationId": "daily_history_api_v1_admin_v2_manager_daily_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 14,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Daily History",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/meeting": {
+      "post": {
+        "operationId": "save_meeting_api_v1_admin_v2_manager_daily_meeting_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeetingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Meeting",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/meetings/{meeting_id}/retry-transcribe": {
+      "post": {
+        "operationId": "retry_transcribe_api_v1_admin_v2_manager_daily_meetings__meeting_id__retry_transcribe_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "title": "Meeting Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Transcribe",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/photos": {
+      "post": {
+        "operationId": "save_area_photo_api_v1_admin_v2_manager_daily_photos_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AreaPhotoIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Area Photo",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/submit": {
+      "post": {
+        "operationId": "submit_daily_api_v1_admin_v2_manager_daily_submit_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Daily",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/team": {
+      "get": {
+        "operationId": "get_team_api_v1_admin_v2_manager_daily_team_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Team",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/team/{staff_id}/assessments": {
+      "post": {
+        "operationId": "confirm_assessment_api_v1_admin_v2_manager_daily_team__staff_id__assessments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staff_id",
+            "required": true,
+            "schema": {
+              "title": "Staff Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Assessment",
+        "tags": [
+          "manager-daily"
         ]
       }
     },

@@ -1186,6 +1186,40 @@ export interface paths {
         patch: operations["update_feedback_follow_up_by_type_api_v1_admin_v2_feedback__feedback_type___feedback_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/v2/headquarters/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hq Assessments */
+        get: operations["hq_assessments_api_v1_admin_v2_headquarters_assessments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/headquarters/assessments/{assessment_id}/spot-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Spot Check */
+        post: operations["spot_check_api_v1_admin_v2_headquarters_assessments__assessment_id__spot_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/coupons/half-price/issue": {
         parameters: {
             query?: never;
@@ -1280,6 +1314,142 @@ export interface paths {
          * @description 扫码预览：只返回脱敏顾客信息与券状态，不写库。
          */
         post: operations["validate_coupon_api_v1_admin_v2_manager_coupons_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Daily */
+        get: operations["get_daily_api_v1_admin_v2_manager_daily_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Daily History */
+        get: operations["daily_history_api_v1_admin_v2_manager_daily_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/meeting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Meeting */
+        post: operations["save_meeting_api_v1_admin_v2_manager_daily_meeting_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/meetings/{meeting_id}/retry-transcribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Transcribe */
+        post: operations["retry_transcribe_api_v1_admin_v2_manager_daily_meetings__meeting_id__retry_transcribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Area Photo */
+        post: operations["save_area_photo_api_v1_admin_v2_manager_daily_photos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Daily */
+        post: operations["submit_daily_api_v1_admin_v2_manager_daily_submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Team */
+        get: operations["get_team_api_v1_admin_v2_manager_daily_team_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/team/{staff_id}/assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Assessment */
+        post: operations["confirm_assessment_api_v1_admin_v2_manager_daily_team__staff_id__assessments_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4859,6 +5029,42 @@ export interface components {
         ApiErrorResponse: {
             detail: components["schemas"]["ApiErrorDetail"];
         };
+        /** AreaPhotoIn */
+        AreaPhotoIn: {
+            /** Area */
+            area: string;
+            /** Captured At */
+            captured_at?: string | null;
+            /** Media Id */
+            media_id: number;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /** AssessmentIn */
+        AssessmentIn: {
+            /** Assignment Id */
+            assignment_id?: string | null;
+            /** Course Name */
+            course_name: string;
+            /**
+             * Kind
+             * @default practical
+             */
+            kind: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /**
+             * Result
+             * @default passed
+             */
+            result: string;
+        };
         /** AssignIn */
         AssignIn: {
             /** Idempotency Key */
@@ -5442,6 +5648,23 @@ export interface components {
              * @enum {string}
              */
             side: "left" | "right" | "both" | "unspecified";
+        };
+        /** MeetingIn */
+        MeetingIn: {
+            /**
+             * Attendees
+             * @default
+             */
+            attendees: string;
+            /** Duration Seconds */
+            duration_seconds: number;
+            /** Media Id */
+            media_id: number;
+            /**
+             * Title
+             * @default 晨会
+             */
+            title: string;
         };
         /** MemberCardExplanation */
         MemberCardExplanation: {
@@ -7035,6 +7258,16 @@ export interface components {
              * @default 0
              */
             service_adjustment_cents: number;
+        };
+        /** SpotCheckIn */
+        SpotCheckIn: {
+            /** Hq Status */
+            hq_status: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
         };
         /** StaffAccountCreate */
         StaffAccountCreate: {
@@ -10181,6 +10414,76 @@ export interface operations {
             };
         };
     };
+    hq_assessments_api_v1_admin_v2_headquarters_assessments_get: {
+        parameters: {
+            query?: {
+                status?: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spot_check_api_v1_admin_v2_headquarters_assessments__assessment_id__spot_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                assessment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpotCheckIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     issue_half_price_coupon_api_v1_admin_v2_manager_coupons_half_price_issue_post: {
         parameters: {
             query?: never;
@@ -10329,6 +10632,274 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CouponTokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_daily_api_v1_admin_v2_manager_daily_get: {
+        parameters: {
+            query?: {
+                date?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    daily_history_api_v1_admin_v2_manager_daily_history_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_meeting_api_v1_admin_v2_manager_daily_meeting_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeetingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_transcribe_api_v1_admin_v2_manager_daily_meetings__meeting_id__retry_transcribe_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                meeting_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_area_photo_api_v1_admin_v2_manager_daily_photos_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AreaPhotoIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_daily_api_v1_admin_v2_manager_daily_submit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_team_api_v1_admin_v2_manager_daily_team_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_assessment_api_v1_admin_v2_manager_daily_team__staff_id__assessments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                staff_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentIn"];
             };
         };
         responses: {

@@ -440,3 +440,14 @@ export const validateManagerCoupon = (token: string) => client.post('/admin/v2/m
 export const redeemManagerCoupon = (token: string, requestId: string) => client.post('/admin/v2/manager/coupons/redeem', { token, request_id: requestId });
 export const issueHalfPriceCouponByPhone = (phone: string, name?: string) => client.post('/admin/v2/manager/coupons/half-price/issue-by-phone', { phone, name: name || undefined });
 export const createHalfPriceCouponLink = () => client.post('/admin/v2/manager/coupons/half-price/link');
+
+export const getManagerDaily = (date?: string) => client.get('/admin/v2/manager/daily', { params: date ? { date } : undefined });
+export const saveManagerAreaPhoto = (payload: { area: string; media_id: number; note?: string }) => client.post('/admin/v2/manager/daily/photos', payload);
+export const saveManagerMeeting = (payload: { media_id: number; duration_seconds: number; title?: string; attendees?: string }) => client.post('/admin/v2/manager/daily/meeting', payload);
+export const submitManagerDaily = () => client.post('/admin/v2/manager/daily/submit');
+export const getManagerDailyHistory = (days = 14) => client.get('/admin/v2/manager/daily/history', { params: { days } });
+export const getManagerTeam = () => client.get('/admin/v2/manager/daily/team');
+export const confirmManagerAssessment = (staffId: number, payload: { course_name: string; kind: string; result: string; note?: string; assignment_id?: string }) => client.post(`/admin/v2/manager/daily/team/${staffId}/assessments`, payload);
+export const retryManagerMeetingTranscription = (meetingId: number) => client.post(`/admin/v2/manager/daily/meetings/${meetingId}/retry-transcribe`);
+export const getHqAssessments = (status = 'pending') => client.get('/admin/v2/headquarters/assessments', { params: { status } });
+export const spotCheckHqAssessment = (id: number, payload: { hq_status: 'passed' | 'returned'; note?: string }) => client.post(`/admin/v2/headquarters/assessments/${id}/spot-check`, payload);

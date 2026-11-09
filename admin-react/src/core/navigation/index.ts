@@ -73,6 +73,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     icon: 'idcard',
     items: [
       { path: '/techs', label: '技师管理', icon: 'idcard', roles: managementRoles, capability: 'manage_technicians' },
+      { path: '/assessments', label: '考核抽检', icon: 'file-search', roles: ['admin'], capability: 'manage_technicians', requiresUnboundAdmin: true, headquartersAccess: true },
       { path: '/staff-accounts', label: '员工账号', icon: 'team', roles: ['admin'], capability: 'manage_staff_accounts', requiresUnboundAdmin: true, headquartersAccess: true },
     ],
   },

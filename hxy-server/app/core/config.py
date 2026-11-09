@@ -1,4 +1,4 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     media_storage_root: str = "./media"
     media_max_size_bytes: int = 5 * 1024 * 1024
     media_max_pixels: int = 25_000_000
+    media_audio_max_size_bytes: int = 40 * 1024 * 1024
     media_public_base_url: str = ""
     qiniu_access_key: str = ""
     qiniu_secret_key: str = ""
@@ -92,6 +93,21 @@ class Settings(BaseSettings):
     qiniu_signed_url_ttl_seconds: int = 600
     # 七牛区域不做猜测；为空时由 SDK 按上传凭证自动探测。
     qiniu_zone: str = ""
+
+    # 晨会录音转写；未配置密钥时录音仍可上传，转写状态为 not_configured。
+    asr_provider: str = "tencent"
+    tencent_asr_secret_id: str = ""
+    tencent_asr_secret_key: str = ""
+    tencent_asr_region: str = "ap-guangzhou"
+    tencent_asr_engine: str = "16k_zh"
+
+    @property
+    def asr_ready(self) -> bool:
+        return bool(
+            self.asr_provider == "tencent"
+            and self.tencent_asr_secret_id
+            and self.tencent_asr_secret_key
+        )
 
     # 微信小程序
     wx_appid: str = ""

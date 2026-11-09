@@ -20,6 +20,7 @@ const OrdersPage = lazy(() => import('../pages/OrdersPage'));
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage'));
 const AuditLogsPage = lazy(() => import('../pages/AuditLogsPage'));
 const FeedbackPage = lazy(() => import('../pages/FeedbackPage'));
+const AssessmentsPage = lazy(() => import('../pages/AssessmentsPage'));
 const ExceptionsPage = lazy(() => import('../pages/ExceptionsPage'));
 const RoomsPage = lazy(() => import('../pages/RoomsPage'));
 const TechsPage = lazy(() => import('../pages/TechsPage'));
@@ -141,6 +142,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
                 <Route path="/exceptions" element={page('/exceptions', <ExceptionsPage />)} />
                 <Route path="/audit-logs" element={page('/audit-logs', <AuditLogsPage />)} />
                 <Route path="/feedback" element={page('/feedback', <FeedbackPage />)} />
+                <Route path="/assessments" element={page('/assessments', <AssessmentsPage />)} />
                 <Route path="/rooms/*" element={page('/rooms', <RoomsPage />)} />
                 <Route path="/stores" element={page('/stores', <StoresPage />)} />
                 <Route path="/techs" element={page('/techs', <TechsPage />)} />
