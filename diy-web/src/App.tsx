@@ -37,6 +37,7 @@ import {
   getSelectionSession,
   getServiceStatus,
   getServicePositionMap,
+  getStores,
   moveOccupancy,
   quoteSelectionSession,
   saveSelectionSession,
@@ -50,6 +51,7 @@ import {
   type ServicePosition,
   type PageContent,
   type SavingHint,
+  type StoreSummary,
 } from './api';
 import CouponLoginDialog from './components/CouponLoginDialog';
 import FeedbackDialog from './components/FeedbackDialog';
@@ -316,6 +318,8 @@ export default function App() {
   const hydrated = useRef(false);
   const [boot, setBoot] = useState<BootState>('loading');
   const [bootMessage, setBootMessage] = useState('正在连接门店服务');
+  const [stores, setStores] = useState<StoreSummary[]>([]);
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [addons, setAddons] = useState<Addon[]>([]);
   const [couponTemplates, setCouponTemplates] = useState<CouponTemplate[]>([]);
@@ -444,6 +448,17 @@ export default function App() {
     }
     previousSelectionSignature.current = selectionSignature;
   }, [selectionSignature]);
+  useEffect(() => {
+    let active = true;
+    void getStores().then((items) => { if (active) setStores(items); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+  const currentStore = stores.find((store) => store.id === query.storeId);
+  const storeDisplayName = currentStore ? currentStore.name.replace(/^荷小悦[-·]?/, '') : '荷小悦草本泡脚';
+  const switchStore = (storeId: number) => {
+    setStorePickerOpen(false);
+    window.location.assign(serviceAccountEntry(window.location.origin, storeId));
+  };
   const preview = useMemo(() => calculatePreviewPricing({ projects, selectedProjectIds, projectAddonIds, addons, localParts }), [projects, selectedProjectIds, projectAddonIds, addons, localParts]);
   const appliedPriceType = customerAuth?.user.is_member ? 'member' : 'store';
   const isMember = appliedPriceType === 'member';
@@ -654,11 +669,6 @@ export default function App() {
     setSelectionSummaryOpen(false);
     setSavingHint(null);
     setSavingHintOpen(false);
-  };
-
-  const openSeatMap = () => {
-    setSeatMapOpen(true);
-    openOverlay('seat-map');
   };
 
   const openProfile = () => {
@@ -2156,12 +2166,12 @@ export default function App() {
     <div className="customer-app" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
       {!online && <div className="offline-banner"><WifiOff size={15} />网络已断开，恢复后将继续同步</div>}
       <header className={`miniapp-context-bar${publicBrowsing && isWeChatBrowser() ? ' wechat-public-menu-header' : ''}`}>
-        {publicBrowsing ? <a className="miniapp-store" href={serviceAccountEntry(window.location.origin, query.storeId)} aria-label="返回首页"><MapPinned size={16} /><span>荷小悦草本泡脚</span></a> : <div className="miniapp-store" onClick={openSeatMap} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSeatMap(); } }} role="button" tabIndex={0}>
+        {publicBrowsing ? <button type="button" className="miniapp-store" onClick={() => setStorePickerOpen(true)} aria-label="切换门店"><MapPinned size={16} /><span>{storeDisplayName}</span><small>切换门店</small></button> : <button type="button" className="miniapp-store" onClick={() => setStorePickerOpen(true)} aria-label="切换门店">
           <MapPinned size={16} />
-          <span>荷小悦草本泡脚</span>
+          <span>{storeDisplayName}</span>
           <em>{position?.customer_label || '服务位待核对'}</em>
-          <small>切换</small>
-        </div>}
+          <small>切换门店</small>
+        </button>}
         <button className="miniapp-profile-entry" type="button" onClick={openProfile}>
           <CircleUserRound size={18} />
           <span>{publicBrowsing || customerAuth ? '我的' : '登录'}</span>
@@ -2415,6 +2425,15 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      {storePickerOpen && <div className="store-picker-backdrop" role="presentation" onClick={() => setStorePickerOpen(false)}>
+        <section className="store-picker" role="dialog" aria-modal="true" aria-label="选择门店" onClick={(event) => event.stopPropagation()}>
+          <header><strong>选择门店</strong><button type="button" aria-label="关闭门店选择" onClick={() => setStorePickerOpen(false)}>×</button></header>
+          {stores.length === 0 ? <p>暂无可选门店</p> : stores.map((store) => <button type="button" key={store.id} className={store.id === query.storeId ? 'active' : ''} onClick={() => switchStore(store.id)}>
+            <strong>{store.name}</strong>
+            <small>{store.address}</small>
+          </button>)}
+        </section>
+      </div>}
     </div>
   );
 }

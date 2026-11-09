@@ -498,3 +498,7 @@ export async function claimHalfPriceCoupon(code: string, authToken: string): Pro
     body: JSON.stringify({ code }),
   });
 }
+export type StoreSummary = { id: number; store_code: string; name: string; city: string; address: string; phone: string; business_hours: string; status: string };
+export async function getStores(): Promise<StoreSummary[]> {
+  return request<StoreSummary[]>('/stores');
+}
