@@ -11,6 +11,7 @@ from app.openapi import install_admin_catalog_openapi
 from app.release_static import mount_release_static_files
 from app.services.occupancy_scheduler import start_occupancy_scheduler, stop_occupancy_scheduler
 from app.services.service_anomaly_scheduler import start_service_anomaly_scheduler, stop_service_anomaly_scheduler
+from app.services.daily_ops_retention import start_daily_ops_retention, stop_daily_ops_retention
 
 
 @asynccontextmanager

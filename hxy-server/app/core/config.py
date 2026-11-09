@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     tencent_asr_secret_key: str = ""
     tencent_asr_region: str = "ap-guangzhou"
     tencent_asr_engine: str = "16k_zh"
+    daily_ops_retention_enabled: bool = True
+    daily_ops_retention_interval_seconds: int = 6 * 60 * 60
 
     @property
     def asr_ready(self) -> bool:
