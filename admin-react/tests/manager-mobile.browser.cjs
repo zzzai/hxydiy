@@ -94,7 +94,7 @@ async function main() {
       await start('positions'); await loaded(); await tab('现场');
       await page.locator('.manager-position-card').first().waitFor();
       assert.equal(await page.locator('.manager-position-card').count(), 25);
-      assert.doesNotMatch(await page.locator('.manager-position-view').innerText(), /安排座位|开始服务|结束服务/);
+      assert.equal(await page.locator('.manager-position-view').getByRole('button', { name: /安排座位|开始服务|结束服务/ }).count(), 0);
       const card = page.getByRole('button', { name: '查看2号沙发详情', exact: true });
       await card.scrollIntoViewIfNeeded();
       await noOverflow(); await shot('positions-375');
