@@ -28,7 +28,9 @@ def _is_headquarters_admin(staff: Staff) -> bool:
     return getattr(staff, "role", None) == "admin" and getattr(staff, "store_id", None) is None
 
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+AUDIO_TYPES = {"audio/wav": ".wav"}
+AUDIO_PURPOSES = {"meeting_audio"}
+EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif", "audio/wav": ".wav"}
 FILENAME_EXTENSIONS = {"image/jpeg": {".jpg", ".jpeg"}, "image/png": {".png"}, "image/webp": {".webp"}, "image/gif": {".gif"}}
 FORMAT_CONTENT_TYPES = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp", "GIF": "image/gif"}
 DIRECT_UPLOAD_TTL_SECONDS = 3600
@@ -221,29 +223,50 @@ async def upload_media(
         raise HTTPException(status_code=503, detail="生产媒体存储必须配置七牛云")
     if not db.get(Store, target_store_id):
         raise HTTPException(status_code=404, detail="门店不存在")
-    if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=415, detail="仅支持 JPG、PNG、WebP 或 GIF 图片")
-    original_name = Path(file.filename or "upload").name
-    if not original_name or len(original_name) > 255:
-        raise HTTPException(status_code=400, detail="文件名无效")
-    if Path(original_name).suffix.lower() not in FILENAME_EXTENSIONS[file.content_type]:
-        raise HTTPException(status_code=415, detail="文件扩展名与图片类型不一致")
-    content = await file.read(settings.media_max_size_bytes + 1)
-    if len(content) > settings.media_max_size_bytes:
-        raise HTTPException(status_code=413, detail="图片不能超过 5MB")
-    _validate_image_content(content, file.content_type)
-    object_key = f"stores/{target_store_id}/media/{uuid4().hex}{EXTENSIONS[file.content_type]}"
+    is_audio = purpose in AUDIO_PURPOSES
+    if is_audio:
+        if file.content_type not in AUDIO_TYPES:
+            raise HTTPException(status_code=415, detail="晨会录音仅支持 WAV")
+        original_name = Path(file.filename or "meeting.wav").name
+        if not original_name or len(original_name) > 255:
+            raise HTTPException(status_code=400, detail="文件名无效")
+        if Path(original_name).suffix.lower() != ".wav":
+            raise HTTPException(status_code=415, detail="录音文件扩展名必须为 .wav")
+        content = await file.read(settings.media_audio_max_size_bytes + 1)
+        if len(content) > settings.media_audio_max_size_bytes:
+            raise HTTPException(status_code=413, detail="录音不能超过 40MB")
+        if len(content) < 44 or content[:4] != b"RIFF" or content[8:12] != b"WAVE":
+            raise HTTPException(status_code=415, detail="录音内容无效")
+        content_type = "audio/wav"
+        extension = AUDIO_TYPES[content_type]
+        media_type = "audio"
+    else:
+        if file.content_type not in ALLOWED_TYPES:
+            raise HTTPException(status_code=415, detail="仅支持 JPG、PNG、WebP 或 GIF 图片")
+        original_name = Path(file.filename or "upload").name
+        if not original_name or len(original_name) > 255:
+            raise HTTPException(status_code=400, detail="文件名无效")
+        if Path(original_name).suffix.lower() not in FILENAME_EXTENSIONS[file.content_type]:
+            raise HTTPException(status_code=415, detail="文件扩展名与图片类型不一致")
+        content = await file.read(settings.media_max_size_bytes + 1)
+        if len(content) > settings.media_max_size_bytes:
+            raise HTTPException(status_code=413, detail="图片不能超过 5MB")
+        _validate_image_content(content, file.content_type)
+        content_type = file.content_type
+        extension = EXTENSIONS[content_type]
+        media_type = "image"
+    object_key = f"stores/{target_store_id}/media/{uuid4().hex}{extension}"
     storage = _storage_or_http()
     try:
-        storage.put(object_key, content, file.content_type)
+        storage.put(object_key, content, content_type)
     except MediaStorageError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     media = MediaAsset(
         store_id=target_store_id,
         object_key=object_key,
         original_name=original_name,
-        content_type=file.content_type,
-        media_type="image",
+        content_type=content_type,
+        media_type=media_type,
         size_bytes=len(content),
         purpose=purpose,
         created_by_staff_id=staff.id,

@@ -4,7 +4,7 @@ import { Spin } from 'antd';
 import { Navigate, BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { getStaff, getToken } from '../api';
 import { clearStaffSession, getSessionEpoch, isWecomEntryPending, clearDepartingWecomSession, wecomSessionPath, subscribeSessionEpoch } from '../wecomSession';
-import ManagerStorePage from './ManagerStorePage';
+import ManagerP0Page from './ManagerP0Page';
 import LearningLive from './learning/LearningLive';
 import { isMobileManager } from './managerMobile';
 import TechnicianMobileLoginPage from './TechnicianMobileLoginPage';
@@ -79,7 +79,7 @@ function TechnicianSessionRoutes() {
     flushSync(() => setSuspended(true));
     window.location.assign('/admin/#/today');
   };
-  return <Routes><Route path="/store/login" element={loggedIn && manager ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} managerOnly onLogin={onLogin} />} /><Route path="/login" element={loggedIn ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} onLogin={onLogin} />} /><Route path="/*" element={loggedIn ? <TechnicianMobileShell key={epoch} onLogout={logout} onOpenDesktop={openDesktop}><Routes><Route path="store" element={manager ? <ManagerStorePage learningEntry={learningEnabled ? <LearningLive entry/> : undefined} /> : <Navigate to="/store/login" replace />} />{(!manager || hasTechnician) && <><Route path="today" element={<>{learningEnabled && <LearningLive entry/>}<TechnicianMyServicesPage /></>} /><Route path="positions" element={<TechnicianTodayPage />} /><Route path="history" element={<TechnicianHistoryPage />} /><Route path="me" element={<TechnicianMePage />} /></>}{learningEnabled && <Route path="learning" element={<LearningLive/>} />}<Route path="member-verify" element={manager ? <TechnicianMembershipPausedPage /> : <Navigate to="/today" replace />} /><Route path="*" element={<Navigate to={home} replace />} /></Routes></TechnicianMobileShell> : <Navigate to={loginPath} replace />} /></Routes>;
+  return <Routes><Route path="/store/login" element={loggedIn && manager ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} managerOnly onLogin={onLogin} />} /><Route path="/login" element={loggedIn ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} onLogin={onLogin} />} /><Route path="/*" element={loggedIn ? <TechnicianMobileShell key={epoch} onLogout={logout} onOpenDesktop={openDesktop}><Routes><Route path="store" element={manager ? <ManagerP0Page /> : <Navigate to="/store/login" replace />} />{(!manager || hasTechnician) && <><Route path="today" element={<>{learningEnabled && <LearningLive entry/>}<TechnicianMyServicesPage /></>} /><Route path="positions" element={<TechnicianTodayPage />} /><Route path="history" element={<TechnicianHistoryPage />} /><Route path="me" element={<TechnicianMePage />} /></>}{learningEnabled && <Route path="learning" element={<LearningLive/>} />}<Route path="member-verify" element={manager ? <TechnicianMembershipPausedPage /> : <Navigate to="/today" replace />} /><Route path="*" element={<Navigate to={home} replace />} /></Routes></TechnicianMobileShell> : <Navigate to={loginPath} replace />} /></Routes>;
 }
 
 export default function TechnicianMobileApp() {

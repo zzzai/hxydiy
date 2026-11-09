@@ -54,3 +54,12 @@ __all__ = [
 ]
 
 from app.models.staff_learning import LearningCourseVersion, StaffLearningAssignment, StaffLearningEvent
+
+from app.models.daily_ops import DailyAreaPhoto, DailyMeetingRecording, DailyStoreCheckin, TrainingAssessment
+
+__all__.extend([
+    "DailyAreaPhoto",
+    "DailyMeetingRecording",
+    "DailyStoreCheckin",
+    "TrainingAssessment",
+])
