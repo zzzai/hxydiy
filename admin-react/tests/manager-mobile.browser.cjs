@@ -1,4 +1,4 @@
-const fs = require('node:fs');
+﻿const fs = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { chromium } = require(process.env.MANAGER_TEST_PLAYWRIGHT || 'playwright');
@@ -150,3 +150,4 @@ async function main() {
 }
 
 main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+
