@@ -14,6 +14,7 @@ import ManagerTasksView from './ManagerTasksView';
 import ManagerServiceOrdersView from './ManagerServiceOrdersView';
 import ManagerReviewsView from './ManagerReviewsView';
 import ManagerCouponRedeemView from './ManagerCouponRedeemView';
+import './manager-mobile.css';
 import './manager-p0.css';
 
 type Tab = 'today' | 'floor' | 'team' | 'ops';

@@ -30,7 +30,7 @@ export default function ManagerTodayView({ daily, team, workbench, onOpenFloor, 
       <button type="button" onClick={onOpenOrders}><strong>{workbench?.summary?.today_orders ?? '—'}</strong><span>今日订单</span></button>
       <button type="button" onClick={onOpenTasks}><strong>{workbench?.summary?.waiting_service ?? '—'}</strong><span>待服务</span></button>
       <span><strong>{workbench?.summary?.in_service ?? '—'}</strong><span>服务中</span></span>
-      <button type="button" className={attention ? 'warn' : ''} onClick={onOpenTasks}><strong>{attention || '—'}</strong><span>需处理</span></button>
+      <button type="button" className={attention ? 'warn' : ''} onClick={onOpenTasks}><strong>{attention}</strong><span>需处理</span></button>
     </div>
 
     <div className="manager-p0-quick-grid">
