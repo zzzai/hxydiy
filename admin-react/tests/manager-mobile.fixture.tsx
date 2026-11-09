@@ -100,6 +100,28 @@ client.defaults.adapter = async config => {
     summary: { today_orders: scenario === 'empty' ? 0 : 3, in_service: scenario === 'empty' ? 0 : 1, pending_checkout: scenario === 'empty' ? 0 : 1, attention: scenario === 'empty' ? 0 : 1 },
     attention: scenario === 'empty' ? [] : [{ key: 'addon', label: '顾客加选待处理', count: 1 }],
   });
+  if (method === 'get' && path === '/admin/v2/manager/daily') return ok({
+    business_date: '2026-11-09', checkin_id: 1, status: 'draft', submitted_at: null,
+    areas: [
+      { key: 'restroom', label: '卫生间', done: true, photo: null },
+      { key: 'water_room', label: '打水房', done: true, photo: null },
+      { key: 'cashier', label: '收银台', done: true, photo: null },
+      { key: 'rest_area', label: '休息区', done: false, photo: null },
+      { key: 'foot_area', label: '足疗区', done: false, photo: null },
+    ],
+    meetings: [],
+    completion: { areas_done: 3, areas_total: 5, has_meeting: false, submitted: false },
+  });
+  if (method === 'get' && path === '/admin/v2/manager/daily/team') return ok({
+    summary: { staff_count: 2, on_track: 1, overdue: 1 },
+    technicians: [
+      { staff_id: 7, name: '合成技师', role: 'technician', technician_id: 7, progress: 76, complete: false, overdue: false,
+        learning: { assignment_id: 'synthetic-assignment', title: '草本泡脚', progress: 76 }, assessment: null },
+      { staff_id: 8, name: '合成技师乙', role: 'technician', technician_id: 8, progress: 46, complete: false, overdue: true,
+        learning: { assignment_id: 'synthetic-assignment-2', title: '足部精修', progress: 46 },
+        assessment: { id: 1, course_name: '足部精修', kind: 'practical', result: 'passed', hq_status: 'pending', manager_confirmed_at: '2026-11-09T08:00:00Z', hq_note: '' } },
+    ],
+  });
   if (method === 'get' && path === '/admin/v2/selection-sessions') {
     ++stats.reads;
     if (scenario === 'error') return fail(503, '合成网络错误，请重试');
