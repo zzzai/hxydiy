@@ -1,4 +1,4 @@
-﻿const fs = require('node:fs/promises');
+const fs = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { chromium } = require(process.env.MANAGER_TEST_PLAYWRIGHT || 'playwright');
@@ -30,7 +30,7 @@ async function start(scenario = 'normal', width = 375, route = '/technician/stor
   await page.locator('aside').waitFor();
 }
 async function loaded() { await page.locator('.manager-p0-page').waitFor(); }
-async function tab(label) { await page.locator('.manager-p0-nav').getByRole('button', { name: label, exact: true }).click(); }
+async function tab(label) { await page.locator('.manager-p0-nav button').filter({ hasText: label }).click(); }
 async function noOverflow() {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Page must not overflow horizontally');
   for (const button of await page.locator('.manager-p0-nav button').all()) {
