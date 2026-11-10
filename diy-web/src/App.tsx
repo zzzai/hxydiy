@@ -1081,7 +1081,9 @@ export default function App() {
   const initialize = async () => {
     setBoot('loading');
     if (query.returnVisit) {
-      window.history.replaceState(window.history.state, '', stableStoreEntry(window.location.origin, query.storeId, null));
+      if (!query.profileEntry) {
+        window.history.replaceState(window.history.state, '', stableStoreEntry(window.location.origin, query.storeId, null));
+      }
       setBoot('return-visit');
       return;
     }
