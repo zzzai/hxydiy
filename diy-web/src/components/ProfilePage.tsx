@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Store, UserRound, X } from 'lucide-react';
+﻿import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Store, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -11,7 +11,7 @@ import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipState,
 import MembershipBanner from './MembershipBanner';
 import FeedbackDialog from './FeedbackDialog';
 import MyReports from './MyReports';
-import { ProfileReturnTools, ReturnDialog } from './CustomerReturnTools';
+import { ReturnDialog } from './CustomerReturnTools';
 import './profile-home.css';
 
 type TabKey = 'records' | 'coupons';
@@ -180,7 +180,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
       </header>
 
       {!auth
-        ? <div className="profile-anonymous-body">{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={openReports}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} />{!reportsOpen && <ProfileReturnTools storeId={storeId} compact />}</div>
+        ? <div className="profile-anonymous-body">{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : null}<ProfileLogin onAuthChange={onAuthChange} onOpenReports={reportsOpen ? undefined : openReports} /></div>
         : reportsOpen ? <MyReports key={auth.token} token={auth.token} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
           <main className="profile-body">
             <ProfileCard user={auth.user} onShowCode={() => setMemberCodeOpen(true)} />
@@ -216,7 +216,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   );
 }
 
-function ProfileLogin({ onAuthChange }: { onAuthChange: (auth: CustomerAuth) => void }) {
+function ProfileLogin({ onAuthChange, onOpenReports }: { onAuthChange: (auth: CustomerAuth) => void; onOpenReports?: () => void }) {
   const copy = customerLoginCopy('profile');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -262,9 +262,10 @@ function ProfileLogin({ onAuthChange }: { onAuthChange: (auth: CustomerAuth) => 
 
   return (
     <main className="profile-login">
-      <section className="profile-login-hero">
-        <UserRound size={30} />
-        <div><h1>{copy.title}</h1><p>{copy.detail}</p></div>
+      <section className="profile-login-intro">
+        <span>荷小悦</span>
+        <h1>{copy.title}</h1>
+        <p>{copy.detail}</p>
       </section>
       <section className="coupon-login-form">
         <label><span>手机号</span><input value={phone} inputMode="tel" placeholder="请输入手机号" onChange={(event) => setPhone(normalizePhone(event.target.value))} /></label>
@@ -272,6 +273,7 @@ function ProfileLogin({ onAuthChange }: { onAuthChange: (auth: CustomerAuth) => 
       </section>
       {error && <p className="coupon-login-error">{error}</p>}
       <button className="profile-login-submit" type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button>
+      {onOpenReports ? <button className="profile-report-link" type="button" onClick={onOpenReports}>只看检测报告<ChevronRight size={14} /></button> : null}
     </main>
   );
 }
@@ -405,3 +407,4 @@ function CouponList({ coupons, token }: { coupons: MyCoupon[]; token: string }) 
     </ul>
   );
 }
+

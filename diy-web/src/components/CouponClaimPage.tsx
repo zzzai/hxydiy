@@ -108,17 +108,9 @@ export default function CouponClaimPage() {
             guestToken = '';
           }
         }
-        let visitorId = window.localStorage.getItem('hxy_coupon_visitor') || '';
-        if (!visitorId) {
-          visitorId = crypto.randomUUID();
-          window.localStorage.setItem('hxy_coupon_visitor', visitorId);
-        }
-        const guest = await guestClaimCoupon(code, visitorId);
-        window.localStorage.setItem(guestKey, guest.guest_token);
-        setGuestToken(guest.guest_token);
-        setCoupon(couponFromGuest(guest));
-        if (guest.status === 'unused') await issueGuestQr(guest.guest_token);
-        setGuestReady(true);
+        // Opening the link is only a preview. A coupon (and quota) is created
+        // only when the customer explicitly claims it or logs in.
+        setGuestReady(false);
         return;
       }
 
@@ -155,8 +147,31 @@ export default function CouponClaimPage() {
     }).finally(() => setBusy(false));
   }, [auth?.token, code, guestKey]);
 
-  const sendCode = async () => {
-    const value = normalizePhone(phone);
+  const claimGuest = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      let visitorId = window.localStorage.getItem('hxy_coupon_visitor') || '';
+      if (!visitorId) {
+        visitorId = window.crypto?.randomUUID?.() || `guest-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        window.localStorage.setItem('hxy_coupon_visitor', visitorId);
+      }
+      const guest = await guestClaimCoupon(code, visitorId);
+      window.localStorage.setItem(guestKey, guest.guest_token);
+      setGuestToken(guest.guest_token);
+      setCoupon(couponFromGuest(guest));
+      if (guest.status === 'unused') await issueGuestQr(guest.guest_token);
+      setGuestReady(true);
+    } catch (failure) {
+      const detail = errorDetail(failure);
+      setError(detail.message || '领取失败，请稍后重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendCode = async () => {    const value = normalizePhone(phone);
     if (!isValidPhone(value)) { setError('请输入正确手机号'); return; }
     setSending(true); setError('');
     try { await sendPhoneCode(value); setSeconds(60); }
@@ -205,12 +220,13 @@ export default function CouponClaimPage() {
           {!auth ? <p className="coupon-claim-hint">不登录也能看到券和核销码；登录后这张券会自动绑定到你的账户。</p> : null}
           <div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券包</a></div>
         </> : null}
+        {!auth && !coupon && !busy ? <div className="coupon-claim-preview"><div className="coupon-claim-value"><strong>5折</strong><span>全单可用</span></div><p className="coupon-claim-hint">先预览，不占用 100 张额度。领取后才生成券和核销码。</p><button type="button" className="coupon-claim-primary" disabled={busy} onClick={() => void claimGuest()}>领取并出示核销码</button></div> : null}
         {!auth ? <>
-          <div className="coupon-claim-divider"><span>登录后保存到券包</span></div>
+          <div className="coupon-claim-divider"><span>或登录后自动领取</span></div>
           <label>手机号<input inputMode="numeric" maxLength={11} value={phone} placeholder="请输入手机号" onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))} /></label>
           <div className="coupon-claim-code"><input inputMode="numeric" maxLength={6} value={smsCode} placeholder="验证码" onChange={(event) => setSmsCode(event.target.value.replace(/\D/g, ''))} /><button type="button" disabled={sending || seconds > 0} onClick={() => void sendCode()}>{seconds > 0 ? `${seconds}s` : sending ? '发送中' : '获取验证码'}</button></div>
-          <button type="button" className="coupon-claim-primary" disabled={busy} onClick={() => void login()}>登录并绑定到券包</button>
-          {!guestReady && !coupon && <p className="coupon-claim-hint">没有账号也可以先看券，登录后自动保存。</p>}
+          <button type="button" className="coupon-claim-primary" disabled={busy} onClick={() => void login()}>登录并领取到券包</button>
+          {!guestReady && !coupon && <p className="coupon-claim-hint">未登录打开只预览；点领取或登录后才占用一张。</p>}
         </> : null}
       </>}
     </section>
