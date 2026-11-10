@@ -128,8 +128,8 @@ test('非会员优惠券提示不承诺自动抵扣，明确以门店结算为�
   assert.doesNotMatch(detail, /满足条件自动抵扣/);
 });
 
-test('会员个人中心不展示领券入口', () => {
-  assert.equal(shouldShowCouponTab(true), false);
+test('会员和非会员都展示券包入口', () => {
+  assert.equal(shouldShowCouponTab(true), true);
   assert.equal(shouldShowCouponTab(false), true);
 });
 

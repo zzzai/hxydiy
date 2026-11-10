@@ -257,12 +257,16 @@ def _redeemable(db: Session, staff: Staff, token: str):
     template = db.get(CouponTemplate, coupon.template_id)
     if not template or template.store_id != store_id:
         raise HTTPException(status_code=403, detail={"code": "COUPON_STORE_MISMATCH", "message": "该券不属于当前门店"})
-    customer = db.scalar(select(User).where(
-        User.id == coupon.user_id,
-        User.id.in_(_store_user_ids(store_id)),
-    ))
+    customer = db.get(User, coupon.user_id)
     if not customer:
         raise HTTPException(status_code=403, detail={"code": "COUPON_CUSTOMER_MISMATCH", "message": "顾客不属于当前门店"})
+    if not customer.openid.startswith("guest-coupon-"):
+        store_customer = db.scalar(select(User.id).where(
+            User.id == coupon.user_id,
+            User.id.in_(_store_user_ids(store_id)),
+        ))
+        if not store_customer:
+            raise HTTPException(status_code=403, detail={"code": "COUPON_CUSTOMER_MISMATCH", "message": "顾客不属于当前门店"})
     now = datetime.now(UTC)
     if coupon.status == "used":
         raise HTTPException(status_code=409, detail={"code": "COUPON_ALREADY_USED", "message": "该券已核销"})

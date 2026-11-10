@@ -58,6 +58,10 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   loadContext.current = { open, auth, reportsOpen, onAuthChange };
 
   useEffect(() => { if (open && initialReportsOpen) setReportsOpen(true); }, [open, initialReportsOpen]);
+  useEffect(() => {
+    if (!open) return;
+    if (new URLSearchParams(window.location.search).get('coupon') === '1') setTab('coupons');
+  }, [open]);
 
   const loadData = useCallback((token: string, isMember: boolean) => {
     const requestId = ++loadRequest.current;
@@ -69,7 +73,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
       Promise.resolve([] as Order[]),
       SHOW_PROFILE_HISTORY ? getMySelectionSessions(token) : Promise.resolve([] as SelectionSession[]),
       // 会员不展示券入口，也不应请求会员无权限的券接口；否则任一 403 会让整个个人中心误报加载失败。
-      isMember ? Promise.resolve([] as MyCoupon[]) : getMyCoupons(token),
+      getMyCoupons(token),
     ]).then(([orderItems, sessionItems, couponItems]) => {
       if (!isCurrent()) return;
       setDataOwner(token);
@@ -88,16 +92,12 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   }, []);
 
   useEffect(() => {
-    if (!open || !auth || reportsOpen || (!SHOW_PROFILE_HISTORY && auth.user.is_member)) { setLoading(false); return; }
+    if (!open || !auth || reportsOpen) { setLoading(false); return; }
     loadData(auth.token, auth.user.is_member);
     return () => { loadRequest.current += 1; };
   }, [open, auth?.token, auth?.user.is_member, reportsOpen, loadData, refreshKey]);
 
-  useEffect(() => { if (auth?.user.is_member && tab === 'coupons') setTab('records'); }, [auth?.user.is_member, tab]);
-
-  // Never render one account's cached records or dialogs under another identity.
-  useEffect(() => {
-    setSelectedRecord(null); setFeedbackRecord(null); setFeedbackError('');
+  useEffect(() => { setSelectedRecord(null); setFeedbackRecord(null); setFeedbackError('');
     setFeedbackSubmitting(false); feedbackRequest.current = null;
     setMemberCodeOpen(false); setReturnPanel(null); setRecordsOpen(false); setRecordState('all');
     setRecordLimit(3); setRecordNavigation(0); setTab('records');
@@ -190,7 +190,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
             </nav>
             {!recordsOpen && loadError && <div className="profile-load-error" role="alert"><p>{loadError}</p><button type="button" onClick={() => loadData(auth.token, auth.user.is_member)}>重新加载</button></div>}
             {recordsOpen && <section id="profile-records" className="profile-records-section" ref={recordSection} tabIndex={-1} aria-label="我的服务记录">
-              <div className="profile-section-heading"><h2>{tab === 'records' ? '服务记录' : '我的券'}</h2>{tab === 'records' && <span>{visibleSessions.length >= 50 ? '最近50条' : '最近到店'}</span>}{shouldShowCouponTab(auth.user.is_member) && <button type="button" onClick={() => { setTab(tab === 'records' ? 'coupons' : 'records'); }}>{tab === 'records' ? '我的券' : '服务记录'}<ChevronRight size={14} /></button>}<button className="profile-collapse-records" type="button" onClick={() => { setRecordsOpen(false); recordTrigger.current?.focus(); }}>收起<X size={14} /></button></div>
+              <div className="profile-section-heading"><h2>{tab === 'records' ? '服务记录' : '券包'}</h2>{tab === 'records' && <span>{visibleSessions.length >= 50 ? '最近50条' : '最近到店'}</span>}{shouldShowCouponTab(auth.user.is_member) && <button type="button" onClick={() => { setTab(tab === 'records' ? 'coupons' : 'records'); }}>{tab === 'records' ? '券包' : '服务记录'}<ChevronRight size={14} /></button>}<button className="profile-collapse-records" type="button" onClick={() => { setRecordsOpen(false); recordTrigger.current?.focus(); }}>收起<X size={14} /></button></div>
               {SHOW_PROFILE_HISTORY && tab === 'records' && <RecordFilters value={recordState} onChange={value => { setRecordState(value); setRecordLimit(3); }} />}
               {loadError && <div className="profile-load-error" role="alert"><p>{loadError}</p><button type="button" onClick={() => loadData(auth.token, auth.user.is_member)}>重新加载</button></div>}
               {loading && <p className="profile-empty" role="status">正在加载服务记录…</p>}
@@ -375,7 +375,7 @@ function CouponList({ coupons, token }: { coupons: MyCoupon[]; token: string }) 
       setQrError(failure instanceof Error ? failure.message : '核销码生成失败，请重试');
     } finally { setQrBusy(false); }
   };
-  if (!coupons.length) return <p className="profile-empty">暂无优惠券</p>;
+  if (!coupons.length) return <p className="profile-empty">券包还是空的</p>;
   return (
     <ul className="profile-list">
       {coupons.map((coupon) => (

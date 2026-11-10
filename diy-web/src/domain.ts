@@ -875,14 +875,35 @@ export function formatMoney(cents: number): string {
   return `¥${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 1)}`;
 }
 
+const PROJECT_IMAGE_ALIASES: Record<string, string> = {
+  'assets/products/daily-care-pack.png': 'assets/daily-care-pack.webp',
+  'assets/products/family-relax-card.png': 'assets/family-relax-card.webp',
+  'assets/products/herbal-heat-pack.png': 'assets/herbal-heat-pack.webp',
+  'assets/ip-paopao-running-bucket.png': 'assets/ip-paopao-running-bucket.webp',
+};
+
 export function projectImage(project: Project): string {
-  const generatedAsset = generatedProjectAsset(project.code);
-  if (generatedAsset) return assetPath(`projects/${generatedAsset}.webp`);
+  // Admin-configured project media is the source of truth. Generated menu art
+  // is only a fallback and must never silently replace an uploaded main image.
   if (project.image_url) {
     if (/^https?:\/\//.test(project.image_url)) return project.image_url;
-    if (project.image_url.startsWith('/diy/assets/')) return assetPath(project.image_url.slice('/diy/assets/'.length));
-    return assetPath(project.image_url.replace(/^\/?assets\//, ''));
+    const normalized = project.image_url
+      .replace(/^\/diy\/assets\//, 'assets/')
+      .replace(/^\/?assets\//, 'assets/');
+    const alias = PROJECT_IMAGE_ALIASES[normalized];
+    if (alias) return assetPath(alias.replace(/^assets\//, ''));
+    // Preserve the configured photo path. If the old database points at a
+    // removed png, fall through to the stable generated fallback below.
+    if (!normalized.endsWith('.png') || !normalized.includes('assets/products/')) {
+      return assetPath(normalized.replace(/^assets\//, ''));
+    }
   }
+  return projectImageFallback(project);
+}
+
+export function projectImageFallback(project: Project): string {
+  const generatedAsset = generatedProjectAsset(project.code);
+  if (generatedAsset) return assetPath(`projects/${generatedAsset}.webp`);
   if (project.code === 'hxy-spa-60' || project.code === 'hxy-spa-90') return assetPath('spa-scene.jpg');
   if (project.code === 'hxy-tuina-70') return assetPath('service-tuina.jpg');
   if (project.category === 'local-strength') return assetPath('service-tuina.jpg');
