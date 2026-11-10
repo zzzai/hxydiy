@@ -6,6 +6,7 @@ import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMy
 import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth, type CustomerUser } from '../customerAuth';
 import { formatMoney } from '../domain';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
+import { bindPendingGuestCoupons } from '../guestCoupon';
 import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipState, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
 import MembershipBanner from './MembershipBanner';
 import FeedbackDialog from './FeedbackDialog';
@@ -250,6 +251,7 @@ function ProfileLogin({ onAuthChange }: { onAuthChange: (auth: CustomerAuth) => 
     try {
       const result = await loginByPhone(phone, code);
       writeCustomerAuth(result);
+      await bindPendingGuestCoupons(result.token);
       onAuthChange(result);
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : '登录失败');
@@ -391,7 +393,7 @@ function CouponList({ coupons, token }: { coupons: MyCoupon[]; token: string }) 
             <small>{coupon.min_spend_cents > 0 ? `满 ${formatMoney(coupon.min_spend_cents)} 可用` : '无门槛'}{coupon.expire_at ? ` · ${formatDateTime(coupon.expire_at)} 前有效` : ''}</small>
             {coupon.status === 'unused' && <button type="button" className="profile-coupon-qr-button" disabled={qrBusy} onClick={() => void showQr(coupon)}>{qrBusy ? '生成中…' : '核销码'}</button>}
             {qr?.couponId === coupon.id && <div className="profile-coupon-qr">
-              <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qr.token)}`} size={168} />
+              <QRCodeSVG value={qr.token} size={168} />
               <small>请店长扫码，5 分钟内有效</small>
               <button type="button" onClick={() => setQr(null)}>收起</button>
             </div>}

@@ -14,14 +14,19 @@ test('所有已上线项目均提供统一长详情视觉模块', () => {
   assert.equal(herbalFootbath.length, 1);
   assert.match(herbalFootbath[0]?.image || '', /hxy-qiqing-30-detail-story-v2\.webp$/);
   assert.match(herbalFootbath[0]?.alt || '', /荷小悦 IP/);
-  assert.equal(projectDetailVisuals('hxy-xiangxiang-60').length, 3);
+  assert.equal(projectDetailVisuals('hxy-xiangxiang-60').length, 1);
+  const generic = projectDetailVisuals('hxy-xiangxiang-60')[0];
+  assert.ok(generic);
+  assert.equal((generic.body.match(/不赶步骤/g) || []).length, 1);
+  assert.ok(generic.body.includes('给双脚和小腿留出完整时间'));
+  assert.ok(generic.body.includes('不赶步骤'));
   const spa60Sections = projectDetailVisuals('hxy-spa-60');
   assert.equal(spa60Sections.length, 3);
   assert.ok(spa60Sections.every((section) => !section.image.endsWith('detail-3.webp')));
   assert.doesNotMatch(spa60Sections.map((section) => section.title + section.body).join(''), /15 分钟头部放松/);
   assert.match(spa60Sections.map((section) => section.title).join(''), /45 分钟精油护理/);
   assert.ok(spa60Sections.every((section) => section.image.includes('hxy-spa-60-detail-')));
-  assert.equal(projectDetailVisuals('hxy-spa-90').length, 3);
+  assert.equal(projectDetailVisuals('hxy-spa-90').length, 1);
 });
 
 test('详情视觉为每张图提供可读替代文本和顾客说明', () => {

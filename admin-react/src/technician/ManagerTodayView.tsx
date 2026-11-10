@@ -42,8 +42,8 @@ export default function ManagerTodayView({ daily, team, workbench, onOpenFloor, 
 
     <section className="manager-p0-card manager-p0-floor-mini" onClick={onOpenFloor}>
       <div className="manager-p0-card-head"><div><small>现场</small><h3>沙发位与区域</h3></div><span className="manager-p0-link">全部 <ShopOutlined /></span></div>
-      <div className="manager-p0-sofa-row">{[1, 2, 3, 4, 5, 6, 7, 8, 9].map((item) => <span key={item} className={item % 4 === 0 ? 'busy' : item % 5 === 0 ? 'clean' : ''}>{item}</span>)}</div>
-      <p className="manager-p0-muted">沙发位状态由系统自动生成，店长只读查看。</p>
+      <div className="manager-p0-sofa-row">{['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((item) => <span key={item}>{item}</span>)}</div>
+      <p className="manager-p0-muted">查看实时现场；座位状态由系统自动生成。</p>
     </section>
 
     <section className="manager-p0-card" onClick={onOpenTeam}>

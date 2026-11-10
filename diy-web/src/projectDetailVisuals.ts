@@ -117,10 +117,13 @@ export function projectDetailVisuals(code: string): ProjectDetailVisualSection[]
   };
   const texts = copy[code];
   if (!texts) return [];
-  return texts.map((title, index) => ({
-    image: assetPath(`projects/${code}-detail-${index + 1}.webp`),
-    title,
-    body: index === 0 ? texts[1] : texts[2],
-    alt: `荷小悦 IP ${title}`,
-  }));
+  // The fallback copy is [title, body, closing]. Render it as one coherent
+  // section; the old three-section mapping repeated the same sentence and
+  // produced duplicated paragraphs on every generic project detail.
+  return [{
+    image: assetPath(`projects/${code}-detail-1.webp`),
+    title: texts[0],
+    body: `${texts[1]} ${texts[2]}`.trim(),
+    alt: `荷小悦 IP ${texts[0]}`,
+  }];
 }

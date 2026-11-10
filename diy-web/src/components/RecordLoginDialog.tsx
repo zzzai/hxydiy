@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { ApiError, loginByPhone, sendPhoneCode } from '../api';
 import { isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
+import { bindPendingGuestCoupons } from '../guestCoupon';
 import { customerLoginCopy } from '../customerCopy';
 
 export default function RecordLoginDialog({ open, selectionSessionId, selectionToken, onClose, onSuccess, purpose = 'record', notice = '' }: {
@@ -65,6 +66,7 @@ export default function RecordLoginDialog({ open, selectionSessionId, selectionT
       const auth = await loginByPhone(phone, code, selectionSessionId, selectionToken);
       if (purpose === 'report' && !active.current) return;
       writeCustomerAuth(auth);
+      await bindPendingGuestCoupons(auth.token);
       onSuccess(auth);
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : '登录失败');

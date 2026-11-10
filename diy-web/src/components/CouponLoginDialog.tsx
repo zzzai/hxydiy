@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { ApiError, claimCoupon, loginByPhone, sendPhoneCode, type CouponTemplate } from '../api';
 import { isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
+import { bindPendingGuestCoupons } from '../guestCoupon';
 import { formatCouponReminder } from '../domain';
 import { maskedPhone } from '../profile';
 
@@ -69,6 +70,7 @@ export default function CouponLoginDialog({ open, coupon, auth, selectionSession
     try {
       const nextAuth = await loginByPhone(phone, code, selectionSessionId, selectionToken);
       writeCustomerAuth(nextAuth);
+      await bindPendingGuestCoupons(nextAuth.token);
       await finishClaim(nextAuth);
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : '登录失败');

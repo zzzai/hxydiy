@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { Button, Input, Spin, Tag, message } from 'antd';
-import { AudioOutlined, CameraOutlined, CheckCircleFilled, ReloadOutlined, StarOutlined, StopOutlined, GiftOutlined } from '@ant-design/icons';
+import { AudioOutlined, CameraOutlined, CheckCircleFilled, ReloadOutlined, ScanOutlined, StarOutlined, StopOutlined, GiftOutlined } from '@ant-design/icons';
 import { getManagerDaily, retryManagerMeetingTranscription, saveManagerAreaPhoto, saveManagerMeeting, submitManagerDaily, uploadMedia } from '../api';
 import { WavRecorder } from './wavRecorder';
 
@@ -24,6 +24,13 @@ function MeetingPanel({ daily, onRefresh }: { daily: Daily; onRefresh: () => Pro
   const [retrying, setRetrying] = useState(false);
   const timer = useRef<number | null>(null);
   const meeting = daily.meetings[0];
+
+  useEffect(() => () => {
+    if (timer.current) window.clearInterval(timer.current);
+    const active = recorder.current;
+    recorder.current = null;
+    if (active) void active.stop().catch(() => undefined);
+  }, []);
 
   const start = async () => {
     try {
@@ -84,8 +91,8 @@ function MeetingPanel({ daily, onRefresh }: { daily: Daily; onRefresh: () => Pro
   </section>;
 }
 
-export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenReviews, onOpenCoupons }: {
-  daily: Daily | null; loading: boolean; onRefresh: () => Promise<void>; onOpenReviews: () => void; onOpenCoupons: () => void;
+export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenReviews, onOpenCoupons, onOpenRedeemCoupon }: {
+  daily: Daily | null; loading: boolean; onRefresh: () => Promise<void>; onOpenReviews: () => void; onOpenCoupons: () => void; onOpenRedeemCoupon: () => void;
 }) {
   const [uploading, setUploading] = useState('');
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -125,13 +132,16 @@ export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenR
       <div className="manager-p0-card-head"><div><small>今日经营</small><h2>{done}/5 区域</h2></div><Tag color={daily.status === 'submitted' ? 'green' : 'gold'}>{daily.status === 'submitted' ? '已提交' : '进行中'}</Tag></div>
       <div className="manager-p0-progress"><i style={{ width: `${(done / 5) * 100}%` }} /></div>
       <p className="manager-p0-muted">照片、晨会、评价、发券都在这里留痕；照片和录音保留 90 天。</p>
-      <div className="manager-p0-actions-inline"><Button size="small" icon={<StarOutlined />} onClick={onOpenReviews}>看评价</Button><Button size="small" icon={<GiftOutlined />} onClick={onOpenCoupons}>发券</Button></div>
+      <div className="manager-p0-actions-inline"><Button size="small" icon={<StarOutlined />} onClick={onOpenReviews}>看评价</Button><Button size="small" icon={<GiftOutlined />} onClick={onOpenCoupons}>发券</Button><Button size="small" icon={<ScanOutlined />} onClick={onOpenRedeemCoupon}>核销券</Button></div>
     </section>
 
     <section className="manager-p0-card">
       <div className="manager-p0-card-head"><div><small>必做</small><h3>区域照片</h3></div><span className="manager-p0-muted">{done}/5</span></div>
       <div className="manager-p0-area-grid">
-        {daily.areas.map((area: Area) => <button type="button" key={area.key} className={'manager-p0-area' + (area.done ? ' is-done' : '')} disabled={uploading === area.key} onClick={() => inputs.current[area.key]?.click()}>
+        {daily.areas.map((area: Area) => <button type="button" key={area.key} className={'manager-p0-area' + (area.done ? ' is-done' : '')} disabled={uploading === area.key} onClick={() => {
+          if (area.done && !window.confirm(daily.status === 'submitted' ? `${area.label}已有照片。重拍会替换原图，并让今日巡检退回“进行中”，需要重新提交。继续？` : `${area.label}已有照片，重拍会替换原图。继续？`)) return;
+          inputs.current[area.key]?.click();
+        }}>
           {area.photo?.media?.url ? <img src={area.photo.media.url} alt={area.label} /> : <span className="manager-p0-area-placeholder">{AREA_ICONS[area.key] || '区'}</span>}
           <span className="manager-p0-area-name">{area.label}</span>
           <span className="manager-p0-area-state">{uploading === area.key ? '上传中…' : area.done ? `${timeText(area.photo?.captured_at)} 已上传` : '点击拍照'}</span>
@@ -147,3 +157,4 @@ export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenR
     <button type="button" className="manager-p0-text-link" onClick={() => void onRefresh()}><ReloadOutlined /> 刷新今日记录</button>
   </div>;
 }
+

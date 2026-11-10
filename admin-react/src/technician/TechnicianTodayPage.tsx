@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, Button, Drawer, Empty, List, Spin, Tag, Typography } from 'antd';
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { confirmTechnicianService, finishTechnicianService, getTechnicianMe, getTechnicianTasks } from '../api';
@@ -109,6 +110,7 @@ function OrderPricingBlock({ pricing }: { pricing: any }) {
 }
 
 export default function TechnicianTodayPage() {
+  const navigate = useNavigate();
   const [me, setMe] = useState<any>();
   const [tasks, setTasks] = useState<any[]>([]);
   const [unassignedTasks, setUnassignedTasks] = useState<any[]>([]);
@@ -203,7 +205,7 @@ export default function TechnicianTodayPage() {
         <h1>服务看板</h1>
             <p>{me?.technician?.name || '技师'} · {boardSummary || '当前没有待处理服务'} · 共 {tasks.length} 个服务位{unassignedTasks.length ? ` · 未排座 ${unassignedTasks.length} 单` : ''}</p>
       </div>
-      <Button shape="circle" aria-label="刷新服务看板" icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} />
+      <div className="technician-page-title-actions"><Button onClick={() => navigate('/today')}>返回今日服务</Button><Button shape="circle" aria-label="刷新服务看板" icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} /></div>
     </div>
     {error && <Alert type="error" showIcon message={error} action={<Button size="small" onClick={() => void load()}>重试</Button>} />}
     {unassignedTasks.length > 0 && <section className="technician-board-section">
