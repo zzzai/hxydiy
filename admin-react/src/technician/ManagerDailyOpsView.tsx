@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Input, Spin, Tag, message } from 'antd';
 import { AudioOutlined, CameraOutlined, CheckCircleFilled, ReloadOutlined, ScanOutlined, StarOutlined, StopOutlined, GiftOutlined } from '@ant-design/icons';
 import { getManagerDaily, retryManagerMeetingTranscription, saveManagerAreaPhoto, saveManagerMeeting, submitManagerDaily, uploadMedia } from '../api';
@@ -157,4 +157,3 @@ export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenR
     <button type="button" className="manager-p0-text-link" onClick={() => void onRefresh()}><ReloadOutlined /> 刷新今日记录</button>
   </div>;
 }
-
