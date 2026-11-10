@@ -100,7 +100,8 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   useEffect(() => { setSelectedRecord(null); setFeedbackRecord(null); setFeedbackError('');
     setFeedbackSubmitting(false); feedbackRequest.current = null;
     setMemberCodeOpen(false); setReturnPanel(null); setRecordsOpen(false); setRecordState('all');
-    setRecordLimit(3); setRecordNavigation(0); setTab('records');
+    setRecordLimit(3); setRecordNavigation(0);
+    setTab(new URLSearchParams(window.location.search).get('coupon') === '1' ? 'coupons' : 'records');
   }, [auth?.token]);
 
   useEffect(() => {
