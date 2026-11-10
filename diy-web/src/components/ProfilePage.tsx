@@ -18,6 +18,8 @@ type TabKey = 'records' | 'coupons';
 // Temporary customer presentation switches; server rules and records remain intact.
 const SHOW_PROFILE_HISTORY = true;
 const SHOW_DYNAMIC_MEMBER_CODE = false;
+const OPEN_COUPON_ON_MOUNT = typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).get('coupon') === '1';
 
 export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, onReportsBack, onOpenReports, storeId = 1, refreshKey = 0 }: {
   open: boolean;
@@ -30,7 +32,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   storeId?: number;
   refreshKey?: number;
 }) {
-  const [tab, setTab] = useState<TabKey>('records');
+  const [tab, setTab] = useState<TabKey>(OPEN_COUPON_ON_MOUNT ? 'coupons' : 'records');
   const [reportsOpen, setReportsOpen] = useState(initialReportsOpen);
   const openReports = () => onOpenReports ? onOpenReports() : setReportsOpen(true);
   const [recordState, setRecordState] = useState<RecordFilter>('all');
@@ -60,7 +62,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   useEffect(() => { if (open && initialReportsOpen) setReportsOpen(true); }, [open, initialReportsOpen]);
   useEffect(() => {
     if (!open) return;
-    if (new URLSearchParams(window.location.search).get('coupon') === '1') setTab('coupons');
+    if (OPEN_COUPON_ON_MOUNT) setTab('coupons');
   }, [open]);
 
   const loadData = useCallback((token: string, isMember: boolean) => {
@@ -101,7 +103,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
     setFeedbackSubmitting(false); feedbackRequest.current = null;
     setMemberCodeOpen(false); setReturnPanel(null); setRecordsOpen(false); setRecordState('all');
     setRecordLimit(3); setRecordNavigation(0);
-    setTab(new URLSearchParams(window.location.search).get('coupon') === '1' ? 'coupons' : 'records');
+    setTab(OPEN_COUPON_ON_MOUNT ? 'coupons' : 'records');
   }, [auth?.token]);
 
   useEffect(() => {
