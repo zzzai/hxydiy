@@ -161,10 +161,12 @@ const pageTracking = createDiyPageTracking(trackDiyEvent);
 function getQueryConfig() {
   const query = new URLSearchParams(window.location.search);
   const returnVisit = isReturnEntry(query);
+  const profileEntry = query.get('view') === 'profile';
   const serviceHub = isServiceAccountEntry(query);
   return {
     storeId: Number(query.get('store') || 1),
     returnVisit,
+    profileEntry,
     serviceHub,
     publicPage: serviceHub ? query.get('page') : null,
     positionCode: returnVisit ? '' : query.get('seat') || '',
@@ -360,7 +362,7 @@ export default function App() {
   const [detailProject, setDetailProject] = useState<Project | null>(null);
   const [localDetailOpen, setLocalDetailOpen] = useState(false);
   const [seatMapOpen, setSeatMapOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(() => query.returnVisit || (!query.serviceHub && shouldRestoreProfileOverlay(window.history.state)));
+  const [profileOpen, setProfileOpen] = useState(() => query.profileEntry || query.returnVisit || (!query.serviceHub && shouldRestoreProfileOverlay(window.history.state)));
   const [membershipKind, setMembershipKind] = useState<MembershipKind | null>(null);
   const [moving, setMoving] = useState(false);
   const [saving, setSaving] = useState(false);
