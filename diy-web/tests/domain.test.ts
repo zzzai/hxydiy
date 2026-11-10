@@ -156,10 +156,10 @@ test('足部精修使用专属荷小悦主图资源', () => {
   assert.match(projectImage(item), /projects\/hxy-foot-refine-1\.webp$/);
 });
 
-test('后台配置的项目主图优先于生成素材，避免覆盖店长上传图片', () => {
+test('项目专属主图优先于后台旧图，恢复顾客端原主图', () => {
   const item = project({ id: 1, code: 'hxy-xiaoqi-90', category: 'bath', name: '招牌草本泡', image_url: '/assets/services/service-foot-bath.jpg' });
-  assert.match(projectImage(item), /service-foot-bath\.jpg$/);
-  assert.doesNotMatch(projectImage(item), /projects\/hxy-xiaoqi-90\.webp$/);
+  assert.match(projectImage(item), /projects\/hxy-xiaoqi-90\.webp$/);
+  assert.doesNotMatch(projectImage(item), /service-foot-bath\.jpg$/);
 });
 
 test('拔罐刮痧使用专属荷小悦主图资源', () => {
