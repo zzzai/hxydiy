@@ -369,6 +369,7 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [savingHint, setSavingHint] = useState<SavingHint | null>(null);
   const [savingHintOpen, setSavingHintOpen] = useState(false);
+  const pendingMemberSubmit = useRef(false);
   const [selectionSummaryOpen, setSelectionSummaryOpen] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [toast, setToast] = useState('');
@@ -458,6 +459,7 @@ export default function App() {
   const currentStore = stores.find((store) => store.id === query.storeId);
   const storeDisplayName = currentStore ? currentStore.name.replace(/^荷小悦[-·]?/, '') : '荷小悦草本泡脚';
   const switchStore = (storeId: number) => {
+    if ((occupancy || session || selectedProjectIds.length > 0) && !window.confirm('切换门店会离开当前服务位，未提交的选单不会保留。确定切换？')) return;
     setStorePickerOpen(false);
     window.location.assign(serviceAccountEntry(window.location.origin, storeId));
   };
@@ -1920,12 +1922,14 @@ export default function App() {
       const quote = await quoteSelectionSession(session.id, accessToken, submissionItems, deviceLabel(), requestAccess);
       if (publicBrowsing && generation !== privateGeneration.current) return;
       if (quote.saving_hint?.kind === 'member') {
+        pendingMemberSubmit.current = true;
         setSavingHint(quote.saving_hint);
         setSavingHintOpen(true);
         openOverlay('saving-hint');
         return;
       }
       await submitRevision();
+      pendingMemberSubmit.current = false;
     } catch (error) {
       flash(error instanceof Error ? error.message : '报价失败，请稍后重试');
     } finally {
@@ -1933,6 +1937,13 @@ export default function App() {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!pendingMemberSubmit.current || !customerAuth?.token || !customerAuth.user.is_member) return;
+    pendingMemberSubmit.current = false;
+    flash('已识别会员身份，正在提交选单');
+    void submit();
+  }, [customerAuth?.token]);
 
   const submitServiceFeedback = async (input: { rating: number; tags: string[]; note: string }) => {
     if (!session || !(feedbackToken || accessToken)) return;
@@ -2368,6 +2379,7 @@ export default function App() {
           replaceTopOverlay('record-login');
         }}
         onSkip={() => {
+          pendingMemberSubmit.current = false;
           dismissTopOverlay();
           void submitRevision();
         }}

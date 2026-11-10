@@ -29,7 +29,8 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   const [team, setTeam] = useState<Awaited<ReturnType<typeof getManagerTeam>>['data'] | null>(null);
   const [workbench, setWorkbench] = useState<Awaited<ReturnType<typeof getManagerWorkbench>>['data'] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [couponShare, setCouponShare] = useState<{ link: string; qr: string } | null>(null);
+  const [couponShare, setCouponShare] = useState<{ link: string; qr: string; issued: number; remaining: number; limit: number } | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
   const [couponToken, setCouponToken] = useState('');
   const [reviewFocus, setReviewFocus] = useState<PendingReview | null>(null);
   const [mapRefresh, setMapRefresh] = useState(0);
@@ -74,6 +75,8 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   }, []);
 
   const generateCoupon = async () => {
+    if (couponBusy) return;
+    setCouponBusy(true);
     try {
       const response = await createHalfPriceCouponLink();
       const url = new URL('/', window.location.origin);
@@ -82,9 +85,12 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       const link = url.toString();
       let qr = '';
       try { qr = await QRCode.toDataURL(link, { width: 220, margin: 1, errorCorrectionLevel: 'L' }); } catch { /* link still works */ }
-      setCouponShare({ link, qr });
-    } catch {
-      message.error('生成券链接失败，请重试');
+      setCouponShare({ link, qr, issued: response.data.issued, remaining: response.data.remaining, limit: response.data.limit });
+    } catch (failure) {
+      const detail = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail;
+      message.error(detail?.message || '生成券链接失败，请重试');
+    } finally {
+      setCouponBusy(false);
     }
   };
 
@@ -114,7 +120,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       <ManagerPositionView key={storeId} storeId={storeId} refreshKey={mapRefresh} />
     </div>}
     {tab === 'team' && !subview && <ManagerTeamView team={team} onRefresh={() => load(true)} />}
-    {tab === 'ops' && !subview && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={() => load(true)} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} />}
+    {tab === 'ops' && !subview && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={() => load(true)} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }} />}
 
     {subview === 'orders' && <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => openTab('floor')} />}
     {subview === 'tasks' && <ManagerTasksView onOpenReviews={() => setSubview('reviews')} onOpenPositions={() => openTab('floor')} onOpenOrders={() => setSubview('orders')} />}
@@ -122,7 +128,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} />}
 
     {couponShare && <Modal open title="半价券链接" footer={null} onCancel={() => setCouponShare(null)}>
-      <div className="manager-p0-coupon-share"><p>发给顾客，登录领取，60 天有效。</p>{couponShare.qr && <img src={couponShare.qr} alt="半价券领取二维码" />}<Input readOnly value={couponShare.link} /><div><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button type="primary" onClick={() => void generateCoupon()}><GiftOutlined /> 再生成一张</Button></div></div>
+      <div className="manager-p0-coupon-share"><p>发给顾客：不登录也能先看券和核销码，登录后自动存入券包。60 天有效。</p>{couponShare.qr && <img src={couponShare.qr} alt="半价券领取二维码" />}<Input readOnly value={couponShare.link} /><div><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button type="primary" onClick={() => void generateCoupon()}><GiftOutlined /> 再生成一张</Button></div></div>
     </Modal>}
 
     <nav className="manager-p0-nav" aria-label="店长导航">

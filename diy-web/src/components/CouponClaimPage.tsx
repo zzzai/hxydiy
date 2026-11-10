@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import {
-  bindGuestCoupon, claimHalfPriceCoupon, getCouponRedeemToken, getGuestCoupon, getGuestCouponRedeemToken,
+  ApiError, bindGuestCoupon, claimHalfPriceCoupon, getCouponRedeemToken, getGuestCoupon, getGuestCouponRedeemToken,
   getMyCoupons, guestClaimCoupon, loginByPhone, sendPhoneCode, type GuestCoupon, type MyCoupon,
 } from '../api';
+import { GUEST_COUPON_KEY_PREFIX } from '../guestCoupon';
 import { isValidPhone, normalizePhone, readCustomerAuth, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
 import './coupon-claim.css';
 
@@ -15,6 +16,7 @@ function couponFromGuest(value: GuestCoupon): CouponView {
 }
 
 function errorDetail(failure: unknown): { code?: string; message?: string } {
+  if (failure instanceof ApiError) return { code: failure.code, message: failure.message };
   return (failure as { response?: { data?: { detail?: { code?: string; message?: string } } } })?.response?.data?.detail || {};
 }
 
@@ -30,9 +32,12 @@ export default function CouponClaimPage() {
   const [busy, setBusy] = useState(false);
   const [coupon, setCoupon] = useState<CouponView | null>(null);
   const [qrToken, setQrToken] = useState('');
+  const [qrExpiresAt, setQrExpiresAt] = useState(0);
+  const [qrRemaining, setQrRemaining] = useState(0);
+  const [guestToken, setGuestToken] = useState('');
   const [error, setError] = useState('');
   const [guestReady, setGuestReady] = useState(false);
-  const guestKey = code ? `hxy_coupon_guest_${code}` : '';
+  const guestKey = code ? `${GUEST_COUPON_KEY_PREFIX}${code}` : '';
   const runKey = useRef('');
 
   useEffect(() => {
@@ -44,7 +49,31 @@ export default function CouponClaimPage() {
   const issueQr = async (couponId: number, authToken: string) => {
     const qr = await getCouponRedeemToken(couponId, authToken);
     setQrToken(qr.token);
+    setQrExpiresAt(Date.parse(qr.expires_at) || Date.now() + 300_000);
   };
+
+  const issueGuestQr = async (token: string) => {
+    const qr = await getGuestCouponRedeemToken(token);
+    setQrToken(qr.token);
+    setQrExpiresAt(Date.parse(qr.expires_at) || Date.now() + 300_000);
+  };
+
+  useEffect(() => {
+    const tick = () => setQrRemaining(qrExpiresAt ? Math.max(0, Math.ceil((qrExpiresAt - Date.now()) / 1000)) : 0);
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [qrExpiresAt]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && qrExpiresAt && Date.now() >= qrExpiresAt && coupon?.status === 'unused') {
+        void (auth?.token ? issueQr(coupon.id, auth.token) : guestToken ? issueGuestQr(guestToken) : Promise.resolve());
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [auth?.token, coupon, guestToken, qrExpiresAt]);
 
   const showExisting = async (authToken: string) => {
     const coupons: MyCoupon[] = await getMyCoupons(authToken);
@@ -69,8 +98,9 @@ export default function CouponClaimPage() {
         if (guestToken) {
           try {
             const guest = await getGuestCoupon(guestToken);
+            setGuestToken(guestToken);
             setCoupon(couponFromGuest(guest));
-            if (guest.status === 'unused') setQrToken((await getGuestCouponRedeemToken(guestToken)).token);
+            if (guest.status === 'unused') await issueGuestQr(guestToken);
             setGuestReady(true);
             return;
           } catch {
@@ -85,8 +115,9 @@ export default function CouponClaimPage() {
         }
         const guest = await guestClaimCoupon(code, visitorId);
         window.localStorage.setItem(guestKey, guest.guest_token);
+        setGuestToken(guest.guest_token);
         setCoupon(couponFromGuest(guest));
-        if (guest.status === 'unused') setQrToken((await getGuestCouponRedeemToken(guest.guest_token)).token);
+        if (guest.status === 'unused') await issueGuestQr(guest.guest_token);
         setGuestReady(true);
         return;
       }
@@ -150,17 +181,25 @@ export default function CouponClaimPage() {
   const menuUrl = `/?store=${storeId}&view=menu`;
   const couponUrl = `/?store=${storeId}&view=profile&coupon=1`;
   const usable = coupon?.status === 'unused';
+  const refreshQr = () => {
+    if (!coupon) return;
+    if (auth?.token) void issueQr(coupon.id, auth.token);
+    else if (guestToken) void issueGuestQr(guestToken);
+  };
 
   return <main className="coupon-claim-page">
     <section className="coupon-claim-card">
       <header><span>荷小悦</span><h1>半价券</h1><p>全单 5 折 · 领取后 60 天有效</p></header>
       {!code ? <p className="coupon-claim-error">链接无效，请让店长重新发送。</p> : <>
         {busy && !coupon ? <p className="coupon-claim-hint">正在准备半价券…</p> : null}
-        {error ? <p className="coupon-claim-error">{error}</p> : null}
+        {error ? <><p className="coupon-claim-error">{error}</p><div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券包</a></div></> : null}
         {coupon ? <>
           <div className="coupon-claim-value"><strong>{coupon.percent_off / 10}折</strong><span>全单可用</span></div>
-          {usable && qrToken ? <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qrToken)}`} size={220} level="L" /> : null}
-          {usable && qrToken ? <p className="coupon-claim-hint">无需登录也能核销；请店长扫码</p> : <p className="coupon-claim-meta">{coupon.status === 'used' ? '这张券已经核销' : coupon.status === 'expired' ? '这张券已经过期' : '正在生成核销码…'}</p>}
+          {usable && qrToken && qrRemaining > 0 ? <QRCodeSVG value={qrToken} size={220} level="L" /> : null}
+          {usable && qrToken && qrRemaining > 0 ? <p className="coupon-claim-hint">无需登录也能核销；请店长扫码 · 核销码 {Math.floor(qrRemaining / 60)}:{String(qrRemaining % 60).padStart(2, '0')} 内有效</p> : null}
+          {usable && qrToken && qrRemaining <= 0 ? <><p className="coupon-claim-meta">核销码已过期，请刷新后再给店长扫码。</p><button type="button" className="coupon-claim-primary" onClick={refreshQr}>刷新核销码</button></> : null}
+          {usable && !qrToken ? <p className="coupon-claim-meta">正在生成核销码…</p> : null}
+          {!usable ? <p className="coupon-claim-meta">{coupon.status === 'used' ? '这张券已经核销' : coupon.status === 'expired' ? '这张券已经过期' : '正在生成核销码…'}</p> : null}
           <p className="coupon-claim-meta">有效期至 {coupon.expire_at ? new Date(coupon.expire_at).toLocaleDateString('zh-CN') : '60 天后'}</p>
           <p className="coupon-claim-hint">登录后可保存到「券包」，也能查看项目菜单。</p>
           {!auth ? <p className="coupon-claim-hint">不登录也能看到券和核销码；登录后这张券会自动绑定到你的账户。</p> : null}

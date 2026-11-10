@@ -40,7 +40,13 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack }: {
   useEffect(() => { if (initialToken) void validate(initialToken); }, [initialToken]);
 
   const validate = async (raw = token) => {
-    const value = raw.trim();
+    const scanned = raw.trim();
+    let value = scanned;
+    try {
+      const url = new URL(scanned);
+      value = url.searchParams.get('coupon') || url.searchParams.get('c') || scanned;
+    } catch { /* not a URL */ }
+    value = value.trim();
     if (!value || busy) return;
     setBusy(true); setError(''); setSuccess(''); setPreview(null);
     try {

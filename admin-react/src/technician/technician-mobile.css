@@ -153,3 +153,5 @@
 .technician-login-brand > span { color: var(--hxy-text); background: var(--hxy-brand-leaf); }
 .technician-login-brand h2, .technician-member-paused h1 { color: var(--hxy-text); }
 .technician-position-count, .technician-position-tile-action { color: var(--hxy-primary); }
+.technician-page-title-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.technician-page-title-actions .ant-btn { font-size: 12px; }
