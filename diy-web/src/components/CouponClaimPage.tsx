@@ -148,7 +148,7 @@ export default function CouponClaimPage() {
   };
 
   const menuUrl = `/?store=${storeId}&view=menu`;
-  const couponUrl = `/?store=${storeId}&view=return&coupon=1`;
+  const couponUrl = `/?store=${storeId}&view=profile&coupon=1`;
   const usable = coupon?.status === 'unused';
 
   return <main className="coupon-claim-page">
