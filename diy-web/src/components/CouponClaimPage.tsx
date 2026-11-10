@@ -1,26 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-import { claimHalfPriceCoupon, getCouponRedeemToken, getMyCoupons, loginByPhone, sendPhoneCode, type MyCoupon } from '../api';
+import {
+  bindGuestCoupon, claimHalfPriceCoupon, getCouponRedeemToken, getGuestCoupon, getGuestCouponRedeemToken,
+  getMyCoupons, guestClaimCoupon, loginByPhone, sendPhoneCode, type GuestCoupon, type MyCoupon,
+} from '../api';
 import { isValidPhone, normalizePhone, readCustomerAuth, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
 import './coupon-claim.css';
 
-type ClaimedCoupon = { id: number; name: string; percent_off: number; expire_at: string };
+type CouponView = { id: number; name: string; percent_off: number; expire_at: string; status: string };
+
+function couponFromGuest(value: GuestCoupon): CouponView {
+  return { id: value.coupon_id, name: value.name, percent_off: value.percent_off, expire_at: value.expire_at || '', status: value.status };
+}
+
+function errorDetail(failure: unknown): { code?: string; message?: string } {
+  return (failure as { response?: { data?: { detail?: { code?: string; message?: string } } } })?.response?.data?.detail || {};
+}
 
 export default function CouponClaimPage() {
   const params = new URLSearchParams(window.location.search);
-  const token = params.get('c') || params.get('token') || '';
+  const code = params.get('c') || params.get('token') || '';
   const storeId = Number(params.get('store') || 1);
   const [auth, setAuth] = useState<CustomerAuth | null>(() => readCustomerAuth());
   const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
+  const [smsCode, setSmsCode] = useState('');
   const [seconds, setSeconds] = useState(0);
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [coupon, setCoupon] = useState<ClaimedCoupon | null>(null);
+  const [coupon, setCoupon] = useState<CouponView | null>(null);
   const [qrToken, setQrToken] = useState('');
   const [error, setError] = useState('');
-  const claimed = useRef(false);
+  const [guestReady, setGuestReady] = useState(false);
+  const guestKey = code ? `hxy_coupon_guest_${code}` : '';
+  const runKey = useRef('');
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -33,30 +46,83 @@ export default function CouponClaimPage() {
     setQrToken(qr.token);
   };
 
+  const showExisting = async (authToken: string) => {
+    const coupons: MyCoupon[] = await getMyCoupons(authToken);
+    const existing = coupons.find((item) => item.coupon_type === 'percent' && item.percent_off === 50 && item.status === 'unused')
+      || coupons.find((item) => item.coupon_type === 'percent' && item.percent_off === 50);
+    if (!existing) return false;
+    setCoupon({ id: existing.id, name: existing.name, percent_off: existing.percent_off, expire_at: existing.expire_at || '', status: existing.status });
+    if (existing.status === 'unused') await issueQr(existing.id, authToken);
+    return true;
+  };
+
   useEffect(() => {
-    if (!auth?.token || !token || claimed.current) return;
-    claimed.current = true;
-    setBusy(true);
+    if (!code) return;
+    const key = `${auth?.token || 'guest'}:${code}`;
+    if (runKey.current === key) return;
+    runKey.current = key;
     setError('');
-    void claimHalfPriceCoupon(token, auth.token).then(async (result) => {
-      setCoupon({ id: result.coupon_id, name: result.name, percent_off: result.percent_off, expire_at: result.expire_at });
-      await issueQr(result.coupon_id, auth.token);
-    }).catch(async (failure: unknown) => {
-      const detail = (failure as { response?: { data?: { detail?: { code?: string; message?: string } } } })?.response?.data?.detail;
-      if (detail?.code === 'COUPON_ALREADY_HELD') {
-        try {
-          const coupons: MyCoupon[] = await getMyCoupons(auth.token);
-          const existing = coupons.find((item) => item.coupon_type === 'percent' && item.percent_off === 50 && item.status === 'unused');
-          if (existing) {
-            setCoupon({ id: existing.id, name: existing.name, percent_off: existing.percent_off, expire_at: existing.expire_at || '' });
-            await issueQr(existing.id, auth.token);
+    setBusy(true);
+    const run = async () => {
+      if (!auth?.token) {
+        let guestToken = window.localStorage.getItem(guestKey) || '';
+        if (guestToken) {
+          try {
+            const guest = await getGuestCoupon(guestToken);
+            setCoupon(couponFromGuest(guest));
+            if (guest.status === 'unused') setQrToken((await getGuestCouponRedeemToken(guestToken)).token);
+            setGuestReady(true);
             return;
+          } catch {
+            window.localStorage.removeItem(guestKey);
+            guestToken = '';
           }
-        } catch { /* fall through */ }
+        }
+        let visitorId = window.localStorage.getItem('hxy_coupon_visitor') || '';
+        if (!visitorId) {
+          visitorId = crypto.randomUUID();
+          window.localStorage.setItem('hxy_coupon_visitor', visitorId);
+        }
+        const guest = await guestClaimCoupon(code, visitorId);
+        window.localStorage.setItem(guestKey, guest.guest_token);
+        setCoupon(couponFromGuest(guest));
+        if (guest.status === 'unused') setQrToken((await getGuestCouponRedeemToken(guest.guest_token)).token);
+        setGuestReady(true);
+        return;
       }
-      setError(detail?.message || '领取失败，请联系店长');
+
+      const guestToken = window.localStorage.getItem(guestKey) || '';
+      if (guestToken) {
+        try {
+          const bound = await bindGuestCoupon(guestToken, auth.token);
+          window.localStorage.removeItem(guestKey);
+          setCoupon({ id: bound.coupon_id, name: bound.name, percent_off: bound.percent_off, expire_at: bound.expire_at || '', status: bound.status });
+          if (bound.status === 'unused') await issueQr(bound.coupon_id, auth.token);
+          return;
+        } catch (failure) {
+          const detail = errorDetail(failure);
+          if (detail.code === 'COUPON_ALREADY_BOUND') {
+            window.localStorage.removeItem(guestKey);
+          }
+        }
+      }
+      try {
+        const claimed = await claimHalfPriceCoupon(code, auth.token);
+        setCoupon({ id: claimed.coupon_id, name: claimed.name, percent_off: claimed.percent_off, expire_at: claimed.expire_at, status: 'unused' });
+        await issueQr(claimed.coupon_id, auth.token);
+      } catch (failure) {
+        const detail = errorDetail(failure);
+        if (detail.code === 'COUPON_ALREADY_HELD') {
+          if (await showExisting(auth.token)) return;
+        }
+        setError(detail.message || '领取失败，请联系店长');
+      }
+    };
+    void run().catch((failure) => {
+      const detail = errorDetail(failure);
+      setError(detail.message || '领券失败，请稍后重试');
     }).finally(() => setBusy(false));
-  }, [auth?.token, token]);
+  }, [auth?.token, code, guestKey]);
 
   const sendCode = async () => {
     const value = normalizePhone(phone);
@@ -69,11 +135,12 @@ export default function CouponClaimPage() {
 
   const login = async () => {
     const value = normalizePhone(phone);
-    if (!isValidPhone(value) || code.length !== 6) { setError('请输入手机号和 6 位验证码'); return; }
+    if (!isValidPhone(value) || smsCode.length !== 6) { setError('请输入手机号和 6 位验证码'); return; }
     setBusy(true); setError('');
     try {
-      const result = await loginByPhone(value, code);
+      const result = await loginByPhone(value, smsCode);
       writeCustomerAuth(result);
+      runKey.current = '';
       setAuth(result);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : '登录失败');
@@ -82,27 +149,31 @@ export default function CouponClaimPage() {
 
   const menuUrl = `/?store=${storeId}&view=menu`;
   const couponUrl = `/?store=${storeId}&view=return&coupon=1`;
+  const usable = coupon?.status === 'unused';
 
   return <main className="coupon-claim-page">
     <section className="coupon-claim-card">
       <header><span>荷小悦</span><h1>半价券</h1><p>全单 5 折 · 领取后 60 天有效</p></header>
-      {!token ? <p className="coupon-claim-error">链接无效，请让店长重新发送。</p>
-        : !auth ? <>
-          <p className="coupon-claim-hint">登录后领取，也能在「我的券」看到，并查看项目菜单。</p>
+      {!code ? <p className="coupon-claim-error">链接无效，请让店长重新发送。</p> : <>
+        {busy && !coupon ? <p className="coupon-claim-hint">正在准备半价券…</p> : null}
+        {error ? <p className="coupon-claim-error">{error}</p> : null}
+        {coupon ? <>
+          <div className="coupon-claim-value"><strong>{coupon.percent_off / 10}折</strong><span>全单可用</span></div>
+          {usable && qrToken ? <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qrToken)}`} size={220} level="L" /> : null}
+          {usable && qrToken ? <p className="coupon-claim-hint">无需登录也能核销；请店长扫码</p> : <p className="coupon-claim-meta">{coupon.status === 'used' ? '这张券已经核销' : coupon.status === 'expired' ? '这张券已经过期' : '正在生成核销码…'}</p>}
+          <p className="coupon-claim-meta">有效期至 {coupon.expire_at ? new Date(coupon.expire_at).toLocaleDateString('zh-CN') : '60 天后'}</p>
+          <p className="coupon-claim-hint">登录后可保存到「券包」，也能查看项目菜单。</p>
+          {!auth ? <p className="coupon-claim-hint">不登录也能看到券和核销码；登录后这张券会自动绑定到你的账户。</p> : null}
+          <div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券包</a></div>
+        </> : null}
+        {!auth ? <>
+          <div className="coupon-claim-divider"><span>登录后保存到券包</span></div>
           <label>手机号<input inputMode="numeric" maxLength={11} value={phone} placeholder="请输入手机号" onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))} /></label>
-          <div className="coupon-claim-code"><input inputMode="numeric" maxLength={6} value={code} placeholder="验证码" onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))} /><button type="button" disabled={sending || seconds > 0} onClick={() => void sendCode()}>{seconds > 0 ? `${seconds}s` : sending ? '发送中' : '获取验证码'}</button></div>
-          {error && <p className="coupon-claim-error">{error}</p>}
-          <button type="button" className="coupon-claim-primary" disabled={busy} onClick={() => void login()}>登录并领取</button>
-        </> : busy ? <p className="coupon-claim-hint">正在领取半价券…</p>
-          : error ? <><p className="coupon-claim-error">{error}</p><a className="coupon-claim-link" href={couponUrl}>打开我的券</a></>
-            : coupon ? <>
-              <div className="coupon-claim-value"><strong>5折</strong><span>全单可用</span></div>
-              {qrToken && <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qrToken)}`} size={220} level="L" />}
-              <p className="coupon-claim-hint">请店长扫码核销</p>
-              <p className="coupon-claim-meta">有效期至 {coupon.expire_at ? new Date(coupon.expire_at).toLocaleDateString('zh-CN') : '60 天后'}</p>
-              <p className="coupon-claim-hint">也可以在我的券看到，还能查看项目菜单。</p>
-              <div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券</a></div>
-            </> : null}
+          <div className="coupon-claim-code"><input inputMode="numeric" maxLength={6} value={smsCode} placeholder="验证码" onChange={(event) => setSmsCode(event.target.value.replace(/\D/g, ''))} /><button type="button" disabled={sending || seconds > 0} onClick={() => void sendCode()}>{seconds > 0 ? `${seconds}s` : sending ? '发送中' : '获取验证码'}</button></div>
+          <button type="button" className="coupon-claim-primary" disabled={busy} onClick={() => void login()}>登录并绑定到券包</button>
+          {!guestReady && !coupon && <p className="coupon-claim-hint">没有账号也可以先看券，登录后自动保存。</p>}
+        </> : null}
+      </>}
     </section>
   </main>;
 }

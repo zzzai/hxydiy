@@ -1983,6 +1983,44 @@
         "title": "FeedbackIn",
         "type": "object"
       },
+      "GuestClaimIn": {
+        "properties": {
+          "code": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "visitor_id": {
+            "maxLength": 64,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9-]+$",
+            "title": "Visitor Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "visitor_id"
+        ],
+        "title": "GuestClaimIn",
+        "type": "object"
+      },
+      "GuestTokenIn": {
+        "properties": {
+          "guest_token": {
+            "maxLength": 4096,
+            "minLength": 20,
+            "title": "Guest Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "guest_token"
+        ],
+        "title": "GuestTokenIn",
+        "type": "object"
+      },
       "H5LoginRequest": {
         "properties": {
           "code": {
@@ -22168,6 +22206,67 @@
         ]
       }
     },
+    "/api/v1/coupons/bind-guest": {
+      "post": {
+        "operationId": "bind_guest_api_v1_coupons_bind_guest_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bind Guest Api V1 Coupons Bind Guest Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bind Guest",
+        "tags": [
+          "coupons"
+        ]
+      }
+    },
     "/api/v1/coupons/claim": {
       "post": {
         "description": "领取领券中心券（服务端校验：可领 / 每日限领 / 总限领）。",
@@ -22339,6 +22438,136 @@
           }
         },
         "summary": "Claim Share Coupon",
+        "tags": [
+          "coupons"
+        ]
+      }
+    },
+    "/api/v1/coupons/guest-claim": {
+      "post": {
+        "description": "未登录也能拿到可核销的券；登录后再绑定到顾客账户。",
+        "operationId": "guest_claim_api_v1_coupons_guest_claim_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestClaimIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Guest Claim Api V1 Coupons Guest Claim Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Guest Claim",
+        "tags": [
+          "coupons"
+        ]
+      }
+    },
+    "/api/v1/coupons/guest-status": {
+      "post": {
+        "operationId": "guest_status_api_v1_coupons_guest_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Guest Status Api V1 Coupons Guest Status Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Guest Status",
+        "tags": [
+          "coupons"
+        ]
+      }
+    },
+    "/api/v1/coupons/guest/redeem-token": {
+      "post": {
+        "operationId": "guest_redeem_token_api_v1_coupons_guest_redeem_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuestTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Guest Redeem Token Api V1 Coupons Guest Redeem Token Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Guest Redeem Token",
         "tags": [
           "coupons"
         ]

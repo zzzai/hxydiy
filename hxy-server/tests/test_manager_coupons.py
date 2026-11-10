@@ -145,3 +145,33 @@ def test_link_claim_needs_login_and_is_one_per_customer(coupons):
     again = client.post("/api/v1/coupons/claim-half-price", headers=headers["customer"], json={"token": token})
     assert again.status_code == 409
     assert again.json()["detail"]["code"] == "COUPON_ALREADY_HELD"
+
+
+def test_guest_claim_shows_qr_before_login_and_binds_to_account(coupons):
+    client, factory, _, headers = coupons
+    link = client.post(PREFIX + "/half-price/link", headers=headers["manager"]).json()["token"]
+    guest = client.post("/api/v1/coupons/guest-claim", json={"code": link, "visitor_id": "guest-visitor-001"})
+    assert guest.status_code == 200, guest.text
+    body = guest.json()
+    assert body["status"] == "unused"
+    assert body["guest_token"]
+    qr = client.post("/api/v1/coupons/guest/redeem-token", json={"guest_token": body["guest_token"]})
+    assert qr.status_code == 200, qr.text
+    preview = client.post(PREFIX + "/validate", headers=headers["manager"], json={"token": qr.json()["token"]})
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["valid"] is True
+
+    # A second browser guest coupon can be bound to the logged-in account.
+    second = client.post("/api/v1/coupons/guest-claim", json={"code": link, "visitor_id": "guest-visitor-002"})
+    assert second.status_code == 200, second.text
+    bound = client.post("/api/v1/coupons/bind-guest", headers=headers["customer"], json={"guest_token": second.json()["guest_token"]})
+    assert bound.status_code == 200, bound.text
+    assert bound.json()["already_held"] is False
+    mine = client.get("/api/v1/coupons", headers=headers["customer"])
+    assert mine.status_code == 200
+    assert [item["id"] for item in mine.json()["items"]] == [bound.json()["coupon_id"]]
+    # A guest QR is redeemable by the store manager without a store relation.
+    redeemed = client.post(PREFIX + "/redeem", headers=headers["manager"],
+                           json={"token": qr.json()["token"], "request_id": str(uuid.uuid4())})
+    assert redeemed.status_code == 200, redeemed.text
+    assert redeemed.json()["status"] == "used"

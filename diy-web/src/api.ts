@@ -502,3 +502,17 @@ export type StoreSummary = { id: number; store_code: string; name: string; city:
 export async function getStores(): Promise<StoreSummary[]> {
   return request<StoreSummary[]>('/stores');
 }
+
+export type GuestCoupon = { guest_token: string; coupon_id: number; name: string; percent_off: number; expire_at: string | null; status: string; remaining?: number };
+export function guestClaimCoupon(code: string, visitorId: string) {
+  return request<GuestCoupon>('/coupons/guest-claim', { method: 'POST', body: JSON.stringify({ code, visitor_id: visitorId }) });
+}
+export function getGuestCoupon(guestToken: string) {
+  return request<GuestCoupon>('/coupons/guest-status', { method: 'POST', body: JSON.stringify({ guest_token: guestToken }) });
+}
+export function getGuestCouponRedeemToken(guestToken: string) {
+  return request<{ coupon_id: number; token: string; expires_at: string }>('/coupons/guest/redeem-token', { method: 'POST', body: JSON.stringify({ guest_token: guestToken }) });
+}
+export function bindGuestCoupon(guestToken: string, authToken: string) {
+  return request<{ coupon_id: number; name: string; percent_off: number; expire_at: string | null; status: string; already_held: boolean }>('/coupons/bind-guest', { method: 'POST', headers: { Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ guest_token: guestToken }) });
+}

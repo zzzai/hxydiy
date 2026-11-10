@@ -10,3 +10,4 @@
 .coupon-claim-meta{color:#66766d;font-size:12px;margin:6px 0}
 .coupon-claim-actions{display:flex;gap:8px;margin-top:14px}.coupon-claim-actions a,.coupon-claim-link{flex:1;display:block;min-height:44px;line-height:44px;border-radius:10px;background:#eff6f1;color:#176856;text-decoration:none;font-weight:600;font-size:14px}
 .coupon-claim-link{margin-top:10px}
+.coupon-claim-divider{display:flex;align-items:center;gap:10px;margin:16px 0 4px;color:#7d9084;font-size:11px}.coupon-claim-divider:before,.coupon-claim-divider:after{content:"";height:1px;flex:1;background:#e0e9e3}

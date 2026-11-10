@@ -19,6 +19,8 @@ REDEEM_SCOPE = "coupon_redeem"
 REDEEM_TTL_SECONDS = 300
 CLAIM_SCOPE = "coupon_claim"
 CLAIM_TTL_DAYS = 60
+GUEST_SCOPE = "guest_coupon"
+GUEST_TTL_DAYS = 60
 
 
 def _b64(value: bytes) -> str:
@@ -99,3 +101,15 @@ def decode_claim_token(token: str) -> dict:
     if type(store_id) is not int or type(template_id) is not int:
         raise HTTPException(status_code=400, detail={"code": "COUPON_LINK_INVALID", "message": "领券链接无效或已过期"})
     return {"store_id": store_id, "template_id": template_id}
+
+
+def create_guest_token(coupon_id: int, user_id: int) -> tuple[str, datetime]:
+    expires_at = datetime.now(UTC) + timedelta(days=GUEST_TTL_DAYS)
+    return _compact("g", coupon_id, user_id, expires_at), expires_at
+
+
+def decode_guest_token(token: str) -> dict:
+    coupon_id, user_id = _parse_compact(
+        token, "g", error_code="COUPON_GUEST_INVALID", message="领券记录无效或已过期",
+    )
+    return {"coupon_id": coupon_id, "user_id": user_id}

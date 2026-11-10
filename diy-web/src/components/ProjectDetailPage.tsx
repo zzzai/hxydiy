@@ -259,7 +259,7 @@ export default function ProjectDetailPage({
   const memberOnly = !project.prices.some((item) => item.price_type === 'store') && project.prices.some((item) => item.price_type === 'member');
   const packageUnit = project.price_label?.includes('套') ? project.price_label : undefined;
   const configuredPrices = detailPriceComparison(preview, isMember);
-  const detailVisualSections = project.content_version === 'menu-20261101' ? [] : projectDetailVisuals(project.code);
+  const detailVisualSections = projectDetailVisuals(project.code);
   const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
   const hasAdditions = !detailOnly && (catalogPublished
     ? isCatalogOptions && (relaxProjects.length > 0 || catalogLocalChoices.length > 0)

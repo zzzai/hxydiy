@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
@@ -61,7 +61,7 @@ test('pending feedback moves focus to a visible filtered record list', async () 
 
 test('profile does not present a capped list as lifetime savings or a complete order count', async () => {
   const page = await subject({ sessions: Array.from({ length: 50 }, (_, i) => record(`r-${i}`, i === 0)) });
-  try { await page.click('服务记录'); assert.doesNotMatch(page.text(), /累计会员省|下单记录/); assert.match(page.text(), /最近50条/); assert.equal(page.app.root.findAllByProps({ className: 'profile-record-main' }).length, 3); assert.deepEqual(page.coupons, []); }
+  try { await page.click('服务记录'); assert.doesNotMatch(page.text(), /累计会员省|下单记录/); assert.match(page.text(), /最近50条/); assert.equal(page.app.root.findAllByProps({ className: 'profile-record-main' }).length, 3); assert.deepEqual(page.coupons, ['synthetic-a']); }
   finally { await page.close(); }
 });
 
@@ -136,3 +136,4 @@ test('home keeps records collapsed and all six shortcuts work without showing re
     assert.equal(page.app.root.findAllByProps({ className: 'profile-record-main' }).length, 0);
   } finally { await page.close(); }
 });
+

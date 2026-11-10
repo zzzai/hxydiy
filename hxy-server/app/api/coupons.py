@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,7 @@ from app.core.customer_auth import current_customer_id
 from app.core.config import settings
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
-from app.domain.coupon_redeem import create_redeem_token, decode_claim_token
+from app.domain.coupon_redeem import create_guest_token, create_redeem_token, decode_claim_token, decode_guest_token
 from app.models import AuditLog, CouponTemplate, User, UserCoupon, SelectionSession
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
@@ -253,6 +253,15 @@ def my_coupons(
     return {"items": items, "total": len(items)}
 
 
+class GuestClaimIn(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    visitor_id: str = Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
+
+
+class GuestTokenIn(BaseModel):
+    guest_token: str = Field(min_length=20, max_length=4096)
+
+
 class ClaimHalfPriceIn(BaseModel):
     code: str | None = None
     token: str | None = None
@@ -311,6 +320,152 @@ def claim_half_price(
         "percent_off": template.percent_off,
         "expire_at": coupon.expire_at.isoformat(),
         "remaining": max(0, 100 - issued - 1),
+    }
+
+
+def _guest_coupon_view(coupon: UserCoupon, template: CouponTemplate, guest_token: str, *, remaining: int | None = None) -> dict:
+    status = coupon.status
+    if status == "unused" and coupon.expire_at and _aware(coupon.expire_at) <= datetime.now(timezone.utc):
+        status = "expired"
+    return {
+        "guest_token": guest_token,
+        "coupon_id": coupon.id,
+        "name": template.name,
+        "percent_off": template.percent_off,
+        "expire_at": coupon.expire_at.isoformat() if coupon.expire_at else None,
+        "status": status,
+        **({"remaining": remaining} if remaining is not None else {}),
+    }
+
+
+@router.post("/guest-claim")
+def guest_claim(
+    body: GuestClaimIn,
+    db: Session = Depends(get_db),
+) -> dict:
+    """未登录也能拿到可核销的券；登录后再绑定到顾客账户。"""
+    payload = decode_claim_token(body.code)
+    template = lock_coupon_template(
+        db, CouponTemplate.id == payload["template_id"],
+        CouponTemplate.store_id == payload["store_id"],
+    )
+    if not template or template.status != "published":
+        raise HTTPException(status_code=404, detail={"code": "COUPON_LINK_INVALID", "message": "领券活动不存在或已结束"})
+    openid = f"guest-coupon-{body.visitor_id}"
+    guest = db.scalar(select(User).where(User.openid == openid).with_for_update())
+    if guest is None:
+        guest = User(openid=openid, nickname="微信顾客", phone=None, is_member=False)
+        db.add(guest)
+        db.flush()
+    coupon = db.scalar(select(UserCoupon).where(
+        UserCoupon.user_id == guest.id,
+        UserCoupon.template_id == template.id,
+    ).order_by(UserCoupon.id.desc()))
+    remaining = None
+    if coupon is None:
+        issued = int(db.scalar(select(func.count()).select_from(UserCoupon).where(
+            UserCoupon.template_id == template.id,
+        )) or 0)
+        if issued >= 100:
+            raise HTTPException(status_code=409, detail={"code": "COUPON_SOLD_OUT", "message": "半价券 100 张已发完"})
+        now = datetime.now(timezone.utc)
+        coupon = try_issue_coupon(
+            db, template, guest.id, now + timedelta(days=template.validity_days or 60),
+            claimed_at=now,
+        )
+        if coupon is None:
+            raise coupon_budget_exhausted()
+        remaining = max(0, 100 - issued - 1)
+        db.add(AuditLog(
+            actor_type="guest", actor_id=str(guest.id),
+            action="guest_claim_half_price_coupon", entity_type="user_coupon",
+            entity_id=str(coupon.id), store_id=template.store_id,
+            detail={"template_id": template.id, "template_code": template.code, "anonymous": True},
+        ))
+    else:
+        remaining = max(0, 100 - int(db.scalar(select(func.count()).select_from(UserCoupon).where(
+            UserCoupon.template_id == template.id,
+        )) or 0))
+    guest_token, _ = create_guest_token(coupon.id, guest.id)
+    db.commit()
+    return _guest_coupon_view(coupon, template, guest_token, remaining=remaining)
+
+
+@router.post("/guest-status")
+def guest_status(body: GuestTokenIn, db: Session = Depends(get_db)) -> dict:
+    payload = decode_guest_token(body.guest_token)
+    coupon = db.get(UserCoupon, payload["coupon_id"])
+    if not coupon or coupon.user_id != payload["user_id"]:
+        raise HTTPException(status_code=404, detail={"code": "COUPON_NOT_FOUND", "message": "券不存在或已绑定账户"})
+    template = db.get(CouponTemplate, coupon.template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail={"code": "COUPON_NOT_FOUND", "message": "券不存在"})
+    return _guest_coupon_view(coupon, template, body.guest_token)
+
+
+@router.post("/guest/redeem-token")
+def guest_redeem_token(body: GuestTokenIn, db: Session = Depends(get_db)) -> dict:
+    payload = decode_guest_token(body.guest_token)
+    coupon = db.get(UserCoupon, payload["coupon_id"])
+    if not coupon or coupon.user_id != payload["user_id"]:
+        raise HTTPException(status_code=404, detail={"code": "COUPON_NOT_FOUND", "message": "券不存在或已绑定账户"})
+    now = datetime.now(timezone.utc)
+    if coupon.status == "used":
+        raise HTTPException(status_code=409, detail={"code": "COUPON_ALREADY_USED", "message": "该券已核销"})
+    if coupon.status != "unused":
+        raise HTTPException(status_code=409, detail={"code": "COUPON_NOT_REDEEMABLE", "message": "该券当前不可核销"})
+    if coupon.expire_at and _aware(coupon.expire_at) <= now:
+        raise HTTPException(status_code=409, detail={"code": "COUPON_EXPIRED", "message": "该券已过期"})
+    token, expires_at = create_redeem_token(coupon.id, payload["user_id"])
+    return {"coupon_id": coupon.id, "token": token, "expires_at": expires_at.isoformat()}
+
+
+@router.post("/bind-guest")
+def bind_guest(
+    body: GuestTokenIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    user_id = _user_id(authorization, db)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    payload = decode_guest_token(body.guest_token)
+    coupon = db.get(UserCoupon, payload["coupon_id"])
+    if not coupon or coupon.user_id != payload["user_id"]:
+        raise HTTPException(status_code=409, detail={"code": "COUPON_ALREADY_BOUND", "message": "这张券已经绑定到账户"})
+    template = db.get(CouponTemplate, coupon.template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail={"code": "COUPON_NOT_FOUND", "message": "券不存在"})
+    db.scalar(select(User.id).where(User.id == user_id).with_for_update())
+    existing = db.scalar(select(UserCoupon).where(
+        UserCoupon.user_id == user_id,
+        UserCoupon.template_id == template.id,
+        UserCoupon.status == "unused",
+    ))
+    if existing:
+        return {
+            "coupon_id": existing.id,
+            "name": template.name,
+            "percent_off": template.percent_off,
+            "expire_at": existing.expire_at.isoformat() if existing.expire_at else None,
+            "status": existing.status,
+            "already_held": True,
+        }
+    coupon.user_id = user_id
+    db.add(AuditLog(
+        actor_type="customer", actor_id=str(user_id),
+        action="customer_bind_guest_coupon", entity_type="user_coupon",
+        entity_id=str(coupon.id), store_id=template.store_id,
+        detail={"template_id": template.id, "from_guest_id": payload["user_id"]},
+    ))
+    db.commit()
+    return {
+        "coupon_id": coupon.id,
+        "name": template.name,
+        "percent_off": template.percent_off,
+        "expire_at": coupon.expire_at.isoformat() if coupon.expire_at else None,
+        "status": coupon.status,
+        "already_held": False,
     }
 
 

@@ -128,8 +128,9 @@ export function shouldShowCouponPrompt(_isMember: boolean, _detailOnly: boolean)
   return false;
 }
 
-export function shouldShowCouponTab(isMember: boolean): boolean {
-  return !isMember;
+export function shouldShowCouponTab(_isMember: boolean): boolean {
+  // 券包是账户资产，会员和非会员都必须能看到并使用。
+  return true;
 }
 
 export function shouldShowMembershipPromos(isMember: boolean): boolean {
