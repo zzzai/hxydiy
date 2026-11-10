@@ -128,7 +128,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} />}
 
     {couponShare && <Modal open title="半价券链接" footer={null} onCancel={() => setCouponShare(null)}>
-      <div className="manager-p0-coupon-share"><p>发给顾客：不登录也能先看券和核销码，登录后自动存入券包。60 天有效。</p>{couponShare.qr && <img src={couponShare.qr} alt="半价券领取二维码" />}<Input readOnly value={couponShare.link} /><div><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button type="primary" onClick={() => void generateCoupon()}><GiftOutlined /> 再生成一张</Button></div></div>
+      <div className="manager-p0-coupon-share"><p>发给顾客：不登录也能先看券和核销码，登录后自动存入券包。60 天有效。</p><p className="manager-p0-muted">本店已发 {couponShare.issued}/{couponShare.limit} 张，剩余 {couponShare.remaining} 张。</p>{couponShare.qr && <img src={couponShare.qr} alt="半价券领取二维码" />}<Input readOnly value={couponShare.link} /><div><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button type="primary" loading={couponBusy} onClick={() => void generateCoupon()}><GiftOutlined /> 重新生成链接</Button></div></div>
     </Modal>}
 
     <nav className="manager-p0-nav" aria-label="店长导航">
