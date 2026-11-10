@@ -43,7 +43,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   const feedbackRequest = useRef<object | null>(null);
   const [dataOwner, setDataOwner] = useState<string | null>(null);
   const [returnPanel, setReturnPanel] = useState<'save' | 'contact' | 'tuesday' | null>(null);
-  const [recordsOpen, setRecordsOpen] = useState(false);
+  const [recordsOpen, setRecordsOpen] = useState(OPEN_COUPON_ON_MOUNT);
   const recordTrigger = useRef<HTMLButtonElement | null>(null);
   const [recordLimit, setRecordLimit] = useState(3);
   const [recordNavigation, setRecordNavigation] = useState(0);
@@ -101,7 +101,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
 
   useEffect(() => { setSelectedRecord(null); setFeedbackRecord(null); setFeedbackError('');
     setFeedbackSubmitting(false); feedbackRequest.current = null;
-    setMemberCodeOpen(false); setReturnPanel(null); setRecordsOpen(false); setRecordState('all');
+    setMemberCodeOpen(false); setReturnPanel(null); setRecordsOpen(OPEN_COUPON_ON_MOUNT); setRecordState('all');
     setRecordLimit(3); setRecordNavigation(0);
     setTab(OPEN_COUPON_ON_MOUNT ? 'coupons' : 'records');
   }, [auth?.token]);
