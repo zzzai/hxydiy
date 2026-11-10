@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
@@ -136,4 +136,3 @@ test('home keeps records collapsed and all six shortcuts work without showing re
     assert.equal(page.app.root.findAllByProps({ className: 'profile-record-main' }).length, 0);
   } finally { await page.close(); }
 });
-
