@@ -1,4 +1,4 @@
-﻿import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Store, UserRound, X } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Store, UserRound, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -407,4 +407,3 @@ function CouponList({ coupons, token }: { coupons: MyCoupon[]; token: string }) 
     </ul>
   );
 }
-
