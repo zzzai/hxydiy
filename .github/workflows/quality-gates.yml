@@ -1,0 +1,38 @@
+name: Quality gates
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  design-evidence:
+    name: Design evidence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require design evidence for UI changes
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          ui_changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -E '^(diy-web|admin-react)/src/.*\.(tsx|ts|css)$' || true)
+          if [ -z "$ui_changed" ]; then
+            echo "No UI source changes; design evidence not required."
+            exit 0
+          fi
+          echo "UI source files changed:"
+          printf '%s\n' "$ui_changed"
+          if printf '%s' "${PR_BODY:-}" | grep -Eq '设计验收|无需视觉验收'; then
+            echo "Design evidence section present."
+            exit 0
+          fi
+          echo "::error::UI changes require a '## 设计验收' section with screenshots, or '无需视觉验收' with a reason."
+          exit 1

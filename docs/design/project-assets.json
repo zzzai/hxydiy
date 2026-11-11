@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "updated": "2026-11-11",
+  "note": "顾客菜单可见项目的主图登记。新增/替换图片必须同步更新本文件并通过 project-assets.test.ts。",
+  "projects": [
+    { "code": "hxy-xiangxiang-60", "asset": "/assets/projects/hxy-xiangxiang-60.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-xiaoqi-90", "asset": "/assets/projects/hxy-xiaoqi-90.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-nvshen-60", "asset": "/assets/projects/hxy-nvshen-60.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-spa-60", "asset": "/assets/projects/hxy-spa-60.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-spa-90", "asset": "/assets/projects/hxy-spa-90.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-local-care-60", "asset": "/assets/projects/hxy-jubu-30.webp", "source": "borrowed", "status": "active", "note": "暂借局部放松插画，待专属图" },
+    { "code": "hxy-waist-kit-10", "asset": "/assets/projects/hxy-spa-60.webp", "source": "borrowed", "status": "active", "note": "暂借 SPA 插画，待专属套盒图" },
+    { "code": "hxy-neck-kit-10", "asset": "/assets/projects/hxy-head-30.webp", "source": "borrowed", "status": "active", "note": "暂借头疗插画，待专属套盒图" },
+    { "code": "hxy-oil-back-30", "asset": "/assets/projects/hxy-oil-back-30-main.webp", "source": "derived", "status": "active", "note": "现有精油开背详情图裁切" },
+    { "code": "hxy-caier-30", "asset": "/assets/projects/hxy-caier-30.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-head-30", "asset": "/assets/projects/hxy-head-30.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-jubu-30", "asset": "/assets/projects/hxy-jubu-30.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-foot-refine-1", "asset": "/assets/projects/hxy-foot-refine-1.webp", "source": "approved", "status": "active" },
+    { "code": "hxy-cupping-scraping-1", "asset": "/assets/projects/hxy-cupping-scraping-1.webp", "source": "approved", "status": "active" }
+  ]
+}

@@ -9,6 +9,8 @@
 
 本文件是 UI 设计与前端实现的统一契约。
 
+配套门禁：`docs/QUALITY-GATES.md`。资产登记：`docs/design/project-assets.json`。自动化：`diy-web/tests/project-assets.test.ts`、`.github/workflows/quality-gates.yml`。
+
 优先级：
 
 1. 本文件
