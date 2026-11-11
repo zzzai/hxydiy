@@ -441,6 +441,32 @@ export const redeemManagerCoupon = (token: string, requestId: string) => client.
 export const issueHalfPriceCouponByPhone = (phone: string, name?: string) => client.post('/admin/v2/manager/coupons/half-price/issue-by-phone', { phone, name: name || undefined });
 export const createHalfPriceCouponLink = () => client.post('/admin/v2/manager/coupons/half-price/link');
 
+export type ManagerCouponHistoryKind = 'issued' | 'redeemed';
+export type ManagerCouponHistoryStatus = 'unused' | 'used' | 'expired';
+export type ManagerCouponHistoryItem = {
+  id: string;
+  kind: ManagerCouponHistoryKind;
+  at: string;
+  coupon_id: number;
+  customer_name: string;
+  phone_masked: string;
+  status: ManagerCouponHistoryStatus;
+  source: 'link' | 'direct';
+  actor_name?: string | null;
+  template_name: string;
+};
+export type ManagerCouponHistorySummary = {
+  issued: number;
+  redeemed: number;
+  unused: number;
+  expired: number;
+};
+export const getManagerCouponHistory = (params: { days?: number; kind?: 'all' | ManagerCouponHistoryKind; limit?: number; offset?: number } = {}) =>
+  client.get<{ summary: ManagerCouponHistorySummary; items: ManagerCouponHistoryItem[]; next_offset: number | null }>(
+    '/admin/v2/manager/coupons/history',
+    { params: { days: params.days ?? 30, kind: params.kind ?? 'all', limit: params.limit ?? 30, offset: params.offset ?? 0 } },
+  );
+
 export const getManagerDaily = (date?: string) => client.get('/admin/v2/manager/daily', { params: date ? { date } : undefined });
 export const saveManagerAreaPhoto = (payload: { area: string; media_id: number; note?: string }) => client.post('/admin/v2/manager/daily/photos', payload);
 export const saveManagerMeeting = (payload: { media_id: number; duration_seconds: number; title?: string; attendees?: string }) => client.post('/admin/v2/manager/daily/meeting', payload);

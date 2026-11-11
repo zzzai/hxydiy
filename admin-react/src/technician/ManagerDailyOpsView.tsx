@@ -91,8 +91,8 @@ function MeetingPanel({ daily, onRefresh }: { daily: Daily; onRefresh: () => Pro
   </section>;
 }
 
-export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenReviews, onOpenCoupons, onOpenRedeemCoupon }: {
-  daily: Daily | null; loading: boolean; onRefresh: () => Promise<void>; onOpenReviews: () => void; onOpenCoupons: () => void; onOpenRedeemCoupon: () => void;
+export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenReviews, onOpenCoupons, onOpenRedeemCoupon, onOpenCouponHistory }: {
+  daily: Daily | null; loading: boolean; onRefresh: () => Promise<void>; onOpenReviews: () => void; onOpenCoupons: () => void; onOpenRedeemCoupon: () => void; onOpenCouponHistory: () => void;
 }) {
   const [uploading, setUploading] = useState('');
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -132,7 +132,7 @@ export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenR
       <div className="manager-p0-card-head"><div><small>今日经营</small><h2>{done}/5 区域</h2></div><Tag color={daily.status === 'submitted' ? 'green' : 'gold'}>{daily.status === 'submitted' ? '已提交' : '进行中'}</Tag></div>
       <div className="manager-p0-progress"><i style={{ width: `${(done / 5) * 100}%` }} /></div>
       <p className="manager-p0-muted">照片、晨会、评价、发券都在这里留痕；照片和录音保留 90 天。</p>
-      <div className="manager-p0-actions-inline"><Button size="small" icon={<StarOutlined />} onClick={onOpenReviews}>看评价</Button><Button size="small" icon={<GiftOutlined />} onClick={onOpenCoupons}>发券</Button><Button size="small" icon={<ScanOutlined />} onClick={onOpenRedeemCoupon}>核销券</Button></div>
+      <div className="manager-p0-actions-inline"><Button size="small" icon={<StarOutlined />} onClick={onOpenReviews}>看评价</Button><Button size="small" icon={<GiftOutlined />} onClick={onOpenCoupons}>发券</Button><Button size="small" icon={<ScanOutlined />} onClick={onOpenRedeemCoupon}>核销券</Button><Button size="small" onClick={onOpenCouponHistory}>券记录</Button></div>
     </section>
 
     <section className="manager-p0-card">

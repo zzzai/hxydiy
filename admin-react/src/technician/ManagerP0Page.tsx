@@ -14,11 +14,12 @@ import ManagerTasksView from './ManagerTasksView';
 import ManagerServiceOrdersView from './ManagerServiceOrdersView';
 import ManagerReviewsView from './ManagerReviewsView';
 import ManagerCouponRedeemView from './ManagerCouponRedeemView';
+import ManagerCouponHistoryView from './ManagerCouponHistoryView';
 import './manager-mobile.css';
 import './manager-p0.css';
 
 type Tab = 'today' | 'floor' | 'team' | 'ops';
-type Subview = 'orders' | 'tasks' | 'reviews' | 'coupons' | null;
+type Subview = 'orders' | 'tasks' | 'reviews' | 'coupons' | 'coupon-history' | null;
 
 export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode } = {}) {
   const current = useTechnicianSession();
@@ -95,7 +96,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   };
 
   const openTab = (next: Tab) => { setSubview(null); setTab(next); };
-  const title = subview === 'orders' ? '订单' : subview === 'tasks' ? '待处理' : subview === 'reviews' ? '评价' : subview === 'coupons' ? '核销券' : tab === 'today' ? '今日' : tab === 'floor' ? '现场' : tab === 'team' ? '团队' : '经营';
+  const title = subview === 'orders' ? '订单' : subview === 'tasks' ? '待处理' : subview === 'reviews' ? '评价' : subview === 'coupons' ? '核销券' : subview === 'coupon-history' ? '券记录' : tab === 'today' ? '今日' : tab === 'floor' ? '现场' : tab === 'team' ? '团队' : '经营';
 
   return <section className="manager-p0-page">
     <header className="manager-p0-head">
@@ -120,12 +121,13 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       <ManagerPositionView key={storeId} storeId={storeId} refreshKey={mapRefresh} />
     </div>}
     {tab === 'team' && !subview && <ManagerTeamView team={team} onRefresh={() => load(true)} />}
-    {tab === 'ops' && !subview && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={() => load(true)} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }} />}
+    {tab === 'ops' && !subview && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={() => load(true)} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }} onOpenCouponHistory={() => setSubview('coupon-history')} />}
 
     {subview === 'orders' && <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => openTab('floor')} />}
     {subview === 'tasks' && <ManagerTasksView onOpenReviews={() => setSubview('reviews')} onOpenPositions={() => openTab('floor')} onOpenOrders={() => setSubview('orders')} />}
     {subview === 'reviews' && <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true)} onFocusError={() => message.error('评价链接已失效')} />}
-    {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} />}
+    {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} onOpenHistory={() => setSubview('coupon-history')} />}
+    {subview === 'coupon-history' && <ManagerCouponHistoryView />}
 
     {couponShare && <Modal open title="半价券链接" footer={null} onCancel={() => setCouponShare(null)}>
       <div className="manager-p0-coupon-share"><p>发给顾客：不登录也能先看券和核销码，登录后自动存入券包。60 天有效。</p><p className="manager-p0-muted">本店已发 {couponShare.issued}/{couponShare.limit} 张，剩余 {couponShare.remaining} 张。</p>{couponShare.qr && <img src={couponShare.qr} alt="半价券领取二维码" />}<Input readOnly value={couponShare.link} /><div><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button type="primary" loading={couponBusy} onClick={() => void generateCoupon()}><GiftOutlined /> 重新生成链接</Button></div></div>
