@@ -13,6 +13,7 @@ import {
   priceGuidanceForPrices,
   detailPreviewProjectIds,
   detailPreviewLocalParts,
+  featuredProjects,
   previewPriceForIdentity,
   detailPriceComparison,
   resolveMemberTotalCents,
@@ -180,6 +181,17 @@ test('门店 2 的 s2- 项目编码仍使用同一项目主图和选项能力', 
   assert.match(projectImage(store2), /projects\/hxy-xiangxiang-60\.webp$/);
   assert.equal(isFootbathOptionsProject(store2), true);
   assert.equal(isCatalogOptionsProject(store2), true);
+});
+
+test('门店 2 推荐位按基础编码匹配，缺推荐项目时用可见项目补足', () => {
+  const items = [
+    project({ id: 31, code: 's2-hxy-xiangxiang-60', category: 'bath', name: '精选草本泡' }),
+    project({ id: 32, code: 's2-hxy-spa-90', category: 'care', name: '舒缓精油SPA' }),
+    project({ id: 33, code: 's2-hxy-caier-30', category: 'small', name: '采耳' }),
+  ];
+  const featured = featuredProjects(items);
+  assert.equal(featured[0]?.code, 's2-hxy-spa-90');
+  assert.equal(featured.length, 3);
 });
 
 test('拔罐刮痧使用专属荷小悦主图资源', () => {
