@@ -10,7 +10,7 @@
 | `customer-menu-store2-guest.png` | 顾客菜单 · 华富世家店 · 未登录 | 390 × 900 | 门店 2，项目主图/推荐位 |
 | `customer-menu-store2-member.png` | 顾客菜单 · 华富世家店 · 会员 | 476 × 762 | 合成会员账号，仅用于视觉基线 |
 | `customer-profile-member-gold.png` | 我的 · 年度权益会员 | 476 × 762 | 金色会员卡基线 |
-| `admin-login.png` | 管理后台登录 | 1280 × 800 | AntD 登录页 |
+| `customer-coupon-used.png` | 半价券 · 已核销 | 390 × 844 | 不再显示登录/领取表单 |\n| `admin-login.png` | 管理后台登录 | 1280 × 800 | AntD 登录页 |
 | `manager-login.png` | 门店移动工作台登录 | 390 × 844 | 已用 CDP 真实 390 视口复核，无横向溢出 |
 
 ## 使用方式
