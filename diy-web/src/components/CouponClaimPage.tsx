@@ -212,6 +212,7 @@ export default function CouponClaimPage() {
           <div className="coupon-claim-value"><strong>{coupon.percent_off / 10}折</strong><span>全单可用</span></div>
           {usable && qrToken && qrRemaining > 0 ? <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qrToken)}`} size={220} level="L" /> : null}
           {usable && qrToken && qrRemaining > 0 ? <p className="coupon-claim-hint">无需登录也能核销；请店长扫码 · 核销码 {Math.floor(qrRemaining / 60)}:{String(qrRemaining % 60).padStart(2, '0')} 内有效</p> : null}
+          {usable && qrToken && qrRemaining > 0 ? <button type="button" className="coupon-claim-link" onClick={() => { void navigator.clipboard?.writeText(qrToken); }}>复制核销码</button> : null}
           {usable && qrToken && qrRemaining <= 0 ? <><p className="coupon-claim-meta">核销码已过期，请刷新后再给店长扫码。</p><button type="button" className="coupon-claim-primary" onClick={refreshQr}>刷新核销码</button></> : null}
           {usable && !qrToken ? <p className="coupon-claim-meta">正在生成核销码…</p> : null}
           {!usable ? <p className="coupon-claim-meta">{coupon.status === 'used' ? '这张券已经核销' : coupon.status === 'expired' ? '这张券已经过期' : '正在生成核销码…'}</p> : null}

@@ -13,3 +13,4 @@
 .coupon-claim-divider{display:flex;align-items:center;gap:10px;margin:16px 0 4px;color:#7d9084;font-size:11px}.coupon-claim-divider:before,.coupon-claim-divider:after{content:"";height:1px;flex:1;background:#e0e9e3}
 .coupon-claim-preview { display: grid; justify-items: center; gap: 4px; padding: 4px 0 2px; }
 .coupon-claim-preview .coupon-claim-primary { width: 100%; margin-top: 8px; }
+button.coupon-claim-link{border:0;cursor:pointer;width:100%;font:inherit}
