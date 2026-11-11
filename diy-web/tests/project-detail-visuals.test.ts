@@ -37,8 +37,13 @@ test('详情视觉为每张图提供可读替代文本和顾客说明', () => {
   }
 });
 
-test('精油开背提供专属长详情图', () => {
-  const sections = projectDetailVisuals('hxy-oil-back-30');
+test('门店 2 的 s2- 项目编码仍匹配专属详情视觉', () => {
+  const sections = projectDetailVisuals('s2-hxy-xiaoqi-90');
+  assert.equal(sections.length, 3);
+  assert.match(sections[0]?.image || '', /hxy-xiaoqi-90-detail-herbal\.webp$/);
+});
+
+test('精油开背提供专属长详情图', () => {  const sections = projectDetailVisuals('hxy-oil-back-30');
   assert.equal(sections.length, 1);
   assert.match(sections[0]?.image || '', /projects\/hxy-oil-back-30-detail\.webp$/);
   assert.match(`${sections[0]?.title}${sections[0]?.body}`, /精油|背部|30 分钟/);

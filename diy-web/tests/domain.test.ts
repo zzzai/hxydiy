@@ -175,6 +175,13 @@ test('缺专属图的项目使用同风格项目插画，不混入通用照片',
   }
 });
 
+test('门店 2 的 s2- 项目编码仍使用同一项目主图和选项能力', () => {
+  const store2 = project({ id: 22, code: 's2-hxy-xiangxiang-60', category: 'bath', name: '精选草本泡', image_url: '/assets/services/service-foot-bath.jpg' });
+  assert.match(projectImage(store2), /projects\/hxy-xiangxiang-60\.webp$/);
+  assert.equal(isFootbathOptionsProject(store2), true);
+  assert.equal(isCatalogOptionsProject(store2), true);
+});
+
 test('拔罐刮痧使用专属荷小悦主图资源', () => {
   const item = project({ id: 15, code: 'hxy-cupping-scraping-1', category: 'small', name: '拔罐/刮痧' });
   assert.match(projectImage(item), /projects\/hxy-cupping-scraping-1\.webp$/);

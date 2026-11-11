@@ -1,4 +1,4 @@
-import { assetPath } from './domain.ts';
+import { assetPath, canonicalProjectCode } from './domain.ts';
 
 export type ProjectDetailVisualSection = {
   image: string;
@@ -95,14 +95,15 @@ const CUPPING_SCRAPING_VISUALS: ProjectDetailVisualSection[] = [
 ];
 
 export function projectDetailVisuals(code: string): ProjectDetailVisualSection[] {
+  const projectCode = canonicalProjectCode(code);
   // 招牌草本沐足与 60 分钟精油 SPA 使用专属流程插画；其他项目沿用统一信息结构和画风。
-  if (code === 'hxy-xiaoqi-90') return SIGNATURE_FOOTBATH_VISUALS;
-  if (code === 'hxy-spa-60') return SPA_60_VISUALS;
-  if (code === 'hxy-foot-refine-1') return FOOT_REFINEMENT_VISUALS;
-  if (code === 'hxy-nvshen-60') return GODDESS_FOOT_CARE_VISUALS;
-  if (code === 'hxy-qiqing-30') return HERBAL_FOOTBATH_VISUALS;
-  if (code === 'hxy-oil-back-30') return OIL_BACK_VISUALS;
-  if (code === 'hxy-cupping-scraping-1') return CUPPING_SCRAPING_VISUALS;
+  if (projectCode === 'hxy-xiaoqi-90') return SIGNATURE_FOOTBATH_VISUALS;
+  if (projectCode === 'hxy-spa-60') return SPA_60_VISUALS;
+  if (projectCode === 'hxy-foot-refine-1') return FOOT_REFINEMENT_VISUALS;
+  if (projectCode === 'hxy-nvshen-60') return GODDESS_FOOT_CARE_VISUALS;
+  if (projectCode === 'hxy-qiqing-30') return HERBAL_FOOTBATH_VISUALS;
+  if (projectCode === 'hxy-oil-back-30') return OIL_BACK_VISUALS;
+  if (projectCode === 'hxy-cupping-scraping-1') return CUPPING_SCRAPING_VISUALS;
   const copy: Record<string, [string, string, string]> = {
     'hxy-xiangxiang-60': ['先暖足，再慢慢放松', '给双脚和小腿留出完整时间，按需要自由搭配。', '不赶步骤，按门店最终确认清单服务。'],
     'hxy-tuina-70': ['从肩背开始，慢慢松开', '先选手法力度，再按需要加选服务内容。', '服务完成后统一线下结算。'],
@@ -115,13 +116,13 @@ export function projectDetailVisuals(code: string): ProjectDetailVisualSection[]
     'hxy-head-30': ['让头部慢慢松下来', '木梳、热巾和舒缓氛围，按需要加选。', '服务完成后统一线下结算。'],
     'hxy-taoke-60': ['一套完整安排', '草本、工具、毛巾与茶饮，按固定内容呈现。', '具体项目、时长和价格以门店最终确认清单为准。'],
   };
-  const texts = copy[code];
+  const texts = copy[projectCode];
   if (!texts) return [];
   // The fallback copy is [title, body, closing]. Render it as one coherent
   // section; the old three-section mapping repeated the same sentence and
   // produced duplicated paragraphs on every generic project detail.
   return [{
-    image: assetPath(`projects/${code}-detail-1.webp`),
+    image: assetPath(`projects/${projectCode}-detail-1.webp`),
     title: texts[0],
     body: `${texts[1]} ${texts[2]}`.trim(),
     alt: `荷小悦 IP ${texts[0]}`,

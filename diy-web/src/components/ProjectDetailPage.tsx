@@ -44,6 +44,7 @@ import {
   detailPriceComparison,
   displayProjectName,
   projectImage,
+  canonicalProjectCode,
   relaxAddOnProjects,
   customerProjectTagGroups,
   customerProjectSummaryText,
@@ -141,7 +142,7 @@ export default function ProjectDetailPage({
   const attachableAddons = useMemo(() => project && !isDetailOnlyProject(project) ? fallbackAttachableAddons(addons, project.id) : [], [addons, project]);
   const localProject = useMemo(() => projects.find((item) => item.category === 'local-strength') || null, [projects]);
   const isFootBath = Boolean(project && isPrimaryFootBathDiy(project));
-  const scalpProjects = isFootBath ? relaxProjects.filter((item) => item.code === 'hxy-head-30') : [];
+  const scalpProjects = isFootBath ? relaxProjects.filter((item) => canonicalProjectCode(item.code) === 'hxy-head-30') : [];
   const lowerRelaxProjects = isFootBath ? relaxProjects.filter((item) => item.code !== 'hxy-head-30') : relaxProjects;
   const isCatalogOptions = Boolean(project && isCatalogOptionsProject(project));
   const isFootbathOptions = Boolean(project && isFootbathOptionsProject(project));
@@ -278,7 +279,7 @@ export default function ProjectDetailPage({
 
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="project-detail-title">{displayName}</h1><button className="detail-share-button" type="button" aria-label="分享项目" onClick={() => onShare(project)}><Share2 size={21} /><span>分享</span></button></div>
-          <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={project.code === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
+          <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={canonicalProjectCode(project.code) === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
           {detailOnly && project.content_version === 'menu-20261101'
             ? <div className="mini-detail-price"><span className="detail-price-primary"><span className="detail-price-label">套盒价</span><strong>{project.prices.some((item) => item.price_type === 'store') ? formatMoney(project.prices.find((item) => item.price_type === 'store')!.amount_cents) : '到店咨询'}</strong></span><span className="detail-price-unit">10次/套</span></div>
             : <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} memberOnly={memberOnly} unit={packageUnit} />}
@@ -373,8 +374,8 @@ export default function ProjectDetailPage({
 
         <ProjectDetailVisualSections
           sections={detailVisualSections}
-          eyebrow={project.code === 'hxy-qiqing-30' ? '荷小悦的慢时光' : undefined}
-          title={project.code === 'hxy-qiqing-30' ? '一桶草本，慢慢把自己照顾好' : undefined}
+          eyebrow={canonicalProjectCode(project.code) === 'hxy-qiqing-30' ? '荷小悦的慢时光' : undefined}
+          title={canonicalProjectCode(project.code) === 'hxy-qiqing-30' ? '一桶草本，慢慢把自己照顾好' : undefined}
         />
 
         {!detailOnly && !isFootBath && !catalogPublished && groups.length === 0 && <div className="mini-standard-card"><Check size={18} />项目按门店标准服务，到店后可向技师说明偏好。</div>}
