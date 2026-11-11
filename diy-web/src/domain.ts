@@ -246,8 +246,18 @@ export function catalogProjectsForSection(projects: Project[], sectionId: string
 }
 
 export function featuredProjects(projects: Project[]): Project[] {
-  const byCode = new Map(projects.map((project) => [project.code, project]));
-  return FEATURED_CODES.map((code) => byCode.get(code)).filter((project): project is Project => Boolean(project));
+  const byCode = new Map(projects.map((project) => [canonicalProjectCode(project.code), project]));
+  const picked = FEATURED_CODES
+    .map((code) => byCode.get(code))
+    .filter((project): project is Project => Boolean(project));
+  if (picked.length >= 2) return picked;
+  // Store 2 (and future stores) may not carry every featured code. Keep the
+  // menu recommendation strip populated with the first visible projects.
+  const selected = new Set(picked.map((project) => project.id));
+  const fallback = projects
+    .filter((project) => !selected.has(project.id) && !isDetailOnlyProject(project))
+    .slice(0, 4 - picked.length);
+  return [...picked, ...fallback];
 }
 
 export function canCustomerChangePosition(source: string, positionType: string, occupancyStatus: string | undefined): boolean {
