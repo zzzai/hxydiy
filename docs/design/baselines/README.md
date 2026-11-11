@@ -11,7 +11,7 @@
 | `customer-menu-store2-member.png` | 顾客菜单 · 华富世家店 · 会员 | 476 × 762 | 合成会员账号，仅用于视觉基线 |
 | `customer-profile-member-gold.png` | 我的 · 年度权益会员 | 476 × 762 | 金色会员卡基线 |
 | `admin-login.png` | 管理后台登录 | 1280 × 800 | AntD 登录页 |
-| `manager-login.png` | 门店移动工作台登录 | 390 × 844 | 当前基线；已知右侧有横向溢出，待修复 |
+| `manager-login.png` | 门店移动工作台登录 | 390 × 844 | 已用 CDP 真实 390 视口复核，无横向溢出 |
 
 ## 使用方式
 
@@ -32,6 +32,8 @@
 - 新基线必须记录生产 commit
 - 不把测试 token 写入仓库
 
-## 已知问题
+## 抓取注意
 
-- `manager-login.png` 在 390px 下右侧内容溢出，登录卡片宽度需要收口
+- 必须用 CDP `Emulation.setDeviceMetricsOverride` 设置 390 × 844 后再截图
+- 直接用 headless `--window-size=390,844` 会被 DPI 缩放，出现假溢出
+- 真实 390 视口下登录卡片宽 354px，左右各 18px，无横向溢出
