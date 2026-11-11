@@ -141,6 +141,7 @@ def coupon_history(
     redeem_rows = list(db.scalars(select(AuditLog).where(
         AuditLog.action == "manager_redeem_coupon",
         AuditLog.store_id == store_id,
+        AuditLog.entity_id.in_([str(coupon.id) for coupon, _ in issued_rows]) if issued_rows else False,
         AuditLog.created_at >= start,
     ).order_by(AuditLog.created_at.desc())))
 
@@ -211,7 +212,7 @@ def coupon_history(
         events = [item for item in events if item["kind"] == kind]
 
     issued_total = len(issued_rows)
-    redeemed_total = len({row.entity_id for row in redeem_rows})
+    redeemed_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "used")
     unused_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "unused")
     expired_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "expired")
     page = events[offset:offset + limit]
