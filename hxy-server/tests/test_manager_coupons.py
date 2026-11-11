@@ -57,6 +57,31 @@ def coupons():
     engine.dispose()
 
 
+def test_history_records_issue_and_redeem_for_own_store(coupons):
+    client, factory, ids, headers = coupons
+    issued = client.post(PREFIX + "/half-price/issue", headers=headers["manager"], json={"user_id": ids["customer"]})
+    assert issued.status_code == 200, issued.text
+    coupon_id = issued.json()["coupon_id"]
+    token = client.post(f"/api/v1/coupons/{coupon_id}/redeem-token", headers=headers["customer"]).json()["token"]
+    redeemed = client.post(PREFIX + "/redeem", headers=headers["manager"], json={"token": token, "request_id": str(uuid.uuid4())})
+    assert redeemed.status_code == 200, redeemed.text
+
+    history = client.get(PREFIX + "/history?days=30", headers=headers["manager"])
+    assert history.status_code == 200, history.text
+    body = history.json()
+    assert body["summary"]["issued"] == 1
+    assert body["summary"]["redeemed"] == 1
+    assert body["summary"]["unused"] == 0
+    assert {item["kind"] for item in body["items"]} == {"issued", "redeemed"}
+    assert all(item["phone_masked"] == "138****8000" for item in body["items"])
+    assert all("13800138000" not in str(item) for item in body["items"])
+
+    other = client.get(PREFIX + "/history?days=30", headers=headers["other_manager"])
+    assert other.status_code == 200
+    assert other.json()["summary"]["issued"] == 0
+    assert other.json()["items"] == []
+
+
 def test_issue_scan_and_customer_invalidation(coupons):
     client, factory, ids, headers = coupons
     issued = client.post(PREFIX + "/half-price/issue", headers=headers["manager"], json={"user_id": ids["customer"]})

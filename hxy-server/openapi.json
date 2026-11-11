@@ -13779,6 +13779,94 @@
         ]
       }
     },
+    "/api/v1/admin/v2/manager/coupons/history": {
+      "get": {
+        "description": "本店半价券的发券、领取、核销记录。\n\n发券以 UserCoupon 的实际创建为准；仅生成链接不算发券。\n领取和直接发券都来自 UserCoupon，核销时间来自 AuditLog。",
+        "operationId": "coupon_history_api_v1_admin_v2_manager_coupons_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coupon History",
+        "tags": [
+          "manager-coupons"
+        ]
+      }
+    },
     "/api/v1/admin/v2/manager/coupons/redeem": {
       "post": {
         "description": "确认核销：原子把 unused 改为 used；重复请求不会二次消费。",

@@ -26,7 +26,7 @@ from app.api.admin_v2 import (
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.domain.coupon_redeem import create_claim_token, decode_redeem_token
-from app.models import CouponTemplate, Staff, User, UserCoupon
+from app.models import AuditLog, CouponTemplate, Staff, User, UserCoupon
 
 router = APIRouter(prefix="/admin/v2/manager/coupons", tags=["manager-coupons"])
 
@@ -76,6 +76,155 @@ def _ensure_issue_capacity(db: Session, template: CouponTemplate) -> None:
             "code": "COUPON_SOLD_OUT",
             "message": "半价券 100 张已发完",
         })
+
+
+def _aware(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _history_status(coupon: UserCoupon, now: datetime) -> str:
+    if coupon.status == "used":
+        return "used"
+    expire_at = _aware(coupon.expire_at)
+    if expire_at and expire_at <= now:
+        return "expired"
+    return "unused"
+
+
+@router.get("/history")
+def coupon_history(
+    days: int = 30,
+    kind: str = "all",
+    limit: int = 30,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """本店半价券的发券、领取、核销记录。
+
+    发券以 UserCoupon 的实际创建为准；仅生成链接不算发券。
+    领取和直接发券都来自 UserCoupon，核销时间来自 AuditLog。
+    """
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _resolve_target_store_id(db, staff, None)
+    days = max(1, min(int(days or 30), 90))
+    limit = max(1, min(int(limit or 30), 100))
+    offset = max(0, int(offset or 0))
+    if kind not in {"all", "issued", "redeemed"}:
+        kind = "all"
+
+    template = db.scalar(select(CouponTemplate).where(
+        CouponTemplate.store_id == store_id,
+        CouponTemplate.code == f"{HALF_PRICE_CODE_PREFIX}{store_id}",
+    ))
+    now = datetime.now(UTC)
+    if template is None:
+        return {
+            "summary": {"issued": 0, "redeemed": 0, "unused": 0, "expired": 0},
+            "items": [],
+            "next_offset": None,
+        }
+
+    start = now - timedelta(days=days)
+    issued_rows = list(db.execute(
+        select(UserCoupon, User)
+        .join(User, User.id == UserCoupon.user_id)
+        .where(
+            UserCoupon.template_id == template.id,
+            UserCoupon.claimed_at >= start,
+        )
+        .order_by(UserCoupon.claimed_at.desc())
+    ).all())
+    redeem_rows = list(db.scalars(select(AuditLog).where(
+        AuditLog.action == "manager_redeem_coupon",
+        AuditLog.store_id == store_id,
+        AuditLog.created_at >= start,
+    ).order_by(AuditLog.created_at.desc())))
+
+    coupon_ids = {coupon.id for coupon, _ in issued_rows}
+    coupon_ids.update(int(row.entity_id) for row in redeem_rows if row.entity_id.isdigit())
+    coupons = {coupon.id: coupon for coupon, _ in issued_rows}
+    customers = {coupon.id: user for coupon, user in issued_rows}
+    missing = [coupon_id for coupon_id in coupon_ids if coupon_id not in coupons]
+    if missing:
+        for coupon in db.scalars(select(UserCoupon).where(UserCoupon.id.in_(missing))):
+            coupons[coupon.id] = coupon
+            customer = db.get(User, coupon.user_id)
+            if customer:
+                customers[coupon.id] = customer
+
+    direct_ids = {
+        int(row.entity_id)
+        for row in db.scalars(select(AuditLog).where(
+            AuditLog.action == "manager_issue_half_price_coupon",
+            AuditLog.entity_type == "user_coupon",
+            AuditLog.entity_id.in_([str(coupon_id) for coupon_id in coupon_ids]),
+        )) if row.entity_id.isdigit()
+    }
+    actor_ids = {int(row.actor_id) for row in redeem_rows if row.actor_id.isdigit()}
+    actor_names = {
+        staff_id: name
+        for staff_id, name in db.execute(select(Staff.id, Staff.name).where(Staff.id.in_(actor_ids))).all()
+    } if actor_ids else {}
+
+    events = []
+    for coupon, user in issued_rows:
+        status = _history_status(coupon, now)
+        at = _aware(coupon.claimed_at) or now
+        events.append({
+            "id": f"issue:{coupon.id}",
+            "kind": "issued",
+            "at": at.isoformat(),
+            "coupon_id": coupon.id,
+            "customer_name": _customer_display_name(user),
+            "phone_masked": _masked_phone(user.phone) if user.phone else "—",
+            "status": status,
+            "source": "direct" if coupon.id in direct_ids else "link",
+            "actor_name": None,
+            "template_name": template.name,
+        })
+    for row in redeem_rows:
+        coupon_id = int(row.entity_id) if row.entity_id.isdigit() else 0
+        coupon = coupons.get(coupon_id)
+        user = customers.get(coupon_id)
+        if coupon is None or user is None:
+            continue
+        at = _aware(row.created_at) or now
+        events.append({
+            "id": f"redeem:{row.id}",
+            "kind": "redeemed",
+            "at": at.isoformat(),
+            "coupon_id": coupon.id,
+            "customer_name": _customer_display_name(user),
+            "phone_masked": _masked_phone(user.phone) if user.phone else "—",
+            "status": "used",
+            "source": "direct" if coupon.id in direct_ids else "link",
+            "actor_name": actor_names.get(int(row.actor_id)) if row.actor_id.isdigit() else None,
+            "template_name": template.name,
+        })
+
+    events.sort(key=lambda item: item["at"], reverse=True)
+    if kind != "all":
+        events = [item for item in events if item["kind"] == kind]
+
+    issued_total = len(issued_rows)
+    redeemed_total = len({row.entity_id for row in redeem_rows})
+    unused_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "unused")
+    expired_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "expired")
+    page = events[offset:offset + limit]
+    return {
+        "summary": {
+            "issued": issued_total,
+            "redeemed": redeemed_total,
+            "unused": unused_total,
+            "expired": expired_total,
+        },
+        "items": page,
+        "next_offset": offset + limit if offset + limit < len(events) else None,
+    }
 
 
 class IssueHalfPriceIn(BaseModel):

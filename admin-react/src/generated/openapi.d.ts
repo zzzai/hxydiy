@@ -1280,6 +1280,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/coupons/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coupon History
+         * @description 本店半价券的发券、领取、核销记录。
+         *
+         *     发券以 UserCoupon 的实际创建为准；仅生成链接不算发券。
+         *     领取和直接发券都来自 UserCoupon，核销时间来自 AuditLog。
+         */
+        get: operations["coupon_history_api_v1_admin_v2_manager_coupons_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/coupons/redeem": {
         parameters: {
             query?: never;
@@ -10640,6 +10663,42 @@ export interface operations {
     create_half_price_link_api_v1_admin_v2_manager_coupons_half_price_link_post: {
         parameters: {
             query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coupon_history_api_v1_admin_v2_manager_coupons_history_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                kind?: string;
+                limit?: number;
+                offset?: number;
+            };
             header?: {
                 authorization?: string | null;
             };
