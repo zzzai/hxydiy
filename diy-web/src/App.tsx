@@ -134,6 +134,7 @@ import {
   priceGuidance,
   projectListPricePresentation,
   projectImage,
+  canonicalProjectCode,
   requiresStaffKioskBinding,
   shouldClearDeviceSessionAfterSubmit,
   type Project,
@@ -168,7 +169,7 @@ function getQueryConfig() {
     returnVisit,
     profileEntry,
     serviceHub,
-    publicPage: serviceHub ? query.get('page') : null,
+    publicPage: serviceHub ? (query.get('page') || 'projects') : null,
     positionCode: returnVisit ? '' : query.get('seat') || '',
     source: returnVisit || serviceHub ? '' : query.get('source') || '',
     qrToken: returnVisit ? '' : query.get('qr') || '',
@@ -392,6 +393,11 @@ export default function App() {
       // Invalidate in-flight work before React effects process the new identity.
       privateGeneration.current += 1;
       if (privateSelection.current && session?.status === 'draft') persistPrivateSelection({ items: selectionItems, draft: selectionDraft });
+      // A named customer's private draft must never survive logout into the anonymous entry.
+      if (!auth && customerAuthRef.current?.user.id != null) {
+        clearPrivateSelection(localStorage, query.storeId);
+        privateSelection.current = null;
+      }
     }
     customerAuthRef.current = auth;
     setCustomerAuthState(auth);
@@ -2215,7 +2221,7 @@ export default function App() {
         </>}
         {featured.map((project, index) => (
           <button key={project.id} type="button" className={`miniapp-promo ${index === 0 ? 'primary' : ''}`} onClick={() => openProjectDetail(project)}>
-            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{project.code === 'hxy-spa-90' ? displayProjectName(project) : pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}{project.code !== 'hxy-spa-90' && <i>起</i>}</em></span>
+            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{canonicalProjectCode(project.code) === 'hxy-spa-90' ? displayProjectName(project) : pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}{canonicalProjectCode(project.code) !== 'hxy-spa-90' && <i>起</i>}</em></span>
             <img src={projectImage(project)} alt="" loading="lazy" decoding="async" />
           </button>
         ))}
@@ -2260,7 +2266,7 @@ export default function App() {
                     const { highlights, summary: summaryTags, purchase: purchaseTags } = customerProjectDisplayTagGroups(project);
                     return (
                       <motion.article whileTap={{ scale: 0.985 }} className={`project-card mini-project-row ${selected ? 'selected' : ''}`} key={project.id} onClick={() => openProjectDetail(project)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectDetail(project); } }} role="button" tabIndex={0}>
-                        <div className="project-photo"><img src={projectImage(project)} alt="" loading="lazy" decoding="async" />{project.code === 'hxy-xiaoqi-90' && <span className="signature-badge">招牌</span>}</div>
+                        <div className="project-photo"><img src={projectImage(project)} alt="" loading="lazy" decoding="async" />{canonicalProjectCode(project.code) === 'hxy-xiaoqi-90' && <span className="signature-badge">招牌</span>}</div>
                         <div className="project-copy">
                           <div className="project-title-row"><h3>{displayName}</h3>{project.price_label?.includes('套') ? <span>{project.price_label}</span> : project.duration_min ? <span>{project.duration_min}分钟</span> : null}</div>
                           <p>{customerProjectListDescription(project)}</p>

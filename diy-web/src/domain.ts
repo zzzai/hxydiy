@@ -370,8 +370,13 @@ export function savingsOf(project: Project): number {
   return Math.max(0, priceOf(project, 'store') - priceOf(project, 'member'));
 }
 
+export function canonicalProjectCode(code?: string | null): string {
+  // 门店 2 的项目以 s2- 前缀保存，顾客端展示和资源匹配必须回到基础编码。
+  return String(code || '').replace(/^s\d+-/, '');
+}
+
 export function isPrimaryFootBathDiy(project: Project): boolean {
-  return project.code === 'hxy-qiqing-30';
+  return canonicalProjectCode(project.code) === 'hxy-qiqing-30';
 }
 
 const FOOTBATH_OPTION_CODES = new Set([
@@ -387,19 +392,19 @@ const CATALOG_OPTION_CODES = new Set([
 ]);
 
 export function isCatalogOptionsProject(project: Pick<Project, 'code'>): boolean {
-  return CATALOG_OPTION_CODES.has(project.code);
+  return CATALOG_OPTION_CODES.has(canonicalProjectCode(project.code));
 }
 
 export function isFootbathOptionsProject(project: Pick<Project, 'code'>): boolean {
-  return FOOTBATH_OPTION_CODES.has(project.code);
+  return FOOTBATH_OPTION_CODES.has(canonicalProjectCode(project.code));
 }
 
 export function supportsFootBathBundle(project: Pick<Project, 'code'>): boolean {
-  return project.code === 'hxy-qiqing-30';
+  return canonicalProjectCode(project.code) === 'hxy-qiqing-30';
 }
 
 export function isDetailOnlyProject(project: Pick<Project, 'category' | 'code'>): boolean {
-  return project.category === 'kit' || DETAIL_ONLY_CODES.has(project.code);
+  return project.category === 'kit' || DETAIL_ONLY_CODES.has(canonicalProjectCode(project.code));
 }
 
 export function isFixedProject(project: Pick<Project, 'category' | 'code'>): boolean {
@@ -443,14 +448,14 @@ function uniqueCustomerTags(tags: string[]): string[] {
 
 /** 顾客可见的选购规则标签：只回答“怎么买”，与项目特色、简介分开。 */
 export function customerProjectPurchaseTags(project: CustomerProjectTagInput): string[] {
-  if (project.category === 'local-strength' || project.code === 'hxy-jubu-30') {
+  if (project.category === 'local-strength' || canonicalProjectCode(project.code) === 'hxy-jubu-30') {
     return ['按部位计价', '可多选'];
   }
   // 后台 tags 同时承载服务特色和经营标记；这里仅接收顾客能据此完成选择的规则词。
   const configuredRules = uniqueCustomerTags(project.tags || []).filter((label) => CUSTOMER_PURCHASE_TAGS.has(label));
   const fallbackRules = isDetailOnlyProject(project)
     ? ['套盒服务']
-    : project.code === 'hxy-qiqing-30'
+    : canonicalProjectCode(project.code) === 'hxy-qiqing-30'
       ? ['单次服务', '可搭配局部加强']
       : ['单次服务'];
   return uniqueCustomerTags([...fallbackRules, ...configuredRules]);
@@ -570,7 +575,7 @@ export function customerProjectTagGroups(project: CustomerProjectTagInput): Cust
 export function customerProjectDisplayTagGroups(project: CustomerProjectTagInput): CustomerProjectTagGroups {
   const groups = customerProjectTagGroups(project);
   // 足部精修的完整服务内容已经放在卡片简介中，列表只保留顾客做决定所需的两个标签，避免重复堆叠。
-  if (project.code === 'hxy-foot-refine-1') {
+  if (canonicalProjectCode(project.code) === 'hxy-foot-refine-1') {
     return {
       highlights: ['脚底精修'],
       summary: [],
@@ -607,19 +612,19 @@ export function customerProjectListDescription(project: CustomerProjectTagInput)
     'hxy-jubu-30': '选择想多照顾的身体部位',
     'hxy-cupping-scraping-1': '拔罐或刮痧，任选一种',
   };
-  if (byCode[project.code]) return byCode[project.code];
+  if (byCode[canonicalProjectCode(project.code)]) return byCode[canonicalProjectCode(project.code)];
   return String(project.summary || '').trim().replace(/\+/g, '、');
 }
 
 export function customerProjectHighlights(project: CustomerProjectTagInput): string[] {
-  return [...(CUSTOMER_PROJECT_HIGHLIGHTS[project.code] || fallbackProjectHighlights(project))];
+  return [...(CUSTOMER_PROJECT_HIGHLIGHTS[canonicalProjectCode(project.code)] || fallbackProjectHighlights(project))];
 }
 
 export function customerProjectSummaryTags(project: CustomerProjectTagInput): string[] {
-  if (project.code === 'hxy-taoke-60') return ['10次/套'];
+  if (canonicalProjectCode(project.code) === 'hxy-taoke-60') return ['10次/套'];
   if (project.duration_min && project.duration_min > 0) return [`${project.duration_min}分钟服务`];
-  if (['hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-tuina-70', 'hxy-spa-60', 'hxy-spa-90', 'hxy-caier-30', 'hxy-head-30'].includes(project.code)) return [];
-  return [...(CUSTOMER_PROJECT_SUMMARY_TAGS[project.code] || fallbackProjectSummaryTags(project))];
+  if (['hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-tuina-70', 'hxy-spa-60', 'hxy-spa-90', 'hxy-caier-30', 'hxy-head-30'].includes(canonicalProjectCode(project.code))) return [];
+  return [...(CUSTOMER_PROJECT_SUMMARY_TAGS[canonicalProjectCode(project.code)] || fallbackProjectSummaryTags(project))];
 }
 
 /** 顾客端项目摘要统一入口：后端摘要为空时提供稳定、可读且不暴露经营内部信息的兜底文案。 */
@@ -645,7 +650,7 @@ export function customerProjectSummaryText(project: CustomerProjectTagInput): st
     'hxy-baguan-1': '拔竹罐+草本功效膏贴',
     'hxy-guasha-1': '刮痧+草本功效膏贴',
   };
-  if (byCode[project.code]) return byCode[project.code];
+  if (byCode[canonicalProjectCode(project.code)]) return byCode[canonicalProjectCode(project.code)];
   if (name) return name + (project.duration_min ? ` · ${project.duration_min}分钟服务` : ' · 到店服务');
   return project.duration_min ? `${project.duration_min}分钟服务` : '到店服务';
 }
@@ -884,14 +889,14 @@ export function projectImage(project: Project): string {
     'hxy-waist-kit-10': 'projects/hxy-spa-60.webp',
     'hxy-neck-kit-10': 'projects/hxy-head-30.webp',
   };
-  if (dedicated[project.code]) return assetPath(dedicated[project.code]);
+  if (dedicated[canonicalProjectCode(project.code)]) return assetPath(dedicated[canonicalProjectCode(project.code)]);
   if (project.image_url) {
     if (/^https?:\/\//.test(project.image_url)) return project.image_url;
     if (project.image_url.startsWith('/diy/assets/')) return assetPath(project.image_url.slice('/diy/assets/'.length));
     return assetPath(project.image_url.replace(/^\/?assets\//, ''));
   }
-  if (project.code === 'hxy-spa-60' || project.code === 'hxy-spa-90') return assetPath('spa-scene.jpg');
-  if (project.code === 'hxy-tuina-70') return assetPath('service-tuina.jpg');
+  if (canonicalProjectCode(project.code) === 'hxy-spa-60' || canonicalProjectCode(project.code) === 'hxy-spa-90') return assetPath('spa-scene.jpg');
+  if (canonicalProjectCode(project.code) === 'hxy-tuina-70') return assetPath('service-tuina.jpg');
   if (project.category === 'local-strength') return assetPath('service-tuina.jpg');
   if (project.category === 'small') return assetPath('daily-care-pack.webp');
   if (project.category === 'kit') return assetPath('family-relax-card.webp');
@@ -905,5 +910,6 @@ const GENERATED_PROJECT_ASSETS = new Set([
 ]);
 
 export function generatedProjectAsset(code: string): string | null {
-  return GENERATED_PROJECT_ASSETS.has(code) ? code : null;
+  const canonical = canonicalProjectCode(code);
+  return GENERATED_PROJECT_ASSETS.has(canonical) ? canonical : null;
 }
