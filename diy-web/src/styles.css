@@ -2069,11 +2069,3 @@ button.miniapp-store{border:0;background:transparent;font:inherit;text-align:lef
 .store-picker{width:min(100%,480px);max-height:70dvh;overflow:auto;background:#fff;border-radius:18px;padding:8px 16px 18px;box-shadow:0 18px 50px #10251d33}
 .store-picker header{display:flex;align-items:center;justify-content:space-between;padding:10px 0}.store-picker header strong{font-size:16px;color:#163e34}.store-picker header button{border:0;background:none;font-size:24px;line-height:1;color:#66766d;padding:4px 8px}
 .store-picker>button{display:grid;gap:4px;width:100%;text-align:left;border:1px solid #e4ece6;border-radius:12px;background:#fff;padding:12px;margin-top:8px;font:inherit}.store-picker>button.active{border-color:#1f8f75;background:#eff7f2}.store-picker>button strong{font-size:14px;color:#163e34}.store-picker>button small{color:#7a8a81;font-size:11px;line-height:1.4}
-.profile-anonymous-body .profile-login { width: min(440px, 100%); margin: 0 auto; padding: 14px 4px 24px; }
-.profile-login-intro { padding: 8px 4px 22px; }
-.profile-login-intro > span { color: #1f8f75; font-size: 11px; letter-spacing: .12em; }
-.profile-login-intro h1 { margin: 8px 0 6px; color: #132a24; font-size: 26px; line-height: 1.25; letter-spacing: -.02em; }
-.profile-login-intro p { margin: 0; color: #647a71; font-size: 13px; line-height: 1.65; }
-.profile-login .coupon-login-form { margin-top: 4px; }
-.profile-report-link { display: inline-flex; margin: 18px auto 0; padding: 6px 8px; align-items: center; gap: 2px; border: 0; background: transparent; color: #1f8f75; font: inherit; font-size: 12px; cursor: pointer; }
-.profile-anonymous-body { display: flex; flex-direction: column; }
