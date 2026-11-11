@@ -63,6 +63,7 @@ git status --short
 git log --oneline -5
 git worktree list
 pwsh -File scripts/gates/check-version.ps1 -Release
+pwsh -File scripts/gates/audit-worktrees.ps1
 ```
 
 ---
@@ -261,6 +262,32 @@ health
 - 发布后不记录
 
 ---
+
+## 5.1 GitHub 分支保护状态
+
+2026-11-11 已开启 `main` 保护：
+
+- 禁止直接 push
+- 必须通过 PR
+- 必须通过 required checks：
+  - Static contracts
+  - Backend tests
+  - Admin tests and build
+  - Customer tests and build
+  - Design evidence
+  - Trusted PR Gate
+- required checks 必须基于最新 main
+- 禁止 force push
+- 禁止删除 main
+- 要求线性历史
+- 要求解决所有 review conversation
+- 管理员同样受保护
+
+仍需人工维护：
+
+- CODEOWNERS 的 review 要求
+- 生产环境 required reviewer
+- 旧 worktree / 旧 PR 清理
 
 ## 6. 当前执行顺序
 
