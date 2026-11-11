@@ -164,7 +164,7 @@ test('项目专属主图优先于后台旧图，恢复顾客端原主图', () =>
 
 test('缺专属图的项目使用同风格项目插画，不混入通用照片', () => {
   const cases: Array<[string, string, RegExp]> = [
-    ['hxy-oil-back-30', 'local-strength', /projects\/hxy-oil-back-30-detail\.webp$/],
+    ['hxy-oil-back-30', 'local-strength', /projects\/hxy-oil-back-30-main\.webp$/],
     ['hxy-local-care-60', 'local-strength', /projects\/hxy-jubu-30\.webp$/],
     ['hxy-waist-kit-10', 'kit', /projects\/hxy-spa-60\.webp$/],
     ['hxy-neck-kit-10', 'kit', /projects\/hxy-head-30\.webp$/],
