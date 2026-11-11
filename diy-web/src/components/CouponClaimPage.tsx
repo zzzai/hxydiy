@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, Clock3 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import {
@@ -196,6 +197,14 @@ export default function CouponClaimPage() {
   const menuUrl = `/?store=${storeId}&view=menu`;
   const couponUrl = `/?store=${storeId}&view=profile&coupon=1`;
   const usable = coupon?.status === 'unused';
+  const terminal = Boolean(coupon && !usable);
+  const used = coupon?.status === 'used';
+  const statusTitle = used ? '这张券已核销' : coupon?.status === 'expired' ? '这张券已过期' : '这张券暂不可用';
+  const statusDetail = used
+    ? '门店已经完成核销，这张券不能再次使用。'
+    : coupon?.status === 'expired'
+      ? '已超过有效期，请让店长重新发券。'
+      : '当前状态不可出示核销码，请联系门店确认。';
   const refreshQr = () => {
     if (!coupon) return;
     if (auth?.token) void issueQr(coupon.id, auth.token);
@@ -204,25 +213,33 @@ export default function CouponClaimPage() {
 
   return <main className="coupon-claim-page">
     <section className="coupon-claim-card">
-      <header><span>荷小悦</span><h1>半价券</h1><p>全单 5 折 · 领取后 60 天有效</p></header>
+      <header><span>荷小悦</span><h1>半价券</h1><p>{terminal ? `全单 5 折 · ${used ? '已核销' : '已过期'}` : '全单 5 折 · 领取后 60 天有效'}</p></header>
       {!code ? <p className="coupon-claim-error">链接无效，请让店长重新发送。</p> : <>
         {busy && !coupon ? <p className="coupon-claim-hint">正在准备半价券…</p> : null}
         {error ? <><p className="coupon-claim-error">{error}</p><div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券包</a></div></> : null}
         {coupon ? <>
-          <div className="coupon-claim-value"><strong>{coupon.percent_off / 10}折</strong><span>全单可用</span></div>
+          {usable
+            ? <div className="coupon-claim-value"><strong>{coupon.percent_off / 10}折</strong><span>全单可用</span></div>
+            : <section className={`coupon-claim-status ${coupon.status}`} role="status" aria-live="polite">
+                {used ? <CheckCircle2 size={42} aria-hidden="true" /> : <Clock3 size={42} aria-hidden="true" />}
+                <strong>{statusTitle}</strong>
+                <p>{statusDetail}</p>
+              </section>}
           {usable && qrToken && qrRemaining > 0 ? <QRCodeSVG value={`${window.location.origin}/technician/store?coupon=${encodeURIComponent(qrToken)}`} size={220} level="L" /> : null}
           {usable && qrToken && qrRemaining > 0 ? <p className="coupon-claim-hint">无需登录也能核销；请店长扫码 · 核销码 {Math.floor(qrRemaining / 60)}:{String(qrRemaining % 60).padStart(2, '0')} 内有效</p> : null}
           {usable && qrToken && qrRemaining > 0 ? <button type="button" className="coupon-claim-link" onClick={() => { void navigator.clipboard?.writeText(qrToken); }}>复制核销码</button> : null}
           {usable && qrToken && qrRemaining <= 0 ? <><p className="coupon-claim-meta">核销码已过期，请刷新后再给店长扫码。</p><button type="button" className="coupon-claim-primary" onClick={refreshQr}>刷新核销码</button></> : null}
           {usable && !qrToken ? <p className="coupon-claim-meta">正在生成核销码…</p> : null}
-          {!usable ? <p className="coupon-claim-meta">{coupon.status === 'used' ? '这张券已经核销' : coupon.status === 'expired' ? '这张券已经过期' : '正在生成核销码…'}</p> : null}
-          <p className="coupon-claim-meta">有效期至 {coupon.expire_at ? new Date(coupon.expire_at).toLocaleDateString('zh-CN') : '60 天后'}</p>
-          <p className="coupon-claim-hint">登录后可保存到「券包」，也能查看项目菜单。</p>
-          {!auth ? <p className="coupon-claim-hint">不登录也能看到券和核销码；登录后这张券会自动绑定到你的账户。</p> : null}
-          <div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券包</a></div>
+          {usable ? <p className="coupon-claim-meta">有效期至 {coupon.expire_at ? new Date(coupon.expire_at).toLocaleDateString('zh-CN') : '60 天后'}</p> : null}
+          {usable ? <p className="coupon-claim-hint">登录后可保存到「券包」，也能查看项目菜单。</p> : null}
+          {usable && !auth ? <p className="coupon-claim-hint">不登录也能看到券和核销码；登录后这张券会自动绑定到你的账户。</p> : null}
+          <div className="coupon-claim-actions">
+            <a className={terminal ? 'primary' : ''} href={menuUrl}>看项目菜单</a>
+            <a href={couponUrl}>我的券包</a>
+          </div>
         </> : null}
         {!auth && !coupon && !busy ? <div className="coupon-claim-preview"><div className="coupon-claim-value"><strong>5折</strong><span>全单可用</span></div><p className="coupon-claim-hint">先预览，不占用 100 张额度。领取后才生成券和核销码。</p><button type="button" className="coupon-claim-primary" disabled={busy} onClick={() => void claimGuest()}>领取并出示核销码</button></div> : null}
-        {!auth ? <>
+        {!auth && !terminal ? <>
           <div className="coupon-claim-divider"><span>或登录后自动领取</span></div>
           <label>手机号<input inputMode="numeric" maxLength={11} value={phone} placeholder="请输入手机号" onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))} /></label>
           <div className="coupon-claim-code"><input inputMode="numeric" maxLength={6} value={smsCode} placeholder="验证码" onChange={(event) => setSmsCode(event.target.value.replace(/\D/g, ''))} /><button type="button" disabled={sending || seconds > 0} onClick={() => void sendCode()}>{seconds > 0 ? `${seconds}s` : sending ? '发送中' : '获取验证码'}</button></div>
