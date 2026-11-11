@@ -197,9 +197,9 @@ test('提交前已选弹层同时展示服务位置和当前身份确认', () =>
 
 test('登录入口先表达顾客收益，不使用系统保存口吻', () => {
   assert.deepEqual(customerLoginCopy('profile'), {
-    title: '登录荷小悦',
-    detail: '查看服务记录、检测报告和券包。首次登录自动注册。',
-    action: '登录',
+    title: '登录后，服务记录随时可查',
+    detail: '查看本次清单、服务进度和评价，优惠券也会跟着账号走。',
+    action: '登录查看记录',
   });
   assert.deepEqual(customerLoginCopy('record'), {
     title: '登录后，本次服务记录不丢',
