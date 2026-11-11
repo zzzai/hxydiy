@@ -87,7 +87,7 @@ export default function ManagerCouponHistoryView() {
         <span className="manager-coupon-history-icon" aria-hidden="true">{item.kind === 'redeemed' ? '核' : item.source === 'direct' ? '发' : '领'}</span>
         <span className="manager-coupon-history-copy">
           <strong>{item.kind === 'redeemed' ? `${item.customer_name}核销半价券` : item.source === 'direct' ? `店长给${item.customer_name}发券` : `${item.customer_name}领取半价券`}</strong>
-          <small>{item.kind === 'redeemed' ? `店长 ${item.actor_name || '—'} · 本店核销` : item.source === 'direct' ? '店长直接发券' : '微信链接领取'} · {item.phone_masked}</small>
+          <small>{item.kind === 'redeemed' ? `店长 ${item.actor_name || '—'} · 本店核销` : item.source === 'direct' ? '店长直接发券' : '微信链接领取'}{item.phone_masked && item.phone_masked !== '—' ? ` · ${item.phone_masked}` : ''}</small>
         </span>
         <span className="manager-coupon-history-side">
           <Tag color={item.status === 'used' ? 'green' : item.status === 'expired' ? 'default' : 'gold'}>{statusLabel(item.status)}</Tag>
@@ -107,7 +107,7 @@ export default function ManagerCouponHistoryView() {
         <div className={`manager-coupon-history-status ${selected.status}`}><i />{statusLabel(selected.status)}</div>
         <dl>
           <div><dt>时间</dt><dd>{timeText(selected.at)}</dd></div>
-          <div><dt>顾客</dt><dd>{selected.customer_name} · {selected.phone_masked}</dd></div>
+          <div><dt>顾客</dt><dd>{selected.customer_name}{selected.phone_masked && selected.phone_masked !== '—' ? ` · ${selected.phone_masked}` : ''}</dd></div>
           {selected.kind === 'redeemed' ? <div><dt>核销人</dt><dd>店长 {selected.actor_name || '—'}</dd></div> : null}
         </dl>
         <Button block onClick={() => setSelected(null)}>关闭</Button>

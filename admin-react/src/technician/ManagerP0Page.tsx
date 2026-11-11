@@ -103,9 +103,9 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       <div>
         {subview ? <button type="button" className="manager-p0-back" onClick={() => setSubview(null)}><ArrowLeftOutlined /> 返回</button> : null}
         <h1>{title}</h1>
-        <p>{subview ? '店长工作台' : tab === 'today' ? '今天最该做的事' : tab === 'floor' ? '沙发位只读 · 状态由系统生成' : tab === 'team' ? '学习、考核与总部抽检' : '照片、录音、评价和券'}</p>
+        <p>{subview === 'coupon-history' ? '发券、领取与核销记录' : subview ? '店长工作台' : tab === 'today' ? '今天最该做的事' : tab === 'floor' ? '沙发位只读 · 状态由系统生成' : tab === 'team' ? '学习、考核与总部抽检' : '照片、录音、评价和券'}</p>
       </div>
-      <Button aria-label="刷新" icon={<ReloadOutlined />} loading={loading} onClick={() => { void load(true); if (tab === 'floor') setMapRefresh((value) => value + 1); }} />
+      {subview !== 'coupon-history' && <Button aria-label="刷新" icon={<ReloadOutlined />} loading={loading} onClick={() => { void load(true); if (tab === 'floor') setMapRefresh((value) => value + 1); }} />}
     </header>
 
     {tab === 'today' && !subview && <ManagerTodayView daily={daily} team={team} workbench={workbench}
