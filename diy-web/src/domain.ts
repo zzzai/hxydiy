@@ -878,6 +878,13 @@ export function formatMoney(cents: number): string {
 export function projectImage(project: Project): string {
   const generatedAsset = generatedProjectAsset(project.code);
   if (generatedAsset) return assetPath(`projects/${generatedAsset}.webp`);
+  const dedicated: Record<string, string> = {
+    'hxy-oil-back-30': 'projects/hxy-oil-back-30-detail.webp',
+    'hxy-local-care-60': 'projects/hxy-jubu-30.webp',
+    'hxy-waist-kit-10': 'projects/hxy-spa-60.webp',
+    'hxy-neck-kit-10': 'projects/hxy-head-30.webp',
+  };
+  if (dedicated[project.code]) return assetPath(dedicated[project.code]);
   if (project.image_url) {
     if (/^https?:\/\//.test(project.image_url)) return project.image_url;
     if (project.image_url.startsWith('/diy/assets/')) return assetPath(project.image_url.slice('/diy/assets/'.length));
