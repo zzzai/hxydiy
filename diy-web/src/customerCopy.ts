@@ -174,9 +174,9 @@ export function customerLoginCopy(kind: 'profile' | 'record'): {
 } {
   return kind === 'profile'
     ? {
-      title: '登录后，服务记录随时可查',
-      detail: '查看本次清单、服务进度和评价，优惠券也会跟着账号走。',
-      action: '登录查看记录',
+      title: '登录荷小悦',
+      detail: '查看服务记录、检测报告和券包。首次登录自动注册。',
+      action: '登录',
     }
     : {
       title: '登录后，本次服务记录不丢',
