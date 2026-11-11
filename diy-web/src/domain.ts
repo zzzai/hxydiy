@@ -879,7 +879,7 @@ export function projectImage(project: Project): string {
   const generatedAsset = generatedProjectAsset(project.code);
   if (generatedAsset) return assetPath(`projects/${generatedAsset}.webp`);
   const dedicated: Record<string, string> = {
-    'hxy-oil-back-30': 'projects/hxy-oil-back-30-detail.webp',
+    'hxy-oil-back-30': 'projects/hxy-oil-back-30-main.webp',
     'hxy-local-care-60': 'projects/hxy-jubu-30.webp',
     'hxy-waist-kit-10': 'projects/hxy-spa-60.webp',
     'hxy-neck-kit-10': 'projects/hxy-head-30.webp',
