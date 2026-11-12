@@ -159,7 +159,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     {subview === 'coupon-history' && <ManagerCouponHistoryView />}
 
     {couponShare && <Modal open title="半价券链接" footer={null} onCancel={() => setCouponShare(null)}>
-      <div className="manager-p0-coupon-share"><p>发给顾客：不登录也能先看券和核销码，登录后自动存入券包。60 天有效。</p><p className="manager-p0-muted">本店已发 {couponShare.issued}/{couponShare.limit} 张，剩余 {couponShare.remaining} 张。</p>{couponShare.qr && <img src={couponShare.qr} alt="半价券领取二维码" />}<Input readOnly value={couponShare.link} /><div><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button type="primary" loading={couponBusy} onClick={() => void generateCoupon()}><GiftOutlined /> 重新生成链接</Button></div></div>
+      <div className="manager-p0-coupon-share"><div className="manager-coupon-poster"><span className="manager-coupon-poster-brand">荷小悦 · 草本轻养</span><strong>忙完一天，来泡个脚，<br />给自己松一松。</strong><p>全单 5 折 · 领取后 60 天有效</p>{couponShare.qr && <div className="manager-coupon-poster-qr"><img src={couponShare.qr} alt="半价券领取二维码" /><small>扫码领取</small></div>}<em>到店出示核销码 · 登录后自动存入券包</em></div><p className="manager-p0-muted">本店已发 {couponShare.issued}/{couponShare.limit} 张，剩余 {couponShare.remaining} 张。</p><Input readOnly value={couponShare.link} /><div><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button type="primary" loading={couponBusy} onClick={() => void generateCoupon()}><GiftOutlined /> 重新生成链接</Button></div></div>
     </Modal>}
 
     <nav className="manager-p0-nav" aria-label="店长导航">
