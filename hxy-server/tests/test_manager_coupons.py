@@ -63,7 +63,7 @@ def test_history_records_issue_and_redeem_for_own_store(coupons):
     assert issued.status_code == 200, issued.text
     coupon_id = issued.json()["coupon_id"]
     token = client.post(f"/api/v1/coupons/{coupon_id}/redeem-token", headers=headers["customer"]).json()["token"]
-    redeemed = client.post(PREFIX + "/redeem", headers=headers["manager"], json={"token": token, "request_id": str(uuid.uuid4())})
+    redeemed = client.post(PREFIX + "/redeem", headers=headers["manager"], json={"token": token, "request_id": str(uuid.uuid4()), "scope_confirmed": True})
     assert redeemed.status_code == 200, redeemed.text
 
     history = client.get(PREFIX + "/history?days=30", headers=headers["manager"])
@@ -102,12 +102,12 @@ def test_issue_scan_and_customer_invalidation(coupons):
     assert preview.json()["phone_masked"] == "138****8000"
 
     redeemed = client.post(PREFIX + "/redeem", headers=headers["manager"],
-                           json={"token": token, "request_id": str(uuid.uuid4())})
+                           json={"token": token, "request_id": str(uuid.uuid4()), "scope_confirmed": True})
     assert redeemed.status_code == 200, redeemed.text
     assert redeemed.json()["status"] == "used"
 
     repeated = client.post(PREFIX + "/redeem", headers=headers["manager"],
-                           json={"token": token, "request_id": str(uuid.uuid4())})
+                           json={"token": token, "request_id": str(uuid.uuid4()), "scope_confirmed": True})
     assert repeated.status_code == 409
     assert repeated.json()["detail"]["code"] == "COUPON_ALREADY_USED"
 
@@ -197,6 +197,6 @@ def test_guest_claim_shows_qr_before_login_and_binds_to_account(coupons):
     assert [item["id"] for item in mine.json()["items"]] == [bound.json()["coupon_id"]]
     # A guest QR is redeemable by the store manager without a store relation.
     redeemed = client.post(PREFIX + "/redeem", headers=headers["manager"],
-                           json={"token": qr.json()["token"], "request_id": str(uuid.uuid4())})
+                           json={"token": qr.json()["token"], "request_id": str(uuid.uuid4()), "scope_confirmed": True})
     assert redeemed.status_code == 200, redeemed.text
     assert redeemed.json()["status"] == "used"

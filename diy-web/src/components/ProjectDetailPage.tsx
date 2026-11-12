@@ -20,6 +20,8 @@ import FootBathBundleProgress from './project-options/FootBathBundleProgress';
 import ProjectDetailVisualSections from './ProjectDetailVisualSections';
 import DetailIntroduction from './DetailIntroduction';
 import DetailPrice from './DetailPrice';
+import HalfPriceProjectPrice from './HalfPriceProjectPrice';
+import { halfPriceForProject } from '../halfPriceCoupon';
 import { projectDetailVisuals } from '../projectDetailVisuals';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
@@ -73,6 +75,7 @@ type Props = {
   localParts: string[];
   catalogSelection?: { catalogVersionId: number; optionChoiceIds: number[] };
   coupon: CouponTemplate | null;
+  hasHalfPriceCoupon?: boolean;
   positionLabel: string;
   isMember: boolean;
   readOnly?: boolean;
@@ -101,6 +104,7 @@ export default function ProjectDetailPage({
   localParts,
   catalogSelection,
   coupon,
+  hasHalfPriceCoupon = false,
   positionLabel,
   isMember,
   readOnly = false,
@@ -282,8 +286,9 @@ export default function ProjectDetailPage({
           <DetailIntroduction name={displayName} summary={customerProjectSummaryText(project)} highlights={canonicalProjectCode(project.code) === 'hxy-qiqing-30' ? [...projectHighlights.filter((tag) => tag !== '现煮草本' && tag !== '当日现煮'), '当日现煮'] : projectHighlights} duration={project.duration_min} facts={[...projectSummaryTags.filter((tag) => /\d/.test(tag)), ...projectPurchaseTags]} />
           {detailOnly && project.content_version === 'menu-20261101'
             ? <div className="mini-detail-price"><span className="detail-price-primary"><span className="detail-price-label">套盒价</span><strong>{project.prices.some((item) => item.price_type === 'store') ? formatMoney(project.prices.find((item) => item.price_type === 'store')!.amount_cents) : '到店咨询'}</strong></span><span className="detail-price-unit">10次/套</span></div>
-            : <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} memberOnly={memberOnly} unit={packageUnit} />}
-          {shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
+            : halfPriceForProject(project, hasHalfPriceCoupon) !== null ? <HalfPriceProjectPrice project={project} /> : <DetailPrice current={basePrices.currentCents} comparison={basePrices.comparisonCents} isMember={isMember} memberOnly={memberOnly} unit={packageUnit} />}
+          {hasHalfPriceCoupon && <p className="half-price-excluded">{halfPriceForProject(project, true) !== null ? "仅主项按门店价5折；随选小项、加项不参与，不叠加其他优惠。选单金额尚未核销，到店出示本人券码。" : "本项目不参与半价券，按当前门店价或会员价。"}</p>}
+          {!hasHalfPriceCoupon && shouldShowCouponPrompt(isMember, detailOnly) && <section className="mini-coupon-card mini-coupon-card-summary" role="button" tabIndex={0} onClick={onCouponInfo} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onCouponInfo(); } }}><TicketPercent size={20} /><div><strong>{coupon ? formatCouponReminder(coupon) : (couponPrompt?.title || '登录领取到店礼遇')}</strong><small>登录后领取，优惠以门店结算为准</small></div><ChevronRight size={17} /></section>}
         </section>
 
         {!detailOnly && <section className="mini-seat-reminder"><span>服务位置</span><strong>{positionLabel}</strong>{!unseated && <small>请确认位置无误</small>}</section>}
@@ -395,7 +400,7 @@ export default function ProjectDetailPage({
       </main>
 
       {(!detailOnly || (project && isFixedProject(project) && project.category === 'small')) && <footer className="mini-detail-footer">
-        <div className="mini-detail-total"><span>{memberOnly ? '会员价' : configuredPrices.currentLabel}{packageUnit && ` · ${packageUnit}`}{!memberOnly && (isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>)}</span><strong>{formatMoney(configuredPrices.currentCents)}</strong></div>
+        <div className="mini-detail-total"><span>{hasHalfPriceCoupon ? '选单参考价·未核销' : memberOnly ? '会员价' : configuredPrices.currentLabel}{packageUnit && ` · ${packageUnit}`}{!memberOnly && (isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>)}</span><strong>{formatMoney(configuredPrices.currentCents)}</strong></div>
         <div className="mini-detail-actions">
           <button className="primary" type="button" disabled={readOnly || catalogErrors.length > 0} onClick={() => onConfirm({ project, preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, ...(project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds, linkedProjectIds: [...new Set([...catalogChoices.filter((choice) => draftChoiceIds.includes(choice.id) && choice.linked_project_id !== null).map((choice) => choice.linked_project_id as number), ...draftRelaxProjectIds])] } : {}) })}>{unseated && !selected && !readOnly && catalogErrors.length === 0 ? '加入选单' : projectDetailActionLabel(selected, readOnly, catalogErrors.length > 0)}<ChevronRight size={17} /></button>
         </div>

@@ -24,6 +24,7 @@ from app.api.admin_v2 import (
     _store_user_ids,
 )
 from app.db.session import get_db
+from app.domain.half_price_coupon import coupon_display_name, coupon_scope, is_half_price_coupon
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.domain.coupon_redeem import create_claim_token, create_poster_token, decode_redeem_token
 from app.models import AuditLog, CouponPosterLink, CouponTemplate, Staff, Store, User, UserCoupon
@@ -42,7 +43,7 @@ def _half_price_template(db: Session, store_id: int, *, preserve_existing: bool 
         template = CouponTemplate(
             store_id=store_id,
             code=code,
-            name="半价券（全单5折）",
+            name="足疗·SPA主项5折券",
             coupon_type="percent",
             amount_cents=0,
             percent_off=50,
@@ -262,7 +263,8 @@ def create_half_price_link(
         "limit": HALF_PRICE_ISSUE_LIMIT,
         "issued": issued,
         "remaining": HALF_PRICE_ISSUE_LIMIT - issued,
-        "name": template.name,
+        "name": coupon_display_name(template),
+        **coupon_scope(template),
         "percent_off": template.percent_off,
     }
 
@@ -321,7 +323,7 @@ def issue_half_price_coupon(
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
 ):
-    """店长给本店顾客发一张无门槛全单5折券（每人最多1张未使用）。"""
+    """店长给本店顾客发一张足疗、SPA主项门店价5折券（每人最多1张未使用）。"""
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     store_id = _resolve_target_store_id(db, staff, None)
@@ -362,7 +364,8 @@ def issue_half_price_coupon(
         "coupon_id": coupon.id,
         "user_id": user.id,
         "template_id": template.id,
-        "name": template.name,
+        "name": coupon_display_name(template),
+        **coupon_scope(template),
         "percent_off": template.percent_off,
         "expire_at": coupon.expire_at.isoformat(),
         "status": coupon.status,
@@ -434,7 +437,8 @@ def issue_half_price_by_phone(
         "phone_masked": _masked_phone(phone),
         "created_customer": created_customer,
         "template_id": template.id,
-        "name": template.name,
+        "name": coupon_display_name(template),
+        **coupon_scope(template),
         "percent_off": template.percent_off,
         "expire_at": coupon.expire_at.isoformat(),
         "status": coupon.status,
@@ -447,6 +451,7 @@ class CouponTokenIn(BaseModel):
 
 class CouponRedeemIn(CouponTokenIn):
     holder_present: StrictBool = False
+    scope_confirmed: StrictBool = False
     request_id: str = Field(min_length=8, max_length=100)
 
 
@@ -498,13 +503,15 @@ def validate_coupon(
     coupon, template, customer, _ = _redeemable(db, staff, body.token)
     return {
         "valid": True,
+        "requires_scope_confirmation": is_half_price_coupon(template),
         "requires_holder_confirmation": db.scalar(select(CouponPosterLink.id).where(
             CouponPosterLink.coupon_id == coupon.id,
         )) is not None,
         "coupon_id": coupon.id,
         "customer_name": _customer_display_name(customer),
         "phone_masked": _masked_phone(customer.phone),
-        "name": template.name,
+        "name": coupon_display_name(template),
+        **coupon_scope(template),
         "coupon_type": template.coupon_type,
         "percent_off": template.percent_off,
         "amount_cents": template.amount_cents,
@@ -530,6 +537,11 @@ def redeem_coupon(
             "code": "COUPON_HOLDER_CONFIRMATION_REQUIRED",
             "message": "请先核对顾客本人现场出示的券码及账户信息",
         })
+    if is_half_price_coupon(template) and not body.scope_confirmed:
+        raise HTTPException(status_code=422, detail={
+            "code": "COUPON_SCOPE_CONFIRMATION_REQUIRED",
+            "message": "请确认仅对足疗、SPA主项按门店价5折，小项、痛症调理不参与且不叠加其他优惠",
+        })
     result = db.execute(
         update(UserCoupon)
         .where(UserCoupon.id == coupon.id, UserCoupon.status == "unused")
@@ -545,6 +557,8 @@ def redeem_coupon(
         "template_code": template.code,
         "request_id": body.request_id,
         "holder_present": body.holder_present,
+        "scope_confirmed": body.scope_confirmed,
+        **coupon_scope(template),
         "redeemed_at": datetime.now(UTC).isoformat(),
     })
     db.commit()
@@ -553,6 +567,7 @@ def redeem_coupon(
         "status": "used",
         "customer_name": _customer_display_name(customer),
         "phone_masked": _masked_phone(customer.phone),
-        "name": template.name,
+        "name": coupon_display_name(template),
+        **coupon_scope(template),
         "redeemed_at": datetime.now(UTC).isoformat(),
     }

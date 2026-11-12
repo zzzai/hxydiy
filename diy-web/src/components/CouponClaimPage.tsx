@@ -221,14 +221,14 @@ function LegacyCouponClaimPage() {
 
   return <main className="coupon-claim-page">
     <section className="coupon-claim-card">
-      <header><span>荷小悦</span><h1>半价券</h1><p>{terminal ? `全单 5 折 · ${used ? '已核销' : '已过期'}` : '全单 5 折 · 领取后 60 天有效'}</p></header>
+      <header><span>荷小悦</span><h1>半价券</h1><p>{terminal ? `足疗、SPA主项5折 · ${used ? '已核销' : '已过期'}` : '足疗、SPA主项5折 · 领取后 60 天有效'}</p></header>
       {!terminal ? <p className="coupon-claim-poster-copy">忙完一天，来泡个脚，给自己松一松。</p> : null}
       {!code ? <p className="coupon-claim-error">链接无效，请让店长重新发送。</p> : <>
         {busy && !coupon ? <p className="coupon-claim-hint">正在准备半价券…</p> : null}
         {error ? <><p className="coupon-claim-error">{error}</p><div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券包</a></div></> : null}
         {coupon ? <>
           {usable
-            ? <div className="coupon-claim-value"><strong>{coupon.percent_off / 10}折</strong><span>全单可用</span></div>
+            ? <div className="coupon-claim-value"><strong>{coupon.percent_off / 10}折</strong><span>小项、痛症调理不参与</span></div>
             : <section className={`coupon-claim-status ${coupon.status}`} role="status" aria-live="polite">
                 {used ? <CheckCircle2 size={42} aria-hidden="true" /> : <Clock3 size={42} aria-hidden="true" />}
                 <strong>{statusTitle}</strong>
@@ -247,7 +247,7 @@ function LegacyCouponClaimPage() {
             <a href={couponUrl}>我的券包</a>
           </div>
         </> : null}
-        {!auth && !coupon && !busy ? <div className="coupon-claim-preview"><div className="coupon-claim-value"><strong>5折</strong><span>全单可用</span></div><p className="coupon-claim-hint">先预览，不占用 100 张额度。领取后才生成券和核销码。</p><button type="button" className="coupon-claim-primary" disabled={busy} onClick={() => void claimGuest()}>领取并出示核销码</button></div> : null}
+        {!auth && !coupon && !busy ? <div className="coupon-claim-preview"><div className="coupon-claim-value"><strong>5折</strong><span>小项、痛症调理不参与</span></div><p className="coupon-claim-hint">先预览，不占用 100 张额度。领取后才生成券和核销码。</p><button type="button" className="coupon-claim-primary" disabled={busy} onClick={() => void claimGuest()}>领取并出示核销码</button></div> : null}
         {!auth && !terminal ? <>
           <div className="coupon-claim-divider"><span>或登录后自动领取</span></div>
           <label>手机号<input inputMode="numeric" maxLength={11} value={phone} placeholder="请输入手机号" onChange={(event) => setPhone(event.target.value.replace(/\D/g, ''))} /></label>

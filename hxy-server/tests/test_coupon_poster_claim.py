@@ -76,9 +76,9 @@ def test_single_poster_login_ownership_replay_and_redemption(coupons):
                                   json={"token": qr, "request_id": str(uuid.uuid4())})
     assert no_confirmation.status_code == 422
     wrong_store = client.post(PREFIX + "/redeem", headers=headers["other_manager"],
-                              json={"token": qr, "request_id": str(uuid.uuid4()), "holder_present": True})
+                              json={"token": qr, "request_id": str(uuid.uuid4()), "holder_present": True, "scope_confirmed": True})
     assert wrong_store.status_code == 403
-    redemption = {"token": qr, "request_id": str(uuid.uuid4()), "holder_present": True}
+    redemption = {"token": qr, "request_id": str(uuid.uuid4()), "holder_present": True, "scope_confirmed": True}
     assert client.post(PREFIX + "/redeem", headers=headers["manager"], json=redemption).status_code == 200
     assert client.post(PREFIX + "/redeem", headers=headers["manager"], json=redemption).status_code == 409
     assert client.post(PREFIX + "/validate", headers=headers["manager"], json={"token": qr}).status_code == 409
@@ -214,7 +214,7 @@ def test_postgres_two_claimants_and_duplicate_creation():
                 blocker.execute(select(UserCoupon).where(UserCoupon.id == coupon_id).with_for_update())
                 with ThreadPoolExecutor(2) as pool:
                     futures = [pool.submit(client.post, PREFIX + "/redeem", headers=headers["manager"], json={
-                        "token": qr, "request_id": str(uuid.uuid4()), "holder_present": True,
+                        "token": qr, "request_id": str(uuid.uuid4()), "holder_present": True, "scope_confirmed": True,
                     }) for _ in range(2)]
                     deadline = time.monotonic() + 10
                     blocked = 0
@@ -250,7 +250,7 @@ def test_new_phone_customer_can_redeem_only_their_store_poster(coupons):
     assert preview.status_code == 200, preview.text
     assert preview.json()["requires_holder_confirmation"] is True
     assert client.post(PREFIX + "/validate", headers=headers["other_manager"], json={"token": qr}).status_code == 403
-    assert client.post(PREFIX + "/redeem", headers=headers["manager"], json={"token": qr, "request_id": str(uuid.uuid4()), "holder_present": True}).status_code == 200
+    assert client.post(PREFIX + "/redeem", headers=headers["manager"], json={"token": qr, "request_id": str(uuid.uuid4()), "holder_present": True, "scope_confirmed": True}).status_code == 200
     assert client.post(PREFIX + "/validate", headers=headers["manager"], json={"token": qr}).status_code == 409
 
 

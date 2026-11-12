@@ -2071,3 +2071,17 @@ button.miniapp-store{border:0;background:transparent;font:inherit;text-align:lef
 .store-picker>button{display:grid;gap:4px;width:100%;text-align:left;border:1px solid #e4ece6;border-radius:12px;background:#fff;padding:12px;margin-top:8px;font:inherit}.store-picker>button.active{border-color:#1f8f75;background:#eff7f2}.store-picker>button strong{font-size:14px;color:#163e34}.store-picker>button small{color:#7a8a81;font-size:11px;line-height:1.4}
 .profile-coupon-qr-actions{display:flex;gap:12px;align-items:center;justify-content:center}
 .profile-coupon-qr.expired{background:#fff8f3;border:1px solid #f0d9d2}
+
+.half-price-project { color: #145545; margin-top: 8px; }
+.half-price-project > div { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.half-price-project strong { font-size: 24px; font-weight: 650; }
+.half-price-project small { font-size: 12px; }
+.half-price-project del, .half-price-project > span { color: #66736d; font-size: 12px; }
+.half-price-project > span { display: block; margin-top: 3px; }
+.half-price-menu-note { margin: 12px 16px; padding: 12px 14px; background: #eff6f1; color: #145545; border-radius: 12px; }
+.half-price-menu-note strong, .half-price-menu-note span { display: block; }
+.half-price-menu-note span { margin-top: 4px; font-size: 12px; line-height: 1.6; color: #52655c; }
+.half-price-excluded { display: block; color: #66736d; font-size: 12px; line-height: 1.6; margin-top: 5px; }
+
+.miniapp-catalog-layout .half-price-project { padding-right: 40px; }
+.miniapp-catalog-layout .half-price-project del { flex-basis: 100%; }

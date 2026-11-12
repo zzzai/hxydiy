@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import CouponTemplate, UserCoupon
+from app.domain.half_price_coupon import is_half_price_coupon
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,9 @@ def select_automatic_coupon(
 
     candidates: list[tuple[tuple, AutomaticCouponResult]] = []
     for user_coupon, template in db.execute(statement):
+        # Scan vouchers require explicit in-store scope/holder confirmation.
+        if is_half_price_coupon(template):
+            continue
         expires_at = _utc(user_coupon.expire_at) if user_coupon.expire_at else None
         if expires_at is not None and expires_at <= settled_at:
             continue

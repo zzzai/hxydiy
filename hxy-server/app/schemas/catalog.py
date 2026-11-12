@@ -59,6 +59,7 @@ class ProjectOut(BaseModel):
     price_label: str = ""
     prices: list[PriceOut] = Field(default_factory=list)
     content_version: str = ""
+    half_price_coupon_price_cents: int | None = None
     catalog_version: int | None = None
     catalog_version_id: int | None = None
     option_groups: list = Field(default_factory=list)

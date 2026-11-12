@@ -164,6 +164,9 @@ export type Order = {
 };
 
 export type MyCoupon = {
+  store_id?: number | null;
+  usage_scope?: string | null;
+  scope_note?: string;
   id: number;
   name: string;
   coupon_type: string;
@@ -289,6 +292,7 @@ export async function getMyOrders(token: string): Promise<Order[]> {
 
 export async function getMyCoupons(token: string): Promise<MyCoupon[]> {
   const result = await request<{ items: MyCoupon[] }>('/coupons', {
+    cache: 'no-store',
     headers: { Authorization: `Bearer ${token}` },
   });
   return result.items;

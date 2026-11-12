@@ -1231,7 +1231,7 @@ export interface paths {
         put?: never;
         /**
          * Issue Half Price Coupon
-         * @description 店长给本店顾客发一张无门槛全单5折券（每人最多1张未使用）。
+         * @description 店长给本店顾客发一张足疗、SPA主项门店价5折券（每人最多1张未使用）。
          */
         post: operations["issue_half_price_coupon_api_v1_admin_v2_manager_coupons_half_price_issue_post"];
         delete?: never;
@@ -5365,6 +5365,11 @@ export interface components {
             holder_present: boolean;
             /** Request Id */
             request_id: string;
+            /**
+             * Scope Confirmed
+             * @default false
+             */
+            scope_confirmed: boolean;
             /** Token */
             token: string;
         };
@@ -6659,6 +6664,8 @@ export interface components {
             diy_options?: unknown[];
             /** Duration Min */
             duration_min?: number | null;
+            /** Half Price Coupon Price Cents */
+            half_price_coupon_price_cents?: number | null;
             /** Id */
             id: number;
             /**

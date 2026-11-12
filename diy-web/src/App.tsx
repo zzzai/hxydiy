@@ -69,6 +69,9 @@ import { readPrivateSelection, writePrivateSelection, clearPrivateSelection, pri
 import { shareProjectLink } from './projectShare';
 import { configureWeChatProjectShare, isWeChatBrowser } from './wechatShare';
 import ProjectDetailPage from './components/ProjectDetailPage';
+import HalfPriceProjectPrice from './components/HalfPriceProjectPrice';
+import { halfPriceForProject } from './halfPriceCoupon';
+import { useHalfPriceCoupon } from './useHalfPriceCoupon';
 import LocalDetailPage from './components/LocalDetailPage';
 import {
   createOverlayGuardState,
@@ -269,10 +272,12 @@ function InitialPositionPicker({ positions, onSelect, onBlocked, onViewReports, 
   );
 }
 
-function ProjectPrice({ project, auth }: {
+function ProjectPrice({ project, auth, hasHalfPriceCoupon = false }: {
+  hasHalfPriceCoupon?: boolean;
   project: Project;
   auth: { is_member: boolean } | null;
 }) {
+  if (halfPriceForProject(project, hasHalfPriceCoupon) !== null) return <HalfPriceProjectPrice project={project} />;
   if (project.category === 'kit' && project.content_version === 'menu-20261101') {
     const amount = project.prices.find((item) => item.price_type === 'store')?.amount_cents;
     return <div className="project-meta"><div><strong><small>套盒价</small>{amount == null ? '到店咨询' : formatMoney(amount)}<small> / 10次</small></strong></div></div>;
@@ -328,6 +333,7 @@ export default function App() {
   const [couponTemplates, setCouponTemplates] = useState<CouponTemplate[]>([]);
   const [pageContent, setPageContent] = useState<PageContent | null>(null);
   const [customerAuth, setCustomerAuthState] = useState<CustomerAuth | null>(() => readCustomerAuth());
+  const hasHalfPriceCoupon = useHalfPriceCoupon(customerAuth?.token, query.storeId);
   const [couponLoginOpen, setCouponLoginOpen] = useState(false);
   const [recordLoginOpen, setRecordLoginOpen] = useState(false);
   const [positions, setPositions] = useState<ServicePosition[]>([]);
@@ -2203,6 +2209,7 @@ export default function App() {
       {preservedPrivateSelection?.items?.length && preservedPrivateSelection.sessionId !== session?.id ? <div className="submitted-browse-banner"><span>原选单已保留</span><a href={serviceAccountEntry(window.location.origin, query.storeId, 'projects')}>返回未入座选单</a></div> : null}
       {boot === 'ready' && collaborationMode === 'browse_only' && <div className="shared-cart-banner read-only" role="status">本服务位清单已提交；可继续浏览项目或提交评价与建议</div>}
 
+      {hasHalfPriceCoupon && <aside className="half-price-menu-note"><strong>足疗、SPA主项可享门店价5折</strong><span>小项、加项、痛症调理及套盒不参与，不叠加会员价或其他优惠。到店出示本人券码，由店长核销。</span></aside>}
       <section className="miniapp-promo-strip" aria-label="门店推荐">
         {!publicBrowsing && <button type="button" className="miniapp-promo visit-feedback-entry" onClick={openVisitFeedback}>
           <span className="visit-feedback-icon"><MessageSquareText size={22} /></span>
@@ -2221,7 +2228,7 @@ export default function App() {
         </>}
         {featured.map((project, index) => (
           <button key={project.id} type="button" className={`miniapp-promo ${index === 0 ? 'primary' : ''}`} onClick={() => openProjectDetail(project)}>
-            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{canonicalProjectCode(project.code) === 'hxy-spa-90' ? displayProjectName(project) : pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{formatMoney(priceGuidance(project, customerAuth?.user || null).primaryCents)}{canonicalProjectCode(project.code) !== 'hxy-spa-90' && <i>起</i>}</em></span>
+            <span className="promo-copy"><small>{pageContent?.promo_banners[index]?.eyebrow || (index === 0 ? '新客体验' : index === 1 ? '门店推荐' : index === 2 ? '慢享时光' : '调理套盒')}</small><strong>{canonicalProjectCode(project.code) === 'hxy-spa-90' ? displayProjectName(project) : pageContent?.promo_banners[index]?.title || displayProjectName(project)}</strong><em>{halfPriceForProject(project, hasHalfPriceCoupon) !== null && <i>持券价</i>}{formatMoney(halfPriceForProject(project, hasHalfPriceCoupon) ?? priceGuidance(project, customerAuth?.user || null).primaryCents)}{canonicalProjectCode(project.code) !== 'hxy-spa-90' && <i>起</i>}</em></span>
             <img src={projectImage(project)} alt="" loading="lazy" decoding="async" />
           </button>
         ))}
@@ -2275,7 +2282,8 @@ export default function App() {
                             {summaryTags.length > 0 && <div className="project-badges project-badges-summary" aria-label="项目简介">{summaryTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                             {purchaseTags.length > 0 && <div className="project-badges project-badges-purchase" aria-label="选购规则">{purchaseTags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
                           </div>}
-                          <ProjectPrice project={project} auth={customerAuth?.user || null} />
+                          <ProjectPrice project={project} auth={customerAuth?.user || null} hasHalfPriceCoupon={hasHalfPriceCoupon} />
+                          {hasHalfPriceCoupon && halfPriceForProject(project, true) === null && <small className="half-price-excluded">不参与半价券</small>}
                           {projectPreferences[project.id]?.length > 0 && <div className="preference-line">{projectPreferences[project.id].join(' · ')}</div>}
                         </div>
                         <button className={`detail-arrow luckin-add ${selected ? 'selected' : ''}`} type="button" aria-label={selected ? `调整${displayName}` : `选择${displayName}`} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); openProjectDetail(project); }}>
@@ -2292,6 +2300,7 @@ export default function App() {
                     <p>肩颈、腰臀、腿部、腹部、足部，按需灵活选择。</p>
                     {customerProjectPurchaseTags(localProject).length > 0 && <div className="project-badges project-badges-purchase" aria-label="选购规则">{customerProjectPurchaseTags(localProject).map((tag) => <span key={tag}>{tag}</span>)}</div>}
                     <ProjectPrice project={localProject} auth={customerAuth?.user || null} />
+                    {hasHalfPriceCoupon && <small className="half-price-excluded">不参与半价券</small>}
                     {localParts.length > 0 && <div className="preference-line">已选：{localParts.join(' · ')}</div>}
                   </div>
                   <button className={`detail-arrow luckin-add ${localParts.length ? 'selected' : ''}`} type="button" aria-label={`选择${displayProjectName(localProject)}`} aria-pressed={localParts.length > 0} onClick={(event) => { event.stopPropagation(); openLocalDetail(); }}><Plus size={18} /></button>
@@ -2309,8 +2318,8 @@ export default function App() {
         <button className="selection-summary" type="button" aria-haspopup="dialog" aria-expanded={selectionSummaryOpen} onClick={openSelectionSummary}>
           <span className="selection-bag"><ShoppingBag size={27} /><span className="selection-count">{selectedCount}</span></span>
           <span className="selection-price-copy">
-            <span className="selection-summary-total"><small>{saving ? '正在更新' : '预计合计'}</small><strong>{formatMoney(payableTotal)}</strong></span>
-            <span className="selection-summary-meta">{isMember ? <>{priceDisplay.originalHint && <del>{priceDisplay.originalHint}</del>}{priceDisplay.realizedSavingCents > 0 && <b>已优惠 {formatMoney(priceDisplay.realizedSavingCents)}</b>}{!priceDisplay.realizedSavingCents && <span>已按会员价计算</span>}</> : priceDisplay.memberHint ? <><span className="selection-summary-member-price">{priceDisplay.memberHint}</span>{priceDisplay.savingCents > 0 && <b>可省 {formatMoney(priceDisplay.savingCents)}</b>}</> : <span>{priceDisplay.primaryLabel} · 查看清单</span>}</span>
+            <span className="selection-summary-total"><small>{saving ? '正在更新' : hasHalfPriceCoupon ? '选单参考价' : '预计合计'}</small><strong>{formatMoney(payableTotal)}</strong></span>
+            <span className="selection-summary-meta">{hasHalfPriceCoupon ? <span>持券优惠到店核销确认</span> : isMember ? <>{priceDisplay.originalHint && <del>{priceDisplay.originalHint}</del>}{priceDisplay.realizedSavingCents > 0 && <b>已优惠 {formatMoney(priceDisplay.realizedSavingCents)}</b>}{!priceDisplay.realizedSavingCents && <span>已按会员价计算</span>}</> : priceDisplay.memberHint ? <><span className="selection-summary-member-price">{priceDisplay.memberHint}</span>{priceDisplay.savingCents > 0 && <b>可省 {formatMoney(priceDisplay.savingCents)}</b>}</> : <span>{priceDisplay.primaryLabel} · 查看清单</span>}</span>
           </span>
         </button>
         <button className="submit-button" type="button" disabled={readOnly || submitting || !online} onClick={submit}>
@@ -2355,6 +2364,7 @@ export default function App() {
         localParts={localParts}
         catalogSelection={detailProject ? projectCatalogSelections?.[detailProject.id] : undefined}
         coupon={featuredCoupon}
+        hasHalfPriceCoupon={hasHalfPriceCoupon}
         positionLabel={position?.customer_label || (publicBrowsing ? '由门店安排' : '服务位待核对')}
         isMember={isMember}
         readOnly={readOnly}

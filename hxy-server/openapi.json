@@ -1262,6 +1262,11 @@
             "title": "Request Id",
             "type": "string"
           },
+          "scope_confirmed": {
+            "default": false,
+            "title": "Scope Confirmed",
+            "type": "boolean"
+          },
           "token": {
             "maxLength": 4096,
             "minLength": 20,
@@ -4765,6 +4770,17 @@
               }
             ],
             "title": "Duration Min"
+          },
+          "half_price_coupon_price_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Half Price Coupon Price Cents"
           },
           "id": {
             "title": "Id",
@@ -13636,7 +13652,7 @@
     },
     "/api/v1/admin/v2/manager/coupons/half-price/issue": {
       "post": {
-        "description": "店长给本店顾客发一张无门槛全单5折券（每人最多1张未使用）。",
+        "description": "店长给本店顾客发一张足疗、SPA主项门店价5折券（每人最多1张未使用）。",
         "operationId": "issue_half_price_coupon_api_v1_admin_v2_manager_coupons_half_price_issue_post",
         "parameters": [
           {

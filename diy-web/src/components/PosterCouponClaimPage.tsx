@@ -96,8 +96,9 @@ export default function PosterCouponClaimPage({ code, storeId }: { code: string;
   const loginVisible = !loggedIn && !coupon && !unavailable && (!claimed || showLogin);
   return <main className="coupon-claim-page poster-claim-page">
     <section className="coupon-claim-card">
-      <header><span>荷小悦 · 家门口的养生小馆</span><h1>留一份放松给自己</h1><p>半价券 · 小项除外 · 领取后 60 天有效</p></header>
-      {!coupon && !claimed && !unavailable && <div className="coupon-claim-value"><strong>5折</strong><span>全场可用 · 小项除外</span></div>}
+      <header><span>荷小悦 · 家门口的养生小馆</span><h1>留一份放松给自己</h1><p>足疗、SPA主项5折 · 领取后60天有效</p></header>
+      {!coupon && !claimed && !unavailable && <div className="coupon-claim-value"><strong>5折</strong><span>按门店价5折，不叠加会员价</span></div>}
+      <p className="coupon-claim-hint">仅限足疗、SPA主项；小项、加项、痛症调理及套盒不参与，不叠加其他优惠。登录领取后可在菜单查看持券价。</p>
       {checking && !status && <p role="status">正在查看券状态…</p>}
       {claimed && <section className="coupon-claim-status" role="status"><strong>这张券已被领取</strong><p>这张海报仅对应一张券，领取后绑定领取人的账户，不能转给他人使用。</p></section>}
       {unavailable && <section className="coupon-claim-status" role="status"><strong>领券活动已结束</strong><p>可以查看门店正在提供的项目。</p></section>}
