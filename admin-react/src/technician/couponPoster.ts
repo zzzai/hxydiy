@@ -57,7 +57,7 @@ function text(context: CanvasRenderingContext2D, value: string, x: number, y: nu
   context.fillText(value, x, y);
 }
 
-export async function createCouponPoster(link: string, storeName: string): Promise<Blob> {
+export async function createCouponPoster(link: string, storeName: string): Promise<string> {
   const [mascotUrl, qrUrl] = await Promise.all([
     imageToPngDataUrl(MASCOT_URL),
     QRCode.toDataURL(link, {
@@ -177,7 +177,5 @@ export async function createCouponPoster(link: string, storeName: string): Promi
   context.textBaseline = 'middle';
   context.fillText('荷', 938, 1240);
 
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('海报生成失败')), 'image/png');
-  });
+  return canvas.toDataURL('image/png');
 }

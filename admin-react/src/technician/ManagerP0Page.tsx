@@ -122,22 +122,16 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       return undefined;
     }
     let active = true;
-    let objectUrl = '';
     setPosterUrl('');
     setPosterError('');
     setPosterBusy(true);
     void createCouponPoster(couponShare.link, getStaff()?.store_name || '本店')
-      .then((blob) => {
-        if (!active) return;
-        objectUrl = URL.createObjectURL(blob);
-        setPosterUrl(objectUrl);
+      .then((dataUrl) => {
+        if (active) setPosterUrl(dataUrl);
       })
       .catch(() => { if (active) setPosterError('海报生成失败，请重新生成链接'); })
       .finally(() => { if (active) setPosterBusy(false); });
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    return () => { active = false; };
   }, [couponShare]);
 
   const savePoster = () => {
