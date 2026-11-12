@@ -1,5 +1,16 @@
 # hxy-diy 工作状态
 
+## 2026-11-13 腰臀肩颈图片与领券菜单简化已上线
+
+- [PR #479](https://github.com/zzzai/hxydiy/pull/479) 已合并并发布；运行 SHA `819c265d5f73ea44f11ca71c95faf22da5cc8520`。精确 [CI 43271270953](https://github.com/zzzai/hxydiy/actions/runs/43271270953) 和唯一 [Deploy 43271983870](https://github.com/zzzai/hxydiy/actions/runs/43271983870) 成功，current=`github-819c265d5f73-43271983870`。
+- 腰臀舒理疗、肩颈通理疗使用独立 v2 主图及长详情图，统一既有水彩品牌风格，修正人物姿态和床面支撑。旧图片文件保留；详情依据用户产品手册的60分钟步骤和套盒内容整理。
+- 已领券菜单移除顶部重复半价说明；五个足疗/SPA主项仍显示门店价5折，九个排除项目及到店核销说明保留。不改变领取、本人绑定、一次核销、会员或价格规则。
+- Trusted PR Gate 改为原生 Actions 总作业，保留主干可信工作流与精确head证据核验，取消手工登记检查及写check权限；分支保护未变。54项仓库合同及11项门禁行为测试通过。[修复依据](release/trusted-pr-gate-20261113.md)。
+- 顾客端构建、11项资产/详情/价格测试、53项域测试与完整CI通过；实际React + HTTP + 隔离PostgreSQL九项流程验收通过，375/390px无价格控件重叠。图片逐张目视检查；真实手机体验仍不冒充自动化验收。
+- 真实备份恢复演练通过，无迁移和回填。71张表（含迁移版本）实际发布前备份恢复基准与发布后行数、内容摘要一致，70张旧业务表保持；验证业务写入0。
+- 811项MANIFEST、187个运行Python文件与22项公网资源一致，四张新图公网哈希匹配；后端和迁移与上版相同，健康检查通过。本次事实补录不再次部署。
+- [验收与回退](release/care-project-images-20261113.md)，[脱敏证据](release/evidence/care-project-images-20261113.json)，[Unslop适用性](design/unslop-ui-assessment-20261113.md)。
+
 ## 2026-11-12 半价券主项范围与持券菜单价已上线
 
 - [PR #477](https://github.com/zzzai/hxydiy/pull/477) 已合并并上线，运行 SHA `6909c2d69f9517a705ce9b651741ecbfc8e909f8`。精确 [CI 43246307925](https://github.com/zzzai/hxydiy/actions/runs/43246307925) 与唯一 [Deploy 43247328012](https://github.com/zzzai/hxydiy/actions/runs/43247328012) 通过；current=`github-6909c2d69f95-43247328012`。

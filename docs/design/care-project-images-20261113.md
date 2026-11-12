@@ -29,7 +29,7 @@ Generated using built-in image_gen with current brand assets and source kit phot
 - Preview starts synthetic selection sessions/events only. No production API/business data writes; no price, coupon, schema or membership changes.
 - Evidence: `output/care-project-images/{assets.json,browser-report.json,build-v2.log,tests.log}` and mobile screenshots. Output files are not committed.
 - Design preview: `/review/` on the isolated server port 18448; actual menu: `/?store=1&view=menu`.
-- Delivery status: isolated implementation and preview only; not deployed. Rollback of a future release restores the two prior mappings and removes the new detail branches; no data rollback is needed.
+- Delivery status: published through PR #479 on 2026-11-13. Exact production SHA, verification and rollback are recorded in `../release/care-project-images-20261113.md`. Earlier preview evidence is retained; no data rollback is needed.
 
 ## Anatomy correction after visual review
 
