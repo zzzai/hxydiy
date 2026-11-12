@@ -1,5 +1,9 @@
 # 技师端工作流
 
+## 2026-11-12 单张海报领券已发布
+
+店长手机工作台“券→发券/核销”已接入单张海报流程；技师权限、订单和顾客资料范围不扩大。 生产旧数据保护通过；真实手机短信、微信/企微摄像头与现场本人核对待人工验收。详情见 `../CURRENT-STATE.md`、`../release/coupon-poster-single-claim-20261112.md`。
+
 2026-11-02 新菜单与员工学习发布候选（技师与店长）：工作区保持未合并状态，门店1菜单14项、套盒1280元/10次、12课36题及受控导入已实现；生产状态必须以发布回执为准。契约 `docs/contracts/menu-20261101.md`、`docs/contracts/staff-learning-v1.md`；发布与回退 `docs/release/menu-learning-20261102.md`。未纳入巡检、画像、AI视频等预览。
 
 2026-10-30 `STAFF-LEARNING-FORMAL`：仅学习与辅导代码接入，独立候选工作区隔离验收，未提交/合并/发布。真实 HTTP + PostgreSQL 验证；六门文化试讲课保留审核门禁。PRD `docs/product/PRD-learning-formal-20261030.md`，发布/回退 `docs/release/staff-learning-20261030.md`。不含巡检、画像或订单功能改动，生产库未操作。

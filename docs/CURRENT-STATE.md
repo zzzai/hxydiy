@@ -1,5 +1,15 @@
 # hxy-diy 当前状态
 
+## 2026-11-12 单张海报领券与本人核销已上线（真机待人工验收）
+
+- [PR #475](https://github.com/zzzai/hxydiy/pull/475) 已合并；候选 `560f2d89f520eccf0dcdf663426f8708db19a01b`，合并及运行 SHA `a8b8c931b9dd1e5686ce6550aaf3093e96462848`。精确 [CI 43215598983](https://github.com/zzzai/hxydiy/actions/runs/43215598983) 与唯一 [Deploy 43216379246](https://github.com/zzzai/hxydiy/actions/runs/43216379246) 通过。实际 current=`github-a8b8c931b9dd-43216379246`。
+- 店长“券→发券”生成新 IP 海报与独立领取二维码。首位顾客必须短信登录，券绑定本人；本人重复打开返回同一张券，其他人扫码显示已领取。店长扫码仅预览，核对本人并明确确认后一次核销；并发核销只一次成功。旧 `c.` 公开海报与旧券保持原规则，应新生成海报才能使用新规则。
+- 隔离真实 HTTP、PostgreSQL 和实际 React 全流程通过；并发抢领、并发核销、重复提交、新顾客无历史到店记录、跨店权限及隐私保护已验证。海报为用户确认 v6，导出972×1296、背景与两栏顶线对齐、二维码保持同底色静区；972/720/540宽度可解码。
+- 真实备份和独立库恢复、迁移演练通过。生产 `69` 张原业务表逐表记录摘要和行数完全一致；仅迁移版本记录更新，新增空表 `coupon_poster_links`，没有回填或改写旧会员、余额、订单、优惠券。验证过程业务写入0。
+- 发布后 `779` 项 MANIFEST、`186` 个运行容器 Python 文件、`8` 项公网入口/资源核验一致；health正常，新接口拒绝未授权或无效请求。生产短信已配置且调试验证码关闭；未发真实短信、未领取或核销真实券。
+- 真机短信收取、微信/企微摄像头和现场本人核对仍由门店人工验收；二维码截图无法替代本人核对。本次事实文档补录不再次部署应用。
+- [验收与回退](release/coupon-poster-single-claim-20261112.md)；生产脱敏证据 `docs/release/evidence/coupon-poster-20261112.json`。完整备份和只读基准保存在仓库外受限操作目录。
+
 ## 2026-11-07 新店开业工具与开业检查已上线（店 2 待建档）
 
 - [PR #407](https://github.com/zzzai/hxydiy/pull/407) 合并 `e14dc2bd07b0155627fec59dd66a190afef55163`，[PR #408](https://github.com/zzzai/hxydiy/pull/408) 合并 `9ffb81c89a155132ad96e9ae3acd13853d610058`；最终 main 为 `9ffb81c8`。精确 [CI 42343983827](https://github.com/zzzai/hxydiy/actions/runs/42343983827) 与唯一 [Deploy 42344217202](https://github.com/zzzai/hxydiy/actions/runs/42344217202) 成功，实际 current=`github-9ffb81c89a15-42344217202`。
