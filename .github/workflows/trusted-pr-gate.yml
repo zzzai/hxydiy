@@ -220,7 +220,7 @@ jobs:
           fi
 
   publish:
-    name: Publish trusted result
+    name: Trusted PR Gate
     needs: [scope, static, admin, customer, backend]
     if: always()
     runs-on: ubuntu-latest

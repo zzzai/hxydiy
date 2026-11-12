@@ -43,3 +43,11 @@ function fixture(runs, current = [pr, pr]) {
 test('waiter returns only real trusted run evidence', async () => assert.equal(await waitForTrustedRun(fixture([run])), 100));
 test('missing workflow times out instead of passing', async () => await assert.rejects(waitForTrustedRun(fixture([])), /Timed out/));
 test('head changes during verification invalidate result', async () => await assert.rejects(waitForTrustedRun(fixture([run], [pr, { ...pr, head: { ...pr.head, sha: 'new' } }])), /head changed/));
+
+test('new native trusted aggregate is required and failure cannot be hidden by CI', () => {
+  const native = jobs.map(j => j.name === 'Publish trusted result' ? { ...j, name: 'Trusted PR Gate' } : j);
+  assert.equal(validateResult(run, native), true);
+  assert.throws(() => validateResult(run, native.map(j => j.name === 'Trusted PR Gate' ? { ...j, conclusion: 'failure' } : j)));
+  assert.throws(() => validateResult(run, native.slice(0, -1)));
+  assert.throws(() => validateResult(run, [...native, jobs.at(-1)]));
+});

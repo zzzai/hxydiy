@@ -60,7 +60,6 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("refs/pull/${{ github.event.pull_request.number }}/merge", content)
         self.assertNotIn("github.rest.checks.create", content)
         self.assertNotIn("github.rest.checks.update", content)
-        self.assertIn("name: Publish trusted result", content)
         self.assertIn("name: Trusted PR Gate", content)
         self.assertIn("core.setFailed", content)
         self.assertIn("needs: [scope, static, admin, customer, backend]", content)

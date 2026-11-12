@@ -1,7 +1,7 @@
 // Bind the native check to completed validation from the trusted base workflow.
 const WORKFLOW = '.github/workflows/trusted-pr-gate.yml';
 const JOBS = ['Validate PR scope', 'Static contracts', 'Admin tests and build',
-  'Customer tests and build', 'Backend tests', 'Publish trusted result'];
+  'Customer tests and build', 'Backend tests'];
 
 function assertScope(pr, expectedHead, repository) {
   if (!pr || pr.state !== 'open' || pr.draft || pr.base.ref !== 'main' ||
@@ -25,6 +25,12 @@ function validateResult(run, jobs) {
     if (matches.length !== 1 || matches[0].status !== 'completed' || matches[0].conclusion !== 'success') {
       throw new Error(`Trusted job did not pass: ${name}`);
     }
+  }
+  // Support the old trusted base during this PR's transition. Both names
+  // belong to the fixed trusted workflow, never to arbitrary check runs.
+  const summaries = jobs.filter(job => ['Publish trusted result', 'Trusted PR Gate'].includes(job.name));
+  if (summaries.length !== 1 || summaries[0].status !== 'completed' || summaries[0].conclusion !== 'success') {
+    throw new Error('Trusted aggregate job did not pass.');
   }
   return true;
 }

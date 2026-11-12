@@ -10,8 +10,8 @@ PR #479 的 head `433f9be8021e30a281b297dcc941c80aed7f2df3` 六项必需检查�
 
 - CI 增加正式命名为 `Trusted PR Gate` 的 Actions 作业，先要求静态检查、后台/顾客构建及后端测试全部成功。
 - 再用只读 Actions API 核验同仓库、同分支、精确 head、固定路径、pull_request_target 事件的最新可信工作流；该工作流仍由主干定义，原权限隔离和测试保留。
-- scope、四类测试和 Publish trusted result 六个真实作业必须全部 success。缺失、跳过、取消、超时或 head 变化均失败，不接受任意手工 check run。
-- 删除可信工作流手工生成 check run 和 checks:write 权限；总结果由原生 Actions 作业登记。切换 PR 使用主干旧版可信工作流，其真实作业仍被完整核验。
+- scope、四类测试和 Publish trusted result 六个真实作业（总作业支持切换前后名称）必须全部 success。缺失、跳过、取消、超时或 head 变化均失败，不接受任意手工 check run。
+- 删除可信工作流手工生成 check run 和 checks:write 权限；可信工作流自身也将总作业直接命名为 `Trusted PR Gate`，由 Actions 原生登记。此后主干定义的总作业仍是同名必需门禁，PR 侧修改 CI 或 helper 不能覆盖它的失败。切换 PR 使用主干旧版可信工作流，其真实作业仍被完整核验。
 - 不更改分支保护、必需检查名称、App 限制、生产部署入口、数据库或旧业务资料。不伪造成功、不直推主干。
 
 行为验证覆盖来源过滤、精确 SHA、最新运行/尝试、失败与缺失、超时及核验期间 head 变化。生产结果另以实际部署记录为准。
