@@ -1,0 +1,50 @@
+{
+  "status": "passed",
+  "sha": "a8b8c931b9dd1e5686ce6550aaf3093e96462848",
+  "run_id": "43216379246",
+  "manifest_entries": 779,
+  "container_python_files": 186,
+  "public_resources": [
+    "/",
+    "/admin/",
+    "/admin/assets/index-BduL84FU.js",
+    "/admin/assets/index-Blw_YwV9.css",
+    "/assets/index-CTbtsp06.css",
+    "/assets/index-DTJAcsep.js",
+    "/assets/ip-paopao-footbath-v3.png",
+    "/technician/"
+  ],
+  "health": {
+    "status": "ok",
+    "service": "hxy-customer-api",
+    "environment": "production"
+  },
+  "api_rejections": [
+    {
+      "path": "/api/v1/admin/v2/manager/coupons/half-price/poster-link",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/admin/v2/manager/coupons/validate",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/coupons/poster-status",
+      "status": 400
+    }
+  ],
+  "schema_revision": "20261112_coupon_poster_links",
+  "existing_tables_verified": 69,
+  "changed_existing_tables": [],
+  "new_tables": [
+    "coupon_poster_links"
+  ],
+  "new_table_rows": 0,
+  "backup_sha256": "6a9946b049a5cf86218a369d19e6f7a9c7ea9a95f589e55fb75a0d8537428cd7",
+  "production_business_writes_by_verification": 0,
+  "field_acceptance": "real phone SMS, WeChat/WeCom camera and onsite identity verification remain manual",
+  "release_id": "github-a8b8c931b9dd-43216379246",
+  "ci_run_id": 43215598983,
+  "pr": 475,
+  "backup_restore_rehearsal": "passed in guarded deployment workflow"
+}
