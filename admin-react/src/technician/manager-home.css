@@ -1,0 +1,34 @@
+.manager-home { display: grid; gap: 0; padding-bottom: 18px; }
+.manager-home-lead { padding: 10px 2px 4px; }
+.manager-home-lead > p { margin: 0; color: #8b9a90; font-size: 11px; letter-spacing: .04em; }
+.manager-home-lead > h1 { margin: 7px 0 0; color: #132a24; font-size: 27px; font-weight: 650; line-height: 1.25; letter-spacing: -.03em; }
+.manager-home-lead > span { display: block; margin-top: 8px; color: #647a71; font-size: 13px; line-height: 1.55; }
+.manager-home-section { margin-top: 22px; }
+.manager-home-label { display: flex; align-items: center; justify-content: space-between; margin: 0 1px 9px; color: #536158; font-size: 11px; letter-spacing: .06em; }
+.manager-home-label small { color: #8b9a90; font-size: 10px; letter-spacing: 0; }
+.manager-home-tasks { overflow: hidden; border: 1px solid #dce7e1; border-radius: 16px; background: #fff; }
+.manager-home-task { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 11px; align-items: center; width: 100%; padding: 14px; border: 0; border-bottom: 1px solid #edf2ef; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.manager-home-task:last-child { border-bottom: 0; }
+.manager-home-task:active { background: #f8fbf9; }
+.manager-home-task-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; background: #e7f0eb; color: #145545; font-size: 14px; font-weight: 700; }
+.manager-home-task-icon.warn { background: #fff3d8; color: #8a6529; }
+.manager-home-task-copy { min-width: 0; }
+.manager-home-task-copy strong { display: block; color: #202a23; font-size: 15px; font-weight: 600; line-height: 1.3; }
+.manager-home-task-copy small { display: block; margin-top: 3px; color: #647a71; font-size: 12px; line-height: 1.4; }
+.manager-home-task-side { display: flex; align-items: center; gap: 8px; }
+.manager-home-task-side em { padding: 4px 7px; border-radius: 5px; background: #e7f0eb; color: #145545; font-size: 10px; font-style: normal; white-space: nowrap; }
+.manager-home-task-side em.warn { background: #fff3d8; color: #8a6529; }
+.manager-home-task-side i { color: #8b9a90; font-size: 19px; font-style: normal; line-height: 1; }
+.manager-home-orders { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 20px; padding: 14px 0; border-top: 1px solid #e3ebe5; border-bottom: 1px solid #e3ebe5; }
+.manager-home-orders > div { text-align: center; border-right: 1px solid #edf2ef; }
+.manager-home-orders > div:last-child { border-right: 0; }
+.manager-home-orders strong { display: block; color: #132a24; font-size: 22px; font-weight: 650; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.manager-home-orders span { display: block; margin-top: 3px; color: #647a71; font-size: 11px; }
+.manager-home-quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.manager-home-quick button { min-height: 62px; border: 1px solid #dce7e1; border-radius: 12px; background: #fff; color: #145545; font: inherit; font-size: 12px; cursor: pointer; }
+.manager-home-quick button:active { background: #f6faf7; }
+.manager-home-quick b { display: block; margin: 0 auto 5px; color: #197a3b; font-size: 15px; font-weight: 700; }
+.manager-home-quick span { display: block; }
+.manager-home-note, .manager-home-done { margin: 18px 2px 0; color: #8b9a90; font-size: 11px; line-height: 1.5; }
+.manager-home-done { color: #197a3b; }
+.manager-coupon-center,.manager-me-page{display:grid;gap:0;align-content:start}.manager-coupon-center .manager-home-quick{margin-top:16px}.manager-coupon-center .manager-coupon-history{margin-top:18px}.manager-me-page .manager-p0-stack{margin-top:18px}

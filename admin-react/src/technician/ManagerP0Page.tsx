@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Input, Modal, message } from 'antd';
-import { AppstoreOutlined, ArrowLeftOutlined, HomeOutlined, ReloadOutlined, ShopOutlined, TeamOutlined, GiftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, HomeOutlined, ReloadOutlined, ShopOutlined, GiftOutlined, UserOutlined } from '@ant-design/icons';
 import QRCode from 'qrcode';
 import { createHalfPriceCouponLink, getManagerDaily, getManagerTeam, getManagerWorkbench, getStaff } from '../api';
 import { parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
 import { useTechnicianSession } from './useTechnicianSession';
 import { isMobileManager } from './managerMobile';
-import ManagerTodayView from './ManagerTodayView';
+import ManagerTodayHomeView from './ManagerTodayHomeView';
 import ManagerDailyOpsView from './ManagerDailyOpsView';
 import ManagerTeamView from './ManagerTeamView';
 import ManagerPositionView from './ManagerPositionView';
@@ -17,9 +17,10 @@ import ManagerCouponRedeemView from './ManagerCouponRedeemView';
 import ManagerCouponHistoryView from './ManagerCouponHistoryView';
 import './manager-mobile.css';
 import './manager-p0.css';
+import './manager-home.css';
 
-type Tab = 'today' | 'floor' | 'team' | 'ops';
-type Subview = 'orders' | 'tasks' | 'reviews' | 'coupons' | 'coupon-history' | null;
+type Tab = 'today' | 'floor' | 'coupons' | 'me';
+type Subview = 'orders' | 'tasks' | 'reviews' | 'coupons' | 'coupon-history' | 'ops' | null;
 
 export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode } = {}) {
   const current = useTechnicianSession();
@@ -34,7 +35,6 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponToken, setCouponToken] = useState('');
   const [reviewFocus, setReviewFocus] = useState<PendingReview | null>(null);
-  const [mapRefresh, setMapRefresh] = useState(0);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
   const loadingRef = useRef(false);
 
@@ -96,36 +96,43 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   };
 
   const openTab = (next: Tab) => { setSubview(null); setTab(next); };
-  const title = subview === 'orders' ? '订单' : subview === 'tasks' ? '待处理' : subview === 'reviews' ? '评价' : subview === 'coupons' ? '核销券' : subview === 'coupon-history' ? '券记录' : tab === 'today' ? '今日' : tab === 'floor' ? '现场' : tab === 'team' ? '团队' : '经营';
+  const title = subview === 'orders' ? '订单' : subview === 'tasks' ? '待处理' : subview === 'reviews' ? '评价' : subview === 'coupons' ? '核销券' : subview === 'coupon-history' ? '券记录' : subview === 'ops' ? '巡检与晨会' : '';
 
   return <section className="manager-p0-page">
-    <header className="manager-p0-head">
+    {subview ? <header className="manager-p0-head">
       <div>
-        {subview ? <button type="button" className="manager-p0-back" onClick={() => setSubview(null)}><ArrowLeftOutlined /> 返回</button> : null}
+        <button type="button" className="manager-p0-back" onClick={() => setSubview(null)}><ArrowLeftOutlined /> 返回</button>
         <h1>{title}</h1>
-        <p>{subview === 'coupon-history' ? '发券、领取与核销记录' : subview ? '店长工作台' : tab === 'today' ? '今天最该做的事' : tab === 'floor' ? '沙发位只读 · 状态由系统生成' : tab === 'team' ? '学习、考核与总部抽检' : '照片、录音、评价和券'}</p>
+        <p>{subview === 'coupon-history' ? '发券、领取与核销记录' : subview === 'ops' ? '照片、晨会和今日留痕' : '店长工作台'}</p>
       </div>
-      {subview !== 'coupon-history' && <Button aria-label="刷新" icon={<ReloadOutlined />} loading={loading} onClick={() => { void load(true); if (tab === 'floor') setMapRefresh((value) => value + 1); }} />}
-    </header>
+      {subview !== 'coupon-history' && <Button aria-label="刷新" icon={<ReloadOutlined />} loading={loading} onClick={() => void load(true)} />}
+    </header> : null}
 
-    {tab === 'today' && !subview && <ManagerTodayView daily={daily} team={team} workbench={workbench}
-      onOpenFloor={() => openTab('floor')} onOpenOps={() => openTab('ops')} onOpenTeam={() => openTab('team')}
-      onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()}
-      onOpenOrders={() => { setOrdersRefresh((value) => value + 1); setSubview('orders'); }} onOpenTasks={() => setSubview('tasks')} />}
+    {tab === 'today' && !subview && <ManagerTodayHomeView daily={daily} workbench={workbench}
+      onOpenOps={() => setSubview('ops')} onOpenTasks={() => setSubview('tasks')}
+      onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }}
+      onOpenCouponHistory={() => setSubview('coupon-history')} />}
+
     {tab === 'floor' && !subview && <div className="manager-p0-stack">
-      <section className="manager-p0-card">
-        <div className="manager-p0-card-head"><div><small>今日巡检</small><h3>{daily?.completion.areas_done || 0}/5 区域</h3></div><Button size="small" onClick={() => openTab('ops')}>去拍照</Button></div>
-        <div className="manager-p0-area-chips">{daily?.areas.map((area: { key: string; label: string; done: boolean }) => <span key={area.key} className={area.done ? 'done' : ''}>{area.done ? '✓ ' : ''}{area.label}</span>)}</div>
-        <p className="manager-p0-muted">沙发位、房间、足疗床均为只读；店长不修改座位状态。</p>
-      </section>
-      <ManagerPositionView key={storeId} storeId={storeId} refreshKey={mapRefresh} />
+      <div className="manager-home-lead"><p>现场 · 只读</p><h1>座位和房间</h1><span>座位状态由系统生成，店长不需要手动修改。</span></div>
+      <ManagerPositionView key={storeId} storeId={storeId} refreshKey={0} />
     </div>}
-    {tab === 'team' && !subview && <ManagerTeamView team={team} onRefresh={() => load(true)} />}
-    {tab === 'ops' && !subview && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={() => load(true)} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }} onOpenCouponHistory={() => setSubview('coupon-history')} />}
+
+    {tab === 'coupons' && !subview && <div className="manager-coupon-center">
+      <div className="manager-home-lead"><p>本店 · 近 30 天</p><h1>券</h1><span>发券、核销和记录集中在这里。</span></div>
+      <div className="manager-home-quick"><button type="button" onClick={() => void generateCoupon()}><b>券</b><span>发券</span></button><button type="button" onClick={() => { setCouponToken(''); setSubview('coupons'); }}><b>核</b><span>核销券</span></button><button type="button" onClick={() => setSubview('coupon-history')}><b>记</b><span>券记录</span></button></div>
+      <ManagerCouponHistoryView />
+    </div>}
+
+    {tab === 'me' && !subview && <div className="manager-me-page">
+      <div className="manager-home-lead"><p>店长</p><h1>我的</h1><span>{getStaff()?.name || '店长'} · {getStaff()?.store_name || '本店'}</span></div>
+      <ManagerTeamView team={team} onRefresh={() => load(true)} />
+    </div>}
 
     {subview === 'orders' && <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => openTab('floor')} />}
     {subview === 'tasks' && <ManagerTasksView onOpenReviews={() => setSubview('reviews')} onOpenPositions={() => openTab('floor')} onOpenOrders={() => setSubview('orders')} />}
     {subview === 'reviews' && <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true)} onFocusError={() => message.error('评价链接已失效')} />}
+    {subview === 'ops' && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={() => load(true)} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }} onOpenCouponHistory={() => setSubview('coupon-history')} />}
     {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} onOpenHistory={() => setSubview('coupon-history')} />}
     {subview === 'coupon-history' && <ManagerCouponHistoryView />}
 
@@ -134,7 +141,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     </Modal>}
 
     <nav className="manager-p0-nav" aria-label="店长导航">
-      {([['today', '今日', <HomeOutlined />], ['floor', '现场', <ShopOutlined />], ['team', '团队', <TeamOutlined />], ['ops', '经营', <AppstoreOutlined />]] as const).map(([key, label, icon]) => <button type="button" key={key} className={tab === key && !subview ? 'active' : ''} onClick={() => openTab(key)}>{icon}<span>{label}</span></button>)}
+      {([['today', '今日', <HomeOutlined />], ['floor', '现场', <ShopOutlined />], ['coupons', '券', <GiftOutlined />], ['me', '我的', <UserOutlined />]] as const).map(([key, label, icon]) => <button type="button" key={key} className={tab === key && !subview ? 'active' : ''} onClick={() => openTab(key)}>{icon}<span>{label}</span></button>)}
     </nav>
   </section>;
 }
