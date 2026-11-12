@@ -214,6 +214,7 @@ export default function CouponClaimPage() {
   return <main className="coupon-claim-page">
     <section className="coupon-claim-card">
       <header><span>荷小悦</span><h1>半价券</h1><p>{terminal ? `全单 5 折 · ${used ? '已核销' : '已过期'}` : '全单 5 折 · 领取后 60 天有效'}</p></header>
+      {!terminal ? <p className="coupon-claim-poster-copy">忙完一天，来泡个脚，给自己松一松。</p> : null}
       {!code ? <p className="coupon-claim-error">链接无效，请让店长重新发送。</p> : <>
         {busy && !coupon ? <p className="coupon-claim-hint">正在准备半价券…</p> : null}
         {error ? <><p className="coupon-claim-error">{error}</p><div className="coupon-claim-actions"><a href={menuUrl}>看项目菜单</a><a href={couponUrl}>我的券包</a></div></> : null}
