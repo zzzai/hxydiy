@@ -1,33 +1,65 @@
 import QRCode from 'qrcode';
 
-const POSTER_WIDTH = 1080;
-const POSTER_HEIGHT = 1440;
+const WIDTH = 1080;
+const HEIGHT = 1440;
 const MASCOT_URL = '/assets/hxy-mascot.webp';
 
-function escapeXml(value: string) {
-  const entities: Record<string, string> = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' };
-  return value.replace(/[<>&"']/g, (char) => entities[char] || char);
+function escapeStoreName(value: string) {
+  return value.replace(/^荷小悦[-·]?/, '').replace(/^草本泡脚[（(]?/, '').replace(/[）)]$/, '') || '本店';
 }
 
-async function toDataUrl(url: string): Promise<string> {
+async function loadImage(source: string): Promise<HTMLImageElement> {
+  const image = new Image();
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error('海报素材加载失败'));
+    image.src = source;
+  });
+  return image;
+}
+
+async function imageToPngDataUrl(url: string): Promise<string> {
   const response = await fetch(url);
   if (!response.ok) throw new Error('海报素材加载失败');
   const blob = await response.blob();
-  return new Promise((resolve, reject) => {
+  const source = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(new Error('海报素材加载失败'));
     reader.readAsDataURL(blob);
   });
+  const image = await loadImage(source);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('海报素材加载失败');
+  context.drawImage(image, 0, 0);
+  return canvas.toDataURL('image/png');
 }
 
-function svgText(x: number, y: number, text: string, size: number, color: string, weight = 400, anchor = 'start') {
-  return `<text x="${x}" y="${y}" fill="${color}" font-size="${size}" font-weight="${weight}" text-anchor="${anchor}" font-family="PingFang SC, Microsoft YaHei, Noto Sans SC, sans-serif">${escapeXml(text)}</text>`;
+function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  const r = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + width, y, x + width, y + height, r);
+  context.arcTo(x + width, y + height, x, y + height, r);
+  context.arcTo(x, y + height, x, y, r);
+  context.arcTo(x, y, x + width, y, r);
+  context.closePath();
+}
+
+function text(context: CanvasRenderingContext2D, value: string, x: number, y: number, size: number, color: string, weight = 400, align: CanvasTextAlign = 'left') {
+  context.font = `${weight} ${size}px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`;
+  context.fillStyle = color;
+  context.textAlign = align;
+  context.textBaseline = 'top';
+  context.fillText(value, x, y);
 }
 
 export async function createCouponPoster(link: string, storeName: string): Promise<Blob> {
-  const [mascot, qr] = await Promise.all([
-    toDataUrl(MASCOT_URL),
+  const [mascotUrl, qrUrl] = await Promise.all([
+    imageToPngDataUrl(MASCOT_URL),
     QRCode.toDataURL(link, {
       width: 640,
       margin: 2,
@@ -35,64 +67,117 @@ export async function createCouponPoster(link: string, storeName: string): Promi
       color: { dark: '#145545', light: '#FFFFFF' },
     }),
   ]);
-  const store = storeName.replace(/^荷小悦[-·]?/, '').replace(/^草本泡脚[（(]?/, '').replace(/[）)]$/, '') || '本店';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${POSTER_WIDTH}" height="${POSTER_HEIGHT}" viewBox="0 0 ${POSTER_WIDTH} ${POSTER_HEIGHT}">
-    <rect width="1080" height="1440" fill="#F7F2E6"/>
-    <ellipse cx="120" cy="20" rx="360" ry="300" fill="#1F8F75" opacity=".08"/>
-    <ellipse cx="1010" cy="120" rx="250" ry="280" fill="#C69B3C" opacity=".10"/>
-    <ellipse cx="880" cy="1080" rx="260" ry="180" fill="#1F8F75" opacity=".05"/>
+  const [mascot, qr] = await Promise.all([loadImage(mascotUrl), loadImage(qrUrl)]);
+  const store = escapeStoreName(storeName);
 
-    <circle cx="104" cy="96" r="32" fill="#145545"/>
-    <text x="104" y="108" text-anchor="middle" fill="#FFFFFF" font-size="30" font-weight="700" font-family="PingFang SC, Microsoft YaHei, sans-serif">荷</text>
-    ${svgText(156, 92, '荷小悦', 30, '#145545', 700)}
-    ${svgText(158, 122, '草本轻养 · 半价券', 18, '#647A71')}
+  const canvas = document.createElement('canvas');
+  canvas.width = WIDTH;
+  canvas.height = HEIGHT;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('海报生成失败');
 
-    ${svgText(72, 278, '忙完一天，', 72, '#132A24', 700)}
-    ${svgText(72, 374, '来泡个脚，', 72, '#132A24', 700)}
-    ${svgText(72, 470, '给自己松一松。', 72, '#132A24', 700)}
-    ${svgText(76, 526, '草本现煮 · 到店即享', 28, '#A86D23', 600)}
+  context.fillStyle = '#F7F2E6';
+  context.fillRect(0, 0, WIDTH, HEIGHT);
 
-    <circle cx="830" cy="330" r="178" fill="#FFFBEE" stroke="#C69B3C" stroke-width="5"/>
-    ${svgText(830, 280, '全单', 26, '#A86D23', 600, 'middle')}
-    ${svgText(830, 378, '5折', 112, '#145545', 700, 'middle')}
-    ${svgText(830, 432, '60 天有效', 22, '#647A71', 400, 'middle')}
+  context.save();
+  context.globalAlpha = 0.08;
+  context.fillStyle = '#1F8F75';
+  context.beginPath();
+  context.ellipse(120, 20, 360, 300, 0, 0, Math.PI * 2);
+  context.fill();
+  context.globalAlpha = 0.1;
+  context.fillStyle = '#C69B3C';
+  context.beginPath();
+  context.ellipse(1010, 120, 250, 280, 0, 0, Math.PI * 2);
+  context.fill();
+  context.globalAlpha = 0.05;
+  context.fillStyle = '#1F8F75';
+  context.beginPath();
+  context.ellipse(880, 1080, 260, 180, 0, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
 
-    <image href="${mascot}" x="70" y="600" width="500" height="500" preserveAspectRatio="xMidYMid meet"/>
-    <path d="M585 650 C620 620 654 628 664 656" fill="none" stroke="#1F8F75" stroke-width="3" stroke-linecap="round" opacity=".8"/>
-    <path d="M610 720 C640 700 670 706 680 730" fill="none" stroke="#1F8F75" stroke-width="3" stroke-linecap="round" opacity=".6"/>
-    <path d="M548 1060 C578 1040 610 1046 620 1070" fill="none" stroke="#1F8F75" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+  context.fillStyle = '#145545';
+  context.beginPath();
+  context.arc(104, 96, 32, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = '#FFFFFF';
+  context.font = '700 30px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText('荷', 104, 98);
+  text(context, '荷小悦', 156, 68, 30, '#145545', 700);
+  text(context, '草本轻养 · 半价券', 158, 108, 18, '#647A71');
 
-    <rect x="650" y="620" width="350" height="430" rx="26" fill="#FFFFFF" stroke="#E2C98F" stroke-width="2"/>
-    <image href="${qr}" x="685" y="660" width="280" height="280" preserveAspectRatio="xMidYMid meet"/>
-    ${svgText(825, 990, '扫码领取', 27, '#145545', 700, 'middle')}
-    ${svgText(825, 1024, '到店出示核销码', 17, '#647A71', 400, 'middle')}
+  text(context, '忙完一天，', 72, 210, 72, '#132A24', 700);
+  text(context, '来泡个脚，', 72, 306, 72, '#132A24', 700);
+  text(context, '给自己松一松。', 72, 402, 72, '#132A24', 700);
+  text(context, '草本现煮 · 到店即享', 76, 500, 28, '#A86D23', 600);
 
-    <rect x="56" y="1120" width="968" height="254" rx="34" fill="#145545"/>
-    ${svgText(92, 1214, '全单 5 折', 86, '#FFFFFF', 700)}
-    ${svgText(96, 1270, `草本泡脚 · 到店即享 · ${store}`, 23, '#D9ECDF')}
-    ${svgText(96, 1312, '扫码领取 · 登录后自动存入券包', 20, '#F3DFAA')}
-    <circle cx="938" cy="1238" r="48" fill="none" stroke="#C69B3C" stroke-width="2"/>
-    <text x="938" y="1252" text-anchor="middle" fill="#F3DFAA" font-size="36" font-weight="700" font-family="PingFang SC, Microsoft YaHei, sans-serif">荷</text>
-  </svg>`;
+  context.fillStyle = '#FFFBEE';
+  context.strokeStyle = '#C69B3C';
+  context.lineWidth = 5;
+  context.beginPath();
+  context.arc(830, 330, 178, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#A86D23';
+  context.font = '600 26px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.fillText('全单', 830, 270);
+  context.fillStyle = '#145545';
+  context.font = '700 112px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.fillText('5折', 830, 354);
+  context.fillStyle = '#647A71';
+  context.font = '400 22px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.fillText('60 天有效', 830, 434);
 
-  const svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-  try {
-    const image = new Image();
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error('海报生成失败'));
-      image.src = svgUrl;
-    });
-    const canvas = document.createElement('canvas');
-    canvas.width = POSTER_WIDTH;
-    canvas.height = POSTER_HEIGHT;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('海报生成失败');
-    context.drawImage(image, 0, 0, POSTER_WIDTH, POSTER_HEIGHT);
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('海报生成失败')), 'image/png');
-    });
-  } finally {
-    URL.revokeObjectURL(svgUrl);
+  context.drawImage(mascot, 70, 600, 500, 500);
+
+  context.strokeStyle = 'rgba(31, 143, 117, .7)';
+  context.lineWidth = 3;
+  context.lineCap = 'round';
+  for (const [x, y, rx, ry, start, end] of [[585, 650, 80, 34, 3.5, 5.9], [610, 720, 70, 30, 3.5, 5.8], [548, 1060, 72, 30, 3.5, 5.8]] as const) {
+    context.beginPath();
+    context.ellipse(x, y, rx, ry, 0, start, end);
+    context.stroke();
   }
+
+  roundedRect(context, 650, 620, 350, 430, 26);
+  context.fillStyle = '#FFFFFF';
+  context.fill();
+  context.strokeStyle = '#E2C98F';
+  context.lineWidth = 2;
+  context.stroke();
+  context.drawImage(qr, 685, 660, 280, 280);
+  context.textAlign = 'center';
+  context.textBaseline = 'top';
+  context.fillStyle = '#145545';
+  context.font = '700 27px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.fillText('扫码领取', 825, 960);
+  context.fillStyle = '#647A71';
+  context.font = '400 17px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.fillText('到店出示核销码', 825, 1000);
+
+  roundedRect(context, 56, 1120, 968, 254, 34);
+  context.fillStyle = '#145545';
+  context.fill();
+  text(context, '全单 5 折', 92, 1160, 86, '#FFFFFF', 700);
+  text(context, `草本泡脚 · 到店即享 · ${store}`, 96, 1262, 23, '#D9ECDF');
+  text(context, '扫码领取 · 登录后自动存入券包', 96, 1302, 20, '#F3DFAA');
+  context.strokeStyle = '#C69B3C';
+  context.lineWidth = 2;
+  context.beginPath();
+  context.arc(938, 1238, 48, 0, Math.PI * 2);
+  context.stroke();
+  context.fillStyle = '#F3DFAA';
+  context.font = '700 36px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText('荷', 938, 1240);
+
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('海报生成失败')), 'image/png');
+  });
 }
