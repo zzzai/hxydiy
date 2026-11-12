@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 
 const WIDTH = 1080;
 const HEIGHT = 1440;
-const MASCOT_URL = '/assets/ip-paopao-running-bucket.webp';
+const MASCOT_URL = '/assets/ip-paopao-reference.png';
 
 function escapeStoreName(value: string) {
   return value.replace(/^荷小悦[-·]?/, '').replace(/^草本泡脚[（(]?/, '').replace(/[）)]$/, '') || '本店';
@@ -121,7 +121,7 @@ export async function createCouponPoster(link: string, storeName: string): Promi
   text(context, '一桶草本热水，', 72, 620, 25, '#647A71');
   text(context, '把今天的疲惫泡掉。', 72, 660, 25, '#647A71');
 
-  context.drawImage(mascot, 520, 220, 500, 592);
+  context.drawImage(mascot, 590, 150, 420, 744);
 
   context.strokeStyle = 'rgba(31, 143, 117, .7)';
   context.lineWidth = 3;
