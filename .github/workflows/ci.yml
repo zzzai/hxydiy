@@ -54,6 +54,33 @@ jobs:
             exit 1
           fi
 
+  trusted:
+    name: Trusted PR Gate
+    needs: [static, admin, customer, backend]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    steps:
+      - name: Require local CI results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e "const r=JSON.parse(process.env.RESULTS); if(Object.values(r).some(x=>x.result!=='success')) process.exit(1)"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Verify trusted base workflow for this head
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { waitForTrustedRun } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/trusted-run-gate.cjs`);
+            await waitForTrustedRun({ github, context, core });
+
   admin:
     name: Admin tests and build
     needs: static
