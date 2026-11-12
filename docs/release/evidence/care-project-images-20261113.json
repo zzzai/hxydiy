@@ -1,0 +1,148 @@
+{
+  "status": "passed",
+  "sha": "819c265d5f73ea44f11ca71c95faf22da5cc8520",
+  "run_id": "43271983870",
+  "manifest_entries": 811,
+  "backend_files_unchanged": 187,
+  "public_resources": [
+    "/",
+    "/admin/",
+    "/admin/assets/index-Blw_YwV9.css",
+    "/admin/assets/index-DD8Rf4_z.js",
+    "/assets/App-mwVLT9B1.js",
+    "/assets/CouponClaimPage-doRdRnMn.js",
+    "/assets/RecordLoginDialog-DRAzoT7f.js",
+    "/assets/ReportEntryPage-6dsWfNCB.js",
+    "/assets/StoreFeedbackPage-BB5wqgIE.js",
+    "/assets/api-CPzfiH_B.js",
+    "/assets/circle-check-BNZJ9dsu.js",
+    "/assets/customerCopy-D2N8dSbv.js",
+    "/assets/guestCoupon-CiTW2do0.js",
+    "/assets/index-BipzoEm2.css",
+    "/assets/index-BkyQ3sze.js",
+    "/assets/index-CMc4R1hz.js",
+    "/assets/projects/hxy-neck-kit-10-detail-v2.webp",
+    "/assets/projects/hxy-neck-kit-10-main-v2.webp",
+    "/assets/projects/hxy-waist-kit-10-detail-v2.webp",
+    "/assets/projects/hxy-waist-kit-10-main-v2.webp",
+    "/assets/visitFeedback-BFIStSC8.js",
+    "/technician/"
+  ],
+  "active_customer_chunks": [
+    "App-mwVLT9B1.js",
+    "CouponClaimPage-doRdRnMn.js",
+    "RecordLoginDialog-DRAzoT7f.js",
+    "ReportEntryPage-6dsWfNCB.js",
+    "StoreFeedbackPage-BB5wqgIE.js",
+    "api-CPzfiH_B.js",
+    "circle-check-BNZJ9dsu.js",
+    "customerCopy-D2N8dSbv.js",
+    "guestCoupon-CiTW2do0.js",
+    "index-BkyQ3sze.js",
+    "index-CMc4R1hz.js",
+    "visitFeedback-BFIStSC8.js"
+  ],
+  "assets": [
+    {
+      "name": "hxy-waist-kit-10-main-v2.webp",
+      "sha256": "e3cb0d1e09b7ff42dcce31b30aae02b41bafc357003c8dd9bc5758cba3f8344d",
+      "bytes": 234054
+    },
+    {
+      "name": "hxy-waist-kit-10-detail-v2.webp",
+      "sha256": "7e3ae6aff652a8aa5fe20a407f6f2e7994e495b0a552586d01d3de14f05a86d9",
+      "bytes": 222274
+    },
+    {
+      "name": "hxy-neck-kit-10-main-v2.webp",
+      "sha256": "b4acfe5a53ae9676010c7d130c0186b61dfd3befa115414a6dec32fe2a4588ad",
+      "bytes": 263378
+    },
+    {
+      "name": "hxy-neck-kit-10-detail-v2.webp",
+      "sha256": "b3198f901c5c9bf8d904b234db924fb1a42b71a1749f640e0f533fa094d1cd6c",
+      "bytes": 185552
+    }
+  ],
+  "top_coupon_banner_removed": true,
+  "health": {
+    "status": "ok",
+    "service": "hxy-customer-api",
+    "environment": "production"
+  },
+  "schema_revision": "20261112_coupon_poster_links",
+  "tables_verified": 71,
+  "business_tables_verified": 70,
+  "changed_tables": [],
+  "voucher_prices_cents": [
+    4450,
+    6450,
+    5450,
+    6450,
+    8950
+  ],
+  "excluded_project_count": 9,
+  "backup_sha256": "4a6c5fe9aa5e7557e33bae94579a78eee158987c913156504bef356a5a37b546",
+  "production_business_writes_by_verification": 0,
+  "field_acceptance": "not claimed",
+  "trusted_gate_fix": {
+    "pr": 479,
+    "head": "4c5b727d514e991045c6c5346fc57659de77e934",
+    "merged": true,
+    "merge_commit": "819c265d5f73ea44f11ca71c95faf22da5cc8520",
+    "native_gate": [
+      {
+        "id": 131367454753,
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/zzzai/hxydiy/actions/runs/43270364664/job/131367454753",
+        "app_id": 15368
+      }
+    ],
+    "required_status_checks": {
+      "url": "https://api.github.com/repos/zzzai/hxydiy/branches/main/protection/required_status_checks",
+      "strict": true,
+      "contexts": [
+        "Static contracts",
+        "Backend tests",
+        "Admin tests and build",
+        "Customer tests and build",
+        "Design evidence",
+        "Trusted PR Gate"
+      ],
+      "contexts_url": "https://api.github.com/repos/zzzai/hxydiy/branches/main/protection/required_status_checks/contexts",
+      "checks": [
+        {
+          "context": "Static contracts",
+          "app_id": 15368
+        },
+        {
+          "context": "Backend tests",
+          "app_id": 15368
+        },
+        {
+          "context": "Admin tests and build",
+          "app_id": 15368
+        },
+        {
+          "context": "Customer tests and build",
+          "app_id": 15368
+        },
+        {
+          "context": "Design evidence",
+          "app_id": 15368
+        },
+        {
+          "context": "Trusted PR Gate",
+          "app_id": 15368
+        }
+      ]
+    },
+    "enforce_admins": true,
+    "protection_modified": false
+  },
+  "pr": 479,
+  "ci_run_id": 43271270953,
+  "release_id": "github-819c265d5f73-43271983870",
+  "backup_restore_rehearsal": "passed in guarded deployment workflow"
+}
