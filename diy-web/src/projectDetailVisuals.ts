@@ -94,11 +94,31 @@ const CUPPING_SCRAPING_VISUALS: ProjectDetailVisualSection[] = [
   },
 ];
 
+const WAIST_KIT_VISUALS: ProjectDetailVisualSection[] = [
+  {
+    image: assetPath('projects/hxy-waist-kit-10-detail-v2.webp'),
+    title: '照顾腰臀，也留一段安静时光',
+    body: '60 分钟服务：20 分钟腰臀手法放松，20 分钟仪器配合手法，再用 20 分钟头部按摩搭配腰臀草本热敷。荷悦臻养套盒含保健粉、保健液与保健油，由技师在店调配使用；力度和温度随体感调整。',
+    alt: '荷小悦手绘腰臀护理场景：腰部热敷配合头部按摩，下方展示荷悦臻养套盒与调配用品',
+  },
+];
+
+const NECK_KIT_VISUALS: ProjectDetailVisualSection[] = [
+  {
+    image: assetPath('projects/hxy-neck-kit-10-detail-v2.webp'),
+    title: '从肩颈开始，慢慢放松下来',
+    body: '60 分钟服务：20 分钟肩颈手法放松，20 分钟仪器配合手法，再用 20 分钟头部按摩搭配肩颈草本热敷。荷悦臻养套盒含保健粉、保健液与保健油，由技师在店调配使用；力度和温度随体感调整。',
+    alt: '荷小悦手绘肩颈护理场景：肩颈热敷配合头部按摩，下方展示荷悦臻养套盒与调配用品',
+  },
+];
+
 export function projectDetailVisuals(code: string): ProjectDetailVisualSection[] {
   const projectCode = canonicalProjectCode(code);
   // 招牌草本沐足与 60 分钟精油 SPA 使用专属流程插画；其他项目沿用统一信息结构和画风。
   if (projectCode === 'hxy-xiaoqi-90') return SIGNATURE_FOOTBATH_VISUALS;
   if (projectCode === 'hxy-spa-60') return SPA_60_VISUALS;
+  if (projectCode === 'hxy-waist-kit-10') return WAIST_KIT_VISUALS;
+  if (projectCode === 'hxy-neck-kit-10') return NECK_KIT_VISUALS;
   if (projectCode === 'hxy-foot-refine-1') return FOOT_REFINEMENT_VISUALS;
   if (projectCode === 'hxy-nvshen-60') return GODDESS_FOOT_CARE_VISUALS;
   if (projectCode === 'hxy-qiqing-30') return HERBAL_FOOTBATH_VISUALS;

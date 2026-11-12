@@ -2209,7 +2209,6 @@ export default function App() {
       {preservedPrivateSelection?.items?.length && preservedPrivateSelection.sessionId !== session?.id ? <div className="submitted-browse-banner"><span>原选单已保留</span><a href={serviceAccountEntry(window.location.origin, query.storeId, 'projects')}>返回未入座选单</a></div> : null}
       {boot === 'ready' && collaborationMode === 'browse_only' && <div className="shared-cart-banner read-only" role="status">本服务位清单已提交；可继续浏览项目或提交评价与建议</div>}
 
-      {hasHalfPriceCoupon && <aside className="half-price-menu-note"><strong>足疗、SPA主项可享门店价5折</strong><span>小项、加项、痛症调理及套盒不参与，不叠加会员价或其他优惠。到店出示本人券码，由店长核销。</span></aside>}
       <section className="miniapp-promo-strip" aria-label="门店推荐">
         {!publicBrowsing && <button type="button" className="miniapp-promo visit-feedback-entry" onClick={openVisitFeedback}>
           <span className="visit-feedback-icon"><MessageSquareText size={22} /></span>
