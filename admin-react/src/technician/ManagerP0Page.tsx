@@ -119,9 +119,13 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     </div>}
 
     {tab === 'coupons' && !subview && <div className="manager-coupon-center">
-      <div className="manager-home-lead"><p>本店 · 近 30 天</p><h1>券</h1><span>发券、核销和记录集中在这里。</span></div>
-      <div className="manager-home-quick"><button type="button" onClick={() => void generateCoupon()}><b>券</b><span>发券</span></button><button type="button" onClick={() => { setCouponToken(''); setSubview('coupons'); }}><b>核</b><span>核销券</span></button><button type="button" onClick={() => setSubview('coupon-history')}><b>记</b><span>券记录</span></button></div>
-      <ManagerCouponHistoryView />
+      <div className="manager-home-lead"><p>本店 · 近 30 天</p><h1>券</h1></div>
+      <div className="manager-coupon-segments" role="tablist" aria-label="券功能">
+        <button type="button" role="tab" aria-selected="true" className="active">记录</button>
+        <button type="button" role="tab" aria-selected="false" onClick={() => { setCouponToken(''); setSubview('coupons'); }}>核销</button>
+        <button type="button" role="tab" aria-selected="false" onClick={() => void generateCoupon()}>发券</button>
+      </div>
+      <ManagerCouponHistoryView embedded />
     </div>}
 
     {tab === 'me' && !subview && <div className="manager-me-page">

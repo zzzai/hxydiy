@@ -19,7 +19,7 @@ function kindLabel(kind: ManagerCouponHistoryKind) {
   return kind === 'redeemed' ? '核销记录' : '发券记录';
 }
 
-export default function ManagerCouponHistoryView() {
+export default function ManagerCouponHistoryView({ embedded = false }: { embedded?: boolean } = {}) {
   const [days, setDays] = useState(30);
   const [filter, setFilter] = useState<Filter>('all');
   const [summary, setSummary] = useState<ManagerCouponHistorySummary>(EMPTY_SUMMARY);
@@ -49,12 +49,12 @@ export default function ManagerCouponHistoryView() {
   useEffect(() => { void load(true); }, [days, filter]);
 
   return <section className="manager-coupon-history" aria-label="券记录">
-    <div className="manager-coupon-history-head">
+    {!embedded ? <div className="manager-coupon-history-head">
       <div>
         <p>本店发券、领取与核销记录；生成链接不计入发券。</p>
       </div>
       <Button size="small" onClick={() => void load(true)}>刷新</Button>
-    </div>
+    </div> : null}
 
     <div className="manager-coupon-history-summary">
       <div><strong>{summary.issued}</strong><span>发券</span></div>
