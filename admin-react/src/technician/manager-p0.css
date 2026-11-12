@@ -117,3 +117,4 @@
 .manager-coupon-poster-qr img{display:block;width:180px;height:180px}
 .manager-coupon-poster-qr small{color:#145545;font-size:11px;letter-spacing:.08em}
 .manager-coupon-poster>em{color:#d9ecdf;font-size:10px;font-style:normal;line-height:1.5}
+.manager-coupon-poster-image{display:block;width:min(100%,320px);max-height:58vh;object-fit:contain;border-radius:14px;box-shadow:0 10px 26px rgba(20,45,35,.14)}.manager-coupon-poster-loading,.manager-coupon-poster-error{display:grid;min-height:260px;place-items:center;width:min(100%,320px);padding:18px;border:1px dashed #dce7e1;border-radius:14px;background:#f8fbf9;color:#647a71;font-size:12px;text-align:center}.manager-coupon-poster-error{color:#b44230;background:#fff8f5;border-color:#f0d9d2}
