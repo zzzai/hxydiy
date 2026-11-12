@@ -5,6 +5,8 @@ import { redeemManagerCoupon, validateManagerCoupon } from '../api';
 
 type CouponPreview = {
   requires_holder_confirmation?: boolean;
+  requires_scope_confirmation?: boolean;
+  scope_note?: string;
   coupon_id: number;
   customer_name: string;
   phone_masked: string;
@@ -64,10 +66,10 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack, onO
   };
 
   const redeem = async () => {
-    if (!preview || busy || (preview.requires_holder_confirmation && !holderPresent)) return;
+    if (!preview || busy || ((preview.requires_holder_confirmation || preview.requires_scope_confirmation) && !holderPresent)) return;
     setBusy(true); setError(''); setSuccess('');
     try {
-      const response = await redeemManagerCoupon(token, crypto.randomUUID(), holderPresent);
+      const response = await redeemManagerCoupon(token, crypto.randomUUID(), holderPresent, holderPresent);
       setSuccess(`${response.data.customer_name} 的「${response.data.name}」已核销，券已失效。`);
       setPreview(null);
       setToken('');
@@ -136,14 +138,15 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack, onO
     {busy && !preview && <div className="manager-empty"><Spin size="small" /><span>正在校验</span></div>}
     {preview && <div className="manager-coupon-preview">
       <div><strong>{preview.name}</strong><Tag color="green">可核销</Tag></div>
+      {preview.scope_note && <p className="manager-detail-note">{preview.scope_note}</p>}
       <dl>
         <div><dt>顾客</dt><dd>{preview.customer_name} · {preview.phone_masked}</dd></div>
         <div><dt>优惠</dt><dd>{preview.percent_off ? `${preview.percent_off / 10}折` : `¥${((preview.amount_cents || 0) / 100).toFixed(0)}`}</dd></div>
         <div><dt>有效期</dt><dd>{preview.expire_at ? new Date(preview.expire_at).toLocaleDateString('zh-CN') : '—'}</dd></div>
       </dl>
       <p className="manager-detail-note">确认后券立即变为“已使用”。本次不抵扣当前订单金额。</p>
-      {preview.requires_holder_confirmation && <Checkbox checked={holderPresent} onChange={event => setHolderPresent(event.target.checked)}>已核对顾客本人现场出示的券码及账户信息</Checkbox>}
-      <Button type="primary" block loading={busy} disabled={preview.requires_holder_confirmation && !holderPresent} onClick={() => void redeem()}>确认核销</Button>
+      {(preview.requires_holder_confirmation || preview.requires_scope_confirmation) && <Checkbox checked={holderPresent} onChange={event => setHolderPresent(event.target.checked)}>已核对本人券码{preview.requires_scope_confirmation ? "，仅对足疗、SPA主项按门店价5折，小项、痛症调理不参与且不叠加其他优惠" : "及账户信息"}</Checkbox>}
+      <Button type="primary" block loading={busy} disabled={(preview.requires_holder_confirmation || preview.requires_scope_confirmation) && !holderPresent} onClick={() => void redeem()}>确认核销</Button>
     </div>}
   </section>;
 }

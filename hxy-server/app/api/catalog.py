@@ -7,6 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.half_price_coupon import half_price_project_cents
 from app.domain.catalog_options import CatalogDomainError, verify_published_catalog_hash
 from app.services.store_lifecycle import OPEN_STORE_STATUSES
 from app.models import Addon, OptionChoicePrice, PageContent, PriceBook, Product, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, Store
@@ -259,12 +260,14 @@ def _current_project_prices(db: Session, project_id: int) -> list[dict]:
 
 def _project_to_out(db: Session, p: Project) -> ProjectOut:
     catalog_version, catalog_version_id, option_groups = _published_option_groups(db, p)
+    prices = _current_project_prices(db, p.id)
     return ProjectOut(
         id=p.id, code=p.code, category=p.category, category_mark=p.category_mark,
         name=p.name, duration_min=p.duration_min, summary=p.summary,
         image_url=p.image_url, tags=p.tags, detail_modules=p.detail_modules,
         diy_options=p.diy_options, display_order=p.display_order, price_label=p.price_label,
-        prices=_current_project_prices(db, p.id), content_version=p.content_version,
+        prices=prices, content_version=p.content_version,
+        half_price_coupon_price_cents=half_price_project_cents(p, prices),
         catalog_version=catalog_version, catalog_version_id=catalog_version_id, option_groups=option_groups,
     )
 

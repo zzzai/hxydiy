@@ -567,3 +567,6 @@
 - Built-in image generation uses the supplied design as reference; prompts request only the peeking head/two hands/mint marks and the basket avatar respectively, transparent backgrounds, no UI/text/QR. Saved assets: `diy-web/public/assets/service-account-{peeking,avatar}-v2.png`.
 - Build passed; tests 250 passed/1 existing skipped; four actual local phone/short-screen checks passed. Combined visual QA is recorded in `design-qa.md`; artifacts in `diy-web/output/playwright/customer-service-account-sheet-fidelity/`. No production writes, real health-report reads or automatic follow action.
 - Coordinator owns merge/deploy and shared production records. Generated Vite and tsbuildinfo files are preserved and excluded.
+
+
+2026-11-12 主项半价券修正候选：同店本人有效券驱动菜单持券价；门店价5折，仅足疗/SPA主项，小项与痛症/套盒排除；店长扫码须明确确认范围。旧订单金额、价格表及券历史不变，无迁移。详见coupon-poster-single-claim契约，尚待本次验收发布回执。

@@ -399,6 +399,7 @@ function CouponList({ coupons, token }: { coupons: MyCoupon[]; token: string }) 
           </div>
           <div className="profile-coupon-copy">
             <strong>{coupon.name}</strong>
+            {coupon.scope_note && <small>{coupon.scope_note}</small>}
             <small>{coupon.min_spend_cents > 0 ? `满 ${formatMoney(coupon.min_spend_cents)} 可用` : '无门槛'}{coupon.expire_at ? ` · ${formatDateTime(coupon.expire_at)} 前有效` : ''}</small>
             {coupon.status === 'unused' && <button type="button" className="profile-coupon-qr-button" disabled={qrBusy} onClick={() => void showQr(coupon)}>{qrBusy ? '生成中…' : '核销码'}</button>}
             {qr?.couponId === coupon.id && qrRemaining > 0 && <div className="profile-coupon-qr">

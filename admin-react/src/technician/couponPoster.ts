@@ -103,10 +103,11 @@ export async function createCouponPoster(link: string, storeName: string): Promi
   context.fillStyle = '#E2E8DC';
   context.fillRect(72, OFFER_TOP, 936, 1);
   text(context, '半价放松，慢慢享受', 76, 1045, 24, MUTED);
-  text(context, '全场', 76, 1106, 38, INK, 500);
+  text(context, '主项', 76, 1106, 38, INK, 500);
   text(context, '5', 180, 1082, 126, INK, 600);
   text(context, '折', 264, 1133, 52, INK, 500);
-  text(context, '小项除外', 78, 1284, 22, MUTED);
+  text(context, '足疗 / SPA · 按门店价', 78, 1248, 22, MUTED);
+  text(context, '小项、痛症调理不参与 · 不叠加', 78, 1284, 19, MUTED);
   text(context, '领取后 60 天有效', 78, 1322, 21, '#A86D23');
   if (singleClaim) text(context, '仅 1 张 · 登录领取 · 绑定本人', 78, 1358, 18, MUTED);
 

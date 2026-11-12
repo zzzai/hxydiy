@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.domain.half_price_coupon import coupon_display_name, coupon_scope
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.models import AuditLog, CouponPosterLink, CouponTemplate, User, UserCoupon
 
@@ -30,7 +31,7 @@ def owned_coupon_view(coupon: UserCoupon, template: CouponTemplate) -> dict:
     if status == "unused" and coupon.expire_at and aware(coupon.expire_at) <= datetime.now(UTC):
         status = "expired"
     return {
-        "coupon_id": coupon.id, "name": template.name, "percent_off": template.percent_off,
+        "coupon_id": coupon.id, "name": coupon_display_name(template), **coupon_scope(template), "percent_off": template.percent_off,
         "expire_at": aware(coupon.expire_at).isoformat() if coupon.expire_at else None, "status": status,
     }
 

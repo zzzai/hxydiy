@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.customer_auth import current_customer_id
 from app.core.config import settings
 from app.db.session import get_db
+from app.domain.half_price_coupon import coupon_display_name, coupon_scope
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.domain.coupon_redeem import create_guest_token, create_redeem_token, decode_claim_token, decode_guest_token
 from app.domain.coupon_poster import claim_poster, poster_status
@@ -54,7 +55,8 @@ def _template_out(tpl: CouponTemplate, claimed_today: bool, claimed_total: int) 
         note = "" if claimable else "已达领取上限"
     return {
         "id": tpl.id,
-        "name": tpl.name,
+        "name": coupon_display_name(tpl),
+        **coupon_scope(tpl),
         "coupon_type": tpl.coupon_type,
         "amount_cents": tpl.amount_cents,
         "percent_off": tpl.percent_off,
@@ -240,7 +242,8 @@ def my_coupons(
             continue
         items.append({
             "id": uc.id,
-            "name": tpl.name,
+            "name": coupon_display_name(tpl),
+            **coupon_scope(tpl),
             "coupon_type": tpl.coupon_type,
             "amount_cents": tpl.amount_cents,
             "percent_off": tpl.percent_off,
@@ -331,7 +334,8 @@ def claim_half_price(
     db.commit()
     return {
         "coupon_id": coupon.id,
-        "name": template.name,
+        "name": coupon_display_name(template),
+        **coupon_scope(template),
         "percent_off": template.percent_off,
         "expire_at": coupon.expire_at.isoformat(),
         "remaining": max(0, 100 - issued - 1),
@@ -345,7 +349,8 @@ def _guest_coupon_view(coupon: UserCoupon, template: CouponTemplate, guest_token
     return {
         "guest_token": guest_token,
         "coupon_id": coupon.id,
-        "name": template.name,
+        "name": coupon_display_name(template),
+        **coupon_scope(template),
         "percent_off": template.percent_off,
         "expire_at": coupon.expire_at.isoformat() if coupon.expire_at else None,
         "status": status,
@@ -464,7 +469,8 @@ def bind_guest(
     if existing:
         return {
             "coupon_id": existing.id,
-            "name": template.name,
+            "name": coupon_display_name(template),
+            **coupon_scope(template),
             "percent_off": template.percent_off,
             "expire_at": existing.expire_at.isoformat() if existing.expire_at else None,
             "status": existing.status,
@@ -480,7 +486,8 @@ def bind_guest(
     db.commit()
     return {
         "coupon_id": coupon.id,
-        "name": template.name,
+        "name": coupon_display_name(template),
+        **coupon_scope(template),
         "percent_off": template.percent_off,
         "expire_at": coupon.expire_at.isoformat() if coupon.expire_at else None,
         "status": coupon.status,

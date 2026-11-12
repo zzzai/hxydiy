@@ -16,6 +16,7 @@ from app.db.session import get_db
 from app.models import Order, OrderEvent, PriceBook, Project, Store, User, UserCoupon
 from app.schemas.order import CreateOrderResponse, OrderCreate, OrderOut
 from app.core.customer_auth import current_customer_id
+from app.domain.half_price_coupon import is_half_price_coupon
 from app.domain.coupon_issuance import lock_coupon_template, try_issue_coupon
 from app.services.store_lifecycle import require_store_open
 from fastapi import Header
@@ -169,6 +170,10 @@ def create_order(
                 raise HTTPException(status_code=400, detail="优惠券已过期，请重新选择")
             from app.models import CouponTemplate
             tpl = db.get(CouponTemplate, coupon.template_id)
+            if is_half_price_coupon(tpl):
+                raise HTTPException(status_code=409, detail={
+                    "code": "COUPON_SCAN_REQUIRED", "message": "此券仅限足疗、SPA主项，请到店由店长核对后扫码核销",
+                })
             if tpl and total_cents >= tpl.min_spend_cents:
                 if tpl.coupon_type == "percent" and tpl.percent_off:
                     discount_cents = int(total_cents * tpl.percent_off / 100)

@@ -21,6 +21,7 @@ export type Project = {
   price_label: string;
   prices: Price[];
   content_version?: string;
+  half_price_coupon_price_cents?: number | null;
   catalog_version_id?: number | null;
   catalog_version?: number | null;
   option_groups?: CatalogOptionGroup[];
