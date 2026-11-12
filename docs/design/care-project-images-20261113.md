@@ -46,3 +46,13 @@ On 2026-11-13 the user approved publishing the corrected images and requested re
 The Unslop skill by Damir Sokolovsky ([source](https://github.com/heydamir/unslop), CC BY 4.0) was reviewed as a lightweight UI audit reference. Its useful principles here are reducing repeated copy, keeping interface chrome quiet, and preserving existing brand/layout. It was not installed globally. Desktop-specific dimensions and subjective typography restrictions are not adopted as mobile Chinese UI rules. The reference cannot replace data/permission tests or anatomical image review.
 
 Release-candidate validation: production frontend build and 11 focused asset/detail/pricing tests passed. The actual React menu against real HTTP and isolated PostgreSQL passed 9 end-to-end cases: no top coupon banner; five exact voucher prices; nine excluded rows; 375/390 px non-overlap; ordinary anonymous browsing; login/claim binding; other-browser claimed state; one-time manager redemption; and ordinary prices after consumption. No external requests, real SMS or production business writes. Evidence: `output/care-project-images/{build-release.log,tests-release.log,coupon-menu-report.json}`. Prior image rendering evidence remains valid because this follow-up only removes the banner and its CSS.
+
+## Reviewed screenshots
+
+Screenshots use synthetic data, never real customer records. Main/detail screens were inspected at 375 and 390 px; the following 390 px evidence is retained for PR review.
+
+- [Claimed-voucher menu without the top coupon banner](evidence/care-project-images-20261113/menu-foot-390.png)
+- [Waist main](evidence/care-project-images-20261113/waist-hero-390.png) and [waist detail](evidence/care-project-images-20261113/waist-detail-390.png)
+- [Neck main](evidence/care-project-images-20261113/neck-hero-390.png) and [neck detail](evidence/care-project-images-20261113/neck-detail-390.png)
+
+Initial full CI correctly rejected stale `domain.test.ts` expectations that still mapped the two kits to borrowed SPA/head images. Those exact assertions are updated to the approved dedicated assets; assertions still reject legacy backend photographs. The first PR also lacked the required design-evidence heading; screenshots and the review section have now been supplied. No check is bypassed.
