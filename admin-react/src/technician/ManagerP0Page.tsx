@@ -35,7 +35,10 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   const [posterUrl, setPosterUrl] = useState('');
   const [posterBusy, setPosterBusy] = useState(false);
   const [posterError, setPosterError] = useState('');
+  const [posterRevision, setPosterRevision] = useState(0);
   const [couponBusy, setCouponBusy] = useState(false);
+  const couponRequest = useRef('');
+  const couponPending = useRef(false);
   const [couponToken, setCouponToken] = useState('');
   const [reviewFocus, setReviewFocus] = useState<PendingReview | null>(null);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
@@ -97,10 +100,12 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   }, []);
 
   const generateCoupon = async () => {
-    if (couponBusy) return;
+    if (couponPending.current) return;
+    couponPending.current = true;
     setCouponBusy(true);
     try {
-      const response = await createHalfPriceCouponLink();
+      couponRequest.current ||= crypto.randomUUID();
+      const response = await createHalfPriceCouponLink(couponRequest.current);
       const url = new URL('/', window.location.origin);
       if (storeId > 0) url.searchParams.set('store', String(storeId));
       url.searchParams.set('c', response.data.code || response.data.token);
@@ -110,6 +115,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       const detail = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail;
       message.error(detail?.message || '生成券链接失败，请重试');
     } finally {
+      couponPending.current = false;
       setCouponBusy(false);
     }
   };
@@ -129,10 +135,10 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       .then((dataUrl) => {
         if (active) setPosterUrl(dataUrl);
       })
-      .catch(() => { if (active) setPosterError('海报生成失败，请重新生成链接'); })
+      .catch(() => { if (active) setPosterError('海报生成失败，请重试；领券链接仍可使用'); })
       .finally(() => { if (active) setPosterBusy(false); });
     return () => { active = false; };
-  }, [couponShare]);
+  }, [couponShare, posterRevision]);
 
   const savePoster = () => {
     if (!posterUrl) return;
@@ -189,13 +195,14 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} onOpenHistory={() => setSubview('coupon-history')} />}
     {subview === 'coupon-history' && <ManagerCouponHistoryView />}
 
-    {couponShare && <Modal open title="半价券海报" footer={null} onCancel={() => setCouponShare(null)}>
+    {couponShare && <Modal open title="半价券海报" footer={null} onCancel={() => { setCouponShare(null); couponRequest.current = ''; }}>
       <div className="manager-p0-coupon-share">
         {posterBusy ? <div className="manager-coupon-poster-loading">正在生成海报…</div> : posterError ? <div className="manager-coupon-poster-error">{posterError}</div> : posterUrl ? <img className="manager-coupon-poster-image" src={posterUrl} alt="荷小悦半价券分享海报" /> : null}
         <p className="manager-p0-muted">保存海报后发给顾客；顾客扫码领取，登录后自动存入券包。</p>
         <p className="manager-p0-muted">本店已发 {couponShare.issued}/{couponShare.limit} 张，剩余 {couponShare.remaining} 张。</p>
+        <p>每张海报仅 1 张券。顾客登录后领取并绑定本人，其他人再扫显示已领取。</p>
         <Input readOnly value={couponShare.link} />
-        <div><Button type="primary" icon={<DownloadOutlined />} disabled={!posterUrl || posterBusy} onClick={savePoster}>保存海报</Button><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button loading={couponBusy} onClick={() => void generateCoupon()}>重新生成</Button></div>
+        <div className="manager-coupon-poster-actions"><Button type="primary" icon={<DownloadOutlined />} disabled={!posterUrl || posterBusy} onClick={savePoster}>保存海报</Button><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button aria-label="重新生成海报" loading={posterBusy} onClick={() => setPosterRevision(value => value + 1)}>重新生成海报</Button></div>
       </div>
     </Modal>}
 

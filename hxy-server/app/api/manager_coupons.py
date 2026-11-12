@@ -10,7 +10,7 @@ import re
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from sqlalchemy import func as sa_func, select, update
 from sqlalchemy.orm import Session
 
@@ -25,8 +25,8 @@ from app.api.admin_v2 import (
 )
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
-from app.domain.coupon_redeem import create_claim_token, decode_redeem_token
-from app.models import AuditLog, CouponTemplate, Staff, User, UserCoupon
+from app.domain.coupon_redeem import create_claim_token, create_poster_token, decode_redeem_token
+from app.models import AuditLog, CouponPosterLink, CouponTemplate, Staff, Store, User, UserCoupon
 
 router = APIRouter(prefix="/admin/v2/manager/coupons", tags=["manager-coupons"])
 
@@ -35,7 +35,7 @@ HALF_PRICE_VALIDITY_DAYS = 60
 HALF_PRICE_ISSUE_LIMIT = 100
 
 
-def _half_price_template(db: Session, store_id: int) -> CouponTemplate:
+def _half_price_template(db: Session, store_id: int, *, preserve_existing: bool = False) -> CouponTemplate:
     code = f"{HALF_PRICE_CODE_PREFIX}{store_id}"
     template = lock_coupon_template(db, CouponTemplate.store_id == store_id, CouponTemplate.code == code)
     if template is None:
@@ -57,6 +57,14 @@ def _half_price_template(db: Session, store_id: int) -> CouponTemplate:
         )
         db.add(template)
         db.flush()
+    if preserve_existing and (
+        template.validity_days != HALF_PRICE_VALIDITY_DAYS
+        or template.coupon_type != "percent" or template.percent_off != 50
+        or template.min_spend_cents != 0
+    ):
+        raise HTTPException(status_code=409, detail={
+            "code": "COUPON_CONFIG_MISMATCH", "message": "活动设置与半价券海报不一致，请先核对活动配置",
+        })
     if template.validity_days != HALF_PRICE_VALIDITY_DAYS:
         template.validity_days = HALF_PRICE_VALIDITY_DAYS
     if template.status != "published":
@@ -259,6 +267,49 @@ def create_half_price_link(
     }
 
 
+class PosterLinkIn(BaseModel):
+    request_id: uuid.UUID
+
+
+@router.post("/half-price/poster-link")
+def create_half_price_poster_link(
+    body: PosterLinkIn,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _resolve_target_store_id(db, staff, None)
+    # Serialize duplicate creation and first-template creation without touching coupons.
+    db.scalar(select(Store.id).where(Store.id == store_id).with_for_update(key_share=True))
+    poster = db.scalar(select(CouponPosterLink).where(
+        CouponPosterLink.created_by_staff_id == staff.id,
+        CouponPosterLink.request_id == str(body.request_id),
+    ))
+    if poster and poster.store_id != store_id:
+        raise HTTPException(status_code=409, detail={"code": "POSTER_REQUEST_CONFLICT", "message": "请求已用于其他门店"})
+    template = _half_price_template(db, store_id, preserve_existing=True)
+    if poster is None:
+        _ensure_issue_capacity(db, template)
+        poster = CouponPosterLink(
+            store_id=store_id, template_id=template.id, created_by_staff_id=staff.id,
+            request_id=str(body.request_id), expires_at=datetime.now(UTC) + timedelta(days=60),
+        )
+        db.add(poster)
+        db.flush()
+        _audit(db, staff, "manager_create_coupon_poster", "coupon_poster_link", str(poster.id), {
+            "store_id": store_id, "template_id": template.id, "request_id": str(body.request_id),
+        })
+    token = create_poster_token(poster.id, poster.store_id, _aware(poster.expires_at))
+    issued = _issued_count(db, template.id)
+    db.commit()
+    return {
+        "code": token, "poster_id": poster.id, "claimed": poster.coupon_id is not None,
+        "expires_at": _aware(poster.expires_at).isoformat(), "limit": HALF_PRICE_ISSUE_LIMIT,
+        "issued": issued, "remaining": max(0, HALF_PRICE_ISSUE_LIMIT - issued),
+    }
+
+
 class IssueByPhoneIn(BaseModel):
     phone: str = Field(min_length=11, max_length=20)
     name: str | None = Field(default=None, max_length=32)
@@ -395,6 +446,7 @@ class CouponTokenIn(BaseModel):
 
 
 class CouponRedeemIn(CouponTokenIn):
+    holder_present: StrictBool = False
     request_id: str = Field(min_length=8, max_length=100)
 
 
@@ -410,7 +462,14 @@ def _redeemable(db: Session, staff: Staff, token: str):
     customer = db.get(User, coupon.user_id)
     if not customer:
         raise HTTPException(status_code=403, detail={"code": "COUPON_CUSTOMER_MISMATCH", "message": "顾客不属于当前门店"})
-    if not customer.openid.startswith("guest-coupon-"):
+    # A newly registered poster recipient may have no order or membership yet.
+    # The store-scoped poster establishes access to this coupon only.
+    poster_owner = db.scalar(select(CouponPosterLink.id).where(
+        CouponPosterLink.coupon_id == coupon.id,
+        CouponPosterLink.store_id == store_id,
+        CouponPosterLink.template_id == template.id,
+    ))
+    if not customer.openid.startswith("guest-coupon-") and poster_owner is None:
         store_customer = db.scalar(select(User.id).where(
             User.id == coupon.user_id,
             User.id.in_(_store_user_ids(store_id)),
@@ -439,6 +498,9 @@ def validate_coupon(
     coupon, template, customer, _ = _redeemable(db, staff, body.token)
     return {
         "valid": True,
+        "requires_holder_confirmation": db.scalar(select(CouponPosterLink.id).where(
+            CouponPosterLink.coupon_id == coupon.id,
+        )) is not None,
         "coupon_id": coupon.id,
         "customer_name": _customer_display_name(customer),
         "phone_masked": _masked_phone(customer.phone),
@@ -462,6 +524,12 @@ def redeem_coupon(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     coupon, template, customer, store_id = _redeemable(db, staff, body.token)
+    is_poster = db.scalar(select(CouponPosterLink.id).where(CouponPosterLink.coupon_id == coupon.id)) is not None
+    if is_poster and not body.holder_present:
+        raise HTTPException(status_code=422, detail={
+            "code": "COUPON_HOLDER_CONFIRMATION_REQUIRED",
+            "message": "请先核对顾客本人现场出示的券码及账户信息",
+        })
     result = db.execute(
         update(UserCoupon)
         .where(UserCoupon.id == coupon.id, UserCoupon.status == "unused")
@@ -476,6 +544,7 @@ def redeem_coupon(
         "template_id": template.id,
         "template_code": template.code,
         "request_id": body.request_id,
+        "holder_present": body.holder_present,
         "redeemed_at": datetime.now(UTC).isoformat(),
     })
     db.commit()

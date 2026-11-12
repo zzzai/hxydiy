@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Input, Spin, Tag } from 'antd';
+import { Alert, Button, Checkbox, Input, Spin, Tag } from 'antd';
 import { CameraOutlined, ScanOutlined } from '@ant-design/icons';
 import { redeemManagerCoupon, validateManagerCoupon } from '../api';
 
 type CouponPreview = {
+  requires_holder_confirmation?: boolean;
   coupon_id: number;
   customer_name: string;
   phone_masked: string;
@@ -21,6 +22,7 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack, onO
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busy, setBusy] = useState(false);
+  const [holderPresent, setHolderPresent] = useState(false);
   const [cameraBusy, setCameraBusy] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -48,7 +50,7 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack, onO
     } catch { /* not a URL */ }
     value = value.trim();
     if (!value || busy) return;
-    setBusy(true); setError(''); setSuccess(''); setPreview(null);
+    setBusy(true); setError(''); setSuccess(''); setPreview(null); setHolderPresent(false);
     try {
       const response = await validateManagerCoupon(value);
       setToken(value);
@@ -62,10 +64,10 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack, onO
   };
 
   const redeem = async () => {
-    if (!preview || busy) return;
+    if (!preview || busy || (preview.requires_holder_confirmation && !holderPresent)) return;
     setBusy(true); setError(''); setSuccess('');
     try {
-      const response = await redeemManagerCoupon(token, crypto.randomUUID());
+      const response = await redeemManagerCoupon(token, crypto.randomUUID(), holderPresent);
       setSuccess(`${response.data.customer_name} 的「${response.data.name}」已核销，券已失效。`);
       setPreview(null);
       setToken('');
@@ -83,7 +85,7 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack, onO
     setCameraError('');
     const detectorClass = (window as unknown as { BarcodeDetector?: new (options: { formats: string[] }) => { detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>> } }).BarcodeDetector;
     if (!detectorClass || !navigator.mediaDevices?.getUserMedia) {
-      setCameraError('当前浏览器不支持相机扫码，请让顾客把核销码发给你，粘贴到下方。');
+      setCameraError('当前浏览器不支持相机扫码，请核对顾客现场出示的券码，再粘贴到下方。');
       return;
     }
     setCameraBusy(true);
@@ -140,7 +142,8 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack, onO
         <div><dt>有效期</dt><dd>{preview.expire_at ? new Date(preview.expire_at).toLocaleDateString('zh-CN') : '—'}</dd></div>
       </dl>
       <p className="manager-detail-note">确认后券立即变为“已使用”。本次不抵扣当前订单金额。</p>
-      <Button type="primary" block loading={busy} onClick={() => void redeem()}>确认核销</Button>
+      {preview.requires_holder_confirmation && <Checkbox checked={holderPresent} onChange={event => setHolderPresent(event.target.checked)}>已核对顾客本人现场出示的券码及账户信息</Checkbox>}
+      <Button type="primary" block loading={busy} disabled={preview.requires_holder_confirmation && !holderPresent} onClick={() => void redeem()}>确认核销</Button>
     </div>}
   </section>;
 }

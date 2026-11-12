@@ -84,7 +84,16 @@ def create_claim_token(store_id: int, template_id: int) -> tuple[str, datetime]:
     return _compact("c", store_id, template_id, expires_at), expires_at
 
 
+def create_poster_token(poster_id: int, store_id: int, expires_at: datetime) -> str:
+    return _compact("p", poster_id, store_id, expires_at)
+
+
 def decode_claim_token(token: str) -> dict:
+    if token.startswith("p."):
+        poster_id, store_id = _parse_compact(
+            token, "p", error_code="COUPON_LINK_INVALID", message="领券链接无效或已过期",
+        )
+        return {"poster_id": poster_id, "store_id": store_id}
     if token.startswith("c."):
         store_id, template_id = _parse_compact(
             token, "c", error_code="COUPON_LINK_INVALID", message="领券链接无效或已过期",
