@@ -107,7 +107,7 @@
 .manager-p0-coupon-share { display: grid; gap: 9px; justify-items: center; }
 .manager-p0-coupon-share p { margin: 0; color: #647a71; font-size: 12px; }
 .manager-p0-coupon-share img { width: 210px; height: 210px; }
-.manager-p0-coupon-share > div { display: flex; gap: 6px; }
+.manager-p0-coupon-share > div:not(.manager-coupon-poster) { display: flex; gap: 6px; }
 .manager-p0-audio{width:100%;height:34px;margin-top:9px}
 .manager-coupon-poster{width:100%;padding:18px 16px 16px;display:grid;justify-items:center;gap:8px;border-radius:16px;color:#fff;background:linear-gradient(160deg,#145545 0%,#1f8f75 100%);box-shadow:0 10px 28px rgba(20,85,69,.16);text-align:center}
 .manager-coupon-poster-brand{color:#d9ecdf;font-size:11px;letter-spacing:.16em}
