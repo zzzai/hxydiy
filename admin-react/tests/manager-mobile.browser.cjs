@@ -75,15 +75,15 @@ async function main() {
       await start('normal', width); await loaded();
       assert.equal(await page.locator('.manager-p0-page').count(), 1);
       assert.equal(await page.locator('.manager-p0-nav button').count(), 4);
-      assert.match(await page.locator('.manager-p0-page').innerText(), /今日|现场|团队|经营/);
+      assert.match(await page.locator('.manager-p0-page').innerText(), /今日|现场|券|我的/);
       await noOverflow(); await shot('today-' + width);
-      await tab('经营'); await page.locator('.manager-p0-area').first().waitFor();
+      await page.getByRole('button', { name: /巡检照片/ }).click(); await page.locator('.manager-p0-area').first().waitFor();
       assert.equal(await page.locator('.manager-p0-area').count(), 5);
       await noOverflow(); await shot('ops-' + width);
     });
 
     await check('team-overview', async () => {
-      await start('normal'); await loaded(); await tab('团队');
+      await start('normal'); await loaded(); await tab('我的');
       await page.locator('.manager-p0-tech').first().waitFor();
       assert.equal(await page.locator('.manager-p0-tech').count(), 2);
       assert.match(await page.locator('.manager-p0-page').innerText(), /学习与考核|待总部抽检|待跟进/);
