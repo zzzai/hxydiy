@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Input, Modal, message } from 'antd';
-import { ArrowLeftOutlined, HomeOutlined, ReloadOutlined, ShopOutlined, GiftOutlined, UserOutlined } from '@ant-design/icons';
-import QRCode from 'qrcode';
+import { ArrowLeftOutlined, DownloadOutlined, HomeOutlined, ReloadOutlined, ShopOutlined, GiftOutlined, UserOutlined } from '@ant-design/icons';
 import { createHalfPriceCouponLink, getManagerDaily, getManagerTeam, getManagerWorkbench, getStaff } from '../api';
+import { createCouponPoster } from './couponPoster';
 import { parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
 import { useTechnicianSession } from './useTechnicianSession';
 import { isMobileManager } from './managerMobile';
@@ -31,7 +31,10 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   const [team, setTeam] = useState<Awaited<ReturnType<typeof getManagerTeam>>['data'] | null>(null);
   const [workbench, setWorkbench] = useState<Awaited<ReturnType<typeof getManagerWorkbench>>['data'] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [couponShare, setCouponShare] = useState<{ link: string; qr: string; issued: number; remaining: number; limit: number } | null>(null);
+  const [couponShare, setCouponShare] = useState<{ link: string; issued: number; remaining: number; limit: number } | null>(null);
+  const [posterUrl, setPosterUrl] = useState('');
+  const [posterBusy, setPosterBusy] = useState(false);
+  const [posterError, setPosterError] = useState('');
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponToken, setCouponToken] = useState('');
   const [reviewFocus, setReviewFocus] = useState<PendingReview | null>(null);
@@ -102,15 +105,49 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       if (storeId > 0) url.searchParams.set('store', String(storeId));
       url.searchParams.set('c', response.data.code || response.data.token);
       const link = url.toString();
-      let qr = '';
-      try { qr = await QRCode.toDataURL(link, { width: 220, margin: 1, errorCorrectionLevel: 'L' }); } catch { /* link still works */ }
-      setCouponShare({ link, qr, issued: response.data.issued, remaining: response.data.remaining, limit: response.data.limit });
+      setCouponShare({ link, issued: response.data.issued, remaining: response.data.remaining, limit: response.data.limit });
     } catch (failure) {
       const detail = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail;
       message.error(detail?.message || '生成券链接失败，请重试');
     } finally {
       setCouponBusy(false);
     }
+  };
+
+  useEffect(() => {
+    if (!couponShare) {
+      setPosterUrl('');
+      setPosterError('');
+      setPosterBusy(false);
+      return undefined;
+    }
+    let active = true;
+    let objectUrl = '';
+    setPosterUrl('');
+    setPosterError('');
+    setPosterBusy(true);
+    void createCouponPoster(couponShare.link, getStaff()?.store_name || '本店')
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPosterUrl(objectUrl);
+      })
+      .catch(() => { if (active) setPosterError('海报生成失败，请重新生成链接'); })
+      .finally(() => { if (active) setPosterBusy(false); });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [couponShare]);
+
+  const savePoster = () => {
+    if (!posterUrl) return;
+    const anchor = document.createElement('a');
+    anchor.href = posterUrl;
+    anchor.download = `荷小悦-半价券-${new Date().toISOString().slice(0, 10)}.png`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   };
 
   const openTab = (next: Tab) => { setSubview(null); setTab(next); };
@@ -158,8 +195,14 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} onOpenHistory={() => setSubview('coupon-history')} />}
     {subview === 'coupon-history' && <ManagerCouponHistoryView />}
 
-    {couponShare && <Modal open title="半价券链接" footer={null} onCancel={() => setCouponShare(null)}>
-      <div className="manager-p0-coupon-share"><div className="manager-coupon-poster"><span className="manager-coupon-poster-brand">荷小悦 · 草本轻养</span><strong>忙完一天，来泡个脚，<br />给自己松一松。</strong><p>全单 5 折 · 领取后 60 天有效</p>{couponShare.qr && <div className="manager-coupon-poster-qr"><img src={couponShare.qr} alt="半价券领取二维码" /><small>扫码领取</small></div>}<em>到店出示核销码 · 登录后自动存入券包</em></div><p className="manager-p0-muted">本店已发 {couponShare.issued}/{couponShare.limit} 张，剩余 {couponShare.remaining} 张。</p><Input readOnly value={couponShare.link} /><div><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button type="primary" loading={couponBusy} onClick={() => void generateCoupon()}><GiftOutlined /> 重新生成链接</Button></div></div>
+    {couponShare && <Modal open title="半价券海报" footer={null} onCancel={() => setCouponShare(null)}>
+      <div className="manager-p0-coupon-share">
+        {posterBusy ? <div className="manager-coupon-poster-loading">正在生成海报…</div> : posterError ? <div className="manager-coupon-poster-error">{posterError}</div> : posterUrl ? <img className="manager-coupon-poster-image" src={posterUrl} alt="荷小悦半价券分享海报" /> : null}
+        <p className="manager-p0-muted">保存海报后发给顾客；顾客扫码领取，登录后自动存入券包。</p>
+        <p className="manager-p0-muted">本店已发 {couponShare.issued}/{couponShare.limit} 张，剩余 {couponShare.remaining} 张。</p>
+        <Input readOnly value={couponShare.link} />
+        <div><Button type="primary" icon={<DownloadOutlined />} disabled={!posterUrl || posterBusy} onClick={savePoster}>保存海报</Button><Button onClick={() => void navigator.clipboard.writeText(couponShare.link).then(() => message.success('链接已复制')).catch(() => message.info(couponShare.link))}>复制链接</Button><Button loading={couponBusy} onClick={() => void generateCoupon()}>重新生成</Button></div>
+      </div>
     </Modal>}
 
     <nav className="manager-p0-nav" aria-label="店长导航">
