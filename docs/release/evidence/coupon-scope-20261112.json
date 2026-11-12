@@ -1,0 +1,84 @@
+{
+  "data_baseline": "actual backup immediately before deployment; upload-start baseline and differences retained",
+  "concurrent_upload_activity": {
+    "new_poster_links": 2,
+    "new_audits": 2,
+    "staff_oauth_attempts": 1,
+    "identity_verification_table_changed_before_backup": true
+  },
+  "status": "passed",
+  "sha": "6909c2d69f9517a705ce9b651741ecbfc8e909f8",
+  "run_id": "43247328012",
+  "manifest_entries": 792,
+  "container_python_files": 187,
+  "public_resources": [
+    "/",
+    "/admin/",
+    "/admin/assets/index-Blw_YwV9.css",
+    "/admin/assets/index-DD8Rf4_z.js",
+    "/api/v1/projects?store_id=1",
+    "/assets/index-ABpRcqG9.js",
+    "/assets/index-CA67r3Ch.css",
+    "/assets/ip-paopao-footbath-v3.png",
+    "/technician/"
+  ],
+  "health": {
+    "status": "ok",
+    "service": "hxy-customer-api",
+    "environment": "production"
+  },
+  "api_rejections": [
+    {
+      "path": "/api/v1/admin/v2/manager/coupons/half-price/poster-link",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/admin/v2/manager/coupons/validate",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/coupons/poster-status",
+      "status": 400
+    }
+  ],
+  "schema_revision": "20261112_coupon_poster_links",
+  "existing_tables_verified": 70,
+  "changed_existing_tables": [],
+  "new_tables": [],
+  "eligible_projects": [
+    {
+      "code": "hxy-xiangxiang-60",
+      "store_cents": 8900,
+      "voucher_cents": 4450
+    },
+    {
+      "code": "hxy-xiaoqi-90",
+      "store_cents": 12900,
+      "voucher_cents": 6450
+    },
+    {
+      "code": "hxy-nvshen-60",
+      "store_cents": 10900,
+      "voucher_cents": 5450
+    },
+    {
+      "code": "hxy-spa-60",
+      "store_cents": 12900,
+      "voucher_cents": 6450
+    },
+    {
+      "code": "hxy-spa-90",
+      "store_cents": 17900,
+      "voucher_cents": 8950
+    }
+  ],
+  "excluded_project_count": 9,
+  "backup_sha256": "acd3beae9ec6abdd3b630643570cb0001a8c2e7948191da63ce002e3d8f8f7e7",
+  "production_business_writes_by_verification": 0,
+  "field_acceptance": "real phone SMS, WeChat/WeCom camera and onsite identity verification remain manual",
+  "poster_link_rows": 9,
+  "pr": 477,
+  "ci_run_id": 43246307925,
+  "release_id": "github-6909c2d69f95-43247328012",
+  "backup_restore_rehearsal": "passed in guarded deployment workflow"
+}

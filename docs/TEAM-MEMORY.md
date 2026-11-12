@@ -1,5 +1,7 @@
 # hxy-diy 共享记忆
 
+2026-11-12：PR #477 半价券主项范围与持券菜单价已上线，生产旧业务表完全一致；当前运行、验收与回退见 CURRENT-STATE.md。
+
 2026-11-12：PR #475 单张海报本人领券与一次核销已发布；旧数据逐表保护通过。当前运行、现场验收边界与回退见 CURRENT-STATE.md 及 `contracts/coupon-poster-single-claim.md`。
 
 2026-11-12 单张海报领券发布候选：用户确认一张海报只发一张券，必须手机号登录、首领绑定本人、他人显示已领取；店长扫码预览后核对本人并确认核销。独立 p. 海报码与 coupon_poster_links 新表，保留旧公共活动码、旧匿名券及所有历史权益。契约 docs/contracts/coupon-poster-single-claim.md；发布边界 docs/release/coupon-poster-single-claim-20261112.md。用户已授权验收通过后发布；隔离真实HTTP全链路、PG并发抢领/核销通过。生产状态以本批发布回执为准。
