@@ -16,3 +16,8 @@
 button.coupon-claim-link{border:0;cursor:pointer;width:100%;font:inherit}
 .coupon-claim-status{display:grid;justify-items:center;gap:6px;margin:10px 0 14px;padding:18px 14px;border:1px solid #dce8df;border-radius:14px;background:#f7fbf8;color:#176856}.coupon-claim-status svg{color:#1f8f75}.coupon-claim-status strong{font-size:19px;color:#164f3c}.coupon-claim-status p{margin:0;color:#66766d;font-size:13px;line-height:1.6}.coupon-claim-status.used{border-color:#e2c98f;background:#fffaf0}.coupon-claim-status.used svg,.coupon-claim-status.used strong{color:#9a7220}.coupon-claim-status.expired{border-color:#e1e6e2;background:#fafbfa}.coupon-claim-status.expired svg{color:#7d9084}.coupon-claim-actions a.primary{background:#197a3b;color:#fff}
 .coupon-claim-poster-copy{margin:-6px 0 18px;color:#53665a;font-size:13px;line-height:1.6}.coupon-claim-poster-copy:before{content:"";display:inline-block;width:18px;height:1px;margin:0 7px 3px 0;background:#a86d23;vertical-align:middle}
+
+.poster-claim-page .coupon-claim-primary{background:#145545}
+.poster-claim-page .coupon-claim-primary:disabled{opacity:.55;cursor:wait}
+.poster-claim-page .coupon-claim-code input{min-width:0;width:0}
+.poster-claim-page .coupon-claim-status p{overflow-wrap:anywhere}

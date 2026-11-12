@@ -34,6 +34,8 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   const [view, setView] = useState<'tasks' | 'orders' | 'selections' | 'positions' | 'reviews' | 'coupons'>('selections');
   const [ordersRefresh, setOrdersRefresh] = useState(0);
   const [couponBusy, setCouponBusy] = useState(false);
+  const couponRequest = useRef('');
+  const couponPending = useRef(false);
   const [couponToken, setCouponToken] = useState('');
   const [couponShare, setCouponShare] = useState<{ link: string; qr: string } | null>(null);
   const [mapRefresh, setMapRefresh] = useState(0);
@@ -62,10 +64,12 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
   }, [current]);
 
   const generateCouponLink = async () => {
-    if (couponBusy) return;
+    if (couponPending.current) return;
+    couponPending.current = true;
     setCouponBusy(true);
     try {
-      const response = await createHalfPriceCouponLink();
+      couponRequest.current ||= crypto.randomUUID();
+      const response = await createHalfPriceCouponLink(couponRequest.current);
       const storeId = Number(getStaff()?.store_id || 0);
       const url = new URL('/', window.location.origin);
       if (storeId > 0) url.searchParams.set('store', String(storeId));
@@ -78,6 +82,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
       const detailMessage = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message;
       message.error(detailMessage || '生成失败，请重试');
     } finally {
+      couponPending.current = false;
       setCouponBusy(false);
     }
   };
@@ -271,7 +276,7 @@ export default function ManagerStorePage({ learningEntry }: { learningEntry?: Re
         <Typography.Text type="secondary">如需取消或调整，请联系门店负责人。</Typography.Text>
       </>}
     </Drawer>
-    <Modal open={Boolean(couponShare)} title="半价券链接" footer={null} onCancel={() => setCouponShare(null)}>
+    <Modal open={Boolean(couponShare)} title="半价券链接" footer={null} onCancel={() => { setCouponShare(null); couponRequest.current = ''; }}>
       <div className="manager-coupon-share">
         <p>发给顾客，登录领取，60 天有效。</p>
         {couponShare?.qr && <img className="manager-coupon-share-qr" src={couponShare.qr} alt="半价券领取二维码" />}

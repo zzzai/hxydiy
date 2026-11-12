@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.domain.coupon_redeem import create_guest_token, create_redeem_token, decode_claim_token, decode_guest_token
+from app.domain.coupon_poster import claim_poster, poster_status
 from app.models import AuditLog, CouponTemplate, User, UserCoupon, SelectionSession
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
@@ -267,6 +268,18 @@ class ClaimHalfPriceIn(BaseModel):
     token: str | None = None
 
 
+@router.post("/poster-status")
+def coupon_poster_status(
+    body: ClaimHalfPriceIn,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = decode_claim_token((body.code or body.token or "").strip())
+    if "poster_id" not in payload:
+        raise HTTPException(status_code=422, detail={"code": "COUPON_LINK_INVALID", "message": "不是单张海报领券码"})
+    return poster_status(db, payload, _user_id(authorization, db))
+
+
 @router.post("/claim-half-price")
 def claim_half_price(
     body: ClaimHalfPriceIn,
@@ -281,6 +294,8 @@ def claim_half_price(
     if not value:
         raise HTTPException(status_code=422, detail={"code": "COUPON_LINK_INVALID", "message": "领券链接无效或已过期"})
     payload = decode_claim_token(value)
+    if "poster_id" in payload:
+        return claim_poster(db, payload, user_id)
     template = lock_coupon_template(
         db, CouponTemplate.id == payload["template_id"],
         CouponTemplate.store_id == payload["store_id"],
@@ -345,6 +360,10 @@ def guest_claim(
 ) -> dict:
     """未登录也能拿到可核销的券；登录后再绑定到顾客账户。"""
     payload = decode_claim_token(body.code)
+    if "poster_id" in payload:
+        raise HTTPException(status_code=401, detail={
+            "code": "COUPON_LOGIN_REQUIRED", "message": "请登录后领取，优惠券将绑定本人账户",
+        })
     template = lock_coupon_template(
         db, CouponTemplate.id == payload["template_id"],
         CouponTemplate.store_id == payload["store_id"],

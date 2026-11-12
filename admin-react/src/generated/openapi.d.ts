@@ -1280,6 +1280,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/coupons/half-price/poster-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Half Price Poster Link */
+        post: operations["create_half_price_poster_link_api_v1_admin_v2_manager_coupons_half_price_poster_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/coupons/history": {
         parameters: {
             query?: never;
@@ -3396,6 +3413,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/coupons/poster-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Coupon Poster Status */
+        post: operations["coupon_poster_status_api_v1_coupons_poster_status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/coupons/templates": {
         parameters: {
             query?: never;
@@ -5324,6 +5358,11 @@ export interface components {
         };
         /** CouponRedeemIn */
         CouponRedeemIn: {
+            /**
+             * Holder Present
+             * @default false
+             */
+            holder_present: boolean;
             /** Request Id */
             request_id: string;
             /** Token */
@@ -6336,6 +6375,14 @@ export interface components {
             name: string;
             /** Score */
             score?: number | null;
+        };
+        /** PosterLinkIn */
+        PosterLinkIn: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
         };
         /** PriceOut */
         PriceOut: {
@@ -10670,6 +10717,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_half_price_poster_link_api_v1_admin_v2_manager_coupons_half_price_poster_link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosterLinkIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -15558,6 +15640,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["GuestTokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coupon_poster_status_api_v1_coupons_poster_status_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimHalfPriceIn"];
             };
         };
         responses: {

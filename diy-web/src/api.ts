@@ -516,3 +516,17 @@ export function getGuestCouponRedeemToken(guestToken: string) {
 export function bindGuestCoupon(guestToken: string, authToken: string) {
   return request<{ coupon_id: number; name: string; percent_off: number; expire_at: string | null; status: string; already_held: boolean }>('/coupons/bind-guest', { method: 'POST', headers: { Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ guest_token: guestToken }) });
 }
+
+export type PosterCoupon = { coupon_id: number; name: string; percent_off: number; expire_at: string | null; status: string };
+export type PosterCouponStatus = { state: 'available'; validity_days: number } | { state: 'claimed' | 'unavailable' } | { state: 'owned'; coupon: PosterCoupon };
+export function getCouponPosterStatus(code: string, authToken?: string) {
+  return request<PosterCouponStatus>('/coupons/poster-status', {
+    method: 'POST', headers: authToken ? { Authorization: 'Bearer ' + authToken } : undefined,
+    body: JSON.stringify({ code }),
+  });
+}
+export function claimPosterCoupon(code: string, authToken: string) {
+  return request<PosterCoupon>('/coupons/claim-half-price', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + authToken }, body: JSON.stringify({ code }),
+  });
+}

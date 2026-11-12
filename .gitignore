@@ -34,3 +34,6 @@ _build_plan/
 *.png
 *.svg
 media/
+
+# Versioned brand asset used by the manager coupon poster
+!diy-web/public/assets/ip-paopao-footbath-v3.png

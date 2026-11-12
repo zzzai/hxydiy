@@ -437,9 +437,9 @@ export const getAutomationLogs = (id: number, storeId?: number, page = 1, pageSi
 export { getToken, getStaff };
 export const issueHalfPriceCoupon = (userId: number) => client.post('/admin/v2/manager/coupons/half-price/issue', { user_id: userId });
 export const validateManagerCoupon = (token: string) => client.post('/admin/v2/manager/coupons/validate', { token });
-export const redeemManagerCoupon = (token: string, requestId: string) => client.post('/admin/v2/manager/coupons/redeem', { token, request_id: requestId });
+export const redeemManagerCoupon = (token: string, requestId: string, holderPresent = false) => client.post('/admin/v2/manager/coupons/redeem', { token, request_id: requestId, holder_present: holderPresent });
 export const issueHalfPriceCouponByPhone = (phone: string, name?: string) => client.post('/admin/v2/manager/coupons/half-price/issue-by-phone', { phone, name: name || undefined });
-export const createHalfPriceCouponLink = () => client.post('/admin/v2/manager/coupons/half-price/link');
+export const createHalfPriceCouponLink = (requestId: string) => client.post('/admin/v2/manager/coupons/half-price/poster-link', { request_id: requestId });
 
 export type ManagerCouponHistoryKind = 'issued' | 'redeemed';
 export type ManagerCouponHistoryStatus = 'unused' | 'used' | 'expired';

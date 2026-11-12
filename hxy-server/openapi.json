@@ -1251,6 +1251,11 @@
       },
       "CouponRedeemIn": {
         "properties": {
+          "holder_present": {
+            "default": false,
+            "title": "Holder Present",
+            "type": "boolean"
+          },
           "request_id": {
             "maxLength": 100,
             "minLength": 8,
@@ -4106,6 +4111,20 @@
           "name"
         ],
         "title": "PhysiqueScore",
+        "type": "object"
+      },
+      "PosterLinkIn": {
+        "properties": {
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "PosterLinkIn",
         "type": "object"
       },
       "PriceOut": {
@@ -13779,6 +13798,63 @@
         ]
       }
     },
+    "/api/v1/admin/v2/manager/coupons/half-price/poster-link": {
+      "post": {
+        "operationId": "create_half_price_poster_link_api_v1_admin_v2_manager_coupons_half_price_poster_link_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PosterLinkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Half Price Poster Link",
+        "tags": [
+          "manager-coupons"
+        ]
+      }
+    },
     "/api/v1/admin/v2/manager/coupons/history": {
       "get": {
         "description": "本店半价券的发券、领取、核销记录。\n\n发券以 UserCoupon 的实际创建为准；仅生成链接不算发券。\n领取和直接发券都来自 UserCoupon，核销时间来自 AuditLog。",
@@ -22656,6 +22732,67 @@
           }
         },
         "summary": "Guest Redeem Token",
+        "tags": [
+          "coupons"
+        ]
+      }
+    },
+    "/api/v1/coupons/poster-status": {
+      "post": {
+        "operationId": "coupon_poster_status_api_v1_coupons_poster_status_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimHalfPriceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Coupon Poster Status Api V1 Coupons Poster Status Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coupon Poster Status",
         "tags": [
           "coupons"
         ]

@@ -9,6 +9,7 @@ import {
 import { GUEST_COUPON_KEY_PREFIX } from '../guestCoupon';
 import { isValidPhone, normalizePhone, readCustomerAuth, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
 import './coupon-claim.css';
+import PosterCouponClaimPage from './PosterCouponClaimPage';
 
 type CouponView = { id: number; name: string; percent_off: number; expire_at: string; status: string };
 
@@ -22,6 +23,13 @@ function errorDetail(failure: unknown): { code?: string; message?: string } {
 }
 
 export default function CouponClaimPage() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('c') || params.get('token') || '';
+  if (code.startsWith('p.')) return <PosterCouponClaimPage key={code} code={code} storeId={Number(params.get('store') || 1)} />;
+  return <LegacyCouponClaimPage />;
+}
+
+function LegacyCouponClaimPage() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('c') || params.get('token') || '';
   const storeId = Number(params.get('store') || 1);

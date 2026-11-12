@@ -63,3 +63,6 @@ __all__.extend([
     "DailyStoreCheckin",
     "TrainingAssessment",
 ])
+
+from app.models.coupon_poster import CouponPosterLink
+__all__.append("CouponPosterLink")
