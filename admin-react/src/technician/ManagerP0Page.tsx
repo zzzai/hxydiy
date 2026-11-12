@@ -36,6 +36,24 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   const [couponToken, setCouponToken] = useState('');
   const [reviewFocus, setReviewFocus] = useState<PendingReview | null>(null);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
+  const uiState = useRef({ tab, subview });
+  uiState.current = { tab, subview };
+
+  useEffect(() => {
+    // WeCom swipe-back is a browser history move. Keep one manager entry in
+    // front of the app so a swipe closes the current sheet/subview instead of
+    // falling back to the WeCom login/verification page.
+    const pushGuard = () => window.history.pushState({ ...(window.history.state || {}), hxyManagerGuard: true }, '', window.location.href);
+    pushGuard();
+    const onPop = () => {
+      const current = uiState.current;
+      if (current.subview) setSubview(null);
+      else if (current.tab !== 'today') setTab('today');
+      pushGuard();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const loadingRef = useRef(false);
 
   const load = useCallback(async (silent = false) => {
