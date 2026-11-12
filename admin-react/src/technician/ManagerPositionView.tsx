@@ -69,20 +69,35 @@ export default function ManagerPositionView({ storeId, refreshKey }: { storeId: 
   const activeCard = identity ? cards.find(item => item.id === identity.positionId) : undefined;
   const detail = identity && !changed && positionDetailMatches(activeCard, identity) ? activeCard?.detail : undefined;
   const close = () => { setIdentity(null); setChanged(false); };
-  const renderCard = (card: ManagerPositionCard) => <article className="manager-position-card" key={card.id}>
+  const openCard = (card: ManagerPositionCard) => {
+    if (!card.detail) return;
+    setIdentity({ positionId: card.id, occupancyId: card.detail.occupancyId, selectionId: card.detail.selectionId });
+    setChanged(false);
+  };
+  const renderCard = (card: ManagerPositionCard) => <article
+    className={`manager-position-card is-${card.association}${card.detail ? ' has-detail' : ''}`}
+    key={card.id}
+    role={card.detail ? 'button' : undefined}
+    tabIndex={card.detail ? 0 : undefined}
+    aria-label={card.detail ? '查看' + card.name + '详情' : undefined}
+    onClick={card.detail ? () => openCard(card) : undefined}
+    onKeyDown={card.detail ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openCard(card); } } : undefined}
+  >
     <div className="manager-position-card-heading"><h3>{card.name}</h3>{!card.enabled && <span>已停用</span>}</div>
     <p className={'manager-position-state is-' + card.association}>{card.statusLabel}</p>
-    {card.detail && <><ul className="manager-item-list">{card.detail.items.length ? card.detail.items.map((item, i) => <li key={i}>{selectionChangeItemSummary(item)}</li>) : <li>未填写项目</li>}</ul>
-      <div className="manager-position-card-footer"><strong>{card.detail.price.value}</strong><Button onClick={() => {
-        setIdentity({ positionId: card.id, occupancyId: card.detail!.occupancyId, selectionId: card.detail!.selectionId }); setChanged(false);
-      }} aria-label={'查看' + card.name + '详情'}>查看详情</Button></div></>}
+    {card.detail && <div className="manager-position-card-meta"><span>{card.detail.items.length ? `${card.detail.items.length} 项` : '未填写项目'}</span><strong>{card.detail.price.value}</strong><i aria-hidden="true">›</i></div>}
     {card.association === 'unverified' && <p className="manager-position-note">暂不展示选单，请刷新核对</p>}
   </article>;
   const disabled = cards.filter(card => !card.enabled);
+  const enabled = cards.filter(card => card.enabled);
+  const free = enabled.filter(card => card.association === 'none').length;
+  const busy = enabled.filter(card => card.association !== 'none' && card.association !== 'unverified').length;
+  const verify = enabled.filter(card => card.association === 'unverified').length;
   return <section className="manager-position-view" aria-label="门店座位">
     {error && <Alert type="error" showIcon message="座位加载失败" description={error} action={<Button onClick={() => void load(true)}>重试</Button>} />}
     {loading && !visibleMap && !error && <div className="manager-empty"><Spin size="small" /><span>正在加载座位</span></div>}
     {!error && visibleMap && !cards.length && <div className="manager-empty"><strong>尚未配置服务位</strong></div>}
+    {visibleMap && cards.length > 0 ? <div className="manager-position-summary"><span><b>{free}</b>空闲</span><span><b>{busy}</b>有客</span>{verify > 0 && <span className="verify"><b>{verify}</b>待核对</span>}</div> : null}
     {groups.map(group => {
       const members = cards.filter(card => card.enabled && group.types.some(type => type === card.type));
       return members.length > 0 && <section className="manager-position-group" key={group.name} aria-label={group.name}>
