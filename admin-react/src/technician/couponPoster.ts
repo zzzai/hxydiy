@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 
 const WIDTH = 1080;
 const HEIGHT = 1440;
-const MASCOT_URL = '/assets/hxy-mascot.webp';
+const MASCOT_URL = '/assets/ip-paopao-running-bucket.webp';
 
 function escapeStoreName(value: string) {
   return value.replace(/^荷小悦[-·]?/, '').replace(/^草本泡脚[（(]?/, '').replace(/[）)]$/, '') || '本店';
@@ -49,8 +49,8 @@ function roundedRect(context: CanvasRenderingContext2D, x: number, y: number, wi
   context.closePath();
 }
 
-function text(context: CanvasRenderingContext2D, value: string, x: number, y: number, size: number, color: string, weight = 400, align: CanvasTextAlign = 'left') {
-  context.font = `${weight} ${size}px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`;
+function text(context: CanvasRenderingContext2D, value: string, x: number, y: number, size: number, color: string, weight = 400, align: CanvasTextAlign = 'left', family = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif') {
+  context.font = `${weight} ${size}px ${family}`;
   context.fillStyle = color;
   context.textAlign = align;
   context.textBaseline = 'top';
@@ -76,106 +76,88 @@ export async function createCouponPoster(link: string, storeName: string): Promi
   const context = canvas.getContext('2d');
   if (!context) throw new Error('海报生成失败');
 
-  context.fillStyle = '#F7F2E6';
+  context.fillStyle = '#FBF8F0';
   context.fillRect(0, 0, WIDTH, HEIGHT);
 
   context.save();
   context.globalAlpha = 0.08;
   context.fillStyle = '#1F8F75';
   context.beginPath();
-  context.ellipse(120, 20, 360, 300, 0, 0, Math.PI * 2);
+  context.ellipse(100, 20, 360, 280, 0, 0, Math.PI * 2);
   context.fill();
-  context.globalAlpha = 0.1;
+  context.globalAlpha = 0.08;
   context.fillStyle = '#C69B3C';
   context.beginPath();
-  context.ellipse(1010, 120, 250, 280, 0, 0, Math.PI * 2);
-  context.fill();
-  context.globalAlpha = 0.05;
-  context.fillStyle = '#1F8F75';
-  context.beginPath();
-  context.ellipse(880, 1080, 260, 180, 0, 0, Math.PI * 2);
+  context.ellipse(1000, 100, 240, 250, 0, 0, Math.PI * 2);
   context.fill();
   context.restore();
 
-  context.fillStyle = '#145545';
-  context.beginPath();
-  context.arc(104, 96, 32, 0, Math.PI * 2);
-  context.fill();
+  text(context, '荷小悦', 72, 62, 58, '#145545', 700);
+  text(context, '草本泡脚', 74, 138, 28, '#145545');
+  text(context, '®', 300, 70, 16, '#145545');
+
+  roundedRect(context, 820, 72, 188, 54, 27);
   context.fillStyle = '#FFFFFF';
-  context.font = '700 30px "PingFang SC", "Microsoft YaHei", sans-serif';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText('荷', 104, 98);
-  text(context, '荷小悦', 156, 68, 30, '#145545', 700);
-  text(context, '草本轻养 · 半价券', 158, 108, 18, '#647A71');
-
-  text(context, '忙完一天，', 72, 210, 72, '#132A24', 700);
-  text(context, '来泡个脚，', 72, 306, 72, '#132A24', 700);
-  text(context, '给自己松一松。', 72, 402, 72, '#132A24', 700);
-  text(context, '草本现煮 · 到店即享', 76, 500, 28, '#A86D23', 600);
-
-  context.fillStyle = '#FFFBEE';
-  context.strokeStyle = '#C69B3C';
-  context.lineWidth = 5;
-  context.beginPath();
-  context.arc(830, 330, 178, 0, Math.PI * 2);
   context.fill();
+  context.strokeStyle = '#E2C98F';
+  context.lineWidth = 1;
   context.stroke();
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.fillStyle = '#A86D23';
-  context.font = '600 26px "PingFang SC", "Microsoft YaHei", sans-serif';
-  context.fillText('全单', 830, 270);
-  context.fillStyle = '#145545';
-  context.font = '700 112px "PingFang SC", "Microsoft YaHei", sans-serif';
-  context.fillText('5折', 830, 354);
-  context.fillStyle = '#647A71';
-  context.font = '400 22px "PingFang SC", "Microsoft YaHei", sans-serif';
-  context.fillText('60 天有效', 830, 434);
+  context.font = '700 18px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.fillText('半价券 · 60天', 914, 100);
 
-  context.drawImage(mascot, 70, 600, 500, 500);
+  const kai = '"Kaiti SC", "STKaiti", "KaiTi", "PingFang SC", serif';
+  text(context, '累了，', 72, 292, 64, '#132A24', 400, 'left', kai);
+  text(context, '就来荷小悦', 72, 372, 64, '#132A24', 400, 'left', kai);
+  context.strokeStyle = '#A86D23';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.ellipse(197, 470, 122, 19, 0, 3.35, 6.05);
+  context.stroke();
+  text(context, '草本现煮 · 温暖放松', 76, 505, 24, '#A86D23', 600);
+
+  text(context, '一桶草本热水，', 72, 620, 25, '#647A71');
+  text(context, '把今天的疲惫泡掉。', 72, 660, 25, '#647A71');
+
+  context.drawImage(mascot, 520, 220, 500, 592);
 
   context.strokeStyle = 'rgba(31, 143, 117, .7)';
   context.lineWidth = 3;
   context.lineCap = 'round';
-  for (const [x, y, rx, ry, start, end] of [[585, 650, 80, 34, 3.5, 5.9], [610, 720, 70, 30, 3.5, 5.8], [548, 1060, 72, 30, 3.5, 5.8]] as const) {
+  for (const [x, y, rx, ry, start, end] of [[470, 470, 60, 30, 3.5, 5.8], [470, 530, 48, 24, 3.5, 5.8], [960, 900, 44, 22, 3.5, 5.8]] as const) {
     context.beginPath();
     context.ellipse(x, y, rx, ry, 0, start, end);
     context.stroke();
   }
 
-  roundedRect(context, 650, 620, 350, 430, 26);
+  text(context, '全场 5 折', 72, 980, 86, '#145545', 700);
+  text(context, '小项除外', 78, 1088, 22, '#647A71');
+  text(context, '60 天有效 · 扫码领取', 78, 1124, 20, '#A86D23');
+
+  roundedRect(context, 640, 960, 340, 330, 24);
   context.fillStyle = '#FFFFFF';
   context.fill();
   context.strokeStyle = '#E2C98F';
   context.lineWidth = 2;
   context.stroke();
-  context.drawImage(qr, 685, 660, 280, 280);
+  context.drawImage(qr, 692, 988, 236, 236);
   context.textAlign = 'center';
   context.textBaseline = 'top';
   context.fillStyle = '#145545';
-  context.font = '700 27px "PingFang SC", "Microsoft YaHei", sans-serif';
-  context.fillText('扫码领取', 825, 960);
-  context.fillStyle = '#647A71';
-  context.font = '400 17px "PingFang SC", "Microsoft YaHei", sans-serif';
-  context.fillText('到店出示核销码', 825, 1000);
+  context.font = '700 22px "PingFang SC", "Microsoft YaHei", sans-serif';
+  context.fillText('扫码领取', 810, 1238);
 
-  roundedRect(context, 56, 1120, 968, 254, 34);
-  context.fillStyle = '#145545';
-  context.fill();
-  text(context, '全单 5 折', 92, 1160, 86, '#FFFFFF', 700);
-  text(context, `草本泡脚 · 到店即享 · ${store}`, 96, 1262, 23, '#D9ECDF');
-  text(context, '扫码领取 · 登录后自动存入券包', 96, 1302, 20, '#F3DFAA');
-  context.strokeStyle = '#C69B3C';
-  context.lineWidth = 2;
+  context.strokeStyle = '#E1DCCD';
+  context.lineWidth = 1;
   context.beginPath();
-  context.arc(938, 1238, 48, 0, Math.PI * 2);
+  context.moveTo(72, 1340);
+  context.lineTo(1008, 1340);
   context.stroke();
-  context.fillStyle = '#F3DFAA';
-  context.font = '700 36px "PingFang SC", "Microsoft YaHei", sans-serif';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText('荷', 938, 1240);
+  text(context, `荷小悦 · ${store} · 家门口的养生小馆`, 72, 1358, 18, '#145545');
+  text(context, '让健康生活离家更近', 74, 1396, 16, '#647A71');
+  text(context, 'HXY', 942, 1358, 16, '#C69B3C', 700);
 
   return canvas.toDataURL('image/png');
 }
