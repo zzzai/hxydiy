@@ -82,6 +82,20 @@ async function main() {
       await noOverflow(); await shot('ops-' + width);
     });
 
+    await check('wecom-swipe-back-stays-in-manager', async () => {
+      await start('normal'); await loaded();
+      await tab('现场');
+      await page.goBack({ waitUntil: 'commit' }).catch(() => undefined);
+      await page.waitForFunction(() => document.body.innerText.includes('今天先做') || document.body.innerText.includes('今天没有待处理'));
+      assert.equal(await page.getByText('登录移动工作台').count(), 0);
+      assert.equal(await page.locator('.manager-p0-nav button').count(), 4);
+      await page.getByRole('button', { name: /巡检照片/ }).click();
+      await page.locator('.manager-p0-area').first().waitFor();
+      await page.goBack({ waitUntil: 'commit' }).catch(() => undefined);
+      await page.waitForFunction(() => document.body.innerText.includes('今天先做') || document.body.innerText.includes('今天没有待处理'));
+      assert.equal(await page.getByText('登录移动工作台').count(), 0);
+    });
+
     await check('team-overview', async () => {
       await start('normal'); await loaded(); await tab('我的');
       await page.locator('.manager-p0-tech').first().waitFor();
