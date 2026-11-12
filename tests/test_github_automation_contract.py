@@ -48,25 +48,33 @@ class GitHubAutomationContractTests(unittest.TestCase):
         self.assertIn("sha: pr.head.sha", content)
         self.assertIn("merge_method: 'squash'", content)
 
-    def test_trusted_gate_runs_pr_code_without_secrets_and_writes_a_head_check(self):
+    def test_trusted_gate_runs_pr_code_without_secrets_and_uses_native_result(self):
         content = workflow("trusted-pr-gate.yml")
 
         self.assertIn("pull_request_target:", content)
-        self.assertIn("checks: write", content)
+        self.assertNotIn("checks: write", content)
         self.assertIn("permissions:", content)
         self.assertIn("contents: read", content)
         self.assertIn("pull-requests: read", content)
         self.assertIn("persist-credentials: false", content)
         self.assertIn("refs/pull/${{ github.event.pull_request.number }}/merge", content)
-        self.assertIn("github.rest.checks.create", content)
+        self.assertNotIn("github.rest.checks.create", content)
         self.assertNotIn("github.rest.checks.update", content)
-        self.assertIn("name: Publish trusted result", content)
         self.assertIn("name: Trusted PR Gate", content)
-        self.assertIn("context.payload.pull_request.head.sha", content)
         self.assertIn("core.setFailed", content)
         self.assertIn("needs: [scope, static, admin, customer, backend]", content)
-        self.assertIn("permissions:\n      contents: read\n      checks: write", content)
         self.assertIn("permissions:\n      contents: read\n      checks: none", content)
+
+    def test_native_gate_requires_ci_and_trusted_workflow_without_write_permissions(self):
+        content = workflow("ci.yml").split("  trusted:\n", 1)[1].split("  admin:\n", 1)[0]
+        self.assertIn("name: Trusted PR Gate", content)
+        self.assertIn("needs: [static, admin, customer, backend]", content)
+        self.assertIn("always() && github.event_name == 'pull_request'", content)
+        self.assertIn("actions: read", content)
+        self.assertNotIn(": write", content)
+        self.assertIn("waitForTrustedRun", content)
+        self.assertIn("persist-credentials: false", content)
+        self.assertIn("x.result!=='success'", content)
 
     def test_production_workflow_requires_manual_dispatch_and_pinned_host_identity(self):
         content = workflow("deploy-production.yml")

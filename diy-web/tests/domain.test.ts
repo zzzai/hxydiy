@@ -163,12 +163,12 @@ test('项目专属主图优先于后台旧图，恢复顾客端原主图', () =>
   assert.doesNotMatch(projectImage(item), /service-foot-bath\.jpg$/);
 });
 
-test('缺专属图的项目使用同风格项目插画，不混入通用照片', () => {
+test('项目使用专属或同风格插画，不混入后台旧照片', () => {
   const cases: Array<[string, string, RegExp]> = [
     ['hxy-oil-back-30', 'local-strength', /projects\/hxy-oil-back-30-main\.webp$/],
     ['hxy-local-care-60', 'local-strength', /projects\/hxy-jubu-30\.webp$/],
-    ['hxy-waist-kit-10', 'kit', /projects\/hxy-spa-60\.webp$/],
-    ['hxy-neck-kit-10', 'kit', /projects\/hxy-head-30\.webp$/],
+    ['hxy-waist-kit-10', 'kit', /projects\/hxy-waist-kit-10-main-v2\.webp$/],
+    ['hxy-neck-kit-10', 'kit', /projects\/hxy-neck-kit-10-main-v2\.webp$/],
   ];
   for (const [code, category, expected] of cases) {
     const item = project({ id: 1, code, category, name: code, image_url: '/diy/assets/service-tuina.jpg' });

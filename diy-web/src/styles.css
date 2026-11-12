@@ -2078,9 +2078,6 @@ button.miniapp-store{border:0;background:transparent;font:inherit;text-align:lef
 .half-price-project small { font-size: 12px; }
 .half-price-project del, .half-price-project > span { color: #66736d; font-size: 12px; }
 .half-price-project > span { display: block; margin-top: 3px; }
-.half-price-menu-note { margin: 12px 16px; padding: 12px 14px; background: #eff6f1; color: #145545; border-radius: 12px; }
-.half-price-menu-note strong, .half-price-menu-note span { display: block; }
-.half-price-menu-note span { margin-top: 4px; font-size: 12px; line-height: 1.6; color: #52655c; }
 .half-price-excluded { display: block; color: #66736d; font-size: 12px; line-height: 1.6; margin-top: 5px; }
 
 .miniapp-catalog-layout .half-price-project { padding-right: 40px; }

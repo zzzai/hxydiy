@@ -897,8 +897,8 @@ export function projectImage(project: Project): string {
   const dedicated: Record<string, string> = {
     'hxy-oil-back-30': 'projects/hxy-oil-back-30-main.webp',
     'hxy-local-care-60': 'projects/hxy-jubu-30.webp',
-    'hxy-waist-kit-10': 'projects/hxy-spa-60.webp',
-    'hxy-neck-kit-10': 'projects/hxy-head-30.webp',
+    'hxy-waist-kit-10': 'projects/hxy-waist-kit-10-main-v2.webp',
+    'hxy-neck-kit-10': 'projects/hxy-neck-kit-10-main-v2.webp',
   };
   if (dedicated[canonicalProjectCode(project.code)]) return assetPath(dedicated[canonicalProjectCode(project.code)]);
   if (project.image_url) {
