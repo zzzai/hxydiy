@@ -1,5 +1,15 @@
 # hxy-diy 当前状态
 
+## 2026-11-13 券运营验收补强与会员脱敏回执已上线
+
+- [PR #493](https://github.com/zzzai/hxydiy/pull/493) 合并 `28d85bbea72382e415664a0712b353bb32b26736`；精确 [CI 43412185121](https://github.com/zzzai/hxydiy/actions/runs/43412185121) 和 [Deploy 43412883940](https://github.com/zzzai/hxydiy/actions/runs/43412883940) 成功，current=`github-28d85bbea723-43412883940`。
+- CSV 导出专项：真实 `ledger`/`redemptions` 路由覆盖公式样本、前导空白、逗号/引号/换行、55行分页、模板/状态/北京日期筛选、核销时间窗、脱敏和导出审计；修复前导空白公式未防护、导出缺日期参数/台账日期筛选。Excel/WPS 打开仍待人工。
+- 会员同步接入服务端 allowlist 脱敏回执：上次成功 `MEMBER-SYNC-ZHB-20261106-3CARDS`（3卡/3人，备份恢复通过）；最近 `MEMBER-SYNC-ZHB-20261113-READONLY` 阻塞（116来源卡、15新候选、未提交、业务写入0）。当前有效卡102是数据库事实，不从回执推断，页面不标“已同步”。
+- 新增门店逐项验收表 `acceptance/coupon-operations-store-acceptance-20261113.md`；11项主流程+8项补充全部保留待人工，未创建/核销生产测试券。
+- 生产只读核验：健康200；receipts `available=True`、last success/blocked attempt 正确；membership `receipt_available`；没有调用会写审计的导出接口，没有业务写入。
+- 本批无数据库迁移。真实 Excel/WPS、门店手机/摄像头/现场本人核对、真实会员同步提交仍待人工。
+- [验收与回退](release/coupon-acceptance-20261113.md)。
+
 ## 2026-11-13 券报表北京时间自然日已上线
 
 - [PR #491](https://github.com/zzzai/hxydiy/pull/491) 合并 `5b77cde049d5ba1f06b881f485eb5a6f3a4da81b`；精确 [CI 43382303392](https://github.com/zzzai/hxydiy/actions/runs/43382303392) 和 [Deploy 43382920670](https://github.com/zzzai/hxydiy/actions/runs/43382920670) 成功，current=`github-5b77cde049d5-43382920670`。
