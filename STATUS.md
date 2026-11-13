@@ -67,4 +67,4 @@ admin tests: 321 passed
 
 ## PR
 
-- 会员 PR #497；分支 `codex/member-readonly-20261113`；最新 head 以 PR 为准；未合并，等待独立复核。
+- 会员 PR #497 已合并 `d50941d67579944a201464b4931e40aad3808efd`；CI 43456867992 success；Deploy 43457778128 success；current `github-d50941d67579-43457778128`；health ok/production；文档 PR #499 合并 main `af507fde9cfb3b79675b46cf55b9df36722a93e7`。
