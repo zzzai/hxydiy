@@ -10,5 +10,11 @@
       "sha256": "0d59ad91a03c3b827601755f77dc7bf8eefdb757456951d72be457c4e4f0dcfd"
     }
   ],
-  "allowlist_only": true
+  "allowlist_only": true,
+  "status_notes": [
+    {
+      "file": "20261113-status-note.json",
+      "sha256": "4e530e2ffe74614e58480aa91dcc699d8a5cb055d73bd74015091d999cbcc709"
+    }
+  ]
 }

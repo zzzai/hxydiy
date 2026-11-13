@@ -234,7 +234,8 @@ def test_membership_overview_is_read_only_and_marks_unknown_sync(coupon_admin):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["cards"]["active"] == 1
-    assert body["sync_status"]["state"] == "receipt_available"
+    assert body["sync_status"]["state"] == "receipt_available_paused"
+    assert "暂缓" in body["sync_status"]["label"]
     assert body["receipt"]["last_success"]["new_cards"] == 3
     assert body["receipt"]["latest_attempt"]["status"] == "blocked"
     assert "全手机号" not in str(body)
@@ -430,9 +431,10 @@ def test_member_receipt_loader_honors_allowlist_integrity_and_conflicts(tmp_path
     entries.append(put("no-new.json", receipt("B-NO-NEW", "no_new", "2026-11-06T10:00:00Z", 0)))
     entries.append(put("blocked.json", receipt("B-BLOCKED", "blocked", "2026-11-13T02:45:12Z", 15)))
     (tmp_path / "index.json").write_text(json.dumps({"schema_version": 1, "receipts": entries}))
-    result = load_member_sync_receipts(tmp_path)
+    result = load_member_sync_receipts(tmp_path, store_id=1)
     assert result["available"] is True
-    assert result["last_success"]["batch_id"] == "B-NO-NEW"
+    assert result["last_success"]["batch_id"] == "B-SUCCESS"
+    assert result["last_verification"]["batch_id"] == "B-NO-NEW"
     assert result["latest_attempt"]["batch_id"] == "B-BLOCKED"
     assert result["errors"] == [] and result["conflicts"] == []
 
@@ -441,22 +443,202 @@ def test_member_receipt_loader_honors_allowlist_integrity_and_conflicts(tmp_path
     bad.pop("batch_id")
     entries_bad = entries + [put("bad.json", bad)]
     (tmp_path / "index.json").write_text(json.dumps({"schema_version": 1, "receipts": entries_bad}))
-    result = load_member_sync_receipts(tmp_path)
+    result = load_member_sync_receipts(tmp_path, store_id=1)
     assert any(item["code"] == "RECEIPT_FIELDS_MISSING" for item in result["errors"])
 
     # Digest mismatch is rejected.
     (tmp_path / "no-new.json").write_bytes(b"tampered")
-    result = load_member_sync_receipts(tmp_path)
+    result = load_member_sync_receipts(tmp_path, store_id=1)
     assert any(item["code"] == "RECEIPT_SHA_MISMATCH" for item in result["errors"])
 
     # Same batch and same content is idempotent; different content conflicts.
     same = put("success-copy.json", receipt("B-SUCCESS", "success", "2026-11-05T16:11:43Z", 3))
     conflict = put("success-conflict.json", receipt("B-SUCCESS", "success", "2026-11-05T16:11:43Z", 99))
     (tmp_path / "index.json").write_text(json.dumps({"schema_version": 1, "receipts": [entries[0], same, conflict]}))
-    result = load_member_sync_receipts(tmp_path)
+    result = load_member_sync_receipts(tmp_path, store_id=1)
     assert any(item["code"] == "RECEIPT_BATCH_CONFLICT" for item in result["conflicts"])
-    assert len(result["receipts"]) == 1
+    assert len(result["receipts"]) == 0
 
     # Missing index is an explicit unavailable state, not "no data".
     empty = tmp_path / "empty"; empty.mkdir()
-    assert load_member_sync_receipts(empty)["reason"] == "receipt_index_missing"
+    assert load_member_sync_receipts(empty, store_id=1)["reason"] == "receipt_index_missing"
+
+
+def _receipt_fixture(tmp_path, records, notes=None):
+    import json
+    from hashlib import sha256
+    entries = []
+    for name, data in records:
+        raw = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        (tmp_path / name).write_bytes(raw)
+        entries.append({"file": name, "sha256": sha256(raw).hexdigest()})
+    note_entries = []
+    for name, data in (notes or []):
+        raw = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        (tmp_path / name).write_bytes(raw)
+        note_entries.append({"file": name, "sha256": sha256(raw).hexdigest()})
+    index = {"schema_version": 1, "receipts": entries}
+    if note_entries:
+        index["status_notes"] = note_entries
+    (tmp_path / "index.json").write_text(json.dumps(index))
+    return tmp_path
+
+
+def _receipt(batch, status, when, cards, store=1, **extra):
+    data = {"receipt_version": 1, "receipt_id": batch.lower(), "batch_id": batch,
+            "status": status, "store_id": store, "source_verified_at": when,
+            "new_cards": cards, "new_users": cards, "applied": status == "success"}
+    if status == "success":
+        data["successful_submit_at"] = when
+    data.update(extra)
+    return data
+
+
+def test_member_receipt_store_selection_is_independent_and_scoped(coupon_admin, tmp_path):
+    from app.services.member_sync_receipts import load_member_sync_receipts
+    _receipt_fixture(tmp_path, [
+        ("store1.json", _receipt("S1-OLD", "success", "2026-11-01T00:00:00Z", 3, store=1)),
+        ("store2.json", _receipt("S2-NEW", "success", "2026-11-10T00:00:00Z", 7, store=2)),
+    ])
+    one = load_member_sync_receipts(tmp_path, store_id=1)
+    two = load_member_sync_receipts(tmp_path, store_id=2)
+    three = load_member_sync_receipts(tmp_path, store_id=3)
+    assert one["last_success"]["batch_id"] == "S1-OLD"
+    assert two["last_success"]["batch_id"] == "S2-NEW"
+    assert one["conflicts"] == [] and two["conflicts"] == []
+    assert three["available"] is False
+    assert three["reason"] == "no_store_receipt"
+    assert three["last_success"] is None
+
+
+def test_member_receipt_no_new_and_blocked_do_not_replace_last_success(coupon_admin, tmp_path):
+    from app.services.member_sync_receipts import load_member_sync_receipts
+    _receipt_fixture(tmp_path, [
+        ("success.json", _receipt("S-SUCCESS", "success", "2026-11-05T16:11:43Z", 3)),
+        ("nonew.json", _receipt("S-NO-NEW", "no_new", "2026-11-06T10:00:00Z", 0)),
+        ("blocked.json", _receipt("S-BLOCKED", "blocked", "2026-11-13T02:45:12Z", 15, blocked_reason="blocked_login_required")),
+    ])
+    result = load_member_sync_receipts(tmp_path, store_id=1)
+    assert result["last_success"]["batch_id"] == "S-SUCCESS"
+    assert result["last_success"]["successful_submit_at"] == "2026-11-05T16:11:43Z"
+    assert result["last_verification"]["batch_id"] == "S-NO-NEW"
+    assert result["latest_attempt"]["batch_id"] == "S-BLOCKED"
+    # A no_new-only stream must not invent a successful submission.
+    only = tmp_path / "only"; only.mkdir()
+    _receipt_fixture(only, [("nonew.json", _receipt("ONLY-NO-NEW", "no_new", "2026-11-06T10:00:00Z", 0))])
+    result_only = load_member_sync_receipts(only, store_id=1)
+    assert result_only["last_success"] is None
+    assert result_only["last_verification"]["batch_id"] == "ONLY-NO-NEW"
+
+
+def test_member_receipt_conflict_is_untrusted_and_order_independent(coupon_admin, tmp_path):
+    from app.services.member_sync_receipts import load_member_sync_receipts
+    one = _receipt("C-CONFLICT", "success", "2026-11-05T16:11:43Z", 3)
+    two = _receipt("C-CONFLICT", "success", "2026-11-05T16:11:43Z", 99)
+    for order in ([("a.json", one), ("b.json", two)], [("b.json", two), ("a.json", one)]):
+        case = tmp_path / ("case" + str(len(list(tmp_path.iterdir()))))
+        case.mkdir(); _receipt_fixture(case, order)
+        result = load_member_sync_receipts(case, store_id=1)
+        assert result["has_conflict"] is True
+        assert result["last_success"] is None
+        assert result["available"] is False
+        assert len(result["conflicts"]) == 1
+    # An older trusted success remains visible while the newer conflict is flagged.
+    mixed = tmp_path / "mixed"; mixed.mkdir()
+    _receipt_fixture(mixed, [
+        ("old.json", _receipt("C-OLD", "success", "2026-11-01T00:00:00Z", 2)),
+        ("new-a.json", one), ("new-b.json", two),
+    ])
+    result = load_member_sync_receipts(mixed, store_id=1)
+    assert result["available"] is True
+    assert result["last_success"]["batch_id"] == "C-OLD"
+    assert result["has_conflict"] is True
+
+
+def test_member_receipt_status_note_is_separate_from_historical_blocked(coupon_admin, tmp_path):
+    from app.services.member_sync_receipts import load_member_sync_receipts
+    blocked = _receipt("B-BLOCKED", "blocked", "2026-11-13T02:45:12Z", 15,
+                       blocked_reason="blocked_pending_exact_baseline_authorization",
+                       source_keyset_sha256="keyset-1")
+    note = {"note_version": 1, "note_id": "note-1", "batch_id": "B-BLOCKED", "store_id": 1,
+            "source_keyset_sha256": "keyset-1", "current_status": "paused_by_user",
+            "current_status_label": "已授权，用户要求暂缓", "authorization_status": "authorized_for_frozen_scope",
+            "authorization_recorded_at": None, "time_status": "未记录",
+            "authorization_scope": "original snapshot only", "not_import_authorization": True}
+    _receipt_fixture(tmp_path, [("blocked.json", blocked)], [("note.json", note)])
+    result = load_member_sync_receipts(tmp_path, store_id=1)
+    attempt = result["latest_attempt"]
+    assert attempt["status"] == "blocked"
+    assert attempt["blocked_reason"] == "blocked_pending_exact_baseline_authorization"
+    assert attempt["current_processing"]["current_status"] == "paused_by_user"
+    assert attempt["current_processing"]["authorization_recorded_at"] is None
+    assert attempt["current_processing"]["time_status"] == "未记录"
+
+
+def test_member_receipt_route_scopes_conflicts_and_uses_latest_success(coupon_admin, monkeypatch, tmp_path):
+    from app.core.config import settings
+    from app.services import member_sync_receipts
+    _receipt_fixture(tmp_path, [
+        ("s1-old.json", _receipt("S1-OLD", "success", "2026-11-01T00:00:00Z", 3, store=1)),
+        ("s2-new.json", _receipt("S2-NEW", "success", "2026-11-10T00:00:00Z", 7, store=2)),
+        ("s2-conflict-a.json", _receipt("S2-CONFLICT", "success", "2026-11-12T00:00:00Z", 1, store=2)),
+        ("s2-conflict-b.json", _receipt("S2-CONFLICT", "success", "2026-11-12T00:00:00Z", 9, store=2)),
+    ])
+    monkeypatch.setattr(settings, "member_sync_receipt_dir", str(tmp_path))
+    monkeypatch.setattr(member_sync_receipts.settings, "member_sync_receipt_dir", str(tmp_path))
+    client, _, ids, headers = coupon_admin
+    response = client.get(f"{PREFIX}/v2/member-sync/receipts", headers=headers["manager"])
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["last_success"]["batch_id"] == "S1-OLD"
+    assert body["has_conflict"] is False
+    assert "S2-CONFLICT" not in str(body)
+    assert "s2-conflict" not in str(body)
+    # The other store is still scoped out even though it has newer/conflicting receipts.
+    other = client.get(f"{PREFIX}/v2/member-sync/receipts?store_id={ids['other_store']}", headers=headers["manager"])
+    assert other.status_code == 403
+
+
+def test_member_receipts_handle_shape_timezone_and_note_conflicts_without_500(coupon_admin, tmp_path):
+    import json
+    from hashlib import sha256
+    from app.services.member_sync_receipts import load_member_sync_receipts
+
+    shape = tmp_path / "shape"; shape.mkdir()
+    raw = b"[]"; (shape / "array.json").write_bytes(raw)
+    (shape / "index.json").write_text(json.dumps({"schema_version": 1, "receipts": [
+        {"file": "array.json", "sha256": sha256(raw).hexdigest()},
+    ]}))
+    result = load_member_sync_receipts(shape, store_id=1)
+    assert any(item["code"] == "RECEIPT_SHAPE_INVALID" for item in result["errors"])
+
+    mixed = tmp_path / "mixed-time"; mixed.mkdir()
+    _receipt_fixture(mixed, [
+        ("aware.json", _receipt("M-AWARE", "success", "2026-11-05T16:11:43Z", 3)),
+        ("naive.json", _receipt("M-NAIVE", "success", "2026-11-06T10:00:00", 4)),
+    ])
+    result = load_member_sync_receipts(mixed, store_id=1)
+    assert result["last_success"]["batch_id"] == "M-AWARE"
+    assert result["last_success"]["successful_submit_at"] == "2026-11-05T16:11:43Z"
+
+    attempt_time = tmp_path / "attempt-time"; attempt_time.mkdir()
+    _receipt_fixture(attempt_time, [
+        ("b1.json", _receipt("B1", "blocked", "2026-11-01T00:00:00Z", 1, attempt_at="2026-11-13T00:00:00Z")),
+        ("b2.json", _receipt("B2", "blocked", "2026-11-10T00:00:00Z", 2, attempt_at="2026-11-11T00:00:00Z")),
+    ])
+    result = load_member_sync_receipts(attempt_time, store_id=1)
+    assert result["latest_attempt"]["batch_id"] == "B1"
+
+    note_case = tmp_path / "note-conflict"; note_case.mkdir()
+    blocked = _receipt("N-CONFLICT", "blocked", "2026-11-13T02:45:12Z", 15,
+                       blocked_reason="blocked_login_required", source_keyset_sha256="keyset-1")
+    note_a = {"note_version": 1, "note_id": "a", "batch_id": "N-CONFLICT", "store_id": 1,
+              "source_keyset_sha256": "keyset-1", "current_status": "paused_by_user",
+              "current_status_label": "paused", "authorization_recorded_at": None}
+    note_b = {**note_a, "note_id": "b", "current_status": "authorized_pending_resume", "current_status_label": "authorized"}
+    _receipt_fixture(note_case, [("blocked.json", blocked)], [("a.json", note_a), ("b.json", note_b)])
+    result = load_member_sync_receipts(note_case, store_id=1)
+    assert result["has_conflict"] is True
+    assert result["latest_attempt"]["status"] == "blocked"
+    assert "current_processing" not in result["latest_attempt"]
+    assert any(item["code"] == "RECEIPT_NOTE_CONFLICT" for item in result["conflicts"])

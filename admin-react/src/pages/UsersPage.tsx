@@ -7,6 +7,7 @@ import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 import { getMembershipEntitlements } from '../api';
 import { explainMemberCard, type MembershipExplanation } from '../memberCards';
 import { formatDateTime } from '../utils/couponFormat';
+import { receiptAlertTitle, receiptAlertType, receiptBlockedLabel, receiptCurrentLabel, receiptSubmissionLabel } from './memberReceiptStatus';
 
 export default function UsersPage() {
   const { message } = App.useApp();
@@ -199,16 +200,19 @@ export default function UsersPage() {
             <span><b>{memberOverview.cards.stored}</b> 储值卡</span>
             <span><b>{memberOverview.cards.expiring_30d}</b> 30天内到期</span>
           </div>
-          <Alert type={syncReceipt?.latest_attempt?.status === 'blocked' ? 'warning' : 'info'} showIcon
-            message={`会员同步状态：${syncReceipt?.last_success ? '有历史成功回执' : memberOverview.sync_status.label}`}
+          <Alert type={receiptAlertType(syncReceipt)} showIcon
+            message={syncReceipt?.has_conflict || syncReceipt?.last_success ? receiptAlertTitle(syncReceipt) : `会员同步状态：${memberOverview.sync_status.label}`}
             action={<Button size="small" onClick={() => setSyncReceiptOpen(true)}>查看回执</Button>}
-            description={syncReceipt?.last_success
-              ? `上次成功提交 ${formatDateTime(syncReceipt.last_success.successful_submit_at)} · 新增 ${syncReceipt.last_success.new_cards} 张卡 / ${syncReceipt.last_success.new_users} 人；最近尝试 ${syncReceipt.latest_attempt?.status === 'blocked' ? '等待当前基线确认' : syncReceipt.latest_attempt?.status || '未记录'}。当前有效来源卡 ${memberOverview.cards.active} 张不等于最后同步日期。${memberOverview.note}`
+            description={syncReceipt?.has_conflict
+              ? `存在冲突批次，冲突内容不得作为可信成功结果；当前有效来源卡 ${memberOverview.cards.active} 张仍只是数据库事实。${memberOverview.note}`
+              : syncReceipt?.last_success
+              ? `上次实际成功提交 ${formatDateTime(syncReceipt.last_success.successful_submit_at)} · 新增 ${syncReceipt.last_success.new_cards} 张卡 / ${syncReceipt.last_success.new_users} 人；最近尝试历史状态：${receiptBlockedLabel(syncReceipt.latest_attempt?.blocked_reason)}；当前处理：${receiptCurrentLabel(syncReceipt)}。当前有效来源卡 ${memberOverview.cards.active} 张不等于最后同步日期。${memberOverview.note}`
               : `${memberOverview.sync_status.detail} ${memberOverview.note}${memberOverview.last_observed_at ? ` 最近观测：${memberOverview.last_observed_at.slice(0, 10)}。` : ''}`} />
         </> : null}
       </div>
       <Modal title="会员同步脱敏回执" open={syncReceiptOpen} onCancel={() => setSyncReceiptOpen(false)} footer={<Button onClick={() => setSyncReceiptOpen(false)}>关闭</Button>} width={640}>
-        {syncReceipt?.available ? <>
+        {syncReceipt?.has_conflict ? <Alert type="error" showIcon style={{ marginBottom: 12 }} message="存在回执冲突" description={`冲突批次：${(syncReceipt.conflicts || []).map((item: any) => item.batch_id).filter(Boolean).join('、') || '未记录'}。冲突批次不作为可信成功或最近结果，需人工核对证据。`} /> : null}
+        {syncReceipt?.available || syncReceipt?.has_conflict ? <>
           <p className="member-receipt-note">当前有效来源卡以数据库为事实；回执只证明来源与提交结果，不能反推当前余额或未来卡。</p>
           <Descriptions column={1} size="small" bordered>
             <Descriptions.Item label="上次成功批次">{syncReceipt.last_success?.batch_id || '未记录'}</Descriptions.Item>
@@ -220,10 +224,15 @@ export default function UsersPage() {
             <Descriptions.Item label="重复预览新增">{syncReceipt.last_success?.duplicate_preview_new_cards ?? '未记录'}</Descriptions.Item>
             <Descriptions.Item label="备份恢复">{syncReceipt.last_success?.backup_recovery || '未记录'}</Descriptions.Item>
             <Descriptions.Item label="旧资料保护">{syncReceipt.last_success?.old_records_protected === true ? '通过' : syncReceipt.last_success?.old_records_protected === false ? '失败' : '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="最近来源核验">{syncReceipt.last_verification?.batch_id || '未记录'} · {formatDateTime(syncReceipt.last_verification?.source_verified_at || syncReceipt.last_verification?.successful_submit_at)}</Descriptions.Item>
             <Descriptions.Item label="最近尝试">{syncReceipt.latest_attempt?.batch_id || '未记录'}</Descriptions.Item>
-            <Descriptions.Item label="尝试状态">{syncReceipt.latest_attempt?.status || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="历史尝试状态">{syncReceipt.latest_attempt?.status || '未记录'}（{receiptBlockedLabel(syncReceipt.latest_attempt?.blocked_reason)}）</Descriptions.Item>
+            <Descriptions.Item label="当前处理">{receiptCurrentLabel(syncReceipt)}</Descriptions.Item>
+            <Descriptions.Item label="当前说明">{syncReceipt.latest_attempt?.current_processing?.current_status_detail || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="授权范围">{syncReceipt.latest_attempt?.current_processing?.authorization_scope || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="授权时间">{syncReceipt.latest_attempt?.current_processing?.authorization_recorded_at || syncReceipt.latest_attempt?.current_processing?.time_status || '未记录'}</Descriptions.Item>
             <Descriptions.Item label="来源卡 / 新候选">{syncReceipt.latest_attempt?.source_cards ?? '未记录'} / {syncReceipt.latest_attempt?.new_cards ?? '未记录'}</Descriptions.Item>
-            <Descriptions.Item label="是否提交 / 业务写入">{syncReceipt.latest_attempt?.applied === true ? '已提交' : '未提交'} / {syncReceipt.latest_attempt?.business_writes ?? '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="是否提交 / 业务写入">{receiptSubmissionLabel(syncReceipt.latest_attempt?.applied)} / {syncReceipt.latest_attempt?.business_writes ?? '未记录'}</Descriptions.Item>
             <Descriptions.Item label="阻塞原因">{syncReceipt.latest_attempt?.blocked_detail || syncReceipt.latest_attempt?.blocked_reason || '未记录'}</Descriptions.Item>
             <Descriptions.Item label="来源 keyset SHA">{syncReceipt.latest_attempt?.source_keyset_sha256 || '未记录'}</Descriptions.Item>
             <Descriptions.Item label="上次 source snapshot SHA">{syncReceipt.last_success?.source_snapshot_sha256 || '未记录'}</Descriptions.Item>
