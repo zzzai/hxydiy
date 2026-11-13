@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Skeleton, Space, Tag } from 'antd';
+import { Alert, Button, Card, DatePicker, Skeleton, Space, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
+import dayjs, { type Dayjs } from 'dayjs';
 import { getCouponOverview } from '../../api';
 import { requestErrorMessage } from '../../requestError';
 
@@ -10,7 +11,7 @@ type Overview = {
   templates: { total: number; published: number; draft: number };
   coupons: { total: number; unused: number; locked: number; used: number; expired: number };
   posters: { total: number; claimed: number; unclaimed: number };
-  period: { issued: number; redeemed_events: number; unique_customers: number };
+  period: { issued: number; redeemed_events: number; unique_customers: number; mode?: string; timezone?: string; start_date?: string; end_date?: string };
   issuance_policy: { automatic_enabled: boolean; label: string };
 };
 
@@ -21,16 +22,17 @@ export default function CouponOverview({ storeId, refreshKey, onOpenTab }: Props
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true); setError('');
-    void getCouponOverview(storeId, 30)
+    void getCouponOverview(storeId, 30, range?.[0]?.format('YYYY-MM-DD'), range?.[1]?.format('YYYY-MM-DD'))
       .then((response) => { if (active) setData(response.data); })
       .catch((failure) => { if (active) { setData(null); setError(requestErrorMessage(failure)); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [storeId, refreshKey, attempt]);
+  }, [storeId, refreshKey, attempt, range]);
 
   if (loading) return <Card><Skeleton active paragraph={{ rows: 5 }} /></Card>;
   if (error || !data) return <Card>
@@ -54,7 +56,17 @@ export default function CouponOverview({ storeId, refreshKey, onOpenTab }: Props
         <h2>券运营概览</h2>
         <p className="coupon-muted">所有数字都可以追到券台账或核销记录；生成海报不等于发券。</p>
       </div>
-      <Tag color={data.templates.published > 0 ? 'green' : 'default'}>{data.templates.published} 个模板生效</Tag>
+      <Space wrap>
+        <DatePicker.RangePicker
+          value={range}
+          allowClear
+          format="YYYY-MM-DD"
+          placeholder={['开始日期', '结束日期']}
+          onChange={(value) => setRange(value?.[0] && value?.[1] ? [value[0], value[1]] : null)}
+        />
+        <Tag color={data.templates.published > 0 ? 'green' : 'default'}>{data.templates.published} 个模板生效</Tag>
+        <Tag color="blue">{data.period.mode === 'asia_shanghai_natural_day' ? `北京时间 ${data.period.start_date} ~ ${data.period.end_date}` : 'UTC 滚动 30 天'}</Tag>
+      </Space>
     </div>
 
     <div className="coupon-stat-grid">
