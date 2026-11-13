@@ -37,3 +37,7 @@ Actual React production build with the existing isolated synthetic API was check
 ## Rollback
 
 Restore only the two `projectImage` mappings to their retained `-main-v2.webp` files through the normal release process. No database rollback, historical data edits or price changes are needed.
+
+## Production delivery
+
+Published through PR #484 as `f2876481ec3727feda65ceebe56916a62c702ab9`. Exact CI, deployment, unchanged table hashes and retained asset checks are recorded in [the release record](../release/care-hero-style-20261113.md). No additional image generation or business changes were made after visual validation.
