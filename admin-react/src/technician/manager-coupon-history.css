@@ -2,12 +2,13 @@
 .manager-coupon-history-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .manager-coupon-history-head h2 { margin: 0; color: #132a24; font-size: 20px; }
 .manager-coupon-history-head p { margin: 5px 0 0; color: #647a71; font-size: 12px; line-height: 1.5; }
-.manager-coupon-history-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 12px 4px; border: 1px solid #dce7e1; border-radius: 14px; background: #fff; }
+.manager-coupon-history-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 12px 4px; border: 1px solid #dce7e1; border-radius: 14px; background: #fff; }
 .manager-coupon-history-summary > div { text-align: center; border-right: 1px solid #edf2ef; }
 .manager-coupon-history-summary > div:last-child { border-right: 0; }
 .manager-coupon-history-summary strong { display: block; color: #145545; font-size: 21px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .manager-coupon-history-summary span { display: block; margin-top: 3px; color: #647a71; font-size: 11px; }
 .manager-coupon-history-summary .expired strong { color: #a86d23; }
+.manager-coupon-history-summary > div:nth-child(4) strong { color: #2d6f9e; }
 .manager-coupon-history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .manager-coupon-history-filters { display: flex; gap: 3px; padding: 3px; border-radius: 10px; background: #e7f0eb; }
 .manager-coupon-history-filters button, .manager-coupon-history-range button { min-height: 34px; border: 0; border-radius: 8px; background: transparent; color: #536158; font: inherit; font-size: 12px; padding: 0 10px; }

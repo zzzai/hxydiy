@@ -27,12 +27,13 @@ from app.domain.membership_entitlements import card_state, has_membership, legac
 from app.schemas.member_cards import MembershipExplanation, MemberCardFactUpdate
 from app.core.config import settings
 
-from app.api.admin import _current_staff, _summary_utc, hash_password, normalize_staff_role
+from app.api.admin import _current_staff, _require_marketing_read, _summary_utc, hash_password, normalize_staff_role
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
+from app.domain.coupon_redeem import create_poster_token
 from app.domain.service_record_status import pending_record_summary
 from app.models import (
-    CouponTemplate, UserCoupon, MemberPlan, Recharge,
+    CouponTemplate, UserCoupon, CouponPosterLink, MemberPlan, Recharge,
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, VisitFeedback, ServiceLine, PageContent, PageContentVersion,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, StaffScopeAssignment, PositionOccupancy,
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
@@ -1148,8 +1149,12 @@ def list_coupon_redemptions(
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
 ):
-    staff = _current_staff(authorization, db)
-    _require_admin(staff)
+    """Coupon ledger rows for one template, with effective status filtering.
+
+    This is a customer-coupon ledger, not a redemption-event list.  The
+    dedicated redemption endpoint is the source for successful scan events.
+    """
+    staff = _require_marketing_read(_current_staff(authorization, db))
     action_store_id = _resolve_target_store_id(db, staff, store_id)
     template = db.scalar(select(CouponTemplate).where(
         CouponTemplate.id == template_id,
@@ -1157,30 +1162,426 @@ def list_coupon_redemptions(
     ))
     if not template:
         raise HTTPException(status_code=404, detail="券模板不存在")
+    if status not in (None, "unused", "locked", "used", "expired"):
+        raise HTTPException(status_code=422, detail={"code": "COUPON_STATUS_INVALID", "message": "券状态筛选不合法"})
+    now = datetime.now(UTC)
     base = select(UserCoupon).where(UserCoupon.template_id == template.id)
-    if status:
-        base = base.where(UserCoupon.status == status)
+    if status == "used":
+        base = base.where(UserCoupon.status == "used")
+    elif status == "locked":
+        base = base.where(UserCoupon.status == "locked", or_(UserCoupon.expire_at.is_(None), UserCoupon.expire_at > now))
+    elif status == "unused":
+        base = base.where(UserCoupon.status == "unused", or_(UserCoupon.expire_at.is_(None), UserCoupon.expire_at > now))
+    elif status == "expired":
+        base = base.where(or_(
+            UserCoupon.status == "expired",
+            and_(UserCoupon.status.in_(("unused", "locked")), UserCoupon.expire_at.is_not(None), UserCoupon.expire_at <= now),
+        ))
     total = int(db.scalar(select(sa_func.count()).select_from(base.subquery())) or 0)
-    coupons = list(db.scalars(base.order_by(UserCoupon.id.desc()).offset((page - 1) * page_size).limit(page_size)))
+    coupons = list(db.scalars(base.order_by(UserCoupon.claimed_at.desc(), UserCoupon.id.desc()).offset((page - 1) * page_size).limit(page_size)))
     user_ids = {coupon.user_id for coupon in coupons}
     users = {user.id: user for user in db.scalars(select(User).where(User.id.in_(user_ids)))} if user_ids else {}
-    return {
-        "template": {"id": template.id, "name": template.name, "code": template.code},
-        "items": [{
+    items = []
+    for coupon in coupons:
+        expire_at = coupon.expire_at
+        effective = "used" if coupon.status == "used" else "expired" if coupon.status == "expired" else "expired" if (
+            expire_at is not None and (expire_at.replace(tzinfo=UTC) if expire_at.tzinfo is None else expire_at) <= now
+        ) else "locked" if coupon.status == "locked" else "unused"
+        user = users.get(coupon.user_id)
+        items.append({
             "id": coupon.id,
             "user_id": coupon.user_id,
-            "customer": _customer_display_name(users[coupon.user_id]) if coupon.user_id in users else None,
-            "phone_masked": _masked_phone(users[coupon.user_id].phone) if coupon.user_id in users else None,
-            "status": coupon.status,
+            "customer": _customer_display_name(user) if user else None,
+            "phone_masked": _masked_phone(user.phone) if user else None,
+            "status": effective,
+            "stored_status": coupon.status,
             "used_order_id": coupon.used_order_id,
             "claimed_at": coupon.claimed_at.isoformat() if coupon.claimed_at else None,
             "expire_at": coupon.expire_at.isoformat() if coupon.expire_at else None,
-        } for coupon in coupons],
+        })
+    return {
+        "template": {"id": template.id, "name": template.name, "code": template.code},
+        "items": items,
         "total": total,
         "page": page,
         "page_size": page_size,
     }
 
+
+
+# ──────────────────────────────────────────────────────
+# Coupon operations read models
+# ──────────────────────────────────────────────────────
+
+def _coupon_template_ids(db: Session, store_id: int) -> list[int]:
+    return list(db.scalars(select(CouponTemplate.id).where(CouponTemplate.store_id == store_id)))
+
+
+def _effective_coupon_status(coupon: UserCoupon, now: datetime) -> str:
+    if coupon.status == "used":
+        return "used"
+    if coupon.status == "expired":
+        return "expired"
+    expire_at = coupon.expire_at
+    if expire_at is not None:
+        normalized = expire_at.replace(tzinfo=UTC) if expire_at.tzinfo is None else expire_at
+        if normalized <= now:
+            return "expired"
+    return "locked" if coupon.status == "locked" else "unused"
+
+
+def _coupon_source_map(db: Session, coupon_ids: list[int]) -> dict[int, str]:
+    if not coupon_ids:
+        return {}
+    poster_ids = set(db.scalars(select(CouponPosterLink.coupon_id).where(CouponPosterLink.coupon_id.in_(coupon_ids))))
+    audit_rows = db.execute(
+        select(AuditLog.entity_id, AuditLog.action).where(
+            AuditLog.entity_type == "user_coupon",
+            AuditLog.entity_id.in_([str(coupon_id) for coupon_id in coupon_ids]),
+            AuditLog.action.in_(("issue_customer_coupon", "manager_issue_half_price_coupon")),
+        )
+    ).all()
+    direct_ids = {int(entity_id) for entity_id, _ in audit_rows if str(entity_id).isdigit()}
+    return {
+        coupon_id: "poster" if coupon_id in poster_ids else "direct" if coupon_id in direct_ids else "unknown"
+        for coupon_id in coupon_ids
+    }
+
+
+@router.get("/coupons/overview")
+def coupon_overview(
+    days: int = Query(30, ge=1, le=90),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _require_marketing_read(_current_staff(authorization, db))
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    templates = list(db.scalars(select(CouponTemplate).where(CouponTemplate.store_id == target_store_id).order_by(CouponTemplate.id)))
+    template_ids = [template.id for template in templates]
+    now = datetime.now(UTC)
+    coupons = list(db.scalars(select(UserCoupon).where(UserCoupon.template_id.in_(template_ids)))) if template_ids else []
+    counts = {"total": len(coupons), "unused": 0, "locked": 0, "used": 0, "expired": 0}
+    for coupon in coupons:
+        counts[_effective_coupon_status(coupon, now)] += 1
+    start = now - timedelta(days=days)
+    period_coupons = [coupon for coupon in coupons if coupon.claimed_at and (
+        coupon.claimed_at.replace(tzinfo=UTC) if coupon.claimed_at.tzinfo is None else coupon.claimed_at
+    ) >= start]
+    poster_rows = list(db.scalars(select(CouponPosterLink).where(CouponPosterLink.store_id == target_store_id))) if template_ids else []
+    poster_claimed = sum(1 for poster in poster_rows if poster.coupon_id)
+    audit_rows = list(db.scalars(select(AuditLog).where(
+        AuditLog.action == "manager_redeem_coupon",
+        AuditLog.store_id == target_store_id,
+        AuditLog.created_at >= start,
+    ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc()))) if template_ids else []
+    coupon_by_id = {coupon.id: coupon for coupon in coupons}
+    redeemed_events = [row for row in audit_rows if row.entity_id.isdigit() and int(row.entity_id) in coupon_by_id]
+    redeemed_coupon_ids = {int(row.entity_id) for row in redeemed_events}
+    period_customers = {coupon.user_id for coupon in period_coupons} | {
+        coupon_by_id[coupon_id].user_id for coupon_id in redeemed_coupon_ids
+    }
+    return {
+        "store_id": target_store_id,
+        "days": days,
+        "templates": {
+            "total": len(templates),
+            "published": sum(1 for template in templates if template.status == "published"),
+            "draft": sum(1 for template in templates if template.status == "draft"),
+        },
+        "coupons": counts,
+        "posters": {"total": len(poster_rows), "claimed": poster_claimed, "unclaimed": len(poster_rows) - poster_claimed},
+        "period": {
+            "issued": len(period_coupons),
+            "redeemed_events": len(redeemed_events),
+            "unique_customers": len(period_customers),
+        },
+        "issuance_policy": {
+            "automatic_enabled": bool(settings.coupon_issuance_enabled),
+            "label": "普通自动发券已启用" if settings.coupon_issuance_enabled else "普通自动发券暂停",
+        },
+    }
+
+
+@router.get("/coupons/ledger")
+def coupon_ledger(
+    template_id: int | None = Query(None),
+    status: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _require_marketing_read(_current_staff(authorization, db))
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    templates = {template.id: template for template in db.scalars(
+        select(CouponTemplate).where(CouponTemplate.store_id == target_store_id)
+    )}
+    if template_id is not None and template_id not in templates:
+        raise HTTPException(status_code=404, detail="券模板不存在")
+    if status not in (None, "unused", "locked", "used", "expired"):
+        raise HTTPException(status_code=422, detail={"code": "COUPON_STATUS_INVALID", "message": "券状态筛选不合法"})
+    now = datetime.now(UTC)
+    base = select(UserCoupon).where(UserCoupon.template_id.in_(list(templates)))
+    if template_id is not None:
+        base = base.where(UserCoupon.template_id == template_id)
+    if status == "used":
+        base = base.where(UserCoupon.status == "used")
+    elif status == "locked":
+        base = base.where(UserCoupon.status == "locked", or_(UserCoupon.expire_at.is_(None), UserCoupon.expire_at > now))
+    elif status == "unused":
+        base = base.where(UserCoupon.status == "unused", or_(UserCoupon.expire_at.is_(None), UserCoupon.expire_at > now))
+    elif status == "expired":
+        base = base.where(or_(
+            UserCoupon.status == "expired",
+            and_(UserCoupon.status.in_(("unused", "locked")), UserCoupon.expire_at.is_not(None), UserCoupon.expire_at <= now),
+        ))
+    total = int(db.scalar(select(sa_func.count()).select_from(base.subquery())) or 0)
+    coupons = list(db.scalars(base.order_by(UserCoupon.claimed_at.desc(), UserCoupon.id.desc()).offset((page - 1) * page_size).limit(page_size)))
+    users = {user.id: user for user in db.scalars(select(User).where(User.id.in_({coupon.user_id for coupon in coupons})))} if coupons else {}
+    sources = _coupon_source_map(db, [coupon.id for coupon in coupons])
+    items = []
+    for coupon in coupons:
+        user = users.get(coupon.user_id)
+        template = templates.get(coupon.template_id)
+        items.append({
+            "id": coupon.id,
+            "template_id": coupon.template_id,
+            "template_name": template.name if template else "历史券模板",
+            "customer": _customer_display_name(user) if user else None,
+            "phone_masked": _masked_phone(user.phone) if user else None,
+            "status": _effective_coupon_status(coupon, now),
+            "stored_status": coupon.status,
+            "source": sources.get(coupon.id, "unknown"),
+            "claimed_at": coupon.claimed_at.isoformat() if coupon.claimed_at else None,
+            "expire_at": coupon.expire_at.isoformat() if coupon.expire_at else None,
+            "used_order_id": coupon.used_order_id,
+        })
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/coupons/posters")
+def coupon_posters(
+    template_id: int | None = Query(None),
+    claimed: bool | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    staff = _require_marketing_read(_current_staff(authorization, db))
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    templates = {template.id: template for template in db.scalars(
+        select(CouponTemplate).where(CouponTemplate.store_id == target_store_id)
+    )}
+    if template_id is not None and template_id not in templates:
+        raise HTTPException(status_code=404, detail="券模板不存在")
+    base = select(CouponPosterLink).where(CouponPosterLink.store_id == target_store_id)
+    if template_id is not None:
+        base = base.where(CouponPosterLink.template_id == template_id)
+    if claimed is True:
+        base = base.where(CouponPosterLink.coupon_id.is_not(None))
+    elif claimed is False:
+        base = base.where(CouponPosterLink.coupon_id.is_(None))
+    total = int(db.scalar(select(sa_func.count()).select_from(base.subquery())) or 0)
+    posters = list(db.scalars(base.order_by(CouponPosterLink.created_at.desc(), CouponPosterLink.id.desc()).offset((page - 1) * page_size).limit(page_size)))
+    staff_ids = {poster.created_by_staff_id for poster in posters}
+    actor_names = {staff.id: staff.name for staff in db.scalars(select(Staff).where(Staff.id.in_(staff_ids)))} if staff_ids else {}
+    coupon_ids = [poster.coupon_id for poster in posters if poster.coupon_id]
+    coupons = {coupon.id: coupon for coupon in db.scalars(select(UserCoupon).where(UserCoupon.id.in_(coupon_ids)))} if coupon_ids else {}
+    users = {user.id: user for user in db.scalars(select(User).where(User.id.in_({coupon.user_id for coupon in coupons.values()})))} if coupons else {}
+    items = []
+    for poster in posters:
+        coupon = coupons.get(poster.coupon_id) if poster.coupon_id else None
+        user = users.get(coupon.user_id) if coupon else None
+        items.append({
+            "id": poster.id,
+            "template_id": poster.template_id,
+            "template_name": templates.get(poster.template_id).name if templates.get(poster.template_id) else "历史券模板",
+            "created_by": actor_names.get(poster.created_by_staff_id, "历史未记录"),
+            "created_at": poster.created_at.isoformat() if poster.created_at else None,
+            "expires_at": poster.expires_at.isoformat() if poster.expires_at else None,
+            "claimed": bool(poster.coupon_id),
+            "claimed_at": coupon.claimed_at.isoformat() if coupon and coupon.claimed_at else None,
+            "customer": _customer_display_name(user) if user else None,
+            "phone_masked": _masked_phone(user.phone) if user else None,
+            "coupon_status": _effective_coupon_status(coupon, datetime.now(UTC)) if coupon else None,
+        })
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/coupons/posters/{poster_id}/link")
+def coupon_poster_link(
+    poster_id: int,
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Return the deterministic signed entry for an existing poster.
+
+    This does not create a second poster or coupon; it only exposes the same
+    entry to an authorised reader so the original image can be downloaded.
+    """
+    staff = _require_marketing_read(_current_staff(authorization, db))
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    poster = db.scalar(select(CouponPosterLink).where(
+        CouponPosterLink.id == poster_id,
+        CouponPosterLink.store_id == target_store_id,
+    ))
+    if not poster:
+        raise HTTPException(status_code=404, detail="海报记录不存在")
+    code = create_poster_token(poster.id, poster.store_id, poster.expires_at)
+    base = settings.h5_public_base_url.rstrip("/")
+    link = f"{base}/?store={poster.store_id}&c={code}"
+    _audit(db, staff, "view_coupon_poster_link", "coupon_poster_link", str(poster.id), {
+        "store_id": target_store_id,
+        "claimed": poster.coupon_id is not None,
+    })
+    db.commit()
+    return {
+        "poster_id": poster.id,
+        "claimed": poster.coupon_id is not None,
+        "code": code,
+        "link": link,
+        "expires_at": poster.expires_at.isoformat() if poster.expires_at else None,
+    }
+
+
+@router.get("/coupons/redemptions")
+def coupon_redemptions(
+    template_id: int | None = Query(None),
+    days: int = Query(30, ge=1, le=365),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Successful scan-redemption events, independent of the claim window."""
+    staff = _require_marketing_read(_current_staff(authorization, db))
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    templates = {template.id: template for template in db.scalars(
+        select(CouponTemplate).where(CouponTemplate.store_id == target_store_id)
+    )}
+    if template_id is not None and template_id not in templates:
+        raise HTTPException(status_code=404, detail="券模板不存在")
+    since = datetime.now(UTC) - timedelta(days=days)
+    template_ids = [template_id] if template_id is not None else list(templates)
+    matching_coupon_ids = list(db.scalars(select(UserCoupon.id).where(UserCoupon.template_id.in_(template_ids)))) if template_ids else []
+    if not matching_coupon_ids:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size, "days": days}
+    base = select(AuditLog).where(
+        AuditLog.action == "manager_redeem_coupon",
+        AuditLog.store_id == target_store_id,
+        AuditLog.created_at >= since,
+        AuditLog.entity_id.in_([str(coupon_id) for coupon_id in matching_coupon_ids]),
+    )
+    total = int(db.scalar(select(sa_func.count()).select_from(base.subquery())) or 0)
+    events = list(db.scalars(base.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).offset((page - 1) * page_size).limit(page_size)))
+    coupon_ids = [int(event.entity_id) for event in events if event.entity_id.isdigit()]
+    coupons = {coupon.id: coupon for coupon in db.scalars(select(UserCoupon).where(UserCoupon.id.in_(coupon_ids)))} if coupon_ids else {}
+    filtered = [(event, coupon) for event in events if (coupon := coupons.get(int(event.entity_id)) if event.entity_id.isdigit() else None)]
+    users = {user.id: user for user in db.scalars(select(User).where(User.id.in_({coupon.user_id for _, coupon in filtered})))} if filtered else {}
+    actor_ids = {int(event.actor_id) for event, _ in filtered if event.actor_id.isdigit()}
+    actors = {staff.id: staff.name for staff in db.scalars(select(Staff).where(Staff.id.in_(actor_ids)))} if actor_ids else {}
+    items = [{
+        "id": event.id,
+        "at": event.created_at.isoformat() if event.created_at else None,
+        "coupon_id": coupon.id,
+        "template_id": coupon.template_id,
+        "template_name": templates[coupon.template_id].name,
+        "customer": _customer_display_name(users.get(coupon.user_id)) if users.get(coupon.user_id) else None,
+        "phone_masked": _masked_phone(users[coupon.user_id].phone) if users.get(coupon.user_id) else None,
+        "actor_name": actors.get(int(event.actor_id), "历史未记录") if event.actor_id.isdigit() else "历史未记录",
+        "result": "success",
+    } for event, coupon in filtered]
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "days": days}
+
+def _csv_safe(value) -> str:
+    text = "" if value is None else str(value)
+    # Neutralise spreadsheet formulas while preserving the displayed value.
+    if text.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + text
+    return text
+
+
+@router.get("/coupons/export")
+def export_coupon_records(
+    dataset: str = Query("ledger"),
+    template_id: int | None = Query(None),
+    status: str | None = Query(None),
+    days: int = Query(30, ge=1, le=365),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Export the current filter's full masked result, not just one page."""
+    if dataset not in {"ledger", "redemptions"}:
+        raise HTTPException(status_code=422, detail={"code": "EXPORT_DATASET_INVALID", "message": "未知导出类型"})
+    staff = _require_marketing_read(_current_staff(authorization, db))
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    templates = {template.id: template for template in db.scalars(
+        select(CouponTemplate).where(CouponTemplate.store_id == target_store_id)
+    )}
+    if template_id is not None and template_id not in templates:
+        raise HTTPException(status_code=404, detail="券模板不存在")
+    now = datetime.now(UTC)
+    output = io.StringIO(); output.write("\ufeff"); writer = csv.writer(output)
+    row_count = 0
+    if dataset == "ledger":
+        rows = list(db.scalars(select(UserCoupon).where(UserCoupon.template_id.in_(list(templates))).order_by(UserCoupon.claimed_at.desc(), UserCoupon.id.desc())))
+        if template_id is not None:
+            rows = [row for row in rows if row.template_id == template_id]
+        if status in {"unused", "locked", "used", "expired"}:
+            rows = [row for row in rows if _effective_coupon_status(row, now) == status]
+        user_ids = {row.user_id for row in rows}
+        users = {user.id: user for user in db.scalars(select(User).where(User.id.in_(user_ids)))}
+        sources = _coupon_source_map(db, [row.id for row in rows])
+        writer.writerow(["券ID", "券规则", "顾客", "手机号(脱敏)", "当前状态", "来源", "领取时间", "到期时间", "使用订单"])
+        for row in rows:
+            user = users.get(row.user_id); template = templates.get(row.template_id)
+            writer.writerow([
+                _csv_safe(row.id), _csv_safe(template.name if template else "历史券模板"),
+                _csv_safe(_customer_display_name(user) if user else ""), _csv_safe(_masked_phone(user.phone) if user else ""),
+                _csv_safe(_effective_coupon_status(row, now)), _csv_safe(sources.get(row.id, "unknown")),
+                _csv_safe(row.claimed_at.isoformat() if row.claimed_at else ""), _csv_safe(row.expire_at.isoformat() if row.expire_at else ""),
+                _csv_safe(row.used_order_id or ""),
+            ])
+        row_count = len(rows)
+    else:
+        template_ids = [template_id] if template_id is not None else list(templates)
+        coupon_ids = list(db.scalars(select(UserCoupon.id).where(UserCoupon.template_id.in_(template_ids)))) if template_ids else []
+        since = now - timedelta(days=days)
+        events = list(db.scalars(select(AuditLog).where(
+            AuditLog.action == "manager_redeem_coupon",
+            AuditLog.store_id == target_store_id,
+            AuditLog.created_at >= since,
+            AuditLog.entity_id.in_([str(coupon_id) for coupon_id in coupon_ids]),
+        ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc()))) if coupon_ids else []
+        coupons = {coupon.id: coupon for coupon in db.scalars(select(UserCoupon).where(UserCoupon.id.in_([int(event.entity_id) for event in events if event.entity_id.isdigit()])))}
+        users = {user.id: user for user in db.scalars(select(User).where(User.id.in_({coupon.user_id for coupon in coupons.values()})))} if coupons else {}
+        actors = {staff.id: staff.name for staff in db.scalars(select(Staff).where(Staff.id.in_([int(event.actor_id) for event in events if event.actor_id.isdigit()])))}
+        writer.writerow(["核销时间", "券规则", "券ID", "顾客", "手机号(脱敏)", "操作人", "结果"])
+        for event in events:
+            coupon = coupons.get(int(event.entity_id)) if event.entity_id.isdigit() else None
+            if coupon is None: continue
+            user = users.get(coupon.user_id)
+            writer.writerow([
+                _csv_safe(event.created_at.isoformat() if event.created_at else ""), _csv_safe(templates.get(coupon.template_id).name if templates.get(coupon.template_id) else "历史券模板"),
+                _csv_safe(coupon.id), _csv_safe(_customer_display_name(user) if user else ""), _csv_safe(_masked_phone(user.phone) if user else ""),
+                _csv_safe(actors.get(int(event.actor_id), "历史未记录") if event.actor_id.isdigit() else "历史未记录"), "核销成功",
+            ])
+            row_count += 1
+    _audit(db, staff, "export_coupon_records", "coupon_export", str(target_store_id), {
+        "store_id": target_store_id, "dataset": dataset, "template_id": template_id,
+        "status": status, "days": days, "row_count": row_count, "phone_mode": "masked",
+    })
+    db.commit()
+    filename = f"coupon-{dataset}-{target_store_id}-{now.strftime('%Y%m%d%H%M')}.csv"
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 # ──────────────────────────────────────────────────────
 # 0. 到店服务选单：独立于订单的顾客 DIY 需求

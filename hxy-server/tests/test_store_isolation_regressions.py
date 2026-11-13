@@ -94,7 +94,7 @@ class StoreIsolationRegressionTests(unittest.TestCase):
         created = self.client.post(
             "/api/v1/admin/coupons",
             headers=self.headers,
-            json={"code": "REG-NEW", "name": "新券"},
+            json={"code": "REG-NEW", "name": "新券", "coupon_type": "fixed", "amount_cents": 500},
         )
         self.assertEqual(created.status_code, 200, created.text)
         with self.SessionLocal() as db:

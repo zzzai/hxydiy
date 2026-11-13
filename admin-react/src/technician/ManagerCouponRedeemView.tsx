@@ -141,7 +141,7 @@ export default function ManagerCouponRedeemView({ initialToken = '', onBack, onO
       {preview.scope_note && <p className="manager-detail-note">{preview.scope_note}</p>}
       <dl>
         <div><dt>顾客</dt><dd>{preview.customer_name} · {preview.phone_masked}</dd></div>
-        <div><dt>优惠</dt><dd>{preview.percent_off ? `${preview.percent_off / 10}折` : `¥${((preview.amount_cents || 0) / 100).toFixed(0)}`}</dd></div>
+        <div><dt>优惠</dt><dd>{preview.percent_off ? `${(100 - preview.percent_off) / 10}折` : `¥${((preview.amount_cents || 0) / 100).toFixed(0)}`}</dd></div>
         <div><dt>有效期</dt><dd>{preview.expire_at ? new Date(preview.expire_at).toLocaleDateString('zh-CN') : '—'}</dd></div>
       </dl>
       <p className="manager-detail-note">确认后券立即变为“已使用”。本次不抵扣当前订单金额。</p>
