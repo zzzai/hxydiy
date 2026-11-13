@@ -29,8 +29,11 @@ store_id INTEGER NOT NULL REFERENCES stores(id),
 batch_key VARCHAR(64) NOT NULL,           -- operator-defined exact batch
 source_snapshot_sha256 CHAR(64) NOT NULL,
 manifest_sha256 CHAR(64) NOT NULL,
-source_started_at TIMESTAMPTZ NULL,
-source_ended_at TIMESTAMPTZ NULL,
+query_range_start TIMESTAMPTZ NOT NULL,   -- declared source query range
+query_range_end TIMESTAMPTZ NOT NULL,
+page_count INTEGER NULL,
+last_page_complete BOOLEAN NULL,
+coverage_gaps JSONB NULL,                 -- explicit missing ranges/pages
 observed_at TIMESTAMPTZ NOT NULL,         -- actual read time
 status VARCHAR(16) NOT NULL,              -- preview/applied/blocked
 evidence_ref TEXT NOT NULL,               -- private redacted evidence ref, no PII
@@ -48,12 +51,13 @@ source VARCHAR(32) NOT NULL,
 store_id INTEGER NOT NULL REFERENCES stores(id),
 source_bill_no VARCHAR(128) NOT NULL,
 source_bill_version VARCHAR(64) NULL,     -- only if source proves it
-bill_type VARCHAR(16) NOT NULL,           -- service/open_card/package/recharge/unknown
+bill_type VARCHAR(16) NOT NULL DEFAULT 'unknown',  -- service/open_card/recharge/unknown
 occurred_at TIMESTAMPTZ NOT NULL,         -- source local time -> explicit offset
 settled_at TIMESTAMPTZ NULL,
 currency CHAR(3) NOT NULL DEFAULT 'CNY',
 store_price_total_cents BIGINT NULL,
 settled_total_cents BIGINT NULL,          -- final consumption amount, includes coupon payment
+payment_evidence_complete BOOLEAN NOT NULL DEFAULT FALSE,
 price_plan_discount_cents BIGINT NULL,
 coupon_payment_cents BIGINT NULL,
 card_principal_debit_cents BIGINT NULL,
@@ -62,8 +66,8 @@ cash_payment_cents BIGINT NULL,
 other_payment_cents BIGINT NULL,
 card_id BIGINT NULL REFERENCES membership_cards(id),
 user_id INTEGER NULL REFERENCES users(id),
-attribution_status VARCHAR(24) NOT NULL,  -- owned/shared/unresolved
-refund_status VARCHAR(16) NOT NULL,       -- none/partial/refunded/void/unknown
+attribution_status VARCHAR(24) NOT NULL DEFAULT 'unresolved',  -- owned/shared/unresolved
+refund_status VARCHAR(16) NOT NULL DEFAULT 'unknown',          -- none/partial/refunded/void/unknown
 original_bill_id BIGINT NULL REFERENCES membership_consumption_bills(id),
 source_row_sha256 CHAR(64) NOT NULL,
 raw_evidence_ref TEXT NOT NULL,
@@ -85,8 +89,10 @@ quantity NUMERIC(12,3) NULL,
 store_price_cents BIGINT NULL,
 settled_cents BIGINT NULL,
 payment_breakdown_json JSONB NULL,
-line_sha256 CHAR(64) NOT NULL,
-UNIQUE(bill_id, line_sha256)
+line_sha256 CHAR(64) NOT NULL
+-- no UNIQUE(bill_id,line_sha256): two legitimate identical service lines may exist.
+-- There is no stable line business key until source proves one; keep the whole
+-- bill's ordered line multiset and compare whole-bill version hashes.
 ```
 
 行号不稳定时：**不把 line_order 当业务主键**，整单按 `source_row_sha256` 保存版本；后续同一单号内容变化生成新账单版本/修订，不覆盖旧证据。
@@ -102,10 +108,13 @@ observed_at TIMESTAMPTZ NOT NULL,
 principal_cents BIGINT NULL,
 bonus_cents BIGINT NULL,
 total_cents BIGINT NULL,
-source_batch_id BIGINT NULL REFERENCES membership_consumption_batches(id),
+source_batch_id BIGINT NOT NULL REFERENCES membership_consumption_batches(id),
 evidence_ref TEXT NOT NULL,
 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 UNIQUE(card_id, observed_at, source_batch_id)
+-- source_batch_id is NOT NULL so NULL does not defeat uniqueness.
+-- If an ad-hoc observation without batch is later required, use a separate
+-- partial unique index on (card_id, observed_at) WHERE source_batch_id IS NULL.
 ```
 
 只有来源明确本金/赠金时才拆；只有总余额时 `principal_cents=NULL, bonus_cents=NULL, total_cents=...`，不得把总余额当本金；未知为 NULL，不为0。余额持续核验保存新快照；仍然不是 DIY 钱包。
@@ -123,7 +132,7 @@ UNIQUE(card_id, observed_at, source_batch_id)
 - 批次键：`(source, store_id, batch_key)`；批次 SHA 绑定来源快照和 manifest。
 - 账单头业务键：`(source, store_id, source_bill_no, source_row_sha256)`；只有来源证明单号全租户唯一且版本规则后，才可升级 `source_bill_version` 唯一约束。
 - 相同内容重放：整批/逐单零新增。
-- 相同单号内容变化：新 `source_row_sha256`/版本，旧记录保留，汇总只取当前有效版本；无版本证据时标记冲突，不覆盖。
+- 相同单号内容变化：新 `source_row_sha256`/版本，旧记录保留；**在来源证明版本顺序/当前版本规则前，整组账单冲突，全部排除并标异常，不做 first-wins，也不依赖输入顺序**。
 - 行：只有来源证明稳定明细ID才使用 `source_line_key`；否则整单版本保存，`line_order` 仅展示，不参与去重。
 - 跨账户/跨店：`store_id` 和 owner 必须严格匹配；未知归属进入 `unresolved`，不展示为本人。
 
@@ -146,6 +155,8 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 规则：
 
 - `settled_total_cents` 是最终消费结算额，包含储值扣款、现金、其他真实支付和优惠券支付；不是“现金实付”。
+- 必须显式 `payment_evidence_complete=true`，且本金/赠金/券/现金/其他每个组成部分都不是 NULL；五项合计必须等于 `settled_total_cents`，否则 unknown/anomaly，禁止用 `or 0` 补齐。
+- `settled_total_cents < 0`、支付合计不一致、原价合计<成交、行/头不一致均为 anomaly；不得计算为优惠。
 - 储值扣款是支付，不是免费；不能把储值支付额当优惠。
 - 价格方案优惠单独存；优惠券支付单独存；**券支付不自动记为会员节省**，因为券来源/购券成本未知。
 - 例：原价300、成交240、卡金150、券90 -> 节省60；不是150，也不是240。
@@ -154,7 +165,7 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 - 年卡费单列，不计算回本；赠金/赠礼不重复计入。
 - 负差额或行/头合计不一致：进入核对异常，不静默取0，不纳入已核验优惠。
 - 缺原价/数量/支付构成：保留账单，`savings_cents=NULL`，不计入累计，文案“已核验记录累计优惠”并注明覆盖范围。
-- 统计覆盖期取已核实账单最小/最大 occurred_at；未知覆盖显示未核实。
+- 统计覆盖期不能只用已核实账单最小/最大 occurred_at；必须使用批次声明的 `query_range_start/end`、分页完整性、最后页和 `coverage_gaps`。账单日期范围只是结果范围，不是采集覆盖期。
 - 多笔退款/部分退款：按原账单和可核对分摊调整；缺分摊阻断该账单，不按实付退款简单反推。
 
 ## 6. 合成验收矩阵
@@ -163,8 +174,10 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 |---|---|
 | 原价300/成交240/卡金150/券90 | 节省60；券支付90单列；卡金支付不算免费 |
 | 原价119/储值79/现金0 | 节省40，不是119 |
+| 支付拆分全 None / 只知1分而成交240 | unknown/anomaly，不计算 |
+| 成交-1000 | anomaly，不计算 |
 | 同一批次重复导入两次 | 第二次零新增；唯一键幂等 |
-| 同单号内容变化、无版本字段 | 冲突/待核实，不覆盖旧账单，汇总排除或标异常 |
+| 同单号v1有效/v2退款unknown，正序/逆序 | 整组冲突，savings=null，verified=0，blocked/conflict各1；顺序无关 |
 | 多人账单含2人项目 | 账单只累计一次；未归属行不计入个人；不推断健康画像 |
 | 同人多卡关联同一账单 | 账单只累计一次；权益并集不影响账单金额 |
 | 退款未知 | 账单不计入节省，状态“退款待核实” |
@@ -172,6 +185,8 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 | 缺原价或支付拆分 | 节省NULL，显示未核实；不填0 |
 | 跨账户/跨店读取 | 403/404，不返回账单；店长只本店 |
 | 行/头合计不一致 | 核对异常，不静默取0 |
+| 完全相同的两条合法服务行 | 保留有序多重集，不按内容去重 |
+| 无已核验账单 | 累计savings=null，不是0 |
 | 北京时间边界 | 明确来源本地时间+offsets；展示按明确时区 |
 
 ## 7. 试运行、备份、恢复、回滚与审批
@@ -196,5 +211,6 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 ## 8. 当前结论
 
 - 本方案不执行迁移、不写生产数据、不导入历史、不更新余额。
+- 纯模型合成测试 11 passed；默认归属/退款/账单类型/支付完整性均为 unknown/unresolved，不默认通过。
 - 必须先确认退款/撤销字段、稳定账单/明细标识、全量历史分页和逐人归属；未确认部分保持 unknown/阻断。
 - 人工门店19项、Excel/WPS、真实来源核对继续待人工。

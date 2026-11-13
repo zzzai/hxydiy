@@ -8,8 +8,11 @@ def line(price, settled, qty=1, desc="合成项目"):
 def bill(**overrides):
     base = dict(
         source_bill_no="SYN-001", source_row_sha256="sha-1", store_id=1, user_id=11,
+        bill_type="service", attribution_status="owned", refund_status="none",
+        payment_evidence_complete=True,
         lines=(line(30000, 24000),), store_price_total_cents=30000, settled_total_cents=24000,
-        card_principal_debit_cents=15000, coupon_payment_cents=9000,
+        card_principal_debit_cents=15000, card_bonus_debit_cents=0, coupon_payment_cents=9000,
+        cash_payment_cents=0, other_payment_cents=0,
     )
     base.update(overrides)
     return ConsumptionBill(**base)
@@ -26,13 +29,42 @@ def test_verified_savings_excludes_card_and_coupon_payments():
 def test_simple_119_79_example_is_40_not_119():
     result = compute_bill_savings(bill(lines=(line(11900, 7900),), store_price_total_cents=11900,
                                       settled_total_cents=7900, card_principal_debit_cents=7900,
-                                      coupon_payment_cents=0))
+                                      card_bonus_debit_cents=0, coupon_payment_cents=0,
+                                      cash_payment_cents=0, other_payment_cents=0))
     assert result.status == "verified" and result.savings_cents == 4000
 
 
-def test_open_card_recharge_and_shared_are_not_consumption_savings():
-    assert compute_bill_savings(bill(bill_type="open_card")).status == "excluded"
-    assert compute_bill_savings(bill(bill_type="recharge")).status == "excluded"
+def test_payment_breakdown_must_be_complete_and_reconcile():
+    assert compute_bill_savings(bill(payment_evidence_complete=False)).status == "unknown"
+    assert compute_bill_savings(bill(card_bonus_debit_cents=None)).status == "unknown"
+    assert compute_bill_savings(bill(cash_payment_cents=None)).status == "unknown"
+    # 1 cent of known payment cannot be trusted against a 240.00 settlement.
+    incomplete = bill(card_principal_debit_cents=1, card_bonus_debit_cents=0,
+                      coupon_payment_cents=0, cash_payment_cents=0, other_payment_cents=0)
+    assert compute_bill_savings(incomplete).status == "anomaly"
+    mismatch = bill(card_principal_debit_cents=14000, card_bonus_debit_cents=0,
+                    coupon_payment_cents=9000, cash_payment_cents=0, other_payment_cents=0)
+    assert compute_bill_savings(mismatch).status == "anomaly"
+
+
+def test_negative_settlement_and_negative_savings_are_blocked():
+    negative = bill(settled_total_cents=-1000, lines=(line(30000, -1000),),
+                    card_principal_debit_cents=-1000, card_bonus_debit_cents=0,
+                    coupon_payment_cents=0, cash_payment_cents=0, other_payment_cents=0)
+    assert compute_bill_savings(negative).status == "anomaly"
+    overpaid = bill(settled_total_cents=31000, lines=(line(30000, 31000),),
+                    card_principal_debit_cents=31000, card_bonus_debit_cents=0,
+                    coupon_payment_cents=0, cash_payment_cents=0, other_payment_cents=0)
+    assert compute_bill_savings(overpaid).status == "anomaly"
+
+
+def test_defaults_are_unknown_not_verified():
+    bare = ConsumptionBill(source_bill_no="UNKNOWN", source_row_sha256="sha", store_id=1, user_id=11)
+    assert bare.bill_type == "unknown"
+    assert bare.attribution_status == "unresolved"
+    assert bare.refund_status == "unknown"
+    assert compute_bill_savings(bare).status == "excluded"
+    assert compute_bill_savings(bill(attribution_status="unresolved")).status == "blocked"
     assert compute_bill_savings(bill(attribution_status="shared")).status == "blocked"
     assert compute_bill_savings(bill(refund_status="unknown")).status == "blocked"
 
@@ -48,22 +80,49 @@ def test_duplicate_and_changed_bill_are_idempotent_or_conflict():
     first = bill()
     assert ingest_bills(existing, [first]) == {"inserted": ["SYN-001"], "duplicates": [], "conflicts": []}
     assert ingest_bills(existing, [first]) == {"inserted": [], "duplicates": ["SYN-001"], "conflicts": []}
-    changed = bill(source_row_sha256="sha-2", settled_total_cents=23000, lines=(line(30000, 23000),))
+    changed = bill(source_row_sha256="sha-2", settled_total_cents=23000, lines=(line(30000, 23000),),
+                   card_principal_debit_cents=14000, card_bonus_debit_cents=0,
+                   coupon_payment_cents=9000, cash_payment_cents=0, other_payment_cents=0)
     assert ingest_bills(existing, [changed]) == {"inserted": [], "duplicates": [], "conflicts": ["SYN-001"]}
     assert existing[(1, "SYN-001")] == "sha-1"
 
 
+def test_conflicting_versions_exclude_group_and_ignore_input_order():
+    v1 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v1", source_bill_version="v1")
+    v2 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v2", source_bill_version="v2",
+              refund_status="unknown", payment_evidence_complete=False)
+    for order in ([v1, v2], [v2, v1]):
+        result = aggregate_verified(order)
+        assert result["savings_cents"] is None
+        assert result["verified_bills"] == 0
+        assert result["conflict_bills"] == 1 and result["blocked_bills"] == 1
+
+
+def test_no_verified_bills_returns_null_not_zero():
+    result = aggregate_verified([bill(bill_type="recharge"), bill(refund_status="unknown")])
+    assert result["savings_cents"] is None
+    assert result["verified_bills"] == 0
+
+
 def test_multi_card_and_multi_person_bill_counts_once():
-    shared = bill(linked_card_ids=(1, 2), source_bill_no="SYN-MULTI")
+    multi_card = bill(source_bill_no="SYN-MULTI", linked_card_ids=(1, 2))
     own = bill(source_bill_no="SYN-OWN")
-    result = aggregate_verified([shared, shared, own, own])
+    result = aggregate_verified([multi_card, multi_card, own, own])
     assert result["unique_bills"] == 2
     assert result["verified_bills"] == 2
     assert result["savings_cents"] == 12000
+    shared = bill(source_bill_no="SYN-SHARED", attribution_status="shared")
+    blocked = aggregate_verified([own, shared])
+    assert blocked["savings_cents"] == 6000
+    assert blocked["verified_bills"] == 1 and blocked["blocked_bills"] == 1
 
 
-def test_account_and_store_isolation():
+def test_account_and_store_isolation_rejects_unresolved_shared():
     own = bill()
     assert visible_to(own, 11, 1) is True
     assert visible_to(own, 12, 1) is False
     assert visible_to(own, 11, 2) is False
+    assert visible_to(bill(attribution_status="unresolved"), 11, 1) is False
+    assert visible_to(bill(attribution_status="shared"), 11, 1) is False
+    assert visible_to(bill(user_id=None), 11, 1) is False
+    assert visible_to(bill(attribution_status="unknown"), 11, 1) is False

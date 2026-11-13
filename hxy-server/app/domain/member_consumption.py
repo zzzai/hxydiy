@@ -27,9 +27,10 @@ class ConsumptionBill:
     source_row_sha256: str
     store_id: int
     user_id: int | None
-    bill_type: str = "service"  # service/open_card/package/recharge/unknown
-    attribution_status: str = "owned"  # owned/shared/unresolved
-    refund_status: str = "none"  # none/partial/refunded/void/unknown
+    bill_type: str = "unknown"  # service/open_card/package/recharge/unknown
+    attribution_status: str = "unresolved"  # owned/shared/unresolved
+    refund_status: str = "unknown"  # none/partial/refunded/void/unknown
+    payment_evidence_complete: bool = False
     source_bill_version: str | None = None
     store_price_total_cents: int | None = None
     settled_total_cents: int | None = None
@@ -58,26 +59,48 @@ def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
         return SavingsResult("blocked", None, f"attribution={bill.attribution_status}_not_personal")
     if bill.refund_status != "none":
         return SavingsResult("blocked", None, f"refund_status={bill.refund_status}_needs_evidence")
-    if not bill.lines:
-        return SavingsResult("unknown", None, "lines_missing")
-    if any(line.quantity is None or line.store_price_cents is None or line.settled_cents is None for line in bill.lines):
-        return SavingsResult("unknown", None, "line_price_or_quantity_missing")
     if bill.settled_total_cents is None:
         return SavingsResult("unknown", None, "settled_total_missing")
-    line_store_total = sum((line.store_price_cents or 0) * (line.quantity or 0) for line in bill.lines)
+    if bill.settled_total_cents < 0:
+        return SavingsResult("anomaly", None, "settled_total_negative")
+    if not bill.lines:
+        return SavingsResult("unknown", None, "lines_missing")
+    if any(line.quantity is None or line.quantity <= 0 or line.store_price_cents is None
+           or line.settled_cents is None or line.store_price_cents < 0 or line.settled_cents < 0
+           for line in bill.lines):
+        return SavingsResult("unknown", None, "line_price_quantity_invalid_or_missing")
+    line_store_total = sum(line.store_price_cents * line.quantity for line in bill.lines)
     store_total = bill.store_price_total_cents if bill.store_price_total_cents is not None else line_store_total
+    if store_total < 0:
+        return SavingsResult("anomaly", None, "store_price_total_negative")
     if store_total != line_store_total:
         return SavingsResult("anomaly", None, "header_and_line_store_price_mismatch")
-    line_settled_total = sum((line.settled_cents or 0) for line in bill.lines)
+    line_settled_total = sum(line.settled_cents for line in bill.lines)
     if line_settled_total != bill.settled_total_cents:
         return SavingsResult("anomaly", None, "header_and_line_settled_mismatch")
+
+    # A savings number is only trustworthy when the source's payment breakdown
+    # is explicitly complete and every component reconciles to the final amount.
+    components = (
+        bill.card_principal_debit_cents,
+        bill.card_bonus_debit_cents,
+        bill.coupon_payment_cents,
+        bill.cash_payment_cents,
+        bill.other_payment_cents,
+    )
+    if not bill.payment_evidence_complete or any(value is None for value in components):
+        return SavingsResult("unknown", None, "payment_breakdown_unknown_or_incomplete")
+    if any(value < 0 for value in components):
+        return SavingsResult("anomaly", None, "payment_component_negative")
+    if sum(components) != bill.settled_total_cents:
+        return SavingsResult("anomaly", None, "payment_breakdown_does_not_reconcile")
+
     savings = store_total - bill.settled_total_cents
     if savings < 0:
         return SavingsResult("anomaly", None, "negative_savings")
-    card_payment = None
-    if bill.card_principal_debit_cents is not None or bill.card_bonus_debit_cents is not None:
-        card_payment = (bill.card_principal_debit_cents or 0) + (bill.card_bonus_debit_cents or 0)
-    return SavingsResult("verified", savings, "verified_historical_price_and_settlement", bill.coupon_payment_cents, card_payment)
+    card_payment = bill.card_principal_debit_cents + bill.card_bonus_debit_cents
+    return SavingsResult("verified", savings, "verified_historical_price_settlement_and_payment",
+                         bill.coupon_payment_cents, card_payment)
 
 
 def ingest_bills(existing: dict[tuple[int, str], str], bills: Iterable[ConsumptionBill]) -> dict:
@@ -99,24 +122,42 @@ def ingest_bills(existing: dict[tuple[int, str], str], bills: Iterable[Consumpti
 
 
 def aggregate_verified(bills: Iterable[ConsumptionBill]) -> dict:
-    """Count each bill once, even when multiple cards or people are linked."""
-    seen: set[tuple[int, str]] = set()
+    """Count each source bill once; conflicting versions exclude the whole group.
+
+    Version order is not trusted until the source supplies a stable revision
+    rule. Therefore two different contents for one bill number are a conflict,
+    regardless of input order, and never first-win.
+    """
+    groups: dict[tuple[int, str], list[ConsumptionBill]] = {}
+    for bill in bills:
+        groups.setdefault((bill.store_id, bill.source_bill_no), []).append(bill)
     total = 0
     verified = 0
     blocked = 0
-    for bill in bills:
-        key = (bill.store_id, bill.source_bill_no)
-        if key in seen:
+    conflicts = 0
+    for group in groups.values():
+        hashes = {item.source_row_sha256 for item in group}
+        if len(hashes) > 1:
+            conflicts += 1
+            blocked += 1
             continue
-        seen.add(key)
-        result = compute_bill_savings(bill)
+        result = compute_bill_savings(group[0])
         if result.status == "verified":
             verified += 1
             total += result.savings_cents or 0
         elif result.status in {"blocked", "anomaly", "unknown"}:
             blocked += 1
-    return {"savings_cents": total, "verified_bills": verified, "blocked_bills": blocked, "unique_bills": len(seen)}
+    return {
+        "savings_cents": total if verified else None,
+        "verified_bills": verified,
+        "blocked_bills": blocked,
+        "conflict_bills": conflicts,
+        "unique_bills": len(groups),
+    }
 
 
 def visible_to(bill: ConsumptionBill, user_id: int, store_id: int) -> bool:
-    return bill.user_id == user_id and bill.store_id == store_id
+    return (bill.attribution_status == "owned"
+            and bill.user_id is not None
+            and bill.user_id == user_id
+            and bill.store_id == store_id)
