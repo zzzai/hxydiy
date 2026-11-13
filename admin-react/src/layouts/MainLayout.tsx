@@ -29,6 +29,7 @@ const ProjectsPage = lazy(() => import('../pages/ProjectsPage'));
 const AddonsPage = lazy(() => import('../pages/AddonsPage'));
 const ProductsPage = lazy(() => import('../pages/ProductsPage'));
 const CouponsPage = lazy(() => import('../pages/CouponsPage'));
+const LearningGovernancePage = lazy(() => import('../pages/LearningGovernancePage'));
 const UsersPage = lazy(() => import('../pages/UsersPage'));
 const TagsPage = lazy(() => import('../pages/TagsPage'));
 const SegmentsPage = lazy(() => import('../pages/SegmentsPage'));
@@ -152,6 +153,7 @@ export default function MainLayout({ onLogout }: { onLogout: () => void }) {
                 <Route path="/page-content" element={page('/page-content', <PageContentPage />)} />
                 <Route path="/products" element={page('/products', <ProductsPage />)} />
                 <Route path="/coupons" element={page('/coupons', <CouponsPage />)} />
+                <Route path="/learning-admin" element={page('/learning-admin', <LearningGovernancePage />)} />
                 <Route path="/users" element={page('/users', <UsersPage />)} />
                 <Route path="/tags" element={page('/tags', <TagsPage />)} />
                 <Route path="/segments" element={page('/segments', <SegmentsPage />)} />

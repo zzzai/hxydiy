@@ -78,7 +78,7 @@ test('未知角色采用最小权限且默认进入今日运营', () => {
 
 test('headquarters only exposes pages backed by headquarters-scoped APIs', () => {
   assert.deepEqual(getVisibleMenuPaths('admin', null), [
-    '/brand-overview', '/audit-logs', '/projects', '/addons', '/products', '/page-content', '/assessments', '/staff-accounts', '/stores', '/coupons', '/automation',
+    '/brand-overview', '/audit-logs', '/projects', '/addons', '/products', '/page-content', '/assessments', '/staff-accounts', '/learning-admin', '/stores', '/coupons', '/automation',
   ]);
   assert.equal(isPathAllowed('admin', '/techs', null), false);
   assert.equal(isPathAllowed('admin', '/assessments', null), true);

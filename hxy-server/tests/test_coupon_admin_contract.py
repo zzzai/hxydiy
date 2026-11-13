@@ -11,6 +11,7 @@ from app.api.admin import create_staff_token
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import AuditLog, CouponPosterLink, CouponTemplate, Order, Staff, Store, User, UserCoupon
+from app.models.membership import MembershipCard
 
 PREFIX = "/api/v1/admin"
 
@@ -218,3 +219,19 @@ def test_admin_operations_read_models_are_scoped_and_audited(coupon_admin):
     assert client.get(f"{PREFIX}/v2/coupons/overview", headers=headers["manager"]).status_code == 200
     other = client.get(f"{PREFIX}/v2/coupons/overview?store_id={ids['other_store']}", headers=headers["manager"])
     assert other.status_code == 403
+
+
+def test_membership_overview_is_read_only_and_marks_unknown_sync(coupon_admin):
+    client, factory, ids, headers = coupon_admin
+    with factory.begin() as db:
+        db.add(MembershipCard(user_id=ids["customer"], store_id=ids["store"], source="synthetic",
+                              source_card_key="synthetic-card-1", card_type="annual",
+                              started_at=datetime.now(UTC) - timedelta(days=1),
+                              expires_at=datetime.now(UTC) + timedelta(days=300), status="active"))
+    response = client.get(f"{PREFIX}/v2/membership/overview", headers=headers["manager"])
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["cards"]["active"] == 1
+    assert body["sync_status"]["state"] == "unverified"
+    assert "全手机号" not in str(body)
+    assert client.get(f"{PREFIX}/v2/membership/overview?store_id={ids['other_store']}", headers=headers["manager"]).status_code == 403

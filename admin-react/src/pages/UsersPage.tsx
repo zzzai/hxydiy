@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox, Dropdown, Space } from 'antd';
+import { Alert, App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox, Dropdown, Space } from 'antd';
 import { MoreOutlined, SearchOutlined } from '@ant-design/icons';
-import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer, exportCustomers, getCustomerExports } from '../api';
+import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer, exportCustomers, getCustomerExports, getMembershipOverview } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 import { getMembershipEntitlements } from '../api';
@@ -40,10 +40,19 @@ export default function UsersPage() {
   const [couponToIssue, setCouponToIssue] = useState<number>();
   const [couponLoading, setCouponLoading] = useState(false);
   const [membershipForm] = Form.useForm();
+  const [memberOverview, setMemberOverview] = useState<any>(null);
+  const [memberOverviewError, setMemberOverviewError] = useState('');
   const canCreateProfile = getStaff()?.role === 'manager' || getStaff()?.role === 'admin';
   const canManageDevice = getStaff()?.role === 'manager';
 
   useEffect(() => { getTags().then(r => setTags(r.data || [])); }, []);
+  useEffect(() => {
+    let active = true;
+    void getMembershipOverview()
+      .then((response) => { if (active) { setMemberOverview(response.data); setMemberOverviewError(''); } })
+      .catch(() => { if (active) setMemberOverviewError('会员状态概览加载失败'); });
+    return () => { active = false; };
+  }, []);
 
   const load = async (p = 1) => {
     setLoading(true);
@@ -173,6 +182,20 @@ export default function UsersPage() {
           <Button onClick={() => void openExportHistory()}>导出记录</Button>
           <Button loading={exporting} onClick={() => void handleExport()}>导出顾客（脱敏）</Button>
         </Space>
+      </div>
+      <div className="membership-overview-strip">
+        {memberOverviewError ? <Alert type="warning" showIcon message={memberOverviewError} /> : memberOverview ? <>
+          <div className="membership-overview-facts">
+            <span><b>{memberOverview.customers}</b> 本店顾客</span>
+            <span><b>{memberOverview.legacy_member_count}</b> 旧会员标记</span>
+            <span><b>{memberOverview.cards.active}</b> 有效来源卡</span>
+            <span><b>{memberOverview.cards.annual}</b> 年卡</span>
+            <span><b>{memberOverview.cards.stored}</b> 储值卡</span>
+            <span><b>{memberOverview.cards.expiring_30d}</b> 30天内到期</span>
+          </div>
+          <Alert type="warning" showIcon message={`会员同步状态：${memberOverview.sync_status.label}`}
+            description={`${memberOverview.sync_status.detail} ${memberOverview.note}${memberOverview.last_observed_at ? ` 最近观测：${memberOverview.last_observed_at.slice(0, 10)}。` : ''}`} />
+        </> : null}
       </div>
       <div className="users-filter-row">
         <Input aria-label="搜索昵称或手机号" prefix={<SearchOutlined />} placeholder="搜索昵称或手机号" value={search} onChange={e => setSearch(e.target.value)} onPressEnter={() => load()} style={{ width: 220 }} />
