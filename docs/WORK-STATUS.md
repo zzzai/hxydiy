@@ -1,5 +1,14 @@
 # hxy-diy 工作状态
 
+## 2026-11-13 经营分析数据源与 UTC 边界已上线
+
+- [PR #489](https://github.com/zzzai/hxydiy/pull/489) 合并 `c04cc7a1986c6d8de2032640f8759de6c59560c4`；精确 [CI 43377980123](https://github.com/zzzai/hxydiy/actions/runs/43377980123) 和 [Deploy 43378482044](https://github.com/zzzai/hxydiy/actions/runs/43378482044) 成功，current=`github-c04cc7a1986c-43378482044`。
+- `/admin/operations-summary` 明示 `period.timezone=UTC` 和 `data_sources`：交易来自 DIY 订单、不含智荟宝、取消/退款/退款驳回排除、项目名使用冻结快照、不能称为全店真实营收。
+- 经营分析页增加同一数据源边界提示；未改变历史报表数值、订单、价格或支付。
+- 生产只读核验：健康 200，门店经理接口返回 UTC 和 data_sources，无业务写入。
+- 本批无数据库迁移。真实门店财务口径和外部收银受控关联仍需另行确认。
+- [验收与回退](release/analytics-source-boundary-20261113.md)。
+
 ## 2026-11-13 学习治理与会员只读状态已上线
 
 - [PR #487](https://github.com/zzzai/hxydiy/pull/487) 合并 `330879aff11ba2cc64de68a1624bb9b302e3a27b`；精确 [CI 43374072137](https://github.com/zzzai/hxydiy/actions/runs/43374072137) 和 [Deploy 43374976600](https://github.com/zzzai/hxydiy/actions/runs/43374976600) 成功，current=`github-330879aff11b-43374976600`。
