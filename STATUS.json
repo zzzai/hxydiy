@@ -35,5 +35,7 @@
     "docs_pr": 496,
     "docs_main": "68b126c628b7b458ec6d002000126afc2e680772"
   },
-  "preview_url": "http://127.0.0.1:4179/"
+  "preview_url": "http://127.0.0.1:4179/?store=1",
+  "pr": 497,
+  "merged": false
 }

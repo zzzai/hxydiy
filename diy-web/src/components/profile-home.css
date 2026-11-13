@@ -72,7 +72,7 @@
 .profile-section-heading > .profile-collapse-records { margin-left: 2px; color: #667369; }
 
 /* Read-only source membership snapshot. Never present as DIY wallet. */
-.profile-membership-detail{margin:14px 16px 4px;padding:14px;border:1px solid #dbe7dd;border-radius:18px;background:#fbfdf9}
+.profile-membership-detail{margin:14px 16px 4px;padding:14px;border:1px solid #dbe7dd;border-radius:18px;background:#fbfdf9;text-align:left}
 .profile-membership-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
 .profile-membership-heading h2{margin:0;font-size:16px;color:#173d2a}
 .profile-membership-heading small{display:block;margin-top:3px;color:#6c7f70;font-size:11px;line-height:1.5}
@@ -93,7 +93,7 @@
 .profile-membership-balance small{flex-basis:100%;font-size:10px;color:#879688;line-height:1.5}
 .profile-membership-benefits{margin-top:7px;font-size:11px;color:#5a705d}
 .profile-membership-benefits summary{cursor:pointer;outline-offset:2px}
-.profile-membership-benefits ul{margin:6px 0 2px;padding-left:16px;line-height:1.6}
+.profile-membership-benefits ul{margin:6px 0 2px;padding-left:18px;line-height:1.6;text-align:left;list-style:disc outside}
 .profile-membership-benefits small{display:block;margin-top:4px;color:#89968a;font-size:10px;line-height:1.5}
 .profile-membership-unknown{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
 .profile-membership-unknown-note{margin:10px 0 0;padding:9px 10px;border-radius:12px;background:#f4f7ef;color:#617362;font-size:11px;line-height:1.6}

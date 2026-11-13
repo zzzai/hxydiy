@@ -311,8 +311,8 @@ function MembershipSnapshot({ data, loading, error, onRetry }: { data: CustomerM
         <details className="profile-membership-benefits"><summary>查看权益</summary><ul>{card.benefits.map(benefit => <li key={benefit}>{benefit}</li>)}</ul><small>{card.benefits_note}</small></details>
       </li>)}
     </ul>}
-    <p className="profile-membership-unknown-note">累计消费优惠暂未计算：历史消费和退款关联尚未同步，不显示 0 或推算金额。</p>
-    <p className="profile-membership-scope">{data.coverage.card_snapshot === 'returned' ? '会员卡信息为来源快照' : '暂无来源会员卡'}{data.coverage.as_of ? `，截至 ${formatDateTime(data.coverage.as_of).slice(0, 10)}` : ''}。历史消费尚未同步。</p>
+    <p className="profile-membership-unknown-note">历史消费尚未同步，累计优惠暂不可用。</p>
+    <p className="profile-membership-scope">{data.coverage.card_snapshot === 'returned' ? '会员卡信息为来源快照' : '暂无来源会员卡'}{data.coverage.as_of ? `，截至 ${formatDateTime(data.coverage.as_of).slice(0, 10)}` : ''}。</p>
   </section>;
 }
 

@@ -40,7 +40,7 @@ pytest test_customer_membership_overview + h5_auth + membership_verification
 27 passed, 9 subtests passed
 
 diy-web build: passed
-diy-web tests: 380 tests, 379 passed, 1 skipped
+diy-web tests: 380 tests, 379 passed, 1 skipped（含 5 个 React 延迟/换号/退出/失效/重试用例）
 admin build: passed
 admin tests: 321 passed
 ```
@@ -49,8 +49,8 @@ admin tests: 321 passed
 
 ## 合成预览
 
-- 地址：`http://127.0.0.1:4179/`（本机合成 API + 当前构建代码，非生产数据）
-- 截图/HTML：`evidence/member-readonly-preview.png`、`evidence/member-readonly-preview.html`
+- 地址：`http://127.0.0.1:4179/?store=1`（本机合成 API + 当前构建代码，非生产数据）
+- 截图：`evidence/member-readonly-preview.png`
 - 储值/年度权益均展示既有周二活动；个人赠礼仅写“以门店记录为准”，不表示已发；来源、字段、只读等内部词不在顾客页堆叠。
 
 ## 来源字段
@@ -64,3 +64,7 @@ admin tests: 321 passed
 ## 下一阶段（需独立批准）
 
 历史消费账单存储/导入、退款/版本/去重、真实数据批次。
+
+## PR
+
+- 会员 PR #497；分支 `codex/member-readonly-20261113`；最新 head 以 PR 为准；未合并，等待独立复核。
