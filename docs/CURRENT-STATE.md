@@ -1,5 +1,14 @@
 # hxy-diy 当前状态
 
+## 2026-11-13 会员同步回执四项修复已上线（A）
+
+- [PR #495](https://github.com/zzzai/hxydiy/pull/495) 合并 `16aed90999ec017114d56bbd2cb87e99e4742576`；[CI 43444886747](https://github.com/zzzai/hxydiy/actions/runs/43444886747) success；[Deploy 43445761524](https://github.com/zzzai/hxydiy/actions/runs/43445761524) success；current=`github-16aed90999ec-43445761524`。
+- 修复：冲突批次整批失效且顺序无关；先门店隔离再聚合；`no_new` 不覆盖 `last_success`；历史 blocked 与追加 `current_processing`（原范围授权、用户暂缓、授权时间未记录）分离；note 冲突整批不挂载、`attempt_at` 优先级、无时区/非法 shape 诊断、页面 applied 三态。
+- 验证：定向 19 passed；完整后端 1366 passed/30 skipped/103 subtests；admin build + 321 tests。 生产 loader SHA `53095e5f...` 与独立 8 例验收一致（Codex）。
+- 生产只读：public health `ok/production`；回执历史成功与当前 `paused_by_user` 分开，errors/conflicts 空，15候选未提交；备份 `pre-github-16aed90999ec-20261113T151735Z.dump` 校验 OK，恢复演练成功。
+- 本批无数据库迁移、无会员导入、无旧数据修改、无自动发券/短信。
+- 生产只读接口验证由独立验收完成后补录；门店19项与 Excel/WPS 仍待人工。
+
 ## 2026-11-13 券运营验收补强与会员脱敏回执已上线
 
 - [PR #493](https://github.com/zzzai/hxydiy/pull/493) 合并 `28d85bbea72382e415664a0712b353bb32b26736`；精确 [CI 43412185121](https://github.com/zzzai/hxydiy/actions/runs/43412185121) 和 [Deploy 43412883940](https://github.com/zzzai/hxydiy/actions/runs/43412883940) 成功，current=`github-28d85bbea723-43412883940`。
