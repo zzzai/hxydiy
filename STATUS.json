@@ -37,5 +37,12 @@
   },
   "preview_url": "http://127.0.0.1:4179/?store=1",
   "pr": 497,
-  "merged": false
+  "merged": true,
+  "merged_sha": "d50941d67579944a201464b4931e40aad3808efd",
+  "ci": 43456867992,
+  "deploy": 43457778128,
+  "production_current": "github-d50941d67579-43457778128",
+  "health": "ok/production",
+  "docs_pr": 499,
+  "main": "af507fde9cfb3b79675b46cf55b9df36722a93e7"
 }
