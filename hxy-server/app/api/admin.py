@@ -652,7 +652,21 @@ def operations_summary(
         }
 
     return {
-        "period": {"start_date": start.isoformat(), "end_date": end.isoformat(), "store_id": selected_store_id},
+        "period": {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "store_id": selected_store_id,
+            "timezone": "UTC",
+        },
+        "data_sources": {
+            "transactions": "diy_orders",
+            "includes_external_pos": False,
+            "external_pos_name": "智荟宝",
+            "timezone": "UTC",
+            "refunds": "已支付但状态为 cancelled/expired/refunded/refund_rejected 的订单不计入实收",
+            "project_names": "订单冻结行快照中的项目名，目录改名不回写历史",
+            "revenue_boundary": "本汇总不是全店真实营收；外部收银未受控关联时不合并",
+        },
         "transactions": {
             "orders_count": len(orders),
             "paid_count": len(orders),
