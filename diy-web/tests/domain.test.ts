@@ -167,8 +167,8 @@ test('项目使用专属或同风格插画，不混入后台旧照片', () => {
   const cases: Array<[string, string, RegExp]> = [
     ['hxy-oil-back-30', 'local-strength', /projects\/hxy-oil-back-30-main\.webp$/],
     ['hxy-local-care-60', 'local-strength', /projects\/hxy-jubu-30\.webp$/],
-    ['hxy-waist-kit-10', 'kit', /projects\/hxy-waist-kit-10-main-v2\.webp$/],
-    ['hxy-neck-kit-10', 'kit', /projects\/hxy-neck-kit-10-main-v2\.webp$/],
+    ['hxy-waist-kit-10', 'kit', /projects\/hxy-waist-kit-10-main-v3\.webp$/],
+    ['hxy-neck-kit-10', 'kit', /projects\/hxy-neck-kit-10-main-v3\.webp$/],
   ];
   for (const [code, category, expected] of cases) {
     const item = project({ id: 1, code, category, name: code, image_url: '/diy/assets/service-tuina.jpg' });
