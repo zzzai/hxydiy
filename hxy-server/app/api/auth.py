@@ -14,6 +14,7 @@ from app.core.customer_auth import current_customer_id
 from app.db.session import get_db
 from app.domain.coupon_issuance import lock_coupon_template, try_issue_coupon
 from app.domain.membership_entitlements import has_membership, membership_snapshot
+from app.services.customer_membership import build_customer_membership_overview
 from app.models import AuditLog, CouponTemplate, CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
 from app.models.service import Visit
 from app.schemas.auth import (
@@ -311,6 +312,18 @@ def h5_login(
     db.commit()
     db.refresh(user)
     return LoginResponse(token=create_access_token(str(user.id), openid, login_version, verified_phone=phone), user=UserOut.model_validate(user).model_copy(update=membership_snapshot(db, user)))
+
+
+@router.get("/h5/membership-overview")
+def h5_membership_overview(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Read-only identity/card/balance snapshot for the logged-in customer only."""
+    user = db.get(User, current_customer_id(authorization, db))
+    if user is None:
+        raise HTTPException(status_code=401, detail="登录已失效，请重新登录")
+    return build_customer_membership_overview(db, user)
 
 
 @router.get("/h5/me", response_model=UserOut)

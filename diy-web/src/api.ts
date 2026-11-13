@@ -276,6 +276,46 @@ export function getCurrentCustomer(token: string) {
   });
 }
 
+export type CustomerMembershipOverview = {
+  identity: { is_member: boolean; member_type: string | null; member_expire_at: string | null; note: string };
+  cards: Array<{
+    id: number;
+    card_type: 'annual' | 'stored';
+    card_type_label: string;
+    status: string;
+    usable: boolean;
+    store_id: number;
+    store_name: string | null;
+    started_at: string | null;
+    expires_at: string | null;
+    source: string;
+    observed_at: string | null;
+    balance: {
+      status: string;
+      amount_cents: number | null;
+      real_time: boolean;
+      observed_at: string | null;
+      split: string;
+      semantics: string;
+    };
+    benefits: string[];
+    benefits_note: string;
+  }>;
+  card_count: number;
+  coverage: { source: string; store_ids: number[]; card_snapshot: string; history: string; history_reason: string; as_of: string | null };
+  consumption: { status: string; amount_cents: number | null; bill_count: number | null; coverage: unknown; label: string; note: string };
+  savings: { status: string; amount_cents: number | null; coverage: unknown; label: string; note: string };
+  generated_at: string;
+  read_only: boolean;
+};
+
+export function getMyMembershipOverview(token: string) {
+  return request<CustomerMembershipOverview>('/auth/h5/membership-overview', {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function claimCoupon(templateId: number, token: string) {
   return request<{ code: number; name: string }>('/coupons/claim', {
     method: 'POST',

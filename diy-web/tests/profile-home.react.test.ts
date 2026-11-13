@@ -28,7 +28,7 @@ async function subject({ sessions = [record()], load = undefined as undefined | 
     '../profile': profile, '../domain': domain, '../customerCopy': copy,
     '../guestCoupon': { bindPendingGuestCoupons: async () => undefined, GUEST_COUPON_KEY_PREFIX: 'hxy_coupon_guest_' },
     '../customerAuth': { ...customerAuth, clearCustomerAuth() {} },
-    './MembershipBanner': { __esModule: true, default: () => null }, './MyReports': { __esModule: true, default: () => React.createElement('p', null, '报告页面') },
+    './MembershipBanner': { __esModule: true, default: () => null }, './useCustomerMembership': { useCustomerMembership: () => ({ data: null, loading: false, error: '' }) }, './MyReports': { __esModule: true, default: () => React.createElement('p', null, '报告页面') },
     './CustomerReturnTools': { ProfileReturnTools: () => null, ReturnDialog: ({ panel }: any) => panel ? React.createElement('div', { role: 'dialog', 'aria-label': panel === 'save' ? '服务号入口' : panel === 'tuesday' ? '超级星期二' : '联系门店' }, panel) : null },
   };
   function loadComponent(name: string): any {

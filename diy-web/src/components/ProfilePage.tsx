@@ -2,9 +2,10 @@ import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, Lo
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
+import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type CustomerMembershipOverview, type MyCoupon, type Order, type SelectionSession } from '../api';
 import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth, type CustomerUser } from '../customerAuth';
 import { formatMoney } from '../domain';
+import { useCustomerMembership } from './useCustomerMembership';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
 import { bindPendingGuestCoupons } from '../guestCoupon';
 import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipState, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
@@ -50,6 +51,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   const [recordNavigation, setRecordNavigation] = useState(0);
   const recordSection = useRef<HTMLElement>(null);
   const [memberCodeOpen, setMemberCodeOpen] = useState(false);
+  const membership = useCustomerMembership(open, auth?.token || null, () => { clearCustomerAuth(); onAuthChange(null); }, undefined, refreshKey);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sessions, setSessions] = useState<Awaited<ReturnType<typeof getMySelectionSessions>>>([]);
   const [coupons, setCoupons] = useState<MyCoupon[]>([]);
@@ -184,6 +186,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
         : reportsOpen ? <MyReports key={auth.token} token={auth.token} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
           <main className="profile-body">
             <ProfileCard user={auth.user} onShowCode={() => setMemberCodeOpen(true)} />
+            <MembershipSnapshot data={membership.data} loading={membership.loading} error={membership.error} onRetry={membership.retry} />
             <nav className="profile-shortcuts" aria-label="常用功能">
               <button type="button" aria-expanded={recordsOpen && recordState !== 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('all', event.currentTarget)}><Clock3 size={23} aria-hidden="true" /><span>服务记录</span></button>
               <button type="button" aria-label={`待评价，${pendingCount}条`} aria-expanded={recordsOpen && recordState === 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('pending-feedback', event.currentTarget)}><span className="profile-shortcut-icon"><MessageSquareText size={23} aria-hidden="true" />{pendingCount > 0 && <em aria-hidden="true">{pendingCount}</em>}</span><span>待评价</span></button>
@@ -287,6 +290,34 @@ function ProfileCard({ user, onShowCode }: { user: CustomerUser; onShowCode: () 
     {user.is_member && <p className="profile-membership-expiry">{state.kind === 'expired' ? '会员权益已到期' : expiry ? `权益有效期至 ${expiry}` : '会员有效期以门店记录为准'}{state.kind === 'expiring' && <span> · 还有 {state.daysLeft} 天</span>}</p>}
     {SHOW_DYNAMIC_MEMBER_CODE && user.is_member && state.kind !== 'expired' && <button className="profile-member-code-button" type="button" onClick={onShowCode}>出示动态会员码</button>}
   </section>;
+}
+
+function MembershipSnapshot({ data, loading, error, onRetry }: { data: CustomerMembershipOverview | null; loading: boolean; error: string; onRetry: () => void }) {
+  if (loading) return <section className="profile-membership-detail" aria-label="会员卡与权益"><p className="profile-membership-loading" role="status">正在读取会员卡快照…</p></section>;
+  if (error) return <section className="profile-membership-detail" aria-label="会员卡与权益"><p className="profile-membership-error" role="alert">{error}</p><button type="button" className="profile-membership-retry" onClick={onRetry}>重新加载</button></section>;
+  if (!data) return null;
+  return <section className="profile-membership-detail" aria-label="会员卡与权益">
+    <div className="profile-membership-heading"><div><h2>会员卡与权益</h2><small>余额为来源快照，具体构成以门店记录为准</small></div><span>{data.card_count > 0 ? `${data.card_count} 张来源卡` : '暂无来源卡'}</span></div>
+    {data.cards.length === 0 ? <p className="profile-membership-empty">{data.identity.is_member ? '当前没有可展示的本店来源卡，权益以门店记录为准。' : '暂未关联本店来源会员卡。'}</p> : <ul className="profile-membership-cards">
+      {data.cards.map(card => <li key={card.id} className={`profile-membership-card ${card.usable ? 'is-usable' : 'is-inactive'}`}>
+        <div className="profile-membership-card-head"><strong>{card.card_type_label}</strong><span>{membershipCardStatusLabel(card.status)}</span></div>
+        <p>{card.store_name || `门店 #${card.store_id}`} · {card.usable ? '当前可用' : '当前不可用'}</p>
+        <small>{card.expires_at ? `有效期至 ${formatDateTime(card.expires_at).slice(0, 10)}` : '有效期以来源记录为准'}{card.observed_at ? ` · 核验于 ${formatDateTime(card.observed_at).slice(0, 10)}` : ' · 核验时间未记录'}</small>
+        {card.card_type === 'stored' && <div className="profile-membership-balance">
+          <span>来源余额快照</span>
+          <strong>{card.balance.status === 'source_snapshot' && card.balance.amount_cents !== null ? formatMoney(card.balance.amount_cents) : '未核实'}</strong>
+          <small>非实时余额，具体构成以门店记录为准</small>
+        </div>}
+        <details className="profile-membership-benefits"><summary>查看权益</summary><ul>{card.benefits.map(benefit => <li key={benefit}>{benefit}</li>)}</ul><small>{card.benefits_note}</small></details>
+      </li>)}
+    </ul>}
+    <p className="profile-membership-unknown-note">累计消费优惠暂未计算：历史消费和退款关联尚未同步，不显示 0 或推算金额。</p>
+    <p className="profile-membership-scope">{data.coverage.card_snapshot === 'returned' ? '会员卡信息为来源快照' : '暂无来源会员卡'}{data.coverage.as_of ? `，截至 ${formatDateTime(data.coverage.as_of).slice(0, 10)}` : ''}。历史消费尚未同步。</p>
+  </section>;
+}
+
+function membershipCardStatusLabel(status: string) {
+  return status === 'active' ? '有效' : status === 'disabled' ? '已停用' : status === 'expired' ? '已到期' : status === 'exhausted' ? '余额用尽' : status === 'scheduled' ? '未开始' : '待核实';
 }
 
 function maskPhone(phone: string) {

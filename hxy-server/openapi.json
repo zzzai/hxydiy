@@ -22887,6 +22887,58 @@
         ]
       }
     },
+    "/api/v1/auth/h5/membership-overview": {
+      "get": {
+        "description": "Read-only identity/card/balance snapshot for the logged-in customer only.",
+        "operationId": "h5_membership_overview_api_v1_auth_h5_membership_overview_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response H5 Membership Overview Api V1 Auth H5 Membership Overview Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "H5 Membership Overview",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/h5/send-code": {
       "post": {
         "operationId": "send_h5_code_api_v1_auth_h5_send_code_post",

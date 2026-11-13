@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Optional server-private directory containing allowlisted, redacted member-sync receipts.
     member_sync_receipt_dir: str = ""
 
+    # Verified source scope for the customer membership read-only overview.
+    # Do not derive this from legacy user.membership_store_id.
+    member_source: str = "meiguanjia_export"
+    member_source_store_id: int = 1
+
     # JWT
     jwt_secret: str = "CHANGE_ME_TO_A_LONG_RANDOM_STRING"
     jwt_algorithm: str = "HS256"
