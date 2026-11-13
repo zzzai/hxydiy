@@ -48,6 +48,7 @@ from app.domain.customer_operational_tags import customer_tag_ids, tagged_user_i
 from app.domain.occupancy import audit_occupancy, occupancy_view, release_occupancy
 from app.domain.staff_capabilities import staff_capabilities
 from app.services.customer_profile_projection import rebuild_customer_profile_current
+from app.services.member_sync_receipts import load_member_sync_receipts
 from app.services.store_lifecycle import build_store_opening_check, enforce_store_opening_check, validate_store_can_close, validate_store_transition
 from app.models.operations import Room, Technician
 from app.models.customer_tag_contribution import CustomerTagContribution
@@ -1529,10 +1530,15 @@ def coupon_redemptions(
     } for event, coupon in filtered]
     return {"items": items, "total": total, "page": page, "page_size": page_size, "days": days, "period": period_meta}
 
+_CSV_FORMULA_PREFIX = re.compile(r"^[\s]*[=+@-]")
+_CSV_PURE_NUMBER = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
+
+
 def _csv_safe(value) -> str:
     text = "" if value is None else str(value)
-    # Neutralise spreadsheet formulas while preserving the displayed value.
-    if text.startswith(("=", "+", "-", "@", "\t", "\r")):
+    # Prefix formulas even after leading spaces/tabs/line breaks, but do not
+    # mangle ordinary negative numbers, dates, IDs or Chinese text.
+    if text and _CSV_FORMULA_PREFIX.match(text) and not _CSV_PURE_NUMBER.fullmatch(text.strip()):
         return "'" + text
     return text
 
@@ -1543,6 +1549,8 @@ def export_coupon_records(
     template_id: int | None = Query(None),
     status: str | None = Query(None),
     days: int = Query(30, ge=1, le=365),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     store_id: int | None = Query(None),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
@@ -1557,14 +1565,20 @@ def export_coupon_records(
     )}
     if template_id is not None and template_id not in templates:
         raise HTTPException(status_code=404, detail="券模板不存在")
+    if status not in (None, "unused", "locked", "used", "expired"):
+        raise HTTPException(status_code=422, detail={"code": "COUPON_STATUS_INVALID", "message": "券状态筛选不合法"})
     now = datetime.now(UTC)
+    period_start, period_end, period_meta = _coupon_report_period(days, start_date, end_date)
     output = io.StringIO(); output.write("\ufeff"); writer = csv.writer(output)
     row_count = 0
     if dataset == "ledger":
-        rows = list(db.scalars(select(UserCoupon).where(UserCoupon.template_id.in_(list(templates))).order_by(UserCoupon.claimed_at.desc(), UserCoupon.id.desc())))
+        query = select(UserCoupon).where(UserCoupon.template_id.in_(list(templates)))
+        if start_date is not None or end_date is not None:
+            query = query.where(UserCoupon.claimed_at >= period_start, UserCoupon.claimed_at < period_end)
+        rows = list(db.scalars(query.order_by(UserCoupon.claimed_at.desc(), UserCoupon.id.desc())))
         if template_id is not None:
             rows = [row for row in rows if row.template_id == template_id]
-        if status in {"unused", "locked", "used", "expired"}:
+        if status is not None:
             rows = [row for row in rows if _effective_coupon_status(row, now) == status]
         user_ids = {row.user_id for row in rows}
         users = {user.id: user for user in db.scalars(select(User).where(User.id.in_(user_ids)))}
@@ -1583,11 +1597,11 @@ def export_coupon_records(
     else:
         template_ids = [template_id] if template_id is not None else list(templates)
         coupon_ids = list(db.scalars(select(UserCoupon.id).where(UserCoupon.template_id.in_(template_ids)))) if template_ids else []
-        since = now - timedelta(days=days)
         events = list(db.scalars(select(AuditLog).where(
             AuditLog.action == "manager_redeem_coupon",
             AuditLog.store_id == target_store_id,
-            AuditLog.created_at >= since,
+            AuditLog.created_at >= period_start,
+            AuditLog.created_at < period_end,
             AuditLog.entity_id.in_([str(coupon_id) for coupon_id in coupon_ids]),
         ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc()))) if coupon_ids else []
         coupons = {coupon.id: coupon for coupon in db.scalars(select(UserCoupon).where(UserCoupon.id.in_([int(event.entity_id) for event in events if event.entity_id.isdigit()])))}
@@ -1606,7 +1620,9 @@ def export_coupon_records(
             row_count += 1
     _audit(db, staff, "export_coupon_records", "coupon_export", str(target_store_id), {
         "store_id": target_store_id, "dataset": dataset, "template_id": template_id,
-        "status": status, "days": days, "row_count": row_count, "phone_mode": "masked",
+        "status": status, "days": days, "start_date": start_date.isoformat() if start_date else None,
+        "end_date": end_date.isoformat() if end_date else None,
+        "period_mode": period_meta.get("mode"), "row_count": row_count, "phone_mode": "masked",
     })
     db.commit()
     filename = f"coupon-{dataset}-{target_store_id}-{now.strftime('%Y%m%d%H%M')}.csv"
@@ -1621,6 +1637,48 @@ def _require_learning_read(staff: Staff) -> None:
     if role == "manager" and getattr(staff, "store_id", None) is not None:
         return
     raise HTTPException(status_code=403, detail={"code": "LEARNING_READ_DENIED", "message": "没有学习治理查看权限"})
+
+
+def _member_receipt_summary(result: dict, store_id: int) -> dict:
+    last = result.get("last_success")
+    attempt = result.get("latest_attempt")
+    if last and last.get("store_id") != store_id:
+        last = None
+    if attempt and attempt.get("store_id") != store_id:
+        attempt = None
+    if not last and not attempt:
+        return {"available": False, "reason": "store_scope_mismatch" if result.get("available") else result.get("reason")}
+    return {
+        "available": True,
+        "last_success": {key: last.get(key) for key in ("receipt_id", "batch_id", "status", "successful_submit_at", "source_verified_on", "source_snapshot_sha256", "source_keyset_sha256", "candidate_input_sha256", "manifest_sha256", "new_cards", "new_users", "existing_user_matches", "duplicate_preview_new_cards", "protected_cards", "protected_users", "backup_recovery", "old_records_protected", "evidence_reference")} if last else None,
+        "latest_attempt": {key: attempt.get(key) for key in ("receipt_id", "batch_id", "status", "source_verified_at", "source_keyset_sha256", "source_cards", "current_cards", "new_cards", "new_users", "existing_user_matches", "applied", "business_writes", "source_status", "blocked_reason", "blocked_detail", "evidence_reference")} if attempt else None,
+        "errors": result.get("errors", []),
+        "conflicts": result.get("conflicts", []),
+        "trust_note": result.get("trust_note"),
+    }
+
+
+@router.get("/member-sync/receipts")
+def member_sync_receipts(
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Read the allowlisted redacted member-sync receipts for one store."""
+    staff = _require_marketing_read(_current_staff(authorization, db))
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    result = load_member_sync_receipts()
+    summary = _member_receipt_summary(result, target_store_id)
+    active_cards = int(db.scalar(select(sa_func.count()).select_from(MembershipCard).where(
+        MembershipCard.store_id == target_store_id, MembershipCard.status == "active",
+    )) or 0)
+    return {
+        **summary,
+        "store_id": target_store_id,
+        "current_effective_cards": active_cards,
+        "current_effective_cards_scope": "membership_cards.status=active, current store",
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
 
 
 @router.get("/membership/overview")
@@ -1640,6 +1698,28 @@ def membership_overview(
     )) or 0)
     active = [card for card in cards if card.status == "active"]
     observed = max((card.observed_at for card in cards if card.observed_at), default=None)
+    receipt = load_member_sync_receipts()
+    receipt_summary = _member_receipt_summary(receipt, target_store_id)
+    last_success = receipt_summary.get("last_success")
+    latest_attempt = receipt_summary.get("latest_attempt")
+    if last_success:
+        sync_status = {
+            "state": "receipt_available",
+            "label": "有历史成功回执；本次待核实",
+            "detail": f"上次成功提交：{last_success.get('successful_submit_at') or '未记录'}；最近尝试：{latest_attempt.get('source_verified_at') if latest_attempt else '未记录'}。有效来源卡数量不等于最后同步时间或本次来源已核对。",
+        }
+    elif latest_attempt:
+        sync_status = {
+            "state": "receipt_attempt_only",
+            "label": "有最近尝试，无成功提交回执",
+            "detail": f"最近尝试状态：{latest_attempt.get('status') or '未记录'}；不是已同步。",
+        }
+    else:
+        sync_status = {
+            "state": "unverified",
+            "label": "待核实",
+            "detail": "没有安全可用的脱敏批次回执；本页不使用本机私有输入或伪造线上同步状态。",
+        }
     return {
         "store_id": target_store_id,
         "customers": int(db.scalar(select(sa_func.count()).select_from(store_user_ids.subquery())) or 0),
@@ -1655,11 +1735,8 @@ def membership_overview(
             ) <= datetime.now(UTC) + timedelta(days=30)),
         },
         "last_observed_at": observed.isoformat() if observed else None,
-        "sync_status": {
-            "state": "unverified",
-            "label": "待核实",
-            "detail": "没有安全可用的脱敏批次回执；本页不使用本机私有输入或伪造线上同步状态。",
-        },
+        "sync_status": sync_status,
+        "receipt": receipt_summary,
         "note": "旧会员标记不等同于当前有效门店权益；余额是来源快照，不是实时金额。",
     }
 

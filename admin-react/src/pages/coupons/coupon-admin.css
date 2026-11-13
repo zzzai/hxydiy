@@ -38,3 +38,5 @@
 .membership-overview-strip{display:grid;gap:8px;margin:0 0 12px}
 .membership-overview-facts{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 12px;border:1px solid #dce7e1;border-radius:10px;background:#fff;color:#536158;font-size:12px}
 .membership-overview-facts b{color:#145545;font-size:15px;margin-right:3px}
+
+.member-receipt-note{color:#647a71;font-size:12px;line-height:1.6;margin:0 0 12px}
