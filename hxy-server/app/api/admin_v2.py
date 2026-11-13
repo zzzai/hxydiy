@@ -1249,15 +1249,40 @@ def _coupon_source_map(db: Session, coupon_ids: list[int]) -> dict[int, str]:
     }
 
 
+def _coupon_report_period(days: int, start_date: date | None, end_date: date | None) -> tuple[datetime, datetime, dict]:
+    """Resolve an optional Beijing natural-day range, preserving the UTC days mode."""
+    if start_date is None and end_date is None:
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        return start, end, {"mode": "utc_rolling_days", "days": days, "timezone": "UTC"}
+    if start_date is None or end_date is None:
+        raise HTTPException(status_code=422, detail={"code": "DATE_RANGE_INCOMPLETE", "message": "开始日期和结束日期必须同时提供"})
+    if end_date < start_date:
+        raise HTTPException(status_code=422, detail={"code": "DATE_RANGE_INVALID", "message": "结束日期不能早于开始日期"})
+    if (end_date - start_date).days > 90:
+        raise HTTPException(status_code=422, detail={"code": "DATE_RANGE_TOO_LONG", "message": "日期范围最多 90 天"})
+    local_tz = ZoneInfo("Asia/Shanghai")
+    start_at = datetime.combine(start_date, datetime.min.time(), tzinfo=local_tz).astimezone(UTC)
+    end_at = datetime.combine(end_date + timedelta(days=1), datetime.min.time(), tzinfo=local_tz).astimezone(UTC)
+    return start_at, end_at, {
+        "mode": "asia_shanghai_natural_day", "timezone": "Asia/Shanghai",
+        "start_date": start_date.isoformat(), "end_date": end_date.isoformat(),
+        "utc_start_at": start_at.isoformat(), "utc_end_at": end_at.isoformat(), "days": days,
+    }
+
+
 @router.get("/coupons/overview")
 def coupon_overview(
     days: int = Query(30, ge=1, le=90),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     store_id: int | None = Query(None),
     db: Session = Depends(get_db),
     authorization: str | None = Header(None),
 ):
     staff = _require_marketing_read(_current_staff(authorization, db))
     target_store_id = _resolve_target_store_id(db, staff, store_id)
+    period_start, period_end, period_meta = _coupon_report_period(days, start_date, end_date)
     templates = list(db.scalars(select(CouponTemplate).where(CouponTemplate.store_id == target_store_id).order_by(CouponTemplate.id)))
     template_ids = [template.id for template in templates]
     now = datetime.now(UTC)
@@ -1265,16 +1290,16 @@ def coupon_overview(
     counts = {"total": len(coupons), "unused": 0, "locked": 0, "used": 0, "expired": 0}
     for coupon in coupons:
         counts[_effective_coupon_status(coupon, now)] += 1
-    start = now - timedelta(days=days)
-    period_coupons = [coupon for coupon in coupons if coupon.claimed_at and (
+    period_coupons = [coupon for coupon in coupons if coupon.claimed_at and period_start <= (
         coupon.claimed_at.replace(tzinfo=UTC) if coupon.claimed_at.tzinfo is None else coupon.claimed_at
-    ) >= start]
+    ) < period_end]
     poster_rows = list(db.scalars(select(CouponPosterLink).where(CouponPosterLink.store_id == target_store_id))) if template_ids else []
     poster_claimed = sum(1 for poster in poster_rows if poster.coupon_id)
     audit_rows = list(db.scalars(select(AuditLog).where(
         AuditLog.action == "manager_redeem_coupon",
         AuditLog.store_id == target_store_id,
-        AuditLog.created_at >= start,
+        AuditLog.created_at >= period_start,
+        AuditLog.created_at < period_end,
     ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc()))) if template_ids else []
     coupon_by_id = {coupon.id: coupon for coupon in coupons}
     redeemed_events = [row for row in audit_rows if row.entity_id.isdigit() and int(row.entity_id) in coupon_by_id]
@@ -1293,6 +1318,7 @@ def coupon_overview(
         "coupons": counts,
         "posters": {"total": len(poster_rows), "claimed": poster_claimed, "unclaimed": len(poster_rows) - poster_claimed},
         "period": {
+            **period_meta,
             "issued": len(period_coupons),
             "redeemed_events": len(redeemed_events),
             "unique_customers": len(period_customers),
@@ -1454,6 +1480,8 @@ def coupon_poster_link(
 def coupon_redemptions(
     template_id: int | None = Query(None),
     days: int = Query(30, ge=1, le=365),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     store_id: int | None = Query(None),
@@ -1468,15 +1496,16 @@ def coupon_redemptions(
     )}
     if template_id is not None and template_id not in templates:
         raise HTTPException(status_code=404, detail="券模板不存在")
-    since = datetime.now(UTC) - timedelta(days=days)
+    since, until, period_meta = _coupon_report_period(days, start_date, end_date)
     template_ids = [template_id] if template_id is not None else list(templates)
     matching_coupon_ids = list(db.scalars(select(UserCoupon.id).where(UserCoupon.template_id.in_(template_ids)))) if template_ids else []
     if not matching_coupon_ids:
-        return {"items": [], "total": 0, "page": page, "page_size": page_size, "days": days}
+        return {"items": [], "total": 0, "page": page, "page_size": page_size, "days": days, "period": period_meta}
     base = select(AuditLog).where(
         AuditLog.action == "manager_redeem_coupon",
         AuditLog.store_id == target_store_id,
         AuditLog.created_at >= since,
+        AuditLog.created_at < until,
         AuditLog.entity_id.in_([str(coupon_id) for coupon_id in matching_coupon_ids]),
     )
     total = int(db.scalar(select(sa_func.count()).select_from(base.subquery())) or 0)
@@ -1498,7 +1527,7 @@ def coupon_redemptions(
         "actor_name": actors.get(int(event.actor_id), "历史未记录") if event.actor_id.isdigit() else "历史未记录",
         "result": "success",
     } for event, coupon in filtered]
-    return {"items": items, "total": total, "page": page, "page_size": page_size, "days": days}
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "days": days, "period": period_meta}
 
 def _csv_safe(value) -> str:
     text = "" if value is None else str(value)

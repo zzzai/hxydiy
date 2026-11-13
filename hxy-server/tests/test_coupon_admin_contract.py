@@ -235,3 +235,41 @@ def test_membership_overview_is_read_only_and_marks_unknown_sync(coupon_admin):
     assert body["sync_status"]["state"] == "unverified"
     assert "全手机号" not in str(body)
     assert client.get(f"{PREFIX}/v2/membership/overview?store_id={ids['other_store']}", headers=headers["manager"]).status_code == 403
+
+
+def test_coupon_reports_support_beijing_natural_day_without_changing_utc_days(coupon_admin):
+    client, factory, ids, headers = coupon_admin
+    created = create(client, headers["admin"], code="contract-date-boundary", name="边界券", amount_cents=100, status="published")
+    template_id = created.json()["data"]["id"]
+    with factory.begin() as db:
+        # 2026-11-11T15:59Z is 2026-11-11 23:59 Beijing; 16:01Z is 2026-11-12 00:01 Beijing.
+        before = UserCoupon(user_id=ids["customer"], template_id=template_id, status="unused",
+                            claimed_at=datetime(2026, 11, 11, 15, 59, tzinfo=UTC),
+                            expire_at=datetime(2027, 1, 11, tzinfo=UTC))
+        after = UserCoupon(user_id=ids["customer"], template_id=template_id, status="used",
+                           claimed_at=datetime(2026, 11, 11, 16, 1, tzinfo=UTC),
+                           expire_at=datetime(2027, 1, 11, tzinfo=UTC))
+        db.add_all([before, after]); db.flush()
+        db.add_all([
+            AuditLog(actor_type="staff", actor_id=str(ids["admin"]), store_id=ids["store"],
+                     action="manager_redeem_coupon", entity_type="user_coupon", entity_id=str(before.id),
+                     created_at=datetime(2026, 11, 11, 15, 59, tzinfo=UTC), detail={}),
+            AuditLog(actor_type="staff", actor_id=str(ids["admin"]), store_id=ids["store"],
+                     action="manager_redeem_coupon", entity_type="user_coupon", entity_id=str(after.id),
+                     created_at=datetime(2026, 11, 11, 16, 1, tzinfo=UTC), detail={}),
+        ])
+    day = client.get(f"{PREFIX}/v2/coupons/overview?start_date=2026-11-12&end_date=2026-11-12", headers=headers["admin"])
+    assert day.status_code == 200, day.text
+    period = day.json()["period"]
+    assert period["mode"] == "asia_shanghai_natural_day"
+    assert period["timezone"] == "Asia/Shanghai"
+    assert period["issued"] == 1
+    assert period["redeemed_events"] == 1
+    rolling = client.get(f"{PREFIX}/v2/coupons/overview?days=30", headers=headers["admin"]).json()["period"]
+    assert rolling["mode"] == "utc_rolling_days"
+    incomplete = client.get(f"{PREFIX}/v2/coupons/overview?start_date=2026-11-12", headers=headers["admin"])
+    assert incomplete.status_code == 422
+    redemptions = client.get(f"{PREFIX}/v2/coupons/redemptions?start_date=2026-11-12&end_date=2026-11-12", headers=headers["admin"])
+    assert redemptions.status_code == 200, redemptions.text
+    assert redemptions.json()["total"] == 1
+    assert redemptions.json()["period"]["timezone"] == "Asia/Shanghai"

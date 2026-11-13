@@ -10416,6 +10416,8 @@ export interface operations {
         parameters: {
             query?: {
                 days?: number;
+                start_date?: string | null;
+                end_date?: string | null;
                 store_id?: number | null;
             };
             header?: {
@@ -10523,6 +10525,8 @@ export interface operations {
             query?: {
                 template_id?: number | null;
                 days?: number;
+                start_date?: string | null;
+                end_date?: string | null;
                 page?: number;
                 page_size?: number;
                 store_id?: number | null;
