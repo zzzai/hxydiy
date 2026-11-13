@@ -130,6 +130,16 @@ function fakeApi({ delayedGet = null, delayedCreate = null, delayedCatalog = nul
       const token = options.headers.Authorization.split(' ')[1];
       return response(auth(JSON.parse(Buffer.from(token.split('.')[1], 'base64url')).sub).user);
     }
+    if (pathname === '/api/v1/auth/h5/membership-overview') {
+      return response({
+        identity: { is_member: false, member_type: null, member_expire_at: null, note: 'synthetic' },
+        cards: [], card_count: 0,
+        coverage: { source: 'meiguanjia_export', store_ids: [1], returned_store_ids: [], card_snapshot: 'no_source_card', history: 'unverified', history_reason: 'synthetic', as_of: null },
+        consumption: { status: 'unverified', amount_cents: null, bill_count: null, coverage: null, label: '未核实', note: 'synthetic' },
+        savings: { status: 'unverified', amount_cents: null, coverage: null, label: '累计消费优惠未核实', note: 'synthetic' },
+        generated_at: '2026-11-13T00:00:00Z', read_only: true,
+      });
+    }
     if (pathname === '/api/v1/selection-sessions' && options.method === 'POST') {
       const id = 'new-' + ++created;
       const fresh = { ...session(id), items: [] };

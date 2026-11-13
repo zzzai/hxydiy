@@ -94,3 +94,14 @@ UsersPage增加只读权益说明。美管加密钥暂未取得，按用户要�
   - 尝试：`attempt_at`，缺失才兼容 `source_verified_at`/`successful_submit_at`
 - 无时区时间视为未知，不猜测 UTC；未知/非法 JSON、数组、标量、混合时间类型都返回诊断错误，不抛 500。
 - 页面提交状态为三态：`true=已提交`、`false=未提交`、缺失/非法=`未记录`；新增数等未知值不显示假零。
+
+## 2026-11-13 顾客本人会员只读概览（第一阶段）
+
+- 新增 `GET /api/v1/auth/h5/membership-overview`，从既有本人登录会话取 user，不接受手机号、user_id 作为查询条件；匿名 401，其他顾客/门店不可读。
+- 只读返回：本人 `identity`、来源卡类型/状态/期限/权益门店/权益说明；储值卡逐卡 `balance` 来源快照、`observed_at`、`real_time=false`、`split=unverified`；年度卡余额为 `not_applicable`，不显示 0。
+- `MembershipCard.balance_cents` 在本阶段只称“来源余额快照”，不称本金，不拆分本金/赠金，不进入 DIY 钱包、充值、订单或营收；来源未核验或字段缺失不显示假 0。
+- 卡范围按已核验来源 `member_source`（当前 `meiguanjia_export`）和 `member_source_store_id`（当前 DIY 门店1）显式过滤，不依赖旧 `user.membership_store_id`（旧契约明确其不是权益限制）；本人跨店/异来源卡不因本需求纳入。
+- 全局会员身份复用既有 `membership_snapshot` 权益并集，不在顾客展示层另写一套有效期/多卡判定。
+- 权益说明按卡类型复用既有合同：两类均有会员价与周二会员活动；开卡赠礼/赠品仅在门店已登记时存在，页面不得声称个人已获赠。
+- `consumption`/`savings` 在历史账单未接入前固定 `unverified`、金额 null、覆盖期 null；页面显示“未核实”，不能用 0、充值、开卡费或券核销替代。
+- 本接口不写卡、不刷新余额、不迁移数据库、不导入历史账单。

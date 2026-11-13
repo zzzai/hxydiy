@@ -1,60 +1,70 @@
-# HXY 会员同步与运营后台 STATUS
+# HXY 会员与回执 STATUS
 
-更新时间：2026-11-13 22:32 Asia/Shanghai
+更新时间：2026-11-13 23:12 Asia/Shanghai
 执行方：DeepSeek Harness
 控制/独立审查：Codex
 
-## 批次
+## 上游批次 A（已发布）
 
-| 批次 | 状态 | 说明 |
-|---|---|---|
-| A 四处回执修复 + 边界修正 | dirty 已验证，待提交/PR/CI/发布 | 见 `evidence/verification-20261113.md` |
-| B 会员消费/余额/优惠 | 来源字段未核实，未开发真实导入 | 见 `docs/contracts/member-card-entitlements.md` |
-| C 数据库/历史导入 | 未开始 | 15卡继续暂停；不自动恢复 |
-| D 后台信息架构 | 未开始 | 复用已有页面 |
+- PR #495 合并 `16aed90999ec017114d56bbd2cb87e99e4742576`；CI 43444886747 success；Deploy 43445761524 success；current `github-16aed90999ec-43445761524`；health ok/production。
+- 生产回执 loader SHA `53095e5f222da3e4c89d61227b9bcca4548629512fa32017b5e0df2258ac963c`；历史成功与当前 paused_by_user 分开；errors/conflicts 空；15候选未提交。
+- 备份 `pre-github-16aed90999ec-20261113T151735Z.dump` 校验 OK；受控发布含恢复演练成功；旧数据未改。
+- 文档事实 PR #496 合并 main `68b126c628b7b458ec6d002000126afc2e680772`。
 
-## A 最新验证
+## 本批
 
-```text
-基线：49f7f05aec389f2b95b788c515a78a2fe3efaa85（latest main）
-分支：codex/coupon-acceptance-20261113
-定向合同：19 passed, 1 warning
-完整后端：1366 passed, 30 skipped, 103 subtests passed
-Admin build：通过（tsc -b + vite build）
-Admin tests：321 passed
-dirty patch SHA：见 STATUS.json
-```
+第一阶段：复用既有 H5 本人登录和 `MembershipCard`，只读展示本人身份/权益、逐卡来源余额快照及核验日期；不迁移数据库、不更新余额、不导入历史消费。
 
-已覆盖：
-
-- 冲突回执批次整体失效、顺序无关
-- note 冲突整批不挂载，不输出授权/暂停
-- 先门店隔离再聚合；无本店回执 `no_store_receipt`
-- `no_new` 只更新 `last_verification`，不覆盖 `last_success`
-- 历史 blocked 与 `current_processing` 分离
-- `attempt_at` 优先；未知/混合时区不猜、不崩溃
-- 页面 applied 三态，未知显示“未记录”
-- 跨店冲突/错误/文件名不泄漏
-
-## 基线
+## 工作区
 
 ```text
-worktree: /root/hxy-diy-development/coupon-acceptance-20261113
-branch: codex/coupon-acceptance-20261113
-HEAD/base: 49f7f05aec389f2b95b788c515a78a2fe3efaa85
-last known production: github-28d85bbea723-43412883940
-last known app SHA: 28d85bbea72382e415664a0712b353bb32b26736
+path: /root/hxy-diy-development/member-readonly-20261113
+branch: codex/member-readonly-20261113
+base/main: 68b126c628b7b458ec6d002000126afc2e680772
 ```
 
-SSH/HTTP 已恢复；生产发布前会重新核对 current/health。
+## 实现
 
-## 未执行/保护
+- `GET /api/v1/auth/h5/membership-overview`
+  - 仅从本人会话取 user；匿名 401；不接受手机号/user_id 查询。
+  - 按 `membership_store_id` 过滤本人来源卡；不返回 source_card_key/完整手机号/卡号/凭据。
+  - 年度卡余额 `not_applicable`；储值卡余额只称 `source_snapshot`，`real_time=false`，`split=unverified`，不称本金、不拆本金/赠金、不进入 DIY 钱包。
+  - 历史消费和优惠固定 `unverified`、金额 null；不显示假 0。
+- `diy-web` 个人中心新增“会员卡与权益”只读区；加载失败不影响原有服务记录/券包；未核实优惠明确显示。
+- 无数据库迁移、无后台管理改价、无会员导入。
 
-未执行：会员导入、历史账单导入、15卡恢复、数据库迁移、旧数据改写、自动发券/消息、服务器清理、凭据读取。未把合成测试当真实门店/Excel 验收。
+## 验证
 
-## 下一步
+```text
+pytest test_customer_membership_overview + h5_auth + membership_verification
+27 passed, 9 subtests passed
 
-1. 提交四处修复及文档、STATUS/evidence。
-2. 推送、PR、正常 CI/Trusted PR Gate。
-3. 备份恢复、生产发布、只读终验。
-4. 从最新 main 建会员独立工作区；核实来源字段与 facts 入口；真实导入另批批准。
+diy-web build: passed
+diy-web tests: 380 tests, 379 passed, 1 skipped（含 5 个 React 延迟/换号/退出/失效/重试用例）
+admin build: passed
+admin tests: 321 passed
+```
+
+额外独立 React 行为：A 加载后切 B 不泄露；B 网络错误可见；重试恢复；换号/关闭后迟到 401 不退出新账号；refresh 重载。
+
+## 合成预览
+
+- 地址：`http://127.0.0.1:4179/?store=1`（本机合成 API + 当前构建代码，非生产数据）
+- 截图：`evidence/member-readonly-preview.png`
+- 储值/年度权益均展示既有周二活动；个人赠礼仅写“以门店记录为准”，不表示已发；来源、字段、只读等内部词不在顾客页堆叠。
+
+## 来源字段
+
+已核对 `C:/.../SOURCE-FIELD-REVIEW.md`：
+
+- 已观察卡类型/余额/赠金/总消费/期限/消费明细/价格方案优惠/券支付/卡金变动。
+- 未核验退款/撤销、稳定明细ID、版本、全量历史分页、非零赠金规则、完整手机号归属。
+- 本轮只用样本字段做只读展示设计；122 卡数不是冻结快照；15 卡继续暂停。
+
+## 下一阶段（需独立批准）
+
+历史消费账单存储/导入、退款/版本/去重、真实数据批次。
+
+## PR
+
+- 会员 PR #497；分支 `codex/member-readonly-20261113`；最新 head 以 PR 为准；未合并，等待独立复核。

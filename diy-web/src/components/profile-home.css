@@ -70,3 +70,36 @@
 }
 
 .profile-section-heading > .profile-collapse-records { margin-left: 2px; color: #667369; }
+
+/* Read-only source membership snapshot. Never present as DIY wallet. */
+.profile-membership-detail{margin:14px 16px 4px;padding:14px;border:1px solid #dbe7dd;border-radius:18px;background:#fbfdf9;text-align:left}
+.profile-membership-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.profile-membership-heading h2{margin:0;font-size:16px;color:#173d2a}
+.profile-membership-heading small{display:block;margin-top:3px;color:#6c7f70;font-size:11px;line-height:1.5}
+.profile-membership-heading>span{flex:none;color:#53705d;font-size:12px;background:#edf5e9;border-radius:999px;padding:4px 8px}
+.profile-membership-loading,.profile-membership-error,.profile-membership-empty{margin:4px 0;color:#6c7f70;font-size:12px}
+.profile-membership-error{color:#a33b2f}
+.profile-membership-cards{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.profile-membership-card{padding:11px;border-radius:14px;background:#fff;border:1px solid #e4eee1}
+.profile-membership-card.is-inactive{background:#f7f8f5;opacity:.85}
+.profile-membership-card-head{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.profile-membership-card-head strong{font-size:14px;color:#1e4732}
+.profile-membership-card-head span{font-size:11px;color:#5c725f;background:#f0f6ec;border-radius:999px;padding:3px 7px}
+.profile-membership-card>p{margin:7px 0 2px;font-size:12px;color:#3f5a47}
+.profile-membership-card>small{display:block;color:#7a8b7b;font-size:11px;line-height:1.5}
+.profile-membership-balance{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;margin:8px 0 2px;padding:8px;border-radius:10px;background:#f6faf2}
+.profile-membership-balance span{font-size:11px;color:#6a7d6b}
+.profile-membership-balance strong{font-size:18px;color:#204d35}
+.profile-membership-balance small{flex-basis:100%;font-size:10px;color:#879688;line-height:1.5}
+.profile-membership-benefits{margin-top:7px;font-size:11px;color:#5a705d}
+.profile-membership-benefits summary{cursor:pointer;outline-offset:2px}
+.profile-membership-benefits ul{margin:6px 0 2px;padding-left:18px;line-height:1.6;text-align:left;list-style:disc outside}
+.profile-membership-benefits small{display:block;margin-top:4px;color:#89968a;font-size:10px;line-height:1.5}
+.profile-membership-unknown{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.profile-membership-unknown-note{margin:10px 0 0;padding:9px 10px;border-radius:12px;background:#f4f7ef;color:#617362;font-size:11px;line-height:1.6}
+.profile-membership-unknown>div{padding:9px;border-radius:12px;background:#f4f7ef}
+.profile-membership-unknown strong{font-size:12px;color:#405b47}
+.profile-membership-unknown p{margin:4px 0 0;font-size:10px;line-height:1.5;color:#7c8b7d}
+.profile-membership-scope{margin:10px 0 0;color:#7c8b7d;font-size:10px;line-height:1.6}
+@media (max-width:420px){.profile-membership-unknown{grid-template-columns:1fr}}
+.profile-membership-retry{margin-top:8px;border:1px solid #c8ddc7;background:#fff;color:#2d5d3c;border-radius:10px;padding:6px 12px;font-size:12px}

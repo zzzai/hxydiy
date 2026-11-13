@@ -1,56 +1,41 @@
 {
-  "updated_at": "2026-11-13T22:32:36+08:00",
-  "owner": "DeepSeek Harness",
-  "reviewer": "Codex",
-  "worktree": "/root/hxy-diy-development/coupon-acceptance-20261113",
-  "branch": "codex/coupon-acceptance-20261113",
-  "head": "49f7f05aec389f2b95b788c515a78a2fe3efaa85",
-  "batches": {
-    "A_receipt_fixes": {
-      "status": "dirty_verified_pending_commit_pr_ci_release",
-      "targeted_tests": "19 passed, 1 warning",
-      "full_backend": "1366 passed, 30 skipped, 14 warnings, 103 subtests passed",
-      "admin_build": "vite build passed (tsc -b + vite build)",
-      "admin_tests": "321 passed",
-      "committed": false,
-      "pushed": false,
-      "pr": null,
-      "ci": null,
-      "deployed": false
-    },
-    "B_member_history": {
-      "status": "source_fields_unverified",
-      "real_import": false
-    },
-    "C_storage_import": {
-      "status": "not_started",
-      "paused_15_cards": true,
-      "db_migration": false
-    },
-    "D_admin_information_architecture": {
-      "status": "not_started"
-    }
-  },
-  "last_known": {
-    "main": "49f7f05aec389f2b95b788c515a78a2fe3efaa85",
-    "production": "github-28d85bbea723-43412883940",
-    "app_sha": "28d85bbea72382e415664a0712b353bb32b26736"
-  },
-  "prohibited": [
-    "member_import",
-    "historical_bill_import",
-    "resume_15_cards",
-    "db_migration",
-    "old_data_overwrite",
-    "auto_coupon_message",
-    "credential_read",
-    "server_cleanup"
+  "updated_at": "2026-11-13T23:35:00+08:00",
+  "worktree": "/root/hxy-diy-development/member-readonly-20261113",
+  "branch": "codex/member-readonly-20261113",
+  "base": "68b126c628b7b458ec6d002000126afc2e680772",
+  "stage": "customer_membership_readonly",
+  "implemented": [
+    "auth/h5/membership-overview",
+    "ProfilePage membership snapshot UI"
   ],
-  "origin_main": "49f7f05aec389f2b95b788c515a78a2fe3efaa85",
-  "dirty_patch_sha256": "4a1a0567524749f5c64acd939bd56ba33e2eb1579fc47a57bdbde445fe540170",
-  "evidence": {
-    "status_md": "STATUS.md",
-    "verification_md": "evidence/verification-20261113.md",
-    "test_dates": "2026-11-13 Asia/Shanghai"
-  }
+  "tests": {
+    "backend_targeted": "27 passed, 9 subtests passed",
+    "diy_build": "passed",
+    "diy_tests": "380 tests, 379 passed, 1 skipped",
+    "admin_build": "passed",
+    "admin_tests": "321 passed"
+  },
+  "not_authorized": [
+    "database_migration",
+    "historical_bill_import",
+    "balance_update",
+    "pause_15_cards_resume",
+    "external_account_access",
+    "credential_read"
+  ],
+  "source_fields_verified": "partial",
+  "source_field_review": "C:/Users/gaoji/Documents/ChatGPT/member-account-sync-20261113/SOURCE-FIELD-REVIEW.md",
+  "upstream_receipt_fixes": {
+    "pr": 495,
+    "merged_sha": "16aed90999ec017114d56bbd2cb87e99e4742576",
+    "ci": 43444886747,
+    "deploy": 43445761524,
+    "deploy_status": "success",
+    "current": "github-16aed90999ec-43445761524",
+    "docs_pr": 496,
+    "docs_main": "68b126c628b7b458ec6d002000126afc2e680772"
+  },
+  "preview_url": "http://127.0.0.1:4179/?store=1",
+  "pr": 497,
+  "merged": false
 }

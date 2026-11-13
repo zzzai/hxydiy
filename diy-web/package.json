@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "node --experimental-strip-types --test tests/*.test.ts tests/private-selection-identity.react.test.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/private-selection-identity.react.test.mjs tests/customer-membership-request.react.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
