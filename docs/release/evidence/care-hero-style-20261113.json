@@ -1,0 +1,69 @@
+{
+  "status": "passed",
+  "sha": "f2876481ec3727feda65ceebe56916a62c702ab9",
+  "run_id": "43368772505",
+  "current": "/root/hxy-diy-20260811/releases/github-f2876481ec37-43368772505",
+  "manifest_entries": 828,
+  "runtime_python_files_verified": 188,
+  "public_resources": [
+    "/",
+    "/admin/",
+    "/admin/assets/index-646a8EXH.js",
+    "/admin/assets/index-Dqc6fHz5.css",
+    "/assets/App-bJM5566v.js",
+    "/assets/App-mwVLT9B1.js",
+    "/assets/customerCopy-Uf2d6VMv.js",
+    "/assets/index-BipzoEm2.css",
+    "/assets/index-yqnx8V5k.js",
+    "/assets/projects/hxy-neck-kit-10-detail-v2.webp",
+    "/assets/projects/hxy-neck-kit-10-main-v3.webp",
+    "/assets/projects/hxy-waist-kit-10-detail-v2.webp",
+    "/assets/projects/hxy-waist-kit-10-main-v3.webp",
+    "/technician/"
+  ],
+  "assets": [
+    {
+      "name": "hxy-waist-kit-10-main-v3.webp",
+      "sha256": "eb231c347572e423509417496b74304d0dec82ad099dd1b40c895f9263b8fdbd",
+      "bytes": 134702
+    },
+    {
+      "name": "hxy-waist-kit-10-detail-v2.webp",
+      "sha256": "7e3ae6aff652a8aa5fe20a407f6f2e7994e495b0a552586d01d3de14f05a86d9",
+      "bytes": 222274
+    },
+    {
+      "name": "hxy-neck-kit-10-main-v3.webp",
+      "sha256": "a5e9e3e3031cbff276b1bb0a0ec2b43462bf51f9b85e18bec01485a8d2d79307",
+      "bytes": 136068
+    },
+    {
+      "name": "hxy-neck-kit-10-detail-v2.webp",
+      "sha256": "b3198f901c5c9bf8d904b234db924fb1a42b71a1749f640e0f533fa094d1cd6c",
+      "bytes": 185552
+    }
+  ],
+  "old_assets_retained": true,
+  "health": {
+    "status": "ok",
+    "service": "hxy-customer-api",
+    "environment": "production"
+  },
+  "schema_revision": "20261112_coupon_poster_links",
+  "tables_verified": 71,
+  "business_tables_verified": 70,
+  "changed_tables": [],
+  "backup": {
+    "backup": "/root/hxy-diy-20260811/backups/pre-github-f2876481ec37-43368772505-20261113T051226Z.dump",
+    "sha256": "5f07cdc0bc6719cd510f808a5f6b084bb96fc47817aee8b971da0efc9e18d711",
+    "isolated_database": "hxy_diy_rehearsal_hero_f2876481",
+    "tables_verified": 71,
+    "restored": true,
+    "production_writes": 0
+  },
+  "production_business_writes_by_verification": 0,
+  "inherited_main": "7c5ab06ae4e7c1eff828c6fb92e85996cb90cb26",
+  "inherited_coupon_pr": 483,
+  "own_change": "two hero assets and mappings only",
+  "field_acceptance": "not claimed"
+}
