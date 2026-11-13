@@ -1,0 +1,35 @@
+{
+  "status": "published_and_verified",
+  "verified_at": "2026-11-13T03:28:26.976284+00:00",
+  "store_price_yuan": 119,
+  "member_price_yuan": 79,
+  "group_price_yuan": 89,
+  "half_price_yuan": 59.5,
+  "production_apply_count": 1,
+  "new_price_rows": 1,
+  "new_audit_rows": 1,
+  "old_price_amounts_unchanged": true,
+  "other_tables_unchanged": 69,
+  "repeat_preview_changes": 0,
+  "backup_restored": true,
+  "backup_sha256": "eab5cadcde3a60463ecd47980acbf7b0c5465e05eab2f7941130f475f847cf67",
+  "preview_hash": "dfbdbe24cf65682a7f0f07719561d58d733556e7ccfd700f86edff85776930d8",
+  "source_sha256": "9fdc079f043798f229bf19d52def52ba7cfe7ef0eb137ac8b562123001b576fc",
+  "closed_price_id": 109,
+  "new_price_id": 156,
+  "application_deployed": false,
+  "schema_changed": false,
+  "runtime": {
+    "current": "/root/hxy-diy-20260811/releases/github-819c265d5f73-43271983870",
+    "api_id": "a849dbeb98c5eae30b680c3053f84ae8eee8d3fe4a308d85a664dea25778d8b5"
+  },
+  "pr": 481,
+  "head": "507fe425bffee6c6ebed49fb4a39bc3334378224",
+  "merge_commit": "dcbf9dea87f20d85390080ca4c4a7b2be9ddfd3e",
+  "ci": {
+    "id": 43358722673,
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/zzzai/hxydiy/actions/runs/43358722673"
+  }
+}

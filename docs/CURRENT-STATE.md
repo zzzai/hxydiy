@@ -1,5 +1,13 @@
 # hxy-diy 当前状态
 
+## 2026-11-13 女神草本泡原价119元已生效
+
+- 用户确认的单项价格更新已完成：门店1 `hxy-nvshen-60` 门店价119元、会员价79元、团购价89元；适用主项5折券展示59.50元。公网目录已实读验证。
+- [PR #481](https://github.com/zzzai/hxydiy/pull/481) 合并 `dcbf9dea87f20d85390080ca4c4a7b2be9ddfd3e`，精确 [CI 43358722673](https://github.com/zzzai/hxydiy/actions/runs/43358722673) 通过；11项隔离测试及真实备份/独立PostgreSQL恢复演练通过。
+- 正式价格事务仅执行1次：关闭原价记录109的有效期，新增价格记录156及1条审计；旧价格金额和版本保留，重复预览零变化。事务内其余69张表（含迁移版本）摘要与行数保持，会员、余额、订单/选单及历史记录未改。
+- 本次为价格数据发布，没有部署应用或修改结构；运行current仍为`github-819c265d5f73-43271983870`，API容器未更换。11月1日菜单来源与冻结学习版本作为历史证据保留，禁止重放旧菜单发布脚本覆盖新价。
+- [验收与回退](release/goddess-price-20261113.md)、[脱敏证据](release/evidence/goddess-price-20261113.json)。事实补录不重复执行价格更新。
+
 ## 2026-11-13 腰臀肩颈图片与领券菜单简化已上线
 
 - [PR #479](https://github.com/zzzai/hxydiy/pull/479) 已合并并发布；运行 SHA `819c265d5f73ea44f11ca71c95faf22da5cc8520`。精确 [CI 43271270953](https://github.com/zzzai/hxydiy/actions/runs/43271270953) 和唯一 [Deploy 43271983870](https://github.com/zzzai/hxydiy/actions/runs/43271983870) 成功，current=`github-819c265d5f73-43271983870`。
