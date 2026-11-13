@@ -41,3 +41,11 @@
 - 新增可选 `start_date`/`end_date`（`YYYY-MM-DD`）时，按 `Asia/Shanghai` 自然日解释，并显式换算为 `[start 00:00 +08:00, end+1 00:00 +08:00)` 的 UTC 查询区间；响应 `period.mode=asia_shanghai_natural_day`，同时返回 UTC 起止时间。
 - 开始/结束必须同时提供，范围最多 90 天；不得静默改变旧 `days` 接口含义。概览和核销记录使用同一区间定义。
 - 页面日期选择为空时显示“UTC 滚动 30 天”，选择后显示北京时间自然日；不因时区切换改写历史数据。
+
+## 2026-11-13 CSV 导出专项
+
+- `GET /admin/v2/coupons/export` 的 `ledger`/`redemptions` 在导出前应用同一模板、状态、日期/`days`、门店筛选；一次导出全量结果，不按页面分页截断。
+- 文本字段统一经过公式防护：`= + - @` 以及前导空白/制表符/回车/换行后的公式前置 `'`；纯负数、日期、编号和中文保持原值。CSV 使用标准引号转义，允许逗号、双引号、字段内换行。
+- `ledger` 的领取时间筛选与券台账一致；`redemptions` 的核销时间按 AuditLog 独立筛选。`start_date/end_date` 使用 `Asia/Shanghai` 自然日 -> UTC 半开区间，缺省 `days` 仍是 UTC 滚动窗口。
+- 导出始终脱敏手机号、执行门店权限检查、写 `export_coupon_records` 审计（GET 也会写审计），记录 dataset、筛选、period mode、行数和脱敏模式。
+- 自动化只用 CSV 解析验证内容/列数/转义；真实 Excel/WPS 打开及宏/公式执行仍待人工。

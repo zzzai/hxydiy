@@ -1700,6 +1700,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/member-sync/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Member Sync Receipts
+         * @description Read the allowlisted redacted member-sync receipts for one store.
+         */
+        get: operations["member_sync_receipts_api_v1_admin_v2_member_sync_receipts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/membership-cards/{card_id}/facts": {
         parameters: {
             query?: never;
@@ -10345,6 +10365,8 @@ export interface operations {
                 template_id?: number | null;
                 status?: string | null;
                 days?: number;
+                start_date?: string | null;
+                end_date?: string | null;
                 store_id?: number | null;
             };
             header?: {
@@ -11661,6 +11683,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    member_sync_receipts_api_v1_admin_v2_member_sync_receipts_get: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

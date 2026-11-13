@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert, App, Table, Input, Select, Button, Tag, Popconfirm, Modal, Descriptions, Form, Checkbox, Dropdown, Space } from 'antd';
 import { MoreOutlined, SearchOutlined } from '@ant-design/icons';
-import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer, exportCustomers, getCustomerExports, getMembershipOverview } from '../api';
+import { getUsers, getTags, addUserTag, enrollAnnualMembership, renewAnnualMembership, cancelAnnualMembership, recoverAnnualMembership, getCustomerTrustedDevice, revokeCustomerTrustedDevice, getCustomerPhone, getCoupons, issueCouponToCustomer, exportCustomers, getCustomerExports, getMembershipOverview, getMemberSyncReceipts } from '../api';
 import { getStaff } from '../api';
 import ProfileRecordForm from '../features/technician/ProfileRecordForm';
 import { getMembershipEntitlements } from '../api';
 import { explainMemberCard, type MembershipExplanation } from '../memberCards';
+import { formatDateTime } from '../utils/couponFormat';
 
 export default function UsersPage() {
   const { message } = App.useApp();
@@ -42,6 +43,8 @@ export default function UsersPage() {
   const [membershipForm] = Form.useForm();
   const [memberOverview, setMemberOverview] = useState<any>(null);
   const [memberOverviewError, setMemberOverviewError] = useState('');
+  const [syncReceipt, setSyncReceipt] = useState<any>(null);
+  const [syncReceiptOpen, setSyncReceiptOpen] = useState(false);
   const canCreateProfile = getStaff()?.role === 'manager' || getStaff()?.role === 'admin';
   const canManageDevice = getStaff()?.role === 'manager';
 
@@ -51,6 +54,9 @@ export default function UsersPage() {
     void getMembershipOverview()
       .then((response) => { if (active) { setMemberOverview(response.data); setMemberOverviewError(''); } })
       .catch(() => { if (active) setMemberOverviewError('会员状态概览加载失败'); });
+    void getMemberSyncReceipts()
+      .then((response) => { if (active) setSyncReceipt(response.data); })
+      .catch(() => { if (active) setSyncReceipt(null); });
     return () => { active = false; };
   }, []);
 
@@ -193,10 +199,41 @@ export default function UsersPage() {
             <span><b>{memberOverview.cards.stored}</b> 储值卡</span>
             <span><b>{memberOverview.cards.expiring_30d}</b> 30天内到期</span>
           </div>
-          <Alert type="warning" showIcon message={`会员同步状态：${memberOverview.sync_status.label}`}
-            description={`${memberOverview.sync_status.detail} ${memberOverview.note}${memberOverview.last_observed_at ? ` 最近观测：${memberOverview.last_observed_at.slice(0, 10)}。` : ''}`} />
+          <Alert type={syncReceipt?.latest_attempt?.status === 'blocked' ? 'warning' : 'info'} showIcon
+            message={`会员同步状态：${syncReceipt?.last_success ? '有历史成功回执' : memberOverview.sync_status.label}`}
+            action={<Button size="small" onClick={() => setSyncReceiptOpen(true)}>查看回执</Button>}
+            description={syncReceipt?.last_success
+              ? `上次成功提交 ${formatDateTime(syncReceipt.last_success.successful_submit_at)} · 新增 ${syncReceipt.last_success.new_cards} 张卡 / ${syncReceipt.last_success.new_users} 人；最近尝试 ${syncReceipt.latest_attempt?.status === 'blocked' ? '等待当前基线确认' : syncReceipt.latest_attempt?.status || '未记录'}。当前有效来源卡 ${memberOverview.cards.active} 张不等于最后同步日期。${memberOverview.note}`
+              : `${memberOverview.sync_status.detail} ${memberOverview.note}${memberOverview.last_observed_at ? ` 最近观测：${memberOverview.last_observed_at.slice(0, 10)}。` : ''}`} />
         </> : null}
       </div>
+      <Modal title="会员同步脱敏回执" open={syncReceiptOpen} onCancel={() => setSyncReceiptOpen(false)} footer={<Button onClick={() => setSyncReceiptOpen(false)}>关闭</Button>} width={640}>
+        {syncReceipt?.available ? <>
+          <p className="member-receipt-note">当前有效来源卡以数据库为事实；回执只证明来源与提交结果，不能反推当前余额或未来卡。</p>
+          <Descriptions column={1} size="small" bordered>
+            <Descriptions.Item label="上次成功批次">{syncReceipt.last_success?.batch_id || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="成功提交时间">{formatDateTime(syncReceipt.last_success?.successful_submit_at)}</Descriptions.Item>
+            <Descriptions.Item label="来源确认日期">{syncReceipt.last_success?.source_verified_on || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="新增卡 / 会员">{syncReceipt.last_success?.new_cards ?? '未记录'} / {syncReceipt.last_success?.new_users ?? '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="已有账户匹配">{syncReceipt.last_success?.existing_user_matches ?? '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="保护旧卡 / 用户">{syncReceipt.last_success?.protected_cards ?? '未记录'} / {syncReceipt.last_success?.protected_users ?? '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="重复预览新增">{syncReceipt.last_success?.duplicate_preview_new_cards ?? '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="备份恢复">{syncReceipt.last_success?.backup_recovery || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="旧资料保护">{syncReceipt.last_success?.old_records_protected === true ? '通过' : syncReceipt.last_success?.old_records_protected === false ? '失败' : '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="最近尝试">{syncReceipt.latest_attempt?.batch_id || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="尝试状态">{syncReceipt.latest_attempt?.status || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="来源卡 / 新候选">{syncReceipt.latest_attempt?.source_cards ?? '未记录'} / {syncReceipt.latest_attempt?.new_cards ?? '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="是否提交 / 业务写入">{syncReceipt.latest_attempt?.applied === true ? '已提交' : '未提交'} / {syncReceipt.latest_attempt?.business_writes ?? '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="阻塞原因">{syncReceipt.latest_attempt?.blocked_detail || syncReceipt.latest_attempt?.blocked_reason || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="来源 keyset SHA">{syncReceipt.latest_attempt?.source_keyset_sha256 || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="上次 source snapshot SHA">{syncReceipt.last_success?.source_snapshot_sha256 || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="上次 candidate input SHA">{syncReceipt.last_success?.candidate_input_sha256 || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="上次 manifest SHA">{syncReceipt.last_success?.manifest_sha256 || '未记录'}</Descriptions.Item>
+            <Descriptions.Item label="证据引用">{syncReceipt.last_success?.evidence_reference || syncReceipt.latest_attempt?.evidence_reference || '未记录'}</Descriptions.Item>
+          </Descriptions>
+          <Alert style={{ marginTop: 12 }} type="info" showIcon message="回执边界" description={syncReceipt.trust_note || 'SHA 只用于完整性核对，不单独证明来源真实性；未读取原始会员输入、手机号或卡号。'} />
+        </> : <Alert type="warning" showIcon message="没有可用回执" description="真实回执缺失或格式无效；会员同步仍待核实。" />}
+      </Modal>
       <div className="users-filter-row">
         <Input aria-label="搜索昵称或手机号" prefix={<SearchOutlined />} placeholder="搜索昵称或手机号" value={search} onChange={e => setSearch(e.target.value)} onPressEnter={() => load()} style={{ width: 220 }} />
         <Select aria-label="按标签筛选" placeholder="全部标签" allowClear value={tagFilter} onChange={setTagFilter} style={{ width: 160 }} options={tags.map((t: any) => ({ value: t.id, label: t.name }))} />

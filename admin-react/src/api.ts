@@ -281,6 +281,8 @@ export const updateCoupon = (id: number, data: any, storeId?: number) =>
   client.post(`/admin/coupons/${id}`, data, { params: { store_id: storeId } });
 export const toggleCouponStatus = (id: number, status: string, storeId?: number) =>
   updateCoupon(id, { status, request_id: crypto.randomUUID() }, storeId);
+export const getMemberSyncReceipts = (storeId?: number) =>
+  client.get('/admin/v2/member-sync/receipts', { params: { store_id: storeId } });
 export const getMembershipOverview = (storeId?: number) =>
   client.get('/admin/v2/membership/overview', { params: { store_id: storeId } });
 export const getLearningGovernance = (storeId?: number, days = 30) =>

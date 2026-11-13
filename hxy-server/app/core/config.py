@@ -31,6 +31,9 @@ class Settings(BaseSettings):
             and self.learning_ai_model.strip()
         )
 
+    # Optional server-private directory containing allowlisted, redacted member-sync receipts.
+    member_sync_receipt_dir: str = ""
+
     # JWT
     jwt_secret: str = "CHANGE_ME_TO_A_LONG_RANDOM_STRING"
     jwt_algorithm: str = "HS256"

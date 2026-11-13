@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "receipts": [
+    {
+      "file": "20261106-success.json",
+      "sha256": "33b2d2d13038db066854dfab3669724573f38066daf1da049fd340a504372809"
+    },
+    {
+      "file": "20261113-blocked.json",
+      "sha256": "0d59ad91a03c3b827601755f77dc7bf8eefdb757456951d72be457c4e4f0dcfd"
+    }
+  ],
+  "allowlist_only": true
+}

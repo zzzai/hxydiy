@@ -1,4 +1,6 @@
 from datetime import UTC, datetime, timedelta
+import csv
+import io
 import uuid
 
 import pytest
@@ -232,7 +234,9 @@ def test_membership_overview_is_read_only_and_marks_unknown_sync(coupon_admin):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["cards"]["active"] == 1
-    assert body["sync_status"]["state"] == "unverified"
+    assert body["sync_status"]["state"] == "receipt_available"
+    assert body["receipt"]["last_success"]["new_cards"] == 3
+    assert body["receipt"]["latest_attempt"]["status"] == "blocked"
     assert "全手机号" not in str(body)
     assert client.get(f"{PREFIX}/v2/membership/overview?store_id={ids['other_store']}", headers=headers["manager"]).status_code == 403
 
@@ -273,3 +277,186 @@ def test_coupon_reports_support_beijing_natural_day_without_changing_utc_days(co
     assert redemptions.status_code == 200, redemptions.text
     assert redemptions.json()["total"] == 1
     assert redemptions.json()["period"]["timezone"] == "Asia/Shanghai"
+
+
+def test_coupon_csv_export_protects_formulas_and_preserves_filters(coupon_admin):
+    client, factory, ids, headers = coupon_admin
+    formulas = ["=1+1", "+1+1", "-1+1", "@SUM(1,1)", " =1+1", "\t=1+1", "\r=1+1", "\n=1+1"]
+    normal_name = '中文,含"引号"\n换行'
+    template_ids = []
+    for index, name in enumerate([*formulas, normal_name]):
+        response = create(client, headers["admin"], code=f"csv-formula-{index}", name=name,
+                          amount_cents=100, status="published")
+        assert response.status_code == 200, response.text
+        template_ids.append(response.json()["data"]["id"])
+
+    # One template carries enough rows to exceed the normal 50-row page.
+    bulk_id = template_ids[0]
+    with factory.begin() as db:
+        for index in range(55):
+            db.add(UserCoupon(user_id=ids["customer"], template_id=bulk_id, status="unused",
+                              claimed_at=datetime(2026, 11, 11, 16, 1, tzinfo=UTC),
+                              expire_at=datetime(2027, 1, 11, tzinfo=UTC)))
+        for index, name in enumerate([*formulas[1:], normal_name], start=1):
+            db.add(UserCoupon(user_id=ids["customer"], template_id=template_ids[index], status="unused",
+                              claimed_at=datetime(2026, 11, 11, 16, 1, tzinfo=UTC),
+                              expire_at=datetime(2027, 1, 11, tzinfo=UTC)))
+        # Customer display names are another allowed text field and must be protected too.
+        formula_users = []
+        for index, name in enumerate(formulas[:3]):
+            user = User(openid=f"csv-formula-user-{index}", nickname=name, phone=f"1390013900{index}")
+            formula_users.append(user)
+        db.add_all(formula_users); db.flush()
+        for user in formula_users:
+            db.add(UserCoupon(user_id=user.id, template_id=template_ids[-1], status="unused",
+                              claimed_at=datetime(2026, 11, 11, 16, 1, tzinfo=UTC),
+                              expire_at=datetime(2027, 1, 11, tzinfo=UTC)))
+        # A normal negative numeric ID must not be altered by formula protection.
+        db.add(UserCoupon(user_id=ids["customer"], template_id=template_ids[-1], status="used",
+                          claimed_at=datetime(2026, 11, 11, 16, 1, tzinfo=UTC),
+                          expire_at=datetime(2027, 1, 11, tzinfo=UTC), used_order_id=-5))
+    exported = client.get(f"{PREFIX}/v2/coupons/export?dataset=ledger&template_id={bulk_id}", headers=headers["admin"])
+    assert exported.status_code == 200, exported.text
+    rows = list(csv.reader(io.StringIO(exported.text.lstrip("\ufeff"))))
+    assert len(rows) == 56
+    assert all(len(row) == 9 for row in rows)
+    # Template name cell is protected and still readable.
+    assert all(row[1].startswith("'") for row in rows[1:])
+    assert all(row[1] == "'" + formulas[0] for row in rows[1:])
+
+    all_export = client.get(f"{PREFIX}/v2/coupons/export?dataset=ledger", headers=headers["admin"])
+    all_rows = list(csv.reader(io.StringIO(all_export.text.lstrip("\ufeff"))))
+    assert len(all_rows) >= 56 + len(formulas) + 1
+    by_name = {row[1]: row for row in all_rows[1:]}
+    for formula in formulas:
+        assert ("'" + formula) in by_name
+    assert normal_name in by_name
+    assert any(row[2] == "'" + formulas[0] for row in all_rows[1:])
+    assert any(row[2] == "'" + formulas[1] for row in all_rows[1:])
+    assert any(row[2] == "'" + formulas[2] for row in all_rows[1:])
+    # CSV parser returns the exact original Chinese, comma, quote and newline.
+    assert by_name[normal_name][2] == "顾客甲"
+    assert any(row[8] == "-5" for row in all_rows[1:])
+
+    filtered = client.get(
+        f"{PREFIX}/v2/coupons/export?dataset=ledger&template_id={bulk_id}&status=unused"
+        f"&start_date=2026-11-12&end_date=2026-11-12", headers=headers["admin"])
+    filtered_rows = list(csv.reader(io.StringIO(filtered.text.lstrip("\ufeff"))))
+    assert len(filtered_rows) == 56
+    assert filtered.status_code == 200
+
+    with factory() as db:
+        export_audit = db.scalar(select(AuditLog).where(AuditLog.action == "export_coupon_records").order_by(AuditLog.id.desc()))
+        assert export_audit is not None
+        assert export_audit.detail["row_count"] == len(filtered_rows) - 1
+        assert export_audit.detail["phone_mode"] == "masked"
+        assert export_audit.detail["period_mode"] == "asia_shanghai_natural_day"
+
+    assert client.get(f"{PREFIX}/v2/coupons/export?dataset=ledger", headers=headers["employee"]).status_code == 403
+
+
+def test_coupon_redemption_csv_uses_redemption_time_and_is_audited(coupon_admin):
+    client, factory, ids, headers = coupon_admin
+    created = create(client, headers["admin"], code="csv-redemption-time", name="核销导出券",
+                     amount_cents=100, status="published")
+    template_id = created.json()["data"]["id"]
+    with factory.begin() as db:
+        early = UserCoupon(user_id=ids["customer"], template_id=template_id, status="used",
+                           claimed_at=datetime(2026, 10, 1, tzinfo=UTC),
+                           expire_at=datetime(2026, 12, 1, tzinfo=UTC))
+        late = UserCoupon(user_id=ids["customer"], template_id=template_id, status="used",
+                          claimed_at=datetime(2026, 11, 11, 16, 1, tzinfo=UTC),
+                          expire_at=datetime(2027, 1, 1, tzinfo=UTC))
+        db.add_all([early, late]); db.flush()
+        db.add_all([
+            AuditLog(actor_type="staff", actor_id=str(ids["admin"]), store_id=ids["store"],
+                     action="manager_redeem_coupon", entity_type="user_coupon", entity_id=str(early.id),
+                     created_at=datetime(2026, 11, 11, 15, 59, tzinfo=UTC), detail={}),
+            AuditLog(actor_type="staff", actor_id=str(ids["admin"]), store_id=ids["store"],
+                     action="manager_redeem_coupon", entity_type="user_coupon", entity_id=str(late.id),
+                     created_at=datetime(2026, 11, 11, 16, 1, tzinfo=UTC), detail={}),
+        ])
+    response = client.get(
+        f"{PREFIX}/v2/coupons/export?dataset=redemptions&template_id={template_id}"
+        f"&start_date=2026-11-12&end_date=2026-11-12", headers=headers["admin"])
+    assert response.status_code == 200, response.text
+    rows = list(csv.reader(io.StringIO(response.text.lstrip("\ufeff"))))
+    assert len(rows) == 2
+    assert len(rows[0]) == 7
+    assert rows[1][2] == str(late.id)
+    with factory() as db:
+        audit = db.scalar(select(AuditLog).where(AuditLog.action == "export_coupon_records").order_by(AuditLog.id.desc()))
+        assert audit and audit.detail["dataset"] == "redemptions"
+        assert audit.detail["row_count"] == 1
+        assert audit.detail["period_mode"] == "asia_shanghai_natural_day"
+
+
+def test_member_sync_receipts_endpoint_is_scoped_and_does_not_infer_sync(coupon_admin):
+    client, factory, ids, headers = coupon_admin
+    response = client.get(f"{PREFIX}/v2/member-sync/receipts", headers=headers["manager"])
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["available"] is True
+    assert body["store_id"] == ids["store"]
+    assert body["last_success"]["batch_id"] == "MEMBER-SYNC-ZHB-20261106-3CARDS"
+    assert body["latest_attempt"]["status"] == "blocked"
+    assert body["latest_attempt"]["applied"] is False
+    assert body["latest_attempt"]["business_writes"] == 0
+    assert body["current_effective_cards"] == 0
+    assert body["last_success"]["manifest_sha256"]
+    assert body["latest_attempt"]["source_keyset_sha256"]
+    assert client.get(f"{PREFIX}/v2/member-sync/receipts", headers=headers["employee"]).status_code == 403
+    other = client.get(f"{PREFIX}/v2/member-sync/receipts?store_id={ids['other_store']}", headers=headers["manager"])
+    assert other.status_code == 403
+
+
+def test_member_receipt_loader_honors_allowlist_integrity_and_conflicts(tmp_path):
+    import json
+    from hashlib import sha256
+    from app.services.member_sync_receipts import load_member_sync_receipts
+
+    def receipt(batch, status, when, cards=0):
+        return {"receipt_version": 1, "receipt_id": batch.lower(), "batch_id": batch, "status": status,
+                "store_id": 1, "successful_submit_at": when, "source_verified_at": when,
+                "new_cards": cards, "new_users": cards, "applied": status == "success"}
+
+    def put(name, data):
+        raw = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        (tmp_path / name).write_bytes(raw)
+        return {"file": name, "sha256": sha256(raw).hexdigest()}
+
+    entries = []
+    entries.append(put("success.json", receipt("B-SUCCESS", "success", "2026-11-05T16:11:43Z", 3)))
+    entries.append(put("no-new.json", receipt("B-NO-NEW", "no_new", "2026-11-06T10:00:00Z", 0)))
+    entries.append(put("blocked.json", receipt("B-BLOCKED", "blocked", "2026-11-13T02:45:12Z", 15)))
+    (tmp_path / "index.json").write_text(json.dumps({"schema_version": 1, "receipts": entries}))
+    result = load_member_sync_receipts(tmp_path)
+    assert result["available"] is True
+    assert result["last_success"]["batch_id"] == "B-NO-NEW"
+    assert result["latest_attempt"]["batch_id"] == "B-BLOCKED"
+    assert result["errors"] == [] and result["conflicts"] == []
+
+    # Missing field is rejected, not filled with zero.
+    bad = receipt("B-BAD", "success", "2026-11-07T00:00:00Z")
+    bad.pop("batch_id")
+    entries_bad = entries + [put("bad.json", bad)]
+    (tmp_path / "index.json").write_text(json.dumps({"schema_version": 1, "receipts": entries_bad}))
+    result = load_member_sync_receipts(tmp_path)
+    assert any(item["code"] == "RECEIPT_FIELDS_MISSING" for item in result["errors"])
+
+    # Digest mismatch is rejected.
+    (tmp_path / "no-new.json").write_bytes(b"tampered")
+    result = load_member_sync_receipts(tmp_path)
+    assert any(item["code"] == "RECEIPT_SHA_MISMATCH" for item in result["errors"])
+
+    # Same batch and same content is idempotent; different content conflicts.
+    same = put("success-copy.json", receipt("B-SUCCESS", "success", "2026-11-05T16:11:43Z", 3))
+    conflict = put("success-conflict.json", receipt("B-SUCCESS", "success", "2026-11-05T16:11:43Z", 99))
+    (tmp_path / "index.json").write_text(json.dumps({"schema_version": 1, "receipts": [entries[0], same, conflict]}))
+    result = load_member_sync_receipts(tmp_path)
+    assert any(item["code"] == "RECEIPT_BATCH_CONFLICT" for item in result["conflicts"])
+    assert len(result["receipts"]) == 1
+
+    # Missing index is an explicit unavailable state, not "no data".
+    empty = tmp_path / "empty"; empty.mkdir()
+    assert load_member_sync_receipts(empty)["reason"] == "receipt_index_missing"
