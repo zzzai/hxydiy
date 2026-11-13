@@ -1,5 +1,15 @@
 # hxy-diy 工作状态
 
+## 2026-11-13 券报表北京时间自然日已上线
+
+- [PR #491](https://github.com/zzzai/hxydiy/pull/491) 合并 `5b77cde049d5ba1f06b881f485eb5a6f3a4da81b`；精确 [CI 43382303392](https://github.com/zzzai/hxydiy/actions/runs/43382303392) 和 [Deploy 43382920670](https://github.com/zzzai/hxydiy/actions/runs/43382920670) 成功，current=`github-5b77cde049d5-43382920670`。
+- 券概览/核销记录新增可选 `start_date`/`end_date`：按 `Asia/Shanghai` 自然日解释，显式换算为 UTC 半开区间；默认 `days` 仍为 UTC 滚动窗口，旧接口含义不变。
+- 边界验证：2026-11-11T15:59Z（北京 11-11 23:59）排除，2026-11-11T16:01Z（北京 11-12 00:01）纳入；缺日期 422；范围最多 90 天。
+- 前端券概览增加日期范围，空值显示 UTC 滚动 30 天，选择后显示北京时间自然日及起止日期。
+- 生产只读核验：健康 200；`start_date=2026-11-12/end_date=2026-11-12` 返回 `asia_shanghai_natural_day` 与 `utc_start_at=2026-11-11T16:00:00+00:00`；`days=30` 仍返回 `utc_rolling_days`。无业务写入。
+- 本批无数据库迁移。真实门店财务口径、课程/题库写入和自动化执行器仍未完成。
+- [验收与回退](release/coupon-shanghai-date-boundary-20261113.md)。
+
 ## 2026-11-13 经营分析数据源与 UTC 边界已上线
 
 - [PR #489](https://github.com/zzzai/hxydiy/pull/489) 合并 `c04cc7a1986c6d8de2032640f8759de6c59560c4`；精确 [CI 43377980123](https://github.com/zzzai/hxydiy/actions/runs/43377980123) 和 [Deploy 43378482044](https://github.com/zzzai/hxydiy/actions/runs/43378482044) 成功，current=`github-c04cc7a1986c-43378482044`。
