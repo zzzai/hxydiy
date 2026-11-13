@@ -1354,6 +1354,17 @@
             ],
             "title": "Percent Off"
           },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
           "status": {
             "default": "draft",
             "title": "Status",
@@ -1504,6 +1515,17 @@
               }
             ],
             "title": "Percent Off"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
           },
           "status": {
             "anyOf": [
@@ -8632,7 +8654,7 @@
     },
     "/api/v1/admin/coupons": {
       "get": {
-        "description": "券模板列表（营销配置）。",
+        "description": "券模板列表（营销配置）。店长只读本店，规则写入需管理员。",
         "operationId": "admin_coupons_api_v1_admin_coupons_get",
         "parameters": [
           {
@@ -8698,7 +8720,7 @@
         ]
       },
       "post": {
-        "description": "新建券模板。",
+        "description": "新建券模板；只允许总部/授权管理员。",
         "operationId": "admin_create_coupon_api_v1_admin_coupons_post",
         "parameters": [
           {
@@ -12632,6 +12654,623 @@
         ]
       }
     },
+    "/api/v1/admin/v2/coupons/export": {
+      "get": {
+        "description": "Export the current filter's full masked result, not just one page.",
+        "operationId": "export_coupon_records_api_v1_admin_v2_coupons_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dataset",
+            "required": false,
+            "schema": {
+              "default": "ledger",
+              "title": "Dataset",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "template_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Coupon Records",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/coupons/ledger": {
+      "get": {
+        "operationId": "coupon_ledger_api_v1_admin_v2_coupons_ledger_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "template_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coupon Ledger",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/coupons/overview": {
+      "get": {
+        "operationId": "coupon_overview_api_v1_admin_v2_coupons_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coupon Overview",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/coupons/posters": {
+      "get": {
+        "operationId": "coupon_posters_api_v1_admin_v2_coupons_posters_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "template_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "claimed",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Claimed"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coupon Posters",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/coupons/posters/{poster_id}/link": {
+      "get": {
+        "description": "Return the deterministic signed entry for an existing poster.\n\nThis does not create a second poster or coupon; it only exposes the same\nentry to an authorised reader so the original image can be downloaded.",
+        "operationId": "coupon_poster_link_api_v1_admin_v2_coupons_posters__poster_id__link_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "poster_id",
+            "required": true,
+            "schema": {
+              "title": "Poster Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coupon Poster Link",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/coupons/redemptions": {
+      "get": {
+        "description": "Successful scan-redemption events, independent of the claim window.",
+        "operationId": "coupon_redemptions_api_v1_admin_v2_coupons_redemptions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "template_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Template Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Coupon Redemptions",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/coupons/{template_id}/issue": {
       "post": {
         "operationId": "issue_coupon_to_customer_api_v1_admin_v2_coupons__template_id__issue_post",
@@ -12716,6 +13355,7 @@
     },
     "/api/v1/admin/v2/coupons/{template_id}/redemptions": {
       "get": {
+        "description": "Coupon ledger rows for one template, with effective status filtering.\n\nThis is a customer-coupon ledger, not a redemption-event list.  The\ndedicated redemption endpoint is the source for successful scan events.",
         "operationId": "list_coupon_redemptions_api_v1_admin_v2_coupons__template_id__redemptions_get",
         "parameters": [
           {
