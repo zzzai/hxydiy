@@ -78,6 +78,15 @@ class StoreIsolationRegressionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["funnel"]["project_view"], 1)
 
+    def test_operations_summary_declares_diy_source_and_utc_boundary(self):
+        response = self.client.get("/api/v1/admin/operations-summary", headers=self.headers)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["period"]["timezone"] == "UTC"
+        assert body["data_sources"]["transactions"] == "diy_orders"
+        assert body["data_sources"]["includes_external_pos"] is False
+        assert body["data_sources"]["revenue_boundary"].startswith("本汇总不是全店真实营收")
+
     def test_coupon_list_and_update_hide_other_store_template(self):
         listed = self.client.get("/api/v1/admin/coupons", headers=self.headers)
         self.assertEqual(listed.status_code, 200, listed.text)

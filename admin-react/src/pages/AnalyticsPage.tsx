@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Spin, Empty, Button, Progress, DatePicker, Row, Col, Statistic, Table, Tag, Space, Result, Typography } from 'antd';
+import { Alert, Card, Spin, Empty, Button, Progress, DatePicker, Row, Col, Statistic, Table, Tag, Space, Result, Typography } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -89,6 +89,8 @@ export default function AnalyticsPage() {
         </Space>
       </div>
 
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} message="数据来源与边界"
+        description="实收来自荷小悦 DIY 订单的已支付记录，按 UTC 自然日统计；不含外部智荟宝收银，也没有合并为全店真实营收。取消、过期、退款及退款驳回不计入实收；项目名使用订单冻结快照，目录改名不回写历史。" />
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={12} md={6}><Card><Statistic title="实收金额" value={formatYuan(transaction.paid_amount_cents)} /></Card></Col>
         <Col xs={12} md={6}><Card><Statistic title="订单数" value={transaction.orders_count || 0} /></Card></Col>
