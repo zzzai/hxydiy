@@ -28,6 +28,7 @@ class ConsumptionBill:
     store_id: int
     user_id: int | None
     bill_type: str = "unknown"  # service/open_card/package/recharge/unknown
+    bill_status: str = "unknown"  # normal_settled/voided/reversed/unknown
     attribution_status: str = "unresolved"  # owned/shared/unresolved
     refund_status: str = "unknown"  # none/partial/refunded/void/unknown
     payment_evidence_complete: bool = False
@@ -55,6 +56,8 @@ class SavingsResult:
 def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
     if bill.bill_type != "service":
         return SavingsResult("excluded", None, f"bill_type={bill.bill_type}_not_consumption")
+    if bill.bill_status != "normal_settled":
+        return SavingsResult("blocked", None, f"bill_status={bill.bill_status}_not_current_normal")
     if bill.attribution_status != "owned":
         return SavingsResult("blocked", None, f"attribution={bill.attribution_status}_not_personal")
     if bill.refund_status != "none":

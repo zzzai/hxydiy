@@ -13,6 +13,10 @@
 - 卡金变动：单号、类型、卡金/赠金变动与余额、时间、门店；按单号可关联。
 - 年度卡卡内总消费可为零但仍有顾客消费记录；开卡商品行可为零而整单实收99。
 - 一张账单可含多人服务。
+- 2026-11-14 营业流水样本：同一业务单号可出现4次“已撤单（已重录）”，原价/成交/入账/付款金额仍为正数；也有同号在“反结算”筛选下当前行仍为“正常单（已结账）”。撤单表示历史版本，不能因金额正数或筛选命中当成有效消费/退款。
+- 当前正常单结账时间可早于历史撤单操作时间；不能按最大时间或列表顺序选当前版本。必须由来源显式当前状态/版本规则判定。
+- 时间筛选只有下单/结账，没有更新时间/撤单时间；最近结账窗口不能宣称不漏迟到修改。
+- 收款流水有交易号/支付状态/关联流水/退款人/退款时间等字段，但有限日期无退款成功样例；撤单/重结算不等同支付渠道退款，不能推部分退款分摊。
 
 未核实，禁止实现：退款/撤销/部分退款的关联字段和分摊；明细稳定ID；账单跨店唯一性/修订版本；全量历史分页与时间覆盖；非零赠金权益规则；完整手机号/原始卡号逐人归属；122 卡数是否完整冻结。以上未知不填0，不猜字段。
 
@@ -52,6 +56,9 @@ store_id INTEGER NOT NULL REFERENCES stores(id),
 source_bill_no VARCHAR(128) NOT NULL,
 source_bill_version VARCHAR(64) NULL,     -- only if source proves it
 bill_type VARCHAR(16) NOT NULL DEFAULT 'unknown',  -- service/open_card/recharge/unknown
+bill_status VARCHAR(24) NOT NULL DEFAULT 'unknown', -- normal_settled/voided/reversed/unknown; source-explicit only
+source_version_no INTEGER NULL,                    -- only if source proves revision order
+source_current_marker VARCHAR(32) NULL,            -- source-explicit current marker, if any
 occurred_at TIMESTAMPTZ NOT NULL,         -- source local time -> explicit offset
 settled_at TIMESTAMPTZ NULL,
 currency CHAR(3) NOT NULL DEFAULT 'CNY',
@@ -119,13 +126,15 @@ UNIQUE(card_id, observed_at, source_batch_id)
 
 只有来源明确本金/赠金时才拆；只有总余额时 `principal_cents=NULL, bonus_cents=NULL, total_cents=...`，不得把总余额当本金；未知为 NULL，不为0。余额持续核验保存新快照；仍然不是 DIY 钱包。
 
-### 2.5 退款/冲正（先不建表直到字段核实）
+### 2.5 退款/冲正/收款流水（先不建表直到字段核实）
 
-未见退款/撤销关系字段。建议只有在能拿到原单号、原明细/分摊、状态和金额证据后，再增加 `membership_consumption_adjustments`。在此之前：
+营业账单的撤单/反结算和收款流水退款是两套证据：撤单/重结算不等于支付渠道退款；收款流水有交易号/支付状态/退款时间/关联流水，但本次有限区间无退款成功样例。建议只有在拿到原单号、原支付交易、原明细/分摊、状态和金额证据后，再增加 `membership_consumption_adjustments`/`payment_transactions`。在此之前：
 
-- 退款状态=unknown 的账单不计入累计优惠；
+- `bill_status != normal_settled` 或退款状态=unknown 的账单不计入累计优惠；
+- 已撤单旧版本保留但排除；正数金额不改变排除；
 - 不通过修改旧账单静默冲销；
-- 保留已核实账单，显示“退款待核实”。
+- 保留已核实账单，显示“退款/撤单待核实”；
+- 无退款成功样例，不实现部分退款金额/分摊算法，不猜支付退款关系。
 
 ## 3. 主键、幂等与版本
 
@@ -144,7 +153,11 @@ UNIQUE(card_id, observed_at, source_batch_id)
 - 卡金变动以业务单号关联账单；不能把同一笔卡金变动重复作为消费。
 - 跨来源同一笔消费无可靠关联时不合并、不去重成“全渠道总额”；分开呈现。
 
-## 5. 金额与节省口径
+## 5. 与既有 DIY 指标边界
+
+服务器现有 `docs/contracts/customer-account-profile.md` 第6节的“累计会员节省”来自 DIY 已完成服务的门店价/会员价快照差，不能把本次来源价格方案优惠无依据塞进旧指标。新指标独立命名“来源消费优惠/累计消费优惠”，并明确数据源、覆盖期和缺失；不改写 DIY 订单、钱包、价格或旧统计。
+
+## 6. 金额与节省口径
 
 只对 `bill_type=service` 且 `attribution_status=owned`、原价/成交/支付完整、`refund_status=none` 的账单计算：
 
@@ -166,9 +179,10 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 - 负差额或行/头合计不一致：进入核对异常，不静默取0，不纳入已核验优惠。
 - 缺原价/数量/支付构成：保留账单，`savings_cents=NULL`，不计入累计，文案“已核验记录累计优惠”并注明覆盖范围。
 - 统计覆盖期不能只用已核实账单最小/最大 occurred_at；必须使用批次声明的 `query_range_start/end`、分页完整性、最后页和 `coverage_gaps`。账单日期范围只是结果范围，不是采集覆盖期。
+- 来源时间筛选只有下单/结账，没有更新/撤单时间；只按最近结账窗口采集不能证明迟到撤单/重结算不漏，必须明确“覆盖不完整/待增量核验”。
 - 多笔退款/部分退款：按原账单和可核对分摊调整；缺分摊阻断该账单，不按实付退款简单反推。
 
-## 6. 合成验收矩阵
+## 7. 合成验收矩阵
 
 | 样例 | 期望 |
 |---|---|
@@ -187,9 +201,13 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 | 行/头合计不一致 | 核对异常，不静默取0 |
 | 完全相同的两条合法服务行 | 保留有序多重集，不按内容去重 |
 | 无已核验账单 | 累计savings=null，不是0 |
+| 同单4个已撤单版本+当前正常单无显式当前标记 | 整组冲突，不按时间/顺序选当前 |
+| 已撤单金额仍为正数 | blocked，不计入消费/优惠 |
+| 收款退款无成功样例/无分摊 | 不计算部分退款，标待核实 |
+| 只有下单/结账筛选 | 覆盖不完整；不能用窗口声称全量 |
 | 北京时间边界 | 明确来源本地时间+offsets；展示按明确时区 |
 
-## 7. 试运行、备份、恢复、回滚与审批
+## 8. 试运行、备份、恢复、回滚与审批
 
 ### 仅迁移（不含真实数据）
 
@@ -208,9 +226,9 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 5. 导入后只读核对：旧 DIY 订单/钱包/卡/价/审计不变；外部账单不进入 DIY 营收。
 6. 真实导入/余额更新/15卡恢复均不在本方案授权内。
 
-## 8. 当前结论
+## 9. 当前结论
 
 - 本方案不执行迁移、不写生产数据、不导入历史、不更新余额。
-- 纯模型合成测试 11 passed；默认归属/退款/账单类型/支付完整性均为 unknown/unresolved，不默认通过。
+- 纯模型合成测试 12 passed；默认归属/退款/账单类型/账单状态/支付完整性均为 unknown/unresolved，不默认通过；已撤单正数金额被阻断。
 - 必须先确认退款/撤销字段、稳定账单/明细标识、全量历史分页和逐人归属；未确认部分保持 unknown/阻断。
 - 人工门店19项、Excel/WPS、真实来源核对继续待人工。

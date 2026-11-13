@@ -8,7 +8,7 @@ def line(price, settled, qty=1, desc="合成项目"):
 def bill(**overrides):
     base = dict(
         source_bill_no="SYN-001", source_row_sha256="sha-1", store_id=1, user_id=11,
-        bill_type="service", attribution_status="owned", refund_status="none",
+        bill_type="service", bill_status="normal_settled", attribution_status="owned", refund_status="none",
         payment_evidence_complete=True,
         lines=(line(30000, 24000),), store_price_total_cents=30000, settled_total_cents=24000,
         card_principal_debit_cents=15000, card_bonus_debit_cents=0, coupon_payment_cents=9000,
@@ -61,9 +61,12 @@ def test_negative_settlement_and_negative_savings_are_blocked():
 def test_defaults_are_unknown_not_verified():
     bare = ConsumptionBill(source_bill_no="UNKNOWN", source_row_sha256="sha", store_id=1, user_id=11)
     assert bare.bill_type == "unknown"
+    assert bare.bill_status == "unknown"
     assert bare.attribution_status == "unresolved"
     assert bare.refund_status == "unknown"
     assert compute_bill_savings(bare).status == "excluded"
+    assert compute_bill_savings(bill(bill_status="unknown")).status == "blocked"
+    assert compute_bill_savings(bill(bill_status="voided")).status == "blocked"
     assert compute_bill_savings(bill(attribution_status="unresolved")).status == "blocked"
     assert compute_bill_savings(bill(attribution_status="shared")).status == "blocked"
     assert compute_bill_savings(bill(refund_status="unknown")).status == "blocked"
@@ -88,7 +91,8 @@ def test_duplicate_and_changed_bill_are_idempotent_or_conflict():
 
 
 def test_conflicting_versions_exclude_group_and_ignore_input_order():
-    v1 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v1", source_bill_version="v1")
+    v1 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v1", source_bill_version="v1",
+              bill_status="voided")
     v2 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v2", source_bill_version="v2",
               refund_status="unknown", payment_evidence_complete=False)
     for order in ([v1, v2], [v2, v1]):
@@ -102,6 +106,15 @@ def test_no_verified_bills_returns_null_not_zero():
     result = aggregate_verified([bill(bill_type="recharge"), bill(refund_status="unknown")])
     assert result["savings_cents"] is None
     assert result["verified_bills"] == 0
+
+
+def test_voided_positive_amounts_never_count_as_verified_consumption():
+    voided = bill(source_bill_no="SYN-VOID", source_row_sha256="void-1", bill_status="voided",
+                  source_bill_version="1")
+    # The source keeps original/paid amounts positive for voided/re-recorded versions.
+    assert voided.settled_total_cents > 0
+    assert compute_bill_savings(voided).status == "blocked"
+    assert aggregate_verified([voided])["savings_cents"] is None
 
 
 def test_multi_card_and_multi_person_bill_counts_once():
