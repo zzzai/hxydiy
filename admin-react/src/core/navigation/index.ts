@@ -91,7 +91,7 @@ export const adminNavigationGroups: readonly NavigationGroup[] = [
     label: '营销与触达',
     icon: 'gift',
     items: [
-      { path: '/coupons', label: '优惠券', icon: 'gift', roles: managementRoles, capability: 'manage_marketing', headquartersAccess: true },
+      { path: '/coupons', label: '券运营', icon: 'gift', roles: managementRoles, capability: 'manage_marketing', headquartersAccess: true },
     ],
   },
   {

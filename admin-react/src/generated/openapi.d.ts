@@ -73,13 +73,13 @@ export interface paths {
         };
         /**
          * Admin Coupons
-         * @description 券模板列表（营销配置）。
+         * @description 券模板列表（营销配置）。店长只读本店，规则写入需管理员。
          */
         get: operations["admin_coupons_api_v1_admin_coupons_get"];
         put?: never;
         /**
          * Admin Create Coupon
-         * @description 新建券模板。
+         * @description 新建券模板；只允许总部/授权管理员。
          */
         post: operations["admin_create_coupon_api_v1_admin_coupons_post"];
         delete?: never;
@@ -1006,6 +1006,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/coupons/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Coupon Records
+         * @description Export the current filter's full masked result, not just one page.
+         */
+        get: operations["export_coupon_records_api_v1_admin_v2_coupons_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/coupons/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Coupon Ledger */
+        get: operations["coupon_ledger_api_v1_admin_v2_coupons_ledger_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/coupons/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Coupon Overview */
+        get: operations["coupon_overview_api_v1_admin_v2_coupons_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/coupons/posters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Coupon Posters */
+        get: operations["coupon_posters_api_v1_admin_v2_coupons_posters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/coupons/posters/{poster_id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coupon Poster Link
+         * @description Return the deterministic signed entry for an existing poster.
+         *
+         *     This does not create a second poster or coupon; it only exposes the same
+         *     entry to an authorised reader so the original image can be downloaded.
+         */
+        get: operations["coupon_poster_link_api_v1_admin_v2_coupons_posters__poster_id__link_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/coupons/redemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coupon Redemptions
+         * @description Successful scan-redemption events, independent of the claim window.
+         */
+        get: operations["coupon_redemptions_api_v1_admin_v2_coupons_redemptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/coupons/{template_id}/issue": {
         parameters: {
             query?: never;
@@ -1030,7 +1144,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Coupon Redemptions */
+        /**
+         * List Coupon Redemptions
+         * @description Coupon ledger rows for one template, with effective status filtering.
+         *
+         *     This is a customer-coupon ledger, not a redemption-event list.  The
+         *     dedicated redemption endpoint is the source for successful scan events.
+         */
         get: operations["list_coupon_redemptions_api_v1_admin_v2_coupons__template_id__redemptions_get"];
         put?: never;
         post?: never;
@@ -5426,6 +5546,8 @@ export interface components {
             name: string;
             /** Percent Off */
             percent_off?: number | null;
+            /** Request Id */
+            request_id?: string | null;
             /**
              * Status
              * @default draft
@@ -5463,6 +5585,8 @@ export interface components {
             name?: string | null;
             /** Percent Off */
             percent_off?: number | null;
+            /** Request Id */
+            request_id?: string | null;
             /** Status */
             status?: string | null;
             /** Validity Days */
@@ -10141,6 +10265,223 @@ export interface operations {
         parameters: {
             query?: {
                 day?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_coupon_records_api_v1_admin_v2_coupons_export_get: {
+        parameters: {
+            query?: {
+                dataset?: string;
+                template_id?: number | null;
+                status?: string | null;
+                days?: number;
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coupon_ledger_api_v1_admin_v2_coupons_ledger_get: {
+        parameters: {
+            query?: {
+                template_id?: number | null;
+                status?: string | null;
+                page?: number;
+                page_size?: number;
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coupon_overview_api_v1_admin_v2_coupons_overview_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coupon_posters_api_v1_admin_v2_coupons_posters_get: {
+        parameters: {
+            query?: {
+                template_id?: number | null;
+                claimed?: boolean | null;
+                page?: number;
+                page_size?: number;
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coupon_poster_link_api_v1_admin_v2_coupons_posters__poster_id__link_get: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                poster_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coupon_redemptions_api_v1_admin_v2_coupons_redemptions_get: {
+        parameters: {
+            query?: {
+                template_id?: number | null;
+                days?: number;
+                page?: number;
+                page_size?: number;
+                store_id?: number | null;
             };
             header?: {
                 authorization?: string | null;

@@ -99,6 +99,8 @@ def _history_status(coupon: UserCoupon, now: datetime) -> str:
     expire_at = _aware(coupon.expire_at)
     if expire_at and expire_at <= now:
         return "expired"
+    if coupon.status == "locked":
+        return "locked"
     return "unused"
 
 
@@ -132,7 +134,7 @@ def coupon_history(
     now = datetime.now(UTC)
     if template is None:
         return {
-            "summary": {"issued": 0, "redeemed": 0, "unused": 0, "expired": 0},
+            "summary": {"issued": 0, "redeemed": 0, "unused": 0, "locked": 0, "expired": 0},
             "items": [],
             "next_offset": None,
         }
@@ -147,12 +149,13 @@ def coupon_history(
         )
         .order_by(UserCoupon.claimed_at.desc())
     ).all())
+    # Redemption is its own event window. A coupon claimed before the window
+    # can still be redeemed inside it; filtering by claimed_at would hide it.
     redeem_rows = list(db.scalars(select(AuditLog).where(
         AuditLog.action == "manager_redeem_coupon",
         AuditLog.store_id == store_id,
-        AuditLog.entity_id.in_([str(coupon.id) for coupon, _ in issued_rows]) if issued_rows else False,
         AuditLog.created_at >= start,
-    ).order_by(AuditLog.created_at.desc())))
+    ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())))
 
     coupon_ids = {coupon.id for coupon, _ in issued_rows}
     coupon_ids.update(int(row.entity_id) for row in redeem_rows if row.entity_id.isdigit())
@@ -165,6 +168,15 @@ def coupon_history(
             customer = db.get(User, coupon.user_id)
             if customer:
                 customers[coupon.id] = customer
+
+    redeem_rows = [
+        row for row in redeem_rows
+        if row.entity_id.isdigit()
+        and int(row.entity_id) in coupons
+        and coupons[int(row.entity_id)].template_id == template.id
+    ]
+    coupon_ids = {coupon.id for coupon, _ in issued_rows}
+    coupon_ids.update(int(row.entity_id) for row in redeem_rows if row.entity_id.isdigit())
 
     direct_ids = {
         int(row.entity_id)
@@ -221,8 +233,9 @@ def coupon_history(
         events = [item for item in events if item["kind"] == kind]
 
     issued_total = len(issued_rows)
-    redeemed_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "used")
+    redeemed_total = len(redeem_rows)
     unused_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "unused")
+    locked_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "locked")
     expired_total = sum(1 for coupon, _ in issued_rows if _history_status(coupon, now) == "expired")
     page = events[offset:offset + limit]
     return {
@@ -230,6 +243,7 @@ def coupon_history(
             "issued": issued_total,
             "redeemed": redeemed_total,
             "unused": unused_total,
+            "locked": locked_total,
             "expired": expired_total,
         },
         "items": page,

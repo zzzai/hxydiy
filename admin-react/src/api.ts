@@ -277,12 +277,26 @@ export const updateFeedbackFollowUp = (type: 'service_review' | 'visit_feedback'
 // Coupons
 export const getCoupons = (storeId?: number) => client.get('/admin/coupons', { params: { store_id: storeId } });
 export const createCoupon = (data: any, storeId?: number) => client.post('/admin/coupons', data, { params: { store_id: storeId } });
+export const updateCoupon = (id: number, data: any, storeId?: number) =>
+  client.post(`/admin/coupons/${id}`, data, { params: { store_id: storeId } });
 export const toggleCouponStatus = (id: number, status: string, storeId?: number) =>
-  client.post(`/admin/coupons/${id}`, { status }, { params: { store_id: storeId } });
+  updateCoupon(id, { status, request_id: crypto.randomUUID() }, storeId);
+export const getCouponOverview = (storeId?: number, days = 30) =>
+  client.get('/admin/v2/coupons/overview', { params: { store_id: storeId, days } });
+export const getCouponLedger = (params: { store_id?: number; template_id?: number; status?: string; page?: number; page_size?: number } = {}) =>
+  client.get('/admin/v2/coupons/ledger', { params });
+export const getCouponPosters = (params: { store_id?: number; template_id?: number; claimed?: boolean; page?: number; page_size?: number } = {}) =>
+  client.get('/admin/v2/coupons/posters', { params });
+export const getCouponPosterLink = (posterId: number, storeId?: number) =>
+  client.get(`/admin/v2/coupons/posters/${posterId}/link`, { params: { store_id: storeId } });
+export const getCouponRedemptionEvents = (params: { store_id?: number; template_id?: number; days?: number; page?: number; page_size?: number } = {}) =>
+  client.get('/admin/v2/coupons/redemptions', { params });
+export const exportCouponRecords = (params: { dataset: 'ledger' | 'redemptions'; store_id?: number; template_id?: number; status?: string; days?: number }) =>
+  client.get('/admin/v2/coupons/export', { params, responseType: 'blob' });
 export const issueCouponToCustomer = (templateId: number, userId: number, storeId?: number) =>
   client.post(`/admin/v2/coupons/${templateId}/issue`, { user_id: userId }, { params: { store_id: storeId } });
-export const getCouponRedemptions = (templateId: number, status?: string, storeId?: number) =>
-  client.get(`/admin/v2/coupons/${templateId}/redemptions`, { params: { status, store_id: storeId } });
+export const getCouponRedemptions = (templateId: number, status?: string, storeId?: number, page = 1, pageSize = 50) =>
+  client.get(`/admin/v2/coupons/${templateId}/redemptions`, { params: { status, store_id: storeId, page, page_size: pageSize } });
 
 // Rooms
 export const getStoreMasterData = (params?: any) => client.get('/admin/v2/stores', { params });
@@ -442,7 +456,7 @@ export const issueHalfPriceCouponByPhone = (phone: string, name?: string) => cli
 export const createHalfPriceCouponLink = (requestId: string) => client.post('/admin/v2/manager/coupons/half-price/poster-link', { request_id: requestId });
 
 export type ManagerCouponHistoryKind = 'issued' | 'redeemed';
-export type ManagerCouponHistoryStatus = 'unused' | 'used' | 'expired';
+export type ManagerCouponHistoryStatus = 'unused' | 'locked' | 'used' | 'expired';
 export type ManagerCouponHistoryItem = {
   id: string;
   kind: ManagerCouponHistoryKind;
@@ -459,6 +473,7 @@ export type ManagerCouponHistorySummary = {
   issued: number;
   redeemed: number;
   unused: number;
+  locked: number;
   expired: number;
 };
 export const getManagerCouponHistory = (params: { days?: number; kind?: 'all' | ManagerCouponHistoryKind; limit?: number; offset?: number } = {}) =>

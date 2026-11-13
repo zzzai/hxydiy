@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.domain.coupon_issuance import lock_coupon_template, require_issued_value_unchanged
+from app.domain.coupon_rules import coupon_config_errors, coupon_config_warnings, require_valid_coupon_config
 from app.models import (
     AuditLog,
     CouponTemplate,
@@ -1372,6 +1373,7 @@ class CouponTemplateIn(BaseModel):
     name: str
     coupon_type: str = "fixed"          # fixed / percent
     amount_cents: int = 0
+    # Percentage removed from the payable total: 20 = 20% off = 8折.
     percent_off: int | None = None
     min_spend_cents: int = 0
     validity_days: int = 30
@@ -1382,6 +1384,7 @@ class CouponTemplateIn(BaseModel):
     auto_apply: bool = False
     budget_cents: int | None = None
     status: str = "draft"               # draft / published / archived
+    request_id: str | None = None
 
 
 class CouponTemplateUpdate(BaseModel):
@@ -1399,6 +1402,7 @@ class CouponTemplateUpdate(BaseModel):
     auto_apply: bool | None = None
     budget_cents: int | None = None
     status: str | None = None
+    request_id: str | None = None
 
 
 def _require_admin(authorization: str | None, db: Session) -> Staff:
@@ -1414,12 +1418,63 @@ def _require_manager_staff(staff: Staff) -> Staff:
     return staff
 
 
+def _require_marketing_read(staff: Staff) -> Staff:
+    """Managers may read their own store's coupon records; staff/technicians may not."""
+    role = getattr(staff, "role", None)
+    if role == "admin":
+        return staff
+    if role == "manager" and getattr(staff, "store_id", None) is not None:
+        return staff
+    raise HTTPException(status_code=403, detail={"code": "COUPON_READ_DENIED", "message": "没有本店券记录查看权限"})
+
+
+def _require_marketing_write(staff: Staff) -> Staff:
+    """Coupon rule governance belongs to brand admins, not store managers."""
+    if getattr(staff, "role", None) != "admin":
+        raise HTTPException(status_code=403, detail={
+            "code": "MARKETING_ADMIN_REQUIRED",
+            "message": "券规则只能由总部或授权管理员维护",
+        })
+    return staff
+
+
+def _coupon_audit(db: Session, staff: Staff, action: str, template: CouponTemplate,
+                  before: dict | None, after: dict | None, request_id: str | None) -> None:
+    changes = {}
+    if before is not None and after is not None:
+        changes = {
+            key: {"before": before.get(key), "after": after.get(key)}
+            for key in sorted(set(before) | set(after))
+            if before.get(key) != after.get(key)
+        }
+    db.add(AuditLog(
+        actor_type="staff",
+        actor_id=str(getattr(staff, "id", "")),
+        store_id=template.store_id,
+        action=action,
+        entity_type="coupon_template",
+        entity_id=str(template.id),
+        detail={
+            "template_id": template.id,
+            "code": template.code,
+            "request_id": request_id,
+            "changes": changes,
+        },
+    ))
+
+
 def _coupon_out(t: CouponTemplate, stats: dict | None = None) -> dict:
     stats = stats or {}
     issued = int(stats.get("total", 0))
     used = int(stats.get("used", 0))
     committed = t.amount_cents * issued if (t.budget_cents is not None and t.coupon_type == "fixed") else None
     remaining = max(0, int(t.budget_cents) - committed) if (t.budget_cents is not None and committed is not None) else None
+    if t.budget_cents is None or committed is None:
+        budget_usage_percent = None
+    elif t.budget_cents == 0:
+        budget_usage_percent = 100.0 if committed > 0 else 0.0
+    else:
+        budget_usage_percent = round(committed / t.budget_cents * 100, 2)
     return {
         "id": t.id,
         "code": t.code,
@@ -1437,14 +1492,45 @@ def _coupon_out(t: CouponTemplate, stats: dict | None = None) -> dict:
         "budget_cents": t.budget_cents,
         "committed_cents": committed,
         "remaining_budget_cents": remaining,
-        "budget_usage_percent": round(committed / t.budget_cents * 100, 2) if (t.budget_cents and committed is not None) else None,
+        "budget_usage_percent": budget_usage_percent,
         "status": t.status,
         "issued_count": issued,
         "unused_count": int(stats.get("unused", 0)),
+        "locked_count": int(stats.get("locked", 0)),
         "used_count": used,
         "expired_count": int(stats.get("expired", 0)),
         "usage_rate_percent": round(used / issued * 100, 2) if issued else None,
+        "config_warnings": coupon_config_warnings(t),
     }
+
+
+def _coupon_stats(db: Session, templates: list[CouponTemplate]) -> dict[int, dict[str, int]]:
+    if not templates:
+        return {}
+    now = datetime.now(timezone.utc)
+    stats: dict[int, dict[str, int]] = {}
+    rows = db.execute(
+        select(UserCoupon.template_id, UserCoupon.status, UserCoupon.expire_at)
+        .where(UserCoupon.template_id.in_([template.id for template in templates]))
+    ).all()
+    for template_id, status, expire_at in rows:
+        bucket = stats.setdefault(template_id, {"total": 0, "unused": 0, "locked": 0, "used": 0, "expired": 0})
+        bucket["total"] += 1
+        if status == "used":
+            bucket["used"] += 1
+        elif status == "expired":
+            bucket["expired"] += 1
+        elif status in {"unused", "locked"}:
+            effective_expired = expire_at is not None and (
+                expire_at.replace(tzinfo=timezone.utc) if expire_at.tzinfo is None else expire_at
+            ) <= now
+            if effective_expired:
+                bucket["expired"] += 1
+            elif status == "locked":
+                bucket["locked"] += 1
+            else:
+                bucket["unused"] += 1
+    return stats
 
 
 @router.get("/coupons")
@@ -1453,22 +1539,11 @@ def admin_coupons(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """券模板列表（营销配置）。"""
-    staff = _require_admin(authorization, db)
+    """券模板列表（营销配置）。店长只读本店，规则写入需管理员。"""
+    staff = _require_marketing_read(_current_staff(authorization, db))
     action_store_id = _resolve_marketing_store_id(db, staff, store_id)
     tpls = list(db.scalars(select(CouponTemplate).where(CouponTemplate.store_id == action_store_id).order_by(CouponTemplate.id)))
-    stats: dict[int, dict[str, int]] = {}
-    if tpls:
-        from sqlalchemy import func
-        rows = db.execute(
-            select(UserCoupon.template_id, UserCoupon.status, func.count())
-            .where(UserCoupon.template_id.in_([template.id for template in tpls]))
-            .group_by(UserCoupon.template_id, UserCoupon.status)
-        ).all()
-        for template_id, status, count in rows:
-            bucket = stats.setdefault(template_id, {"total": 0})
-            bucket["total"] += count
-            bucket[status] = bucket.get(status, 0) + count
+    stats = _coupon_stats(db, tpls)
     return {"items": [_coupon_out(t, stats.get(t.id)) for t in tpls], "total": len(tpls)}
 
 
@@ -1479,17 +1554,25 @@ def admin_create_coupon(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """新建券模板。"""
-    staff = _require_admin(authorization, db)
+    """新建券模板；只允许总部/授权管理员。"""
+    staff = _require_marketing_write(_current_staff(authorization, db))
     action_store_id = _resolve_marketing_store_id(db, staff, store_id)
     code = (body.code or "").strip()
     if not code:
         raise HTTPException(status_code=400, detail="请填写券编码")
     if db.scalar(select(CouponTemplate).where(CouponTemplate.store_id == action_store_id, CouponTemplate.code == code)):
         raise HTTPException(status_code=400, detail="券编码已存在")
-    tpl = CouponTemplate(**body.model_dump(exclude={"code"}), code=code, store_id=action_store_id)
-    db.add(tpl)
-    db.commit()
+    values = body.model_dump(exclude={"code", "request_id"})
+    require_valid_coupon_config({**values, "code": code})
+    tpl = CouponTemplate(**values, code=code, store_id=action_store_id)
+    try:
+        db.add(tpl)
+        db.flush()
+        _coupon_audit(db, staff, "coupon_template_create", tpl, None, {**values, "code": code}, body.request_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(tpl)
     return {"code": 0, "data": _coupon_out(tpl)}
 
@@ -1503,23 +1586,38 @@ def admin_update_coupon(
     db: Session = Depends(get_db),
 ) -> dict:
     """更新券模板（含上下架：status 置 published/draft/archived）。"""
-    staff = _require_admin(authorization, db)
+    staff = _require_marketing_write(_current_staff(authorization, db))
     action_store_id = _resolve_marketing_store_id(db, staff, store_id)
     tpl = lock_coupon_template(db, CouponTemplate.id == tpl_id, CouponTemplate.store_id == action_store_id)
     if not tpl:
         raise HTTPException(status_code=404, detail="券不存在")
-    data = body.model_dump(exclude_unset=True)
+    data = body.model_dump(exclude_unset=True, exclude={"request_id"})
     if not data:
         raise HTTPException(status_code=400, detail="没有可更新的字段")
-    if body.code and body.code != tpl.code:
+    if "code" in data and data["code"] and data["code"] != tpl.code:
         if db.scalar(select(CouponTemplate).where(
                 CouponTemplate.store_id == action_store_id,
-                CouponTemplate.code == body.code, CouponTemplate.id != tpl_id)):
+                CouponTemplate.code == data["code"], CouponTemplate.id != tpl_id)):
             raise HTTPException(status_code=400, detail="券编码已存在")
     require_issued_value_unchanged(db, tpl, data)
-    for k, v in data.items():
-        setattr(tpl, k, v)
-    db.commit()
+    before = {key: getattr(tpl, key) for key in ("code", "name", "coupon_type", "amount_cents", "percent_off", "min_spend_cents", "validity_days", "auto_grant_new_user", "is_claimable", "claim_limit", "daily_claimable", "auto_apply", "budget_cents", "status")}
+    merged = {**before, **{key: value for key, value in data.items() if key in before}}
+    config_fields = {"coupon_type", "amount_cents", "percent_off", "min_spend_cents", "validity_days", "claim_limit", "budget_cents"}
+    if data.keys() & config_fields or data.get("status") == "published":
+        require_valid_coupon_config(merged)
+    else:
+        errors = [item for item in coupon_config_errors(merged) if item["field"] in {"code", "name", "status"}]
+        if errors:
+            raise HTTPException(status_code=422, detail={"code": "COUPON_CONFIG_INVALID", "message": "券配置不完整或数值不合法", "fields": errors})
+    for key, value in data.items():
+        setattr(tpl, key, value)
+    after = {key: getattr(tpl, key) for key in before}
+    try:
+        _coupon_audit(db, staff, "coupon_template_update", tpl, before, after, body.request_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return {"code": 0, "data": _coupon_out(tpl)}
 
 

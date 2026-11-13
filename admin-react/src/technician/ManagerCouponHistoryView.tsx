@@ -2,17 +2,18 @@ import { useEffect, useState } from 'react';
 import { Button, Spin, Tag } from 'antd';
 import { getManagerCouponHistory, type ManagerCouponHistoryItem, type ManagerCouponHistoryKind, type ManagerCouponHistorySummary } from '../api';
 import './manager-coupon-history.css';
+import { formatDateTime } from '../utils/couponFormat';
 
 type Filter = 'all' | ManagerCouponHistoryKind;
 
-const EMPTY_SUMMARY: ManagerCouponHistorySummary = { issued: 0, redeemed: 0, unused: 0, expired: 0 };
+const EMPTY_SUMMARY: ManagerCouponHistorySummary = { issued: 0, redeemed: 0, unused: 0, locked: 0, expired: 0 };
 
 function timeText(value: string) {
-  return new Date(value).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+  return formatDateTime(value);
 }
 
 function statusLabel(status: ManagerCouponHistoryItem['status']) {
-  return status === 'used' ? '已核销' : status === 'expired' ? '已过期' : '待使用';
+  return status === 'used' ? '已核销' : status === 'expired' ? '已过期' : status === 'locked' ? '锁定中' : '待使用';
 }
 
 function kindLabel(kind: ManagerCouponHistoryKind) {
@@ -60,6 +61,7 @@ export default function ManagerCouponHistoryView({ embedded = false }: { embedde
       <div><strong>{summary.issued}</strong><span>发券</span></div>
       <div><strong>{summary.redeemed}</strong><span>核销</span></div>
       <div><strong>{summary.unused}</strong><span>待使用</span></div>
+      <div><strong>{summary.locked}</strong><span>锁定中</span></div>
       <div className="expired"><strong>{summary.expired}</strong><span>已过期</span></div>
     </div>
 

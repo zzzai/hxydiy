@@ -29,7 +29,7 @@ def make_case(engine):
         db.add(store)
         db.flush()
         staff = Staff(username="budget-manager", password_hash="unused", name="Manager",
-                      role="manager", store_id=store.id, status="active")
+                      role="admin", store_id=store.id, status="active")
         users = [User(openid=f"budget-user-{i}", membership_store_id=store.id) for i in range(3)]
         db.add_all([staff, *users])
         db.flush()
