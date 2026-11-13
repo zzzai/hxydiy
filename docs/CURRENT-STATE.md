@@ -1,5 +1,14 @@
 # hxy-diy 当前状态
 
+## 2026-11-13 学习治理与会员只读状态已上线
+
+- [PR #487](https://github.com/zzzai/hxydiy/pull/487) 合并 `330879aff11ba2cc64de68a1624bb9b302e3a27b`；精确 [CI 43374072137](https://github.com/zzzai/hxydiy/actions/runs/43374072137) 和 [Deploy 43374976600](https://github.com/zzzai/hxydiy/actions/runs/43374976600) 成功，current=`github-330879aff11b-43374976600`。
+- 新增只读学习治理接口/页面：课程版本、章节/题量、内容哈希、安排/提交、AI 调用/失败/token 审计；不返回答案/解析、不代答、不评分、不自动排课、不调用模型。
+- 顾客列表增加只读会员概览：旧 `is_member` 标记、来源卡有效/年卡/储值卡/30天到期；无安全批次回执时显示“待核实”，不读取私有输入、不修改导入器。
+- 生产只读核验：`/api/v1/admin/v2/learning/overview` 返回 12 个课程版本、8 次 AI 调用/7257 tokens/1 次失败；`membership/overview` 返回本店 330 顾客、102 张有效来源卡、最近观测 2026-11-05；没有业务写入。
+- 本批无数据库迁移、无真实学习任务/评分/会员卡写入、无顾客或健康数据外发。P2 的经营分析口径整合、自动化执行器仍未完成，不冒充交付。
+- [验收与回退](release/learning-membership-governance-20261113.md)。
+
 ## 2026-11-13 肩颈与腰臀主图风格统一已上线
 
 - [PR #484](https://github.com/zzzai/hxydiy/pull/484) 已合并发布；运行 SHA `f2876481ec3727feda65ceebe56916a62c702ab9`，current=`github-f2876481ec37-43368772505`。精确 [CI 43368314990](https://github.com/zzzai/hxydiy/actions/runs/43368314990) 与唯一 [Deploy 43368772505](https://github.com/zzzai/hxydiy/actions/runs/43368772505) 通过。
