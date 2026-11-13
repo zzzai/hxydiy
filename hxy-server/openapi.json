@@ -14290,6 +14290,82 @@
         ]
       }
     },
+    "/api/v1/admin/v2/learning/overview": {
+      "get": {
+        "description": "Read-only HQ/store view of course versions, progress and AI usage.\n\nCourse answers, employee health data and customer data are never returned.\nThis endpoint does not create assignments, grade employees, call a model or\nsend messages.",
+        "operationId": "learning_overview_api_v1_admin_v2_learning_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Learning Overview",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
     "/api/v1/admin/v2/manager/coupons/half-price/issue": {
       "post": {
         "description": "店长给本店顾客发一张足疗、SPA主项门店价5折券（每人最多1张未使用）。",
@@ -15412,6 +15488,70 @@
           }
         },
         "summary": "Update Member Card Facts",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/membership/overview": {
+      "get": {
+        "description": "Read-only membership state; never reads a private import file or mutates a card.",
+        "operationId": "membership_overview_api_v1_admin_v2_membership_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "store_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Membership Overview",
         "tags": [
           "admin-v2"
         ]

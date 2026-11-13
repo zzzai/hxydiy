@@ -1340,6 +1340,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/learning/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Learning Overview
+         * @description Read-only HQ/store view of course versions, progress and AI usage.
+         *
+         *     Course answers, employee health data and customer data are never returned.
+         *     This endpoint does not create assignments, grade employees, call a model or
+         *     send messages.
+         */
+        get: operations["learning_overview_api_v1_admin_v2_learning_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/coupons/half-price/issue": {
         parameters: {
             query?: never;
@@ -1690,6 +1714,26 @@ export interface paths {
          * @description Preview or register checked source facts without creating wallet transactions.
          */
         post: operations["update_member_card_facts_api_v1_admin_v2_membership_cards__card_id__facts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/membership/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Membership Overview
+         * @description Read-only membership state; never reads a private import file or mutates a card.
+         */
+        get: operations["membership_overview_api_v1_admin_v2_membership_overview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10985,6 +11029,40 @@ export interface operations {
             };
         };
     };
+    learning_overview_api_v1_admin_v2_learning_overview_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     issue_half_price_coupon_api_v1_admin_v2_manager_coupons_half_price_issue_post: {
         parameters: {
             query?: never;
@@ -11620,6 +11698,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    membership_overview_api_v1_admin_v2_membership_overview_get: {
+        parameters: {
+            query?: {
+                store_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

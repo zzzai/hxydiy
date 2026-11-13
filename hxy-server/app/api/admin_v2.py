@@ -34,6 +34,7 @@ from app.domain.coupon_redeem import create_poster_token
 from app.domain.service_record_status import pending_record_summary
 from app.models import (
     CouponTemplate, UserCoupon, CouponPosterLink, MemberPlan, Recharge,
+    LearningCourseVersion, StaffLearningAssignment, StaffLearningEvent,
     Project, PriceBook, Addon, Product, Store, SelectionChangeRequest, SelectionRevision, SelectionSession, ServiceFeedback, VisitFeedback, ServiceLine, PageContent, PageContentVersion,
     EventLog, Order, OrderEvent, User, AuditLog, Staff, StaffScopeAssignment, PositionOccupancy,
     MembershipBenefitGrant, CustomerTrustedDevice, MembershipCode,
@@ -1582,6 +1583,149 @@ def export_coupon_records(
     filename = f"coupon-{dataset}-{target_store_id}-{now.strftime('%Y%m%d%H%M')}.csv"
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+def _require_learning_read(staff: Staff) -> None:
+    role = getattr(staff, "role", None)
+    if role == "admin":
+        return
+    if role == "manager" and getattr(staff, "store_id", None) is not None:
+        return
+    raise HTTPException(status_code=403, detail={"code": "LEARNING_READ_DENIED", "message": "没有学习治理查看权限"})
+
+
+@router.get("/membership/overview")
+def membership_overview(
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Read-only membership state; never reads a private import file or mutates a card."""
+    staff = _current_staff(authorization, db)
+    _require_marketing_read(staff)
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    store_user_ids = _store_user_ids(target_store_id)
+    cards = list(db.scalars(select(MembershipCard).where(MembershipCard.store_id == target_store_id)))
+    legacy_members = int(db.scalar(select(sa_func.count()).select_from(User).where(
+        User.id.in_(store_user_ids), User.is_member == True,
+    )) or 0)
+    active = [card for card in cards if card.status == "active"]
+    observed = max((card.observed_at for card in cards if card.observed_at), default=None)
+    return {
+        "store_id": target_store_id,
+        "customers": int(db.scalar(select(sa_func.count()).select_from(store_user_ids.subquery())) or 0),
+        "legacy_member_count": legacy_members,
+        "cards": {
+            "total": len(cards),
+            "active": len(active),
+            "disabled": sum(1 for card in cards if card.status == "disabled"),
+            "annual": sum(1 for card in active if card.card_type == "annual"),
+            "stored": sum(1 for card in active if card.card_type == "stored"),
+            "expiring_30d": sum(1 for card in active if card.expires_at and (
+                card.expires_at.replace(tzinfo=UTC) if card.expires_at.tzinfo is None else card.expires_at
+            ) <= datetime.now(UTC) + timedelta(days=30)),
+        },
+        "last_observed_at": observed.isoformat() if observed else None,
+        "sync_status": {
+            "state": "unverified",
+            "label": "待核实",
+            "detail": "没有安全可用的脱敏批次回执；本页不使用本机私有输入或伪造线上同步状态。",
+        },
+        "note": "旧会员标记不等同于当前有效门店权益；余额是来源快照，不是实时金额。",
+    }
+
+
+@router.get("/learning/overview")
+def learning_overview(
+    days: int = Query(30, ge=1, le=90),
+    store_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """Read-only HQ/store view of course versions, progress and AI usage.
+
+    Course answers, employee health data and customer data are never returned.
+    This endpoint does not create assignments, grade employees, call a model or
+    send messages.
+    """
+    staff = _current_staff(authorization, db)
+    _require_learning_read(staff)
+    target_store_id = _resolve_target_store_id(db, staff, store_id)
+    courses = list(db.scalars(select(LearningCourseVersion).order_by(
+        LearningCourseVersion.code, LearningCourseVersion.created_at.desc()
+    )))
+    assignments = list(db.scalars(select(StaffLearningAssignment).where(
+        StaffLearningAssignment.store_id == target_store_id
+    )))
+    assignment_ids = [item.id for item in assignments]
+    events = list(db.scalars(select(StaffLearningEvent).where(
+        StaffLearningEvent.store_id == target_store_id,
+        StaffLearningEvent.assignment_id.in_(assignment_ids),
+    ))) if assignment_ids else []
+    submitted = {event.assignment_id for event in events if event.kind == "submit"}
+    by_course: dict[str, dict[str, int]] = {}
+    for item in assignments:
+        bucket = by_course.setdefault(item.course_version_id, {"assigned": 0, "completed": 0})
+        bucket["assigned"] += 1
+        if item.id in submitted:
+            bucket["completed"] += 1
+    course_items = []
+    for course in courses:
+        content = course.content if isinstance(course.content, dict) else {}
+        sections = content.get("sections") if isinstance(content.get("sections"), list) else []
+        questions = content.get("questions") if isinstance(content.get("questions"), list) else []
+        counts = by_course.get(course.id, {"assigned": 0, "completed": 0})
+        integrity = False
+        try:
+            integrity = hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest() == course.content_sha256
+        except Exception:
+            integrity = False
+        course_items.append({
+            "id": course.id, "code": course.code, "version": course.version, "status": course.status,
+            "title": content.get("title") or course.code,
+            "category": content.get("category") or "", "minutes": content.get("minutes") or 0,
+            "section_titles": [section.get("title") or section.get("id") for section in sections if isinstance(section, dict)],
+            "section_count": len(sections), "question_count": len(questions),
+            "content_integrity": integrity, "approval_reference_present": bool(course.approval_reference.strip()),
+            "assigned": counts["assigned"], "completed": counts["completed"],
+        })
+    since = datetime.now(UTC) - timedelta(days=days)
+    ai_rows = list(db.scalars(select(AuditLog).where(
+        AuditLog.action.in_(("learning_ai_coach", "learning_ai_weekly_plan")),
+        AuditLog.store_id == target_store_id,
+        AuditLog.created_at >= since,
+    ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(200)))
+    ai_success = 0; ai_error = 0; tokens = 0
+    for row in ai_rows:
+        detail = row.detail if isinstance(row.detail, dict) else {}
+        if detail.get("status") == "success": ai_success += 1
+        elif detail.get("status") == "error": ai_error += 1
+        usage = detail.get("usage") if isinstance(detail.get("usage"), dict) else {}
+        value = usage.get("total_tokens")
+        if isinstance(value, int) and not isinstance(value, bool): tokens += value
+    actor_ids = {int(row.actor_id) for row in ai_rows if row.actor_id and str(row.actor_id).isdigit()}
+    actor_names = {actor.id: actor.name for actor in db.scalars(select(Staff).where(Staff.id.in_(actor_ids)))} if actor_ids else {}
+    return {
+        "store_id": target_store_id, "days": days,
+        "config": {
+            "learning_enabled": bool(settings.staff_learning_enabled),
+            "ai_ready": bool(settings.learning_ai_ready),
+            "ai_model": settings.learning_ai_model if settings.learning_ai_ready else None,
+        },
+        "courses": course_items,
+        "assignments": {"total": len(assignments), "completed": len(submitted), "employees": len({item.staff_id for item in assignments})},
+        "ai": {
+            "calls": len(ai_rows), "success": ai_success, "error": ai_error, "total_tokens": tokens,
+            "items": [{
+                "id": row.id, "at": row.created_at.isoformat() if row.created_at else None,
+                "action": row.action, "actor": actor_names.get(int(row.actor_id), "历史未记录") if row.actor_id and str(row.actor_id).isdigit() else "历史未记录",
+                "status": (row.detail or {}).get("status", "unknown"),
+                "code": (row.detail or {}).get("code", ""),
+                "latency_ms": (row.detail or {}).get("latency_ms", 0),
+                "total_tokens": ((row.detail or {}).get("usage") or {}).get("total_tokens", 0),
+            } for row in ai_rows[:20]],
+        },
+    }
 
 # ──────────────────────────────────────────────────────
 # 0. 到店服务选单：独立于订单的顾客 DIY 需求

@@ -1,0 +1,4 @@
+.learning-admin-page .coupon-admin-header{margin-bottom:16px}
+.learning-stat-grid{grid-template-columns:repeat(5,minmax(130px,1fr))}
+@media (max-width:1100px){.learning-stat-grid{grid-template-columns:repeat(3,minmax(130px,1fr))}}
+@media (max-width:700px){.learning-stat-grid{grid-template-columns:1fr 1fr}}

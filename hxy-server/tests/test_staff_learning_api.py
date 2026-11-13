@@ -347,3 +347,26 @@ def test_weekly_plan_allows_empty_recommendations(learning, monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["suggestions"] == []
     assert "没有" in response.json()["disclaimer"] or "未发现" in response.json()["disclaimer"]
+
+
+def test_admin_learning_overview_is_read_only_scoped_and_never_leaks_answers(learning, monkeypatch):
+    client, factory, ids, headers, course_id, *_ = learning
+    arrange(learning)
+    response = client.get("/api/v1/admin/v2/learning/overview", headers=headers["manager"])
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["assignments"]["total"] == 1
+    assert body["courses"][0]["question_count"] == 2
+    assert "Synthetic answer" not in str(body)
+    assert "answer" not in str(body["courses"])
+    assert client.get("/api/v1/admin/v2/learning/overview", headers=headers["a"]).status_code == 403
+    other = client.get("/api/v1/admin/v2/learning/overview?store_id=2", headers=headers["manager"])
+    assert other.status_code == 403
+    with factory() as db:
+        db.add(AuditLog(actor_type="staff", actor_id=str(ids["manager"]), store_id=ids["manager"] and 1,
+                        action="learning_ai_coach", entity_type="staff_learning", entity_id="synthetic",
+                        detail={"status": "success", "usage": {"total_tokens": 12}, "latency_ms": 100}))
+        db.commit()
+    body = client.get("/api/v1/admin/v2/learning/overview", headers=headers["manager"]).json()
+    assert body["ai"]["calls"] == 1
+    assert body["ai"]["total_tokens"] == 12
