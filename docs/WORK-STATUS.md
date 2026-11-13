@@ -1,5 +1,14 @@
 # hxy-diy 工作状态
 
+## 2026-11-13 顾客会员卡只读概览已上线
+
+- [PR #497](https://github.com/zzzai/hxydiy/pull/497) 合并 `d50941d67579944a201464b4931e40aad3808efd`；[CI 43456867992](https://github.com/zzzai/hxydiy/actions/runs/43456867992) success；[Deploy 43457778128](https://github.com/zzzai/hxydiy/actions/runs/43457778128) success；current=`github-d50941d67579-43457778128`；health ok/production。
+- 顾客本人登录后只读显示身份/权益、逐卡来源余额快照及核验日期；年度卡余额不适用；储值余额不称本金、不拆赠金、不进入 DIY 钱包；历史消费/优惠显示未核实。
+- 来源卡按已核验 `meiguanjia_export` + 门店1显式过滤，不依赖旧 `membership_store_id`；全局身份复用既有 `membership_snapshot` 并集。
+- 页面换号/退出/迟到401/网络错误和重试行为已用真实 React renderer 测试；完整页面合成预览地址 `http://127.0.0.1:4179/?store=1`（本机合成 API，非生产数据）。
+- 生产只读核验：匿名接口 401；用户/会员卡/订单/券计数保持 users447/cards102/orders0/coupons10；无数据库迁移、无余额更新、无历史账单导入、无15卡恢复。
+- 门店19项、Excel/WPS、真实微信/摄像头/现场本人核验仍待人工。
+
 ## 2026-11-13 会员同步回执四项修复已上线（A）
 
 - [PR #495](https://github.com/zzzai/hxydiy/pull/495) 合并 `16aed90999ec017114d56bbd2cb87e99e4742576`；[CI 43444886747](https://github.com/zzzai/hxydiy/actions/runs/43444886747) success；[Deploy 43445761524](https://github.com/zzzai/hxydiy/actions/runs/43445761524) success；current=`github-16aed90999ec-43445761524`。
