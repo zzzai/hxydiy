@@ -1639,23 +1639,35 @@ def _require_learning_read(staff: Staff) -> None:
     raise HTTPException(status_code=403, detail={"code": "LEARNING_READ_DENIED", "message": "没有学习治理查看权限"})
 
 
-def _member_receipt_summary(result: dict, store_id: int) -> dict:
-    last = result.get("last_success")
-    attempt = result.get("latest_attempt")
-    if last and last.get("store_id") != store_id:
-        last = None
-    if attempt and attempt.get("store_id") != store_id:
-        attempt = None
-    if not last and not attempt:
-        return {"available": False, "reason": "store_scope_mismatch" if result.get("available") else result.get("reason")}
+def _member_receipt_summary(result: dict) -> dict:
+    def compact(item):
+        if not item:
+            return None
+        keys = (
+            "receipt_id", "batch_id", "status", "successful_submit_at", "source_verified_at",
+            "source_verified_on", "source_snapshot_sha256", "source_keyset_sha256",
+            "candidate_input_sha256", "manifest_sha256", "source_cards", "current_cards",
+            "new_cards", "new_users", "existing_user_matches", "duplicate_preview_new_cards",
+            "protected_cards", "protected_users", "backup_recovery", "old_records_protected",
+            "applied", "business_writes", "source_status", "blocked_reason", "blocked_detail",
+            "evidence_reference", "current_processing",
+        )
+        return {key: item.get(key) for key in keys if key in item}
     return {
-        "available": True,
-        "last_success": {key: last.get(key) for key in ("receipt_id", "batch_id", "status", "successful_submit_at", "source_verified_on", "source_snapshot_sha256", "source_keyset_sha256", "candidate_input_sha256", "manifest_sha256", "new_cards", "new_users", "existing_user_matches", "duplicate_preview_new_cards", "protected_cards", "protected_users", "backup_recovery", "old_records_protected", "evidence_reference")} if last else None,
-        "latest_attempt": {key: attempt.get(key) for key in ("receipt_id", "batch_id", "status", "source_verified_at", "source_keyset_sha256", "source_cards", "current_cards", "new_cards", "new_users", "existing_user_matches", "applied", "business_writes", "source_status", "blocked_reason", "blocked_detail", "evidence_reference")} if attempt else None,
+        "available": bool(result.get("available")),
+        "has_receipt": bool(result.get("has_receipt")),
+        "has_conflict": bool(result.get("has_conflict")),
+        "current_state": result.get("current_state"),
+        "reason": result.get("reason"),
+        "last_success": compact(result.get("last_success")),
+        "last_verification": compact(result.get("last_verification")),
+        "latest_attempt": compact(result.get("latest_attempt")),
         "errors": result.get("errors", []),
         "conflicts": result.get("conflicts", []),
         "trust_note": result.get("trust_note"),
     }
+
+
 
 
 @router.get("/member-sync/receipts")
@@ -1667,8 +1679,8 @@ def member_sync_receipts(
     """Read the allowlisted redacted member-sync receipts for one store."""
     staff = _require_marketing_read(_current_staff(authorization, db))
     target_store_id = _resolve_target_store_id(db, staff, store_id)
-    result = load_member_sync_receipts()
-    summary = _member_receipt_summary(result, target_store_id)
+    result = load_member_sync_receipts(store_id=target_store_id)
+    summary = _member_receipt_summary(result)
     active_cards = int(db.scalar(select(sa_func.count()).select_from(MembershipCard).where(
         MembershipCard.store_id == target_store_id, MembershipCard.status == "active",
     )) or 0)
@@ -1698,16 +1710,28 @@ def membership_overview(
     )) or 0)
     active = [card for card in cards if card.status == "active"]
     observed = max((card.observed_at for card in cards if card.observed_at), default=None)
-    receipt = load_member_sync_receipts()
-    receipt_summary = _member_receipt_summary(receipt, target_store_id)
+    receipt = load_member_sync_receipts(store_id=target_store_id)
+    receipt_summary = _member_receipt_summary(receipt)
     last_success = receipt_summary.get("last_success")
     latest_attempt = receipt_summary.get("latest_attempt")
-    if last_success:
+    if receipt_summary.get("has_conflict"):
         sync_status = {
-            "state": "receipt_available",
-            "label": "有历史成功回执；本次待核实",
-            "detail": f"上次成功提交：{last_success.get('successful_submit_at') or '未记录'}；最近尝试：{latest_attempt.get('source_verified_at') if latest_attempt else '未记录'}。有效来源卡数量不等于最后同步时间或本次来源已核对。",
+            "state": "receipt_conflict",
+            "label": "回执批次存在冲突，待核实",
+            "detail": "冲突批次不作为可信成功或最近结果；请检查冲突证据后再判断当前状态。",
         }
+    elif last_success:
+        current = latest_attempt.get("current_processing") if latest_attempt else None
+        detail = f"上次成功提交：{last_success.get('successful_submit_at') or '未记录'}；最近尝试：{latest_attempt.get('source_verified_at') if latest_attempt else '未记录'}。有效来源卡数量不等于最后同步时间或本次来源已核对。"
+        if current:
+            detail += f" 当前处理：{current.get('current_status_label') or current.get('current_status') or '待核实'}。"
+        current_state = (current or {}).get("current_status")
+        if current_state == "paused_by_user":
+            sync_status = {"state": "receipt_available_paused", "label": "有历史成功回执；本次差异已获授权，用户要求暂缓", "detail": detail}
+        elif current_state in {"authorized_pending_resume", "authorized_for_frozen_scope"}:
+            sync_status = {"state": "receipt_available_authorized", "label": "有历史成功回执；本次差异已获授权，待恢复", "detail": detail}
+        else:
+            sync_status = {"state": "receipt_available", "label": "有历史成功回执；本次待核实", "detail": detail}
     elif latest_attempt:
         sync_status = {
             "state": "receipt_attempt_only",
