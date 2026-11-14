@@ -602,8 +602,8 @@ export type CustomerConsumptionOverview = {
   read_only: boolean;
 };
 
-export function getMyMembershipConsumption(token: string) {
-  return request<CustomerConsumptionOverview>('/auth/h5/membership-consumption', {
+export function getMyMembershipConsumption(token: string, offset = 0, limit = 20) {
+  return request<CustomerConsumptionOverview>(`/auth/h5/membership-consumption?offset=${offset}&limit=${limit}`, {
     cache: 'no-store',
     headers: { Authorization: `Bearer ${token}` },
   });

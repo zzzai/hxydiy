@@ -189,7 +189,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
           <main className="profile-body">
             <ProfileCard user={auth.user} onShowCode={() => setMemberCodeOpen(true)} />
             <MembershipSnapshot data={membership.data} loading={membership.loading} error={membership.error} onRetry={membership.retry} />
-            <ConsumptionHistory data={consumption.data} loading={consumption.loading} error={consumption.error} onRetry={consumption.retry} />
+            <ConsumptionHistory bills={consumption.bills} data={consumption.data} loading={consumption.loading} loadingMore={consumption.loadingMore} hasMore={consumption.hasMore} error={consumption.error} onRetry={consumption.retry} onLoadMore={consumption.loadMore} />
             <nav className="profile-shortcuts" aria-label="常用功能">
               <button type="button" aria-expanded={recordsOpen && recordState !== 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('all', event.currentTarget)}><Clock3 size={23} aria-hidden="true" /><span>服务记录</span></button>
               <button type="button" aria-label={`待评价，${pendingCount}条`} aria-expanded={recordsOpen && recordState === 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('pending-feedback', event.currentTarget)}><span className="profile-shortcut-icon"><MessageSquareText size={23} aria-hidden="true" />{pendingCount > 0 && <em aria-hidden="true">{pendingCount}</em>}</span><span>待评价</span></button>
@@ -314,33 +314,35 @@ function MembershipSnapshot({ data, loading, error, onRetry }: { data: CustomerM
         <details className="profile-membership-benefits"><summary>查看权益</summary><ul>{card.benefits.map(benefit => <li key={benefit}>{benefit}</li>)}</ul><small>{card.benefits_note}</small></details>
       </li>)}
     </ul>}
-    <p className="profile-membership-unknown-note">历史消费尚未同步，累计优惠暂不可用。</p>
     <p className="profile-membership-scope">{data.coverage.card_snapshot === 'returned' ? '会员卡信息为来源快照' : '暂无来源会员卡'}{data.coverage.as_of ? `，截至 ${formatDateTime(data.coverage.as_of).slice(0, 10)}` : ''}。</p>
   </section>;
 }
 
-function ConsumptionHistory({ data, loading, error, onRetry }: { data: CustomerConsumptionOverview | null; loading: boolean; error: string; onRetry: () => void }) {
+function ConsumptionHistory({ bills, data, loading, loadingMore, hasMore, error, onRetry, onLoadMore }: { bills: CustomerConsumptionOverview['bills']; data: CustomerConsumptionOverview | null; loading: boolean; loadingMore: boolean; hasMore: boolean; error: string; onRetry: () => void; onLoadMore: () => void }) {
   if (loading) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-loading" role="status">正在读取消费记录…</p></section>;
-  if (error) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-error" role="alert">{error}</p><button type="button" className="profile-membership-retry" onClick={onRetry}>重新加载</button></section>;
+  if (error && !bills.length) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-error" role="alert">{error}</p><button type="button" className="profile-membership-retry" onClick={onRetry}>重新加载</button></section>;
   if (!data) return null;
-  const hasBills = data.bills.length > 0;
+  const hasBills = bills.length > 0;
   const range = data.coverage.query_range_start && data.coverage.query_range_end
     ? `${formatDateTime(data.coverage.query_range_start).slice(0, 10)} ~ ${formatDateTime(data.coverage.query_range_end).slice(0, 10)}`
     : null;
+  const observed = data.coverage.observed_at ? `观测 ${formatDateTime(data.coverage.observed_at).slice(0, 10)}` : '';
   return <section className="profile-consumption" aria-label="历史消费">
     <div className="profile-membership-heading"><div><h2>历史消费</h2><small>来源可核实记录，独立于 DIY 钱包</small></div><span>{data.pagination.total} 笔记录</span></div>
     {!hasBills
       ? <p className="profile-membership-empty">暂无可核实的来源消费记录{data.coverage.conflict_bill_groups > 0 ? `（${data.coverage.conflict_bill_groups} 组待核对）` : ''}。</p>
       : <>
         <div className="profile-consumption-savings"><span>累计消费优惠</span><strong>{data.savings.amount_cents !== null ? formatMoney(data.savings.amount_cents) : '未核实'}</strong><small>{data.savings.note}</small></div>
-        {range && <p className="profile-consumption-scope">统计覆盖期：{range}{data.coverage.complete === false ? '（覆盖不完整）' : ''}；金额未核实不计入。</p>}
+        {range && <p className="profile-consumption-scope">统计覆盖期：{range}{observed ? ` · ${observed}` : ''}{data.coverage.complete === false ? '（覆盖不完整）' : ''}；金额未核实不计入。</p>}
         <ul className="profile-consumption-bills">
-          {data.bills.map(bill => <li key={bill.id} className="profile-consumption-bill">
+          {bills.map(bill => <li key={bill.id} className="profile-consumption-bill">
             <div><strong>{bill.source_bill_no}</strong><span>{bill.savings.amount_cents !== null ? `优惠 ${formatMoney(bill.savings.amount_cents)}` : '优惠未核实'}</span></div>
             <small>{bill.occurred_at ? `消费于 ${formatDateTime(bill.occurred_at).slice(0, 10)}` : '时间未记录'}{bill.settled_total_cents !== null ? ` · 结算 ${formatMoney(bill.settled_total_cents)}${bill.currency !== 'CNY' ? ` ${bill.currency}` : ''}` : ''}</small>
             {bill.lines.length > 0 && <details><summary>查看明细</summary><ul>{bill.lines.map((line, i) => <li key={i}>{line.description}{line.quantity !== null ? ` × ${line.quantity}` : ''}{line.settled_cents !== null ? ` · ${formatMoney(line.settled_cents)}` : ''}</li>)}</ul></details>}
           </li>)}
         </ul>
+        {hasMore && <button type="button" className="profile-consumption-more" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? '加载中…' : '加载更多'}</button>}
+        {error && hasBills && <p className="profile-membership-error" role="alert">{error}</p>}
       </>}
   </section>;
 }
