@@ -37,7 +37,7 @@ query_range_start TIMESTAMPTZ NOT NULL,   -- declared source query range
 query_range_end TIMESTAMPTZ NOT NULL,
 page_count INTEGER NULL,
 last_page_complete BOOLEAN NULL,
-coverage_gaps JSONB NULL,                 -- explicit missing ranges/pages
+coverage_gaps JSON NULL,                 -- explicit missing ranges/pages
 observed_at TIMESTAMPTZ NOT NULL,         -- actual read time
 status VARCHAR(16) NOT NULL,              -- preview/applied/blocked
 evidence_ref TEXT NOT NULL,               -- private redacted evidence ref, no PII
@@ -77,9 +77,10 @@ attribution_status VARCHAR(24) NOT NULL DEFAULT 'unresolved',  -- owned/shared/u
 refund_status VARCHAR(16) NOT NULL DEFAULT 'unknown',          -- none/partial/refunded/void/unknown
 original_bill_id BIGINT NULL REFERENCES membership_consumption_bills(id),
 source_row_sha256 CHAR(64) NOT NULL,
+content_sha256 CHAR(64) NOT NULL,
 raw_evidence_ref TEXT NOT NULL,
 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-UNIQUE(source, store_id, source_bill_no, source_row_sha256)
+UNIQUE(source, store_id, source_bill_no, content_sha256)
 ```
 
 账单头与行不可重复累计；行只存在此账单版本下。
@@ -92,10 +93,10 @@ bill_id BIGINT NOT NULL REFERENCES membership_consumption_bills(id),
 source_line_key VARCHAR(128) NULL,        -- only when source proves stable
 line_order INTEGER NOT NULL,
 description TEXT NOT NULL,
-quantity NUMERIC(12,3) NULL,
+quantity INTEGER NULL,
 store_price_cents BIGINT NULL,
 settled_cents BIGINT NULL,
-payment_breakdown_json JSONB NULL,
+payment_breakdown_json JSON NULL,
 line_sha256 CHAR(64) NOT NULL
 -- no UNIQUE(bill_id,line_sha256): two legitimate identical service lines may exist.
 -- There is no stable line business key until source proves one; keep the whole
@@ -139,7 +140,7 @@ UNIQUE(card_id, observed_at, source_batch_id)
 ## 3. 主键、幂等与版本
 
 - 批次键：`(source, store_id, batch_key)`；批次 SHA 绑定来源快照和 manifest。
-- 账单头业务键：`(source, store_id, source_bill_no, source_row_sha256)`；只有来源证明单号全租户唯一且版本规则后，才可升级 `source_bill_version` 唯一约束。
+- 账单头业务键：`(source, store_id, source_bill_no, content_sha256)`（规范化语义摘要，非证据行 SHA）；只有来源证明单号全租户唯一且版本规则后，才可升级 `source_bill_version` 唯一约束。
 - 相同内容重放：整批/逐单零新增。
 - 相同单号内容变化：新 `source_row_sha256`/版本，旧记录保留；**在来源证明版本顺序/当前版本规则前，整组账单冲突，全部排除并标异常，不做 first-wins，也不依赖输入顺序**。
 - 行：只有来源证明稳定明细ID才使用 `source_line_key`；否则整单版本保存，`line_order` 仅展示，不参与去重。
@@ -226,9 +227,10 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 5. 导入后只读核对：旧 DIY 订单/钱包/卡/价/审计不变；外部账单不进入 DIY 营收。
 6. 真实导入/余额更新/15卡恢复均不在本方案授权内。
 
-## 9. 当前结论
+## 9. 当前结论（2026-11-14 实现后）
 
-- 本方案不执行迁移、不写生产数据、不导入历史、不更新余额。
-- 纯模型合成测试 12 passed；默认归属/退款/账单类型/账单状态/支付完整性均为 unknown/unresolved，不默认通过；已撤单正数金额被阻断。
-- 必须先确认退款/撤销字段、稳定账单/明细标识、全量历史分页和逐人归属；未确认部分保持 unknown/阻断。
+- 本分支已实现纯领域模型 + Alembic 迁移草案 + SQLAlchemy 模型 + 本人只读 API + 前端组件与行为测试；**未执行生产迁移、未写生产数据、未导入历史、未更新余额、未恢复15卡、未部署**。
+- 两处缺陷已修复：`ingest_bills` 整组预检（同批同账单冲突零部分写入、正反顺序一致、新旧 existing 保持）；聚合器改按 `bill_content_sha256`（规范化语义摘要）判冲突，同证据 SHA 不同退款/归属/金额/明细不再 first-wins。
+- 领域模型合成测试 18 passed；本人只读 API 测试 4 passed；前端 hook 行为测试 5 passed；`tsc -b` 与 `vite build` 通过。
+- 仍需先确认退款/撤销字段、稳定账单/明细标识、全量历史分页和逐人归属；未确认部分保持 unknown/阻断。真实数据接入不在本分支授权内。
 - 人工门店19项、Excel/WPS、真实来源核对继续待人工。

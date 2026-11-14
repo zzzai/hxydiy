@@ -1,13 +1,20 @@
 """Pure rules for source consumption history; no database or I/O.
 
-This module exists only to validate the proposed amount/dedupe rules with
-synthetic data before any table migration or real source import is approved.
-Unknown evidence is represented by ``None`` and blocked, never defaulted to 0.
+This module validates the amount/dedupe/conflict rules with synthetic data
+before any table migration or real source import is approved. Unknown evidence
+is ``None`` and blocked, never defaulted to 0.
+
+``source_row_sha256`` is evidence-row provenance, not "same fact" identity:
+two rows may carry the same evidence SHA but different semantic content. The
+normalized semantic key (``bill_semantic_key``) decides duplicate vs conflict,
+and ``bill_content_sha256`` is its stable digest for persistence.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import hashlib
+import json
+from dataclasses import dataclass
 from typing import Iterable
 
 
@@ -51,6 +58,58 @@ class SavingsResult:
     reason: str
     coupon_payment_cents: int | None = None
     card_payment_cents: int | None = None
+
+
+def bill_semantic_key(bill: ConsumptionBill) -> tuple:
+    """Normalized semantic identity; deliberately excludes evidence-row SHA."""
+    lines = tuple(
+        (
+            line.description,
+            line.quantity,
+            line.store_price_cents,
+            line.settled_cents,
+            line.source_line_key,
+            line.line_order,
+        )
+        for line in bill.lines
+    )
+    return (
+        bill.store_id,
+        bill.source_bill_no,
+        bill.user_id,
+        bill.bill_type,
+        bill.bill_status,
+        bill.attribution_status,
+        bill.refund_status,
+        bill.payment_evidence_complete,
+        bill.source_bill_version,
+        bill.store_price_total_cents,
+        bill.settled_total_cents,
+        bill.coupon_payment_cents,
+        bill.card_principal_debit_cents,
+        bill.card_bonus_debit_cents,
+        bill.cash_payment_cents,
+        bill.other_payment_cents,
+        lines,
+        bill.linked_card_ids,
+    )
+
+
+def _jsonable(value):
+    if isinstance(value, (tuple, list)):
+        return [_jsonable(item) for item in value]
+    return value
+
+
+def bill_content_sha256(bill: ConsumptionBill) -> str:
+    """Stable digest of normalized semantic content (persistence idempotency)."""
+    payload = json.dumps(
+        _jsonable(bill_semantic_key(bill)),
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
@@ -106,30 +165,42 @@ def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
                          bill.coupon_payment_cents, card_payment)
 
 
-def ingest_bills(existing: dict[tuple[int, str], str], bills: Iterable[ConsumptionBill]) -> dict:
-    """Synthetic idempotency model: same bill content is duplicate, changed content conflicts."""
+def ingest_bills(existing: dict, bills: Iterable[ConsumptionBill]) -> dict:
+    """Idempotency model with whole-group precheck and zero partial writes.
+
+    ``existing`` maps ``(store_id, source_bill_no)`` to a semantic digest
+    (``bill_content_sha256``). A same-batch same-bill conflict rejects the whole
+    group without writing, so the result is order-independent.
+    """
+    groups: dict[tuple[int, str], list[ConsumptionBill]] = {}
+    for bill in bills:
+        groups.setdefault((bill.store_id, bill.source_bill_no), []).append(bill)
+
     inserted: list[str] = []
     duplicates: list[str] = []
     conflicts: list[str] = []
-    for bill in bills:
-        key = (bill.store_id, bill.source_bill_no)
+    for key, group in groups.items():
+        digests = {bill_content_sha256(bill) for bill in group}
+        if len(digests) > 1:
+            conflicts.append(key[1])
+            continue
+        digest = next(iter(digests))
         previous = existing.get(key)
         if previous is None:
-            existing[key] = bill.source_row_sha256
-            inserted.append(bill.source_bill_no)
-        elif previous == bill.source_row_sha256:
-            duplicates.append(bill.source_bill_no)
+            existing[key] = digest
+            inserted.append(key[1])
+        elif previous == digest:
+            duplicates.append(key[1])
         else:
-            conflicts.append(bill.source_bill_no)
+            conflicts.append(key[1])
     return {"inserted": inserted, "duplicates": duplicates, "conflicts": conflicts}
 
 
 def aggregate_verified(bills: Iterable[ConsumptionBill]) -> dict:
-    """Count each source bill once; conflicting versions exclude the whole group.
+    """Count each source bill once; semantic conflicts exclude the whole group.
 
-    Version order is not trusted until the source supplies a stable revision
-    rule. Therefore two different contents for one bill number are a conflict,
-    regardless of input order, and never first-win.
+    Two rows with the same evidence SHA but different semantic content are a
+    conflict, never first-win, regardless of input order.
     """
     groups: dict[tuple[int, str], list[ConsumptionBill]] = {}
     for bill in bills:
@@ -139,8 +210,8 @@ def aggregate_verified(bills: Iterable[ConsumptionBill]) -> dict:
     blocked = 0
     conflicts = 0
     for group in groups.values():
-        hashes = {item.source_row_sha256 for item in group}
-        if len(hashes) > 1:
+        digests = {bill_content_sha256(item) for item in group}
+        if len(digests) > 1:
             conflicts += 1
             blocked += 1
             continue

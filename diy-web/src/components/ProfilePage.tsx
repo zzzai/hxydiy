@@ -2,10 +2,11 @@ import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, Lo
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type CustomerMembershipOverview, type MyCoupon, type Order, type SelectionSession } from '../api';
+import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type CustomerConsumptionOverview, type CustomerMembershipOverview, type MyCoupon, type Order, type SelectionSession } from '../api';
 import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth, type CustomerUser } from '../customerAuth';
 import { formatMoney } from '../domain';
 import { useCustomerMembership } from './useCustomerMembership';
+import { useCustomerConsumption } from './useCustomerConsumption';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
 import { bindPendingGuestCoupons } from '../guestCoupon';
 import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipState, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
@@ -52,6 +53,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   const recordSection = useRef<HTMLElement>(null);
   const [memberCodeOpen, setMemberCodeOpen] = useState(false);
   const membership = useCustomerMembership(open, auth?.token || null, () => { clearCustomerAuth(); onAuthChange(null); }, undefined, refreshKey);
+  const consumption = useCustomerConsumption(open, auth?.token || null, () => { clearCustomerAuth(); onAuthChange(null); }, undefined, refreshKey);
   const [orders, setOrders] = useState<Order[]>([]);
   const [sessions, setSessions] = useState<Awaited<ReturnType<typeof getMySelectionSessions>>>([]);
   const [coupons, setCoupons] = useState<MyCoupon[]>([]);
@@ -187,6 +189,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
           <main className="profile-body">
             <ProfileCard user={auth.user} onShowCode={() => setMemberCodeOpen(true)} />
             <MembershipSnapshot data={membership.data} loading={membership.loading} error={membership.error} onRetry={membership.retry} />
+            <ConsumptionHistory data={consumption.data} loading={consumption.loading} error={consumption.error} onRetry={consumption.retry} />
             <nav className="profile-shortcuts" aria-label="常用功能">
               <button type="button" aria-expanded={recordsOpen && recordState !== 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('all', event.currentTarget)}><Clock3 size={23} aria-hidden="true" /><span>服务记录</span></button>
               <button type="button" aria-label={`待评价，${pendingCount}条`} aria-expanded={recordsOpen && recordState === 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('pending-feedback', event.currentTarget)}><span className="profile-shortcut-icon"><MessageSquareText size={23} aria-hidden="true" />{pendingCount > 0 && <em aria-hidden="true">{pendingCount}</em>}</span><span>待评价</span></button>
@@ -313,6 +316,28 @@ function MembershipSnapshot({ data, loading, error, onRetry }: { data: CustomerM
     </ul>}
     <p className="profile-membership-unknown-note">历史消费尚未同步，累计优惠暂不可用。</p>
     <p className="profile-membership-scope">{data.coverage.card_snapshot === 'returned' ? '会员卡信息为来源快照' : '暂无来源会员卡'}{data.coverage.as_of ? `，截至 ${formatDateTime(data.coverage.as_of).slice(0, 10)}` : ''}。</p>
+  </section>;
+}
+
+function ConsumptionHistory({ data, loading, error, onRetry }: { data: CustomerConsumptionOverview | null; loading: boolean; error: string; onRetry: () => void }) {
+  if (loading) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-loading" role="status">正在读取消费记录…</p></section>;
+  if (error) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-error" role="alert">{error}</p><button type="button" className="profile-membership-retry" onClick={onRetry}>重新加载</button></section>;
+  if (!data) return null;
+  const hasBills = data.bills.length > 0;
+  return <section className="profile-consumption" aria-label="历史消费">
+    <div className="profile-membership-heading"><div><h2>历史消费</h2><small>来源可核实记录，独立于 DIY 钱包</small></div>{hasBills && <span>{data.savings.bill_count ?? 0} 笔可核实</span>}</div>
+    {!hasBills
+      ? <p className="profile-membership-empty">暂无可核实的来源消费记录{data.coverage.conflict_bill_groups > 0 ? `（${data.coverage.conflict_bill_groups} 组待核对）` : ''}。</p>
+      : <>
+        <div className="profile-consumption-savings"><span>累计消费优惠</span><strong>{data.savings.amount_cents !== null ? formatMoney(data.savings.amount_cents) : '未核实'}</strong><small>{data.savings.note}</small></div>
+        <ul className="profile-consumption-bills">
+          {data.bills.map(bill => <li key={bill.id} className="profile-consumption-bill">
+            <div><strong>{bill.source_bill_no}</strong><span>{bill.savings.amount_cents !== null ? `优惠 ${formatMoney(bill.savings.amount_cents)}` : '未核实'}</span></div>
+            <small>{bill.occurred_at ? `消费于 ${formatDateTime(bill.occurred_at).slice(0, 10)}` : '时间未记录'}{bill.settled_total_cents !== null ? ` · 结算 ${formatMoney(bill.settled_total_cents)}` : ''}</small>
+            {bill.lines.length > 0 && <details><summary>查看明细</summary><ul>{bill.lines.map((line, i) => <li key={i}>{line.description}{line.quantity !== null ? ` × ${line.quantity}` : ''}{line.settled_cents !== null ? ` · ${formatMoney(line.settled_cents)}` : ''}</li>)}</ul></details>}
+          </li>)}
+        </ul>
+      </>}
   </section>;
 }
 

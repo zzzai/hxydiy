@@ -1,4 +1,4 @@
-from app.domain.member_consumption import BillLine, ConsumptionBill, aggregate_verified, compute_bill_savings, ingest_bills, visible_to
+from app.domain.member_consumption import BillLine, ConsumptionBill, aggregate_verified, bill_content_sha256, compute_bill_savings, ingest_bills, visible_to
 
 
 def line(price, settled, qty=1, desc="合成项目"):
@@ -87,7 +87,7 @@ def test_duplicate_and_changed_bill_are_idempotent_or_conflict():
                    card_principal_debit_cents=14000, card_bonus_debit_cents=0,
                    coupon_payment_cents=9000, cash_payment_cents=0, other_payment_cents=0)
     assert ingest_bills(existing, [changed]) == {"inserted": [], "duplicates": [], "conflicts": ["SYN-001"]}
-    assert existing[(1, "SYN-001")] == "sha-1"
+    assert existing[(1, "SYN-001")] == bill_content_sha256(first)
 
 
 def test_conflicting_versions_exclude_group_and_ignore_input_order():
@@ -103,7 +103,8 @@ def test_conflicting_versions_exclude_group_and_ignore_input_order():
 
 
 def test_no_verified_bills_returns_null_not_zero():
-    result = aggregate_verified([bill(bill_type="recharge"), bill(refund_status="unknown")])
+    result = aggregate_verified([bill(source_bill_no="SYN-RECHARGE", bill_type="recharge"),
+                                 bill(source_bill_no="SYN-REFUND-UNKNOWN", refund_status="unknown")])
     assert result["savings_cents"] is None
     assert result["verified_bills"] == 0
 
@@ -139,3 +140,84 @@ def test_account_and_store_isolation_rejects_unresolved_shared():
     assert visible_to(bill(attribution_status="shared"), 11, 1) is False
     assert visible_to(bill(user_id=None), 11, 1) is False
     assert visible_to(bill(attribution_status="unknown"), 11, 1) is False
+
+
+def test_same_batch_same_bill_conflict_zero_partial_write():
+    v1 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v1", source_bill_version="v1",
+              bill_status="voided")
+    v2 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v2", source_bill_version="v2",
+              refund_status="unknown", payment_evidence_complete=False)
+    for order in ([v1, v2], [v2, v1]):
+        existing = {}
+        result = ingest_bills(existing, order)
+        assert result == {"inserted": [], "duplicates": [], "conflicts": ["SYN-VERSION"]}
+        assert existing == {}
+
+
+def test_mixed_batch_accepts_only_clean_groups():
+    clean = bill(source_bill_no="SYN-CLEAN")
+    v1 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v1", bill_status="voided")
+    v2 = bill(source_bill_no="SYN-VERSION", source_row_sha256="v2", refund_status="unknown",
+              payment_evidence_complete=False)
+    existing = {}
+    result = ingest_bills(existing, [clean, v1, v2])
+    assert result["inserted"] == ["SYN-CLEAN"]
+    assert result["conflicts"] == ["SYN-VERSION"]
+    assert existing == {(1, "SYN-CLEAN"): bill_content_sha256(clean)}
+
+    existing2 = {}
+    result2 = ingest_bills(existing2, [v2, v1, clean])
+    assert result2["inserted"] == ["SYN-CLEAN"]
+    assert result2["conflicts"] == ["SYN-VERSION"]
+    assert existing2 == {(1, "SYN-CLEAN"): bill_content_sha256(clean)}
+
+
+def test_existing_entries_preserved_on_conflict():
+    first = bill()
+    existing = {}
+    ingest_bills(existing, [first])
+    before = dict(existing)
+    changed = bill(source_row_sha256="sha-2", settled_total_cents=23000, lines=(line(30000, 23000),),
+                   card_principal_debit_cents=14000, card_bonus_debit_cents=0,
+                   coupon_payment_cents=9000, cash_payment_cents=0, other_payment_cents=0)
+    result = ingest_bills(existing, [changed])
+    assert result["conflicts"] == ["SYN-001"]
+    assert existing == before
+
+
+def test_same_evidence_hash_different_content_is_conflict():
+    base = bill(source_bill_no="SYN-FORGED", source_row_sha256="same-hash")
+    different_refund = bill(source_bill_no="SYN-FORGED", source_row_sha256="same-hash", refund_status="refunded")
+    different_amount = bill(source_bill_no="SYN-FORGED", source_row_sha256="same-hash",
+                            settled_total_cents=23000, lines=(line(30000, 23000),),
+                            card_principal_debit_cents=14000, card_bonus_debit_cents=0,
+                            coupon_payment_cents=9000, cash_payment_cents=0, other_payment_cents=0)
+    different_attribution = bill(source_bill_no="SYN-FORGED", source_row_sha256="same-hash",
+                                 attribution_status="shared")
+    for other in (different_refund, different_amount, different_attribution):
+        for order in ([base, other], [other, base]):
+            result = aggregate_verified(order)
+            assert result["savings_cents"] is None
+            assert result["verified_bills"] == 0
+            assert result["conflict_bills"] == 1
+            assert result["blocked_bills"] == 1
+
+
+def test_same_evidence_hash_different_content_conflicts_in_ingest():
+    a = bill(source_bill_no="SYN-FORGED-INGEST", source_row_sha256="same-hash")
+    b = bill(source_bill_no="SYN-FORGED-INGEST", source_row_sha256="same-hash", refund_status="refunded")
+    existing = {}
+    result = ingest_bills(existing, [a, b])
+    assert result["conflicts"] == ["SYN-FORGED-INGEST"]
+    assert existing == {}
+
+
+def test_duplicate_identical_service_lines_preserved_in_semantic_key():
+    one = bill(source_bill_no="SYN-LINES", lines=(line(11900, 7900),), store_price_total_cents=11900,
+               settled_total_cents=7900, card_principal_debit_cents=7900, card_bonus_debit_cents=0,
+               coupon_payment_cents=0, cash_payment_cents=0, other_payment_cents=0)
+    two = bill(source_bill_no="SYN-LINES", lines=(line(11900, 7900), line(11900, 7900)),
+               store_price_total_cents=23800, settled_total_cents=15800,
+               card_principal_debit_cents=15800, card_bonus_debit_cents=0,
+               coupon_payment_cents=0, cash_payment_cents=0, other_payment_cents=0)
+    assert bill_content_sha256(one) != bill_content_sha256(two)

@@ -574,3 +574,36 @@ export function claimPosterCoupon(code: string, authToken: string) {
     method: 'POST', headers: { Authorization: 'Bearer ' + authToken }, body: JSON.stringify({ code }),
   });
 }
+
+export type CustomerConsumptionOverview = {
+  coverage: { source: string; store_ids: number[]; history: string; conflict_bill_groups: number; note: string };
+  bills: Array<{
+    id: number;
+    source_bill_no: string;
+    bill_type: string;
+    bill_status: string;
+    store_id: number;
+    occurred_at: string | null;
+    settled_at: string | null;
+    store_price_total_cents: number | null;
+    settled_total_cents: number | null;
+    coupon_payment_cents: number | null;
+    card_principal_debit_cents: number | null;
+    card_bonus_debit_cents: number | null;
+    cash_payment_cents: number | null;
+    other_payment_cents: number | null;
+    savings: { status: string; amount_cents: number | null };
+    lines: Array<{ description: string; quantity: number | null; store_price_cents: number | null; settled_cents: number | null }>;
+  }>;
+  pagination: { offset: number; limit: number; total: number; has_more: boolean };
+  savings: { status: string; amount_cents: number | null; bill_count: number | null; note: string };
+  generated_at: string;
+  read_only: boolean;
+};
+
+export function getMyMembershipConsumption(token: string) {
+  return request<CustomerConsumptionOverview>('/auth/h5/membership-consumption', {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

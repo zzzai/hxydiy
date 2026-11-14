@@ -1,5 +1,12 @@
 # hxy-diy 共享记忆
 
+## 2026-11-14 消费历史与余额快照只读实现候选（未合并/未部署）
+
+- 隔离工作区 `member-consumption-readonly-20261114`，分支 `codex/member-consumption-readonly-20261114`，基于最新 main `2db878c30`，从方案分支 `7d5a1d0` 引入消费领域模块（来源 SHA 已记录）。
+- 修复两缺陷：`ingest_bills` 整组预检（同批同账单冲突零部分写入、正反顺序一致、新旧 existing 保持）；聚合器改按 `bill_content_sha256` 语义摘要判冲突（同证据 SHA 不同退款/归属/金额/明细不再 first-wins）。
+- 新增 4 张只读来源表（`membership_consumption_batches/bills/lines`、`membership_balance_snapshots`）Alembic 草案 + SQLAlchemy 模型 + 本人只读 API `/auth/h5/membership-consumption` + 前端组件与 hook 行为测试；`tsc -b` 与 `vite build` 通过。
+- 未执行生产迁移/真实数据导入/余额刷新/15卡恢复；新表即使空表也属数据库单独确认，需总控审核与用户确认。契约 `docs/contracts/member-consumption-history-plan-20261113.md`。
+
 ## 2026-11-13 女神草本泡单项价格
 
 - 已授权门店 1 `hxy-nvshen-60` 原价 119 元；会员价 79 元、团购价 89 元保持，主项 5 折券展示 59.50 元。
