@@ -151,12 +151,11 @@ test('closing the profile ignores a late 401 from its in-flight request', async 
   await act(async () => root.unmount());
 });
 
-test('loadMore appends the next page and updates hasMore', async () => {
+test('loadMore advances server offset independent of rendered count', async () => {
   let offsets = [];
   const loader = (token, offset, limit) => {
     offsets.push(offset);
-    if (offset === 0) return Promise.resolve(overview('p0', { bills: [bill('b1')], total: 2, hasMore: true }));
-    return Promise.resolve(overview('p1', { bills: [bill('b2')], offset: 1, total: 2, hasMore: false }));
+    return Promise.resolve(overview('p', { bills: offset === 0 ? [bill('b1')] : [bill('b2')], offset, total: 2, hasMore: offset === 0 }));
   };
   let root;
   await act(async () => { root = create(React.createElement(Harness, { open: true, token: 'token-p', loader, onAuthFailure: () => {} })); });
@@ -166,31 +165,78 @@ test('loadMore appends the next page and updates hasMore', async () => {
 
   await act(async () => { latest.loadMore(); });
   await settle();
-  assert.deepEqual(offsets, [0, 1]);
+  assert.deepEqual(offsets, [0, 20]);
   assert.deepEqual(latest.bills.map(b => b.source_bill_no), ['b1', 'b2']);
   assert.equal(latest.hasMore, false);
   assert.equal(latest.loadingMore, false);
   await act(async () => root.unmount());
 });
 
-test('a late loadMore from the old token cannot append to the new account', async () => {
-  const first = deferred(), second = deferred();
-  let loadMoreOffset = -1;
+test('rapid loadMore issues only one additional request', async () => {
+  let offsets = [];
+  const pending = deferred();
   const loader = (token, offset, limit) => {
-    if (token === 'token-a') return offset === 0 ? first.promise : Promise.resolve(overview('a-more', { bills: [bill('a-more')] }));
+    offsets.push(offset);
+    if (offset === 0) return Promise.resolve(overview('p0', { bills: [bill('b1')], offset: 0, total: 3, hasMore: true }));
+    return pending.promise;
+  };
+  let root;
+  await act(async () => { root = create(React.createElement(Harness, { open: true, token: 'token-r', loader, onAuthFailure: () => {} })); });
+  await settle();
+  await act(async () => { latest.loadMore(); latest.loadMore(); latest.loadMore(); });
+  assert.deepEqual(offsets, [0, 20], 'only one additional request despite rapid clicks');
+  await act(async () => { pending.resolve(overview('p1', { bills: [bill('b2')], offset: 20, total: 3, hasMore: false })); });
+  await settle();
+  assert.deepEqual(latest.bills.map(b => b.source_bill_no), ['b1', 'b2']);
+  await act(async () => root.unmount());
+});
+
+test('loadMore deduplicates bill IDs on merge', async () => {
+  const loader = (token, offset, limit) => {
+    if (offset === 0) return Promise.resolve(overview('p0', { bills: [bill('b1'), bill('b2')], offset: 0, total: 3, hasMore: true }));
+    return Promise.resolve(overview('p1', { bills: [bill('b2'), bill('b3')], offset: 20, total: 3, hasMore: false }));
+  };
+  let root;
+  await act(async () => { root = create(React.createElement(Harness, { open: true, token: 'token-d', loader, onAuthFailure: () => {} })); });
+  await settle();
+  await act(async () => { latest.loadMore(); });
+  await settle();
+  assert.deepEqual(latest.bills.map(b => b.source_bill_no), ['b1', 'b2', 'b3']);
+  await act(async () => root.unmount());
+});
+
+test('loadMore deduplicates repeated IDs within a single incoming page', async () => {
+  const loader = (token, offset, limit) => {
+    if (offset === 0) return Promise.resolve(overview('p0', { bills: [bill('b1')], offset: 0, total: 3, hasMore: true }));
+    return Promise.resolve(overview('p1', { bills: [bill('b2'), bill('b2'), bill('b3')], offset: 20, total: 3, hasMore: false }));
+  };
+  let root;
+  await act(async () => { root = create(React.createElement(Harness, { open: true, token: 'token-d2', loader, onAuthFailure: () => {} })); });
+  await settle();
+  await act(async () => { latest.loadMore(); });
+  await settle();
+  assert.deepEqual(latest.bills.map(b => b.source_bill_no), ['b1', 'b2', 'b3']);
+  await act(async () => root.unmount());
+});
+
+test('a late loadMore from the old token cannot append to the new account', async () => {
+  const first = deferred(), second = deferred(), firstMore = deferred();
+  const loader = (token, offset, limit) => {
+    if (token === 'token-a') return offset === 0 ? first.promise : firstMore.promise;
     if (offset === 0) return second.promise;
-    loadMoreOffset = offset;
     return Promise.resolve(overview('b-more', { bills: [bill('b-more')] }));
   };
   let root;
   await act(async () => { root = create(React.createElement(Harness, { open: true, token: 'token-a', loader, onAuthFailure: () => {} })); });
-  await act(async () => { first.resolve(overview('a', { bills: [bill('a1')], total: 2, hasMore: true })); });
+  await act(async () => { first.resolve(overview('a', { bills: [bill('a1')], offset: 0, total: 2, hasMore: true })); });
   await settle();
   assert.deepEqual(latest.bills.map(b => b.source_bill_no), ['a1']);
 
-  await act(async () => { latest.loadMore(); });  // in-flight loadMore for token-a
+  await act(async () => { latest.loadMore(); });  // in-flight loadMore for token-a (held)
   await act(async () => { root.update(React.createElement(Harness, { open: true, token: 'token-b', loader, onAuthFailure: () => {} })); });
-  await act(async () => { second.resolve(overview('b', { bills: [bill('b1')], total: 1, hasMore: false })); });
+  await act(async () => { second.resolve(overview('b', { bills: [bill('b1')], offset: 0, total: 1, hasMore: false })); });
+  await settle();
+  await act(async () => { firstMore.resolve(overview('a-more', { bills: [bill('a-more')], offset: 20, total: 2, hasMore: false })); });
   await settle();
   assert.deepEqual(latest.bills.map(b => b.source_bill_no), ['b1'], 'late token-a loadMore must be ignored');
   assert.equal(latest.hasMore, false);

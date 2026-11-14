@@ -230,7 +230,11 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 ## 9. 当前结论（2026-11-14 实现后）
 
 - 本分支已实现纯领域模型 + Alembic 迁移草案 + SQLAlchemy 模型 + 本人只读 API + 前端组件与行为测试；**未执行生产迁移、未写生产数据、未导入历史、未更新余额、未恢复15卡、未部署**。
-- 两处缺陷已修复：`ingest_bills` 整组预检（同批同账单冲突零部分写入、正反顺序一致、新旧 existing 保持）；聚合器改按 `bill_content_sha256`（规范化语义摘要）判冲突，同证据 SHA 不同退款/归属/金额/明细不再 first-wins。
-- 领域模型合成测试 18 passed；本人只读 API 测试 4 passed；前端 hook 行为测试 5 passed；`tsc -b` 与 `vite build` 通过。
+- 语义完整性：`bill_content_sha256` 现纳入精确 `Decimal` 数量、`occurred_at`/`settled_at`、`source_version_no`/`source_current_marker`；持久化摘要与重算不一致即整组隔离（不展示被篡改事实），合法新算未知证据仍可见。冲突先按本人候选单号取整组跨归属判定，不泄漏他人组数/明细。
+- 覆盖口径：完整性按已生效批次声明的分页、日期区间与缺失声明保守判定；区间不连续或声明缺失即“覆盖不完整”，原始缺失文本不进入公开响应。
+- 余额只读投影：拒绝负数、本金+赠金≠总额、同刻原始卡事实与观测不一致；最新 0 对旧 active 卡给出仅展示对账态 `zero_balance_against_active_card_review`，不改权益/身份；卡事实时间与最新观测时间分离。
+- 前端：来源金额精确分/币种感知（1499 => ¥14.99，非 CNY 不用 ¥）；加载更多同步在途闸、按服务端 offset 推进、按账单 ID 去重、旧账号迟到响应隔离；空值显示“未核实”而非 0。
+- 迁移验收（隔离一次性 PostgreSQL，非生产）：无四表基线 `stamp 20261112_coupon_poster_links` → `upgrade head` 建四表+约束/索引且旧基线行不变 → 空表 `downgrade` → 再 `upgrade` → 非空表 `downgrade` 拒绝且行保留。脚本 `hxy-server/scripts/verify_member_consumption_upgrade.py`。
+- 测试：后端消费/余额/迁移契约相关测试通过；独立探针 `codex-api-review-v2.py` 12/12、`codex-balance-review.py` 10/10 通过；前端 hook+组件测试通过；`tsc -b` 与 `vite build` 通过。
 - 仍需先确认退款/撤销字段、稳定账单/明细标识、全量历史分页和逐人归属；未确认部分保持 unknown/阻断。真实数据接入不在本分支授权内。
 - 人工门店19项、Excel/WPS、真实来源核对继续待人工。

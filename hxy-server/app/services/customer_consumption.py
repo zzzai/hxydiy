@@ -36,16 +36,16 @@ def _iso(value: datetime | None) -> str | None:
 
 
 def _quantity(value):
-    """Keep integer quantity; unsupported fractional quantity becomes None.
+    """Preserve exact quantity for the semantic digest; never truncate.
 
-    The domain treats ``None`` as unknown and blocks savings, so a Decimal 1.5
-    is never silently truncated to 1.
+    Whole quantities collapse to ``int``. Fractional ``Decimal`` values stay
+    exact (1.5 and 2.5 hash differently) while savings treat them as unknown.
     """
     if value is None:
         return None
     if value == int(value):
         return int(value)
-    return None
+    return value
 
 
 def to_domain_bill(bill: MembershipConsumptionBill, lines: list[MembershipConsumptionLine]) -> ConsumptionBill:
@@ -60,7 +60,11 @@ def to_domain_bill(bill: MembershipConsumptionBill, lines: list[MembershipConsum
         refund_status=bill.refund_status,
         payment_evidence_complete=bill.payment_evidence_complete,
         source_bill_version=bill.source_bill_version,
+        source_version_no=bill.source_version_no,
+        source_current_marker=bill.source_current_marker,
         currency=bill.currency,
+        occurred_at=bill.occurred_at,
+        settled_at=bill.settled_at,
         store_price_total_cents=bill.store_price_total_cents,
         settled_total_cents=bill.settled_total_cents,
         coupon_payment_cents=bill.coupon_payment_cents,
@@ -133,25 +137,46 @@ def _coverage(applied_batches: list[MembershipConsumptionBatch], has_bills: bool
             "conflict_bill_groups": conflict_groups,
             "note": "没有已生效的来源批次，覆盖无法确认。",
         }
-    gaps: list = []
+
+    has_declared_gaps = False
+    intervals: list[tuple[datetime, datetime]] = []
+    all_pages_complete = True
+    valid_ranges = True
     for batch in applied_batches:
         if batch.coverage_gaps:
-            if isinstance(batch.coverage_gaps, list):
-                gaps.extend(batch.coverage_gaps)
+            has_declared_gaps = True
+        if batch.last_page_complete is not True:
+            all_pages_complete = False
+        if batch.query_range_start is None or batch.query_range_end is None or batch.query_range_start > batch.query_range_end:
+            valid_ranges = False
+        elif batch.page_count is not None and batch.page_count <= 0:
+            valid_ranges = False
+        else:
+            intervals.append((batch.query_range_start, batch.query_range_end))
+
+    contiguous = False
+    if valid_ranges and intervals:
+        merged: list[tuple[datetime, datetime]] = []
+        for start, end in sorted(intervals, key=lambda pair: (pair[0], pair[1])):
+            if merged and start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
             else:
-                gaps.append(batch.coverage_gaps)
+                merged.append((start, end))
+        contiguous = len(merged) == 1
+
+    complete = all_pages_complete and valid_ranges and contiguous and not has_declared_gaps
     return {
         "source": settings.member_source,
         "store_ids": [settings.member_source_store_id],
         "history": "returned" if has_bills else "no_source_data",
         "applied_batch_count": len(applied_batches),
-        "complete": all(batch.last_page_complete for batch in applied_batches),
+        "complete": complete,
         "query_range_start": _iso(min(batch.query_range_start for batch in applied_batches)),
         "query_range_end": _iso(max(batch.query_range_end for batch in applied_batches)),
         "observed_at": _iso(max(batch.observed_at for batch in applied_batches)),
-        "coverage_gaps": gaps or None,
+        "coverage_gaps": has_declared_gaps,
         "conflict_bill_groups": conflict_groups,
-        "note": "覆盖期与缺失以已生效来源批次声明为准；账单日期范围不等于完整覆盖。",
+        "note": "覆盖完整性按已生效批次声明的分页、日期区间与缺失声明保守判定；存在缺失、区间不连续或未知修订时不视为完整。",
     }
 
 
@@ -168,21 +193,44 @@ def build_customer_consumption_history(
         .order_by(MembershipConsumptionBatch.observed_at.desc())
     ))
 
-    rows: list[MembershipConsumptionBill] = []
-    if applied_batches:
-        batch_ids = [batch.id for batch in applied_batches]
-        rows = list(db.scalars(
-            select(MembershipConsumptionBill)
-            .where(
-                MembershipConsumptionBill.batch_id.in_(batch_ids),
-                MembershipConsumptionBill.source == settings.member_source,
-                MembershipConsumptionBill.store_id == settings.member_source_store_id,
-            )
-            .order_by(
-                MembershipConsumptionBill.occurred_at.desc(),
-                MembershipConsumptionBill.id.desc(),
-            )
-        ))
+    if not applied_batches:
+        return {
+            "coverage": _coverage([], False, 0),
+            "bills": [],
+            "pagination": {"offset": offset, "limit": limit, "total": 0, "has_more": False},
+            "savings": {
+                "status": "unverified",
+                "amount_cents": None,
+                "bill_count": None,
+                "note": "累计消费优惠只计入已生效批次、归属本人、支付完整、币种一致的已核实服务账单；券支付单列，独立于既有 DIY 会员节省。",
+            },
+            "generated_at": datetime.now(UTC).isoformat(),
+            "read_only": True,
+        }
+
+    batch_ids = [batch.id for batch in applied_batches]
+    all_rows = list(db.scalars(
+        select(MembershipConsumptionBill)
+        .where(
+            MembershipConsumptionBill.batch_id.in_(batch_ids),
+            MembershipConsumptionBill.source == settings.member_source,
+            MembershipConsumptionBill.store_id == settings.member_source_store_id,
+        )
+        .order_by(
+            MembershipConsumptionBill.occurred_at.desc(),
+            MembershipConsumptionBill.id.desc(),
+        )
+    ))
+
+    # Own-candidate keys first: only bill groups where this customer owns a row
+    # are in scope, so an empty account cannot learn other customers' groups.
+    # Alternate owners' rows for those keys are loaded below for conflict checks.
+    candidate_keys = {
+        (row.store_id, row.source_bill_no)
+        for row in all_rows
+        if row.user_id == user.id and row.attribution_status == "owned"
+    }
+    rows = [row for row in all_rows if (row.store_id, row.source_bill_no) in candidate_keys]
 
     lines_by_bill: dict[int, list[MembershipConsumptionLine]] = {}
     if rows:
@@ -208,8 +256,13 @@ def build_customer_consumption_history(
     conflict_groups = 0
     for group in groups.values():
         domains = {row.id: to_domain_bill(row, lines_by_bill.get(row.id, [])) for row in group}
-        recomputed = {bill_content_sha256(dom) for dom in domains.values()}
-        if len(recomputed) > 1:
+        recomputed = {row_id: bill_content_sha256(dom) for row_id, dom in domains.items()}
+        # Persisted digest must match actual semantic facts; a stale digest means
+        # tampered/diverged facts and quarantines the whole group (honest unknown).
+        if any(recomputed[row.id] != row.content_sha256 for row in group):
+            conflict_groups += 1
+            continue
+        if len(set(recomputed.values())) > 1:
             conflict_groups += 1
             continue
         owned = [row for row in group if row.user_id == user.id and row.attribution_status == "owned"]
@@ -233,7 +286,7 @@ def build_customer_consumption_history(
     total = len(visible_bills)
     page = visible_bills[offset:offset + limit]
     return {
-        "coverage": _coverage(applied_batches, bool(rows), conflict_groups),
+        "coverage": _coverage(applied_batches, bool(candidate_keys), conflict_groups),
         "bills": page,
         "pagination": {
             "offset": offset,
@@ -250,3 +303,4 @@ def build_customer_consumption_history(
         "generated_at": datetime.now(UTC).isoformat(),
         "read_only": True,
     }
+

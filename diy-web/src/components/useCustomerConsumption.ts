@@ -20,6 +20,17 @@ function describeError(reason: unknown): string {
   return reason instanceof Error ? reason.message : '消费记录暂时无法加载';
 }
 
+function mergeBills(existing: CustomerConsumptionOverview['bills'], incoming: CustomerConsumptionOverview['bills']) {
+  const seen = new Set(existing.map((bill) => bill.id));
+  const merged = [...existing];
+  for (const bill of incoming) {
+    if (seen.has(bill.id)) continue;
+    seen.add(bill.id);
+    merged.push(bill);
+  }
+  return merged;
+}
+
 export function useCustomerConsumption(
   open: boolean,
   token: string | null,
@@ -30,14 +41,16 @@ export function useCustomerConsumption(
   const [entry, setEntry] = useState<Entry | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const request = useRef(0);
+  const loadingMoreRef = useRef(false);
   const context = useRef({ open, token });
   context.current = { open, token };
   const authFailure = useRef(onAuthFailure);
   authFailure.current = onAuthFailure;
 
   useEffect(() => {
-    if (!open || !token) { setEntry(null); return; }
+    if (!open || !token) { setEntry(null); loadingMoreRef.current = false; return; }
     const current = ++request.current;
+    loadingMoreRef.current = false;
     const activeToken = token;
     setEntry({ token: activeToken, data: null, bills: [], loading: true, loadingMore: false, error: '' });
     const isCurrent = () => current === request.current && context.current.open && context.current.token === activeToken;
@@ -60,19 +73,24 @@ export function useCustomerConsumption(
 
   const loadMore = () => {
     if (!open || !token || !entry || entry.token !== token || entry.loading || entry.loadingMore) return;
+    if (loadingMoreRef.current) return;  // synchronous in-flight guard
     const activeToken = token;
     const current = request.current;
-    const offset = entry.bills.length;
+    // Advance the server offset independently of the unique rendered count.
+    const nextOffset = entry.data ? entry.data.pagination.offset + entry.data.pagination.limit : entry.bills.length;
+    loadingMoreRef.current = true;
     setEntry({ ...entry, loadingMore: true, error: '' });
-    load(activeToken, offset, PAGE_SIZE)
+    load(activeToken, nextOffset, PAGE_SIZE)
       .then((result) => {
         if (current !== request.current || !context.current.open || context.current.token !== activeToken) return;
+        loadingMoreRef.current = false;
         setEntry(prev => prev && prev.token === activeToken ? {
-          ...prev, data: result, bills: [...prev.bills, ...result.bills], loading: false, loadingMore: false, error: '',
+          ...prev, data: result, bills: mergeBills(prev.bills, result.bills), loading: false, loadingMore: false, error: '',
         } : prev);
       })
       .catch((reason) => {
         if (current !== request.current || !context.current.open || context.current.token !== activeToken) return;
+        loadingMoreRef.current = false;
         if (['reauthenticate', 'session-replaced'].includes(authFailureAction(reason))) {
           setEntry(null);
           authFailure.current();

@@ -15,13 +15,15 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Iterable
 
 
 @dataclass(frozen=True)
 class BillLine:
     description: str
-    quantity: int | None
+    quantity: Decimal | int | None
     store_price_cents: int | None
     settled_cents: int | None
     source_line_key: str | None = None
@@ -40,7 +42,11 @@ class ConsumptionBill:
     refund_status: str = "unknown"  # none/partial/refunded/void/unknown
     payment_evidence_complete: bool = False
     source_bill_version: str | None = None
+    source_version_no: int | None = None
+    source_current_marker: str | None = None
     currency: str = "CNY"  # ISO 4217; only CNY aggregates into savings without conversion evidence
+    occurred_at: datetime | None = None
+    settled_at: datetime | None = None
     store_price_total_cents: int | None = None
     settled_total_cents: int | None = None
     coupon_payment_cents: int | None = None
@@ -84,7 +90,11 @@ def bill_semantic_key(bill: ConsumptionBill) -> tuple:
         bill.refund_status,
         bill.payment_evidence_complete,
         bill.source_bill_version,
+        bill.source_version_no,
+        bill.source_current_marker,
         bill.currency,
+        bill.occurred_at,
+        bill.settled_at,
         bill.store_price_total_cents,
         bill.settled_total_cents,
         bill.coupon_payment_cents,
@@ -97,9 +107,21 @@ def bill_semantic_key(bill: ConsumptionBill) -> tuple:
     )
 
 
+def _canon_decimal(value: Decimal) -> str:
+    text = format(value, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
+
+
 def _jsonable(value):
     if isinstance(value, (tuple, list)):
         return [_jsonable(item) for item in value]
+    if isinstance(value, Decimal):
+        return _canon_decimal(value)
+    if isinstance(value, datetime):
+        current = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        return current.isoformat()
     return value
 
 
@@ -131,6 +153,8 @@ def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
         return SavingsResult("anomaly", None, "settled_total_negative")
     if not bill.lines:
         return SavingsResult("unknown", None, "lines_missing")
+    if any(line.quantity is not None and line.quantity != int(line.quantity) for line in bill.lines):
+        return SavingsResult("unknown", None, "fractional_quantity_unsupported")
     if any(line.quantity is None or line.quantity <= 0 or line.store_price_cents is None
            or line.settled_cents is None or line.store_price_cents < 0 or line.settled_cents < 0
            for line in bill.lines):

@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20261112_coupon_poster_links"])
+        self.assertEqual(scripts.get_heads(), ["20261114_member_consumption"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -97,6 +97,8 @@ class AlembicContractTests(unittest.TestCase):
             "technician_shifts",
             "daily_store_checkins", "daily_area_photos", "daily_meeting_recordings", "training_assessments",
             "coupon_poster_links",
+            "membership_consumption_batches", "membership_consumption_bills",
+            "membership_consumption_lines", "membership_balance_snapshots",
         }
         for table in Base.metadata.tables.values():
             if table.name in excluded_tables:
@@ -294,6 +296,8 @@ class AlembicContractTests(unittest.TestCase):
             "technician_shifts",
             "daily_store_checkins", "daily_area_photos", "daily_meeting_recordings", "training_assessments",
             "coupon_poster_links",
+            "membership_consumption_batches", "membership_consumption_bills",
+            "membership_consumption_lines", "membership_balance_snapshots",
         }
         previous_metadata = MetaData()
         for table in Base.metadata.tables.values():

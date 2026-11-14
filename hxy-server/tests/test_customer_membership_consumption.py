@@ -220,18 +220,17 @@ def test_foreign_currency_not_mixed_into_cny_savings(consumption_env):
     assert body["savings"]["amount_cents"] == 4000  # only CNY SYN-V2
 
 
-def test_stale_content_sha256_recomputes_actual_facts(consumption_env):
+def test_stale_content_sha256_quarantines_tampered_facts(consumption_env):
     client, factory, owner_token, other_token, owner_id, other_id = consumption_env
     with factory() as db:
         row = db.scalar(select(MembershipConsumptionBill).where(MembershipConsumptionBill.source_bill_no == "SYN-V1"))
         row.payment_evidence_complete = False  # mutate fact without updating persisted digest
         db.commit()
     body = _get(client, owner_token).json()
-    v1 = _bill(body, "SYN-V1")
-    assert v1 is not None
-    assert v1["savings"]["amount_cents"] is None
-    assert v1["savings"]["status"] != "verified"
-    assert body["savings"]["amount_cents"] == 4000
+    # A stale digest means facts diverged from the persisted hash; the whole
+    # group is quarantined (honest unknown), never shown with tampered facts.
+    assert _bill(body, "SYN-V1") is None
+    assert body["savings"]["amount_cents"] == 4000  # only SYN-V2 remains verified
 
 
 def test_auth_required_and_other_user_isolated(consumption_env):

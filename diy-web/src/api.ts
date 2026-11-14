@@ -293,10 +293,15 @@ export type CustomerMembershipOverview = {
     balance: {
       status: string;
       amount_cents: number | null;
+      principal_cents: number | null;
+      bonus_cents: number | null;
       real_time: boolean;
       observed_at: string | null;
       split: string;
       semantics: string;
+      evidence: string;
+      reconciliation: string | null;
+      original?: { amount_cents: number; observed_at: string | null };
     };
     benefits: string[];
     benefits_note: string;
@@ -576,7 +581,7 @@ export function claimPosterCoupon(code: string, authToken: string) {
 }
 
 export type CustomerConsumptionOverview = {
-  coverage: { source: string; store_ids: number[]; history: string; applied_batch_count: number; complete: boolean | null; query_range_start: string | null; query_range_end: string | null; observed_at: string | null; coverage_gaps: unknown; conflict_bill_groups: number; note: string };
+  coverage: { source: string; store_ids: number[]; history: string; applied_batch_count: number; complete: boolean | null; query_range_start: string | null; query_range_end: string | null; observed_at: string | null; coverage_gaps: boolean | null; conflict_bill_groups: number; note: string };
   bills: Array<{
     id: number;
     source_bill_no: string;

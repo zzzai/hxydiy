@@ -891,6 +891,14 @@ export function formatMoney(cents: number): string {
   return `¥${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 1)}`;
 }
 
+// Scoped exact-cent, currency-aware formatting for the member source displays
+// (consumption history savings/settled/line amounts and source card balances).
+// 1499 => ¥14.99 (never ¥15.0); non-CNY amounts never use the yuan symbol.
+export function formatMemberCents(cents: number, currency = 'CNY'): string {
+  const amount = (cents / 100).toFixed(2);
+  return currency === 'CNY' ? `¥${amount}` : `${currency} ${amount}`;
+}
+
 export function projectImage(project: Project): string {
   const generatedAsset = generatedProjectAsset(project.code);
   if (generatedAsset) return assetPath(`projects/${generatedAsset}.webp`);
