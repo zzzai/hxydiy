@@ -91,7 +91,8 @@ class ProjectMemoryContractTests(unittest.TestCase):
         instructions = read("AGENTS.md")
         self.assertIn("docs/CONTEXT-MANIFEST.md", instructions)
         self.assertIn("跨端契约", instructions)
-        self.assertIn("同一个 PR", instructions)
+        self.assertIn("同一个受审提交批次", instructions)
+        self.assertIn("server-accepted", instructions)
 
 
 if __name__ == "__main__":

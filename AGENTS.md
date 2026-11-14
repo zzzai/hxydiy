@@ -11,11 +11,11 @@
 
 ## 三窗口共享记忆
 
-- 开发任务从最新 `origin/main` 创建或同步独立 worktree，已有隔离工作区可继续使用；只读问答不要求新建或同步。保护未提交文件，不覆盖其他窗口工作；未提交文件和聊天内容不算共享事实。
+- 开发任务从服务器已评审的 `server-accepted` 引用创建或同步独立 worktree；首次初始化前使用总控核实的完整基线 SHA。`origin/main` 仅作异步镜像，已有隔离工作区可继续使用；只读问答不要求新建或同步。保护未提交文件，不覆盖其他窗口工作；未提交文件和聊天内容不算共享事实。
 - 新接手项目、跨端修改或核对发布状态时读取 `docs/CONTEXT-MANIFEST.md`、`docs/CURRENT-STATE.md` 和相关端 workstream；连续任务复用已读上下文，局部修改按需读取相关资料。
-- API、价格、状态机、权限、服务位或画像字段等跨端契约发生变化时，业务实现、合同测试、`docs/TEAM-MEMORY.md` 和相关 `docs/contracts/` 必须在同一个 PR 更新。
+- API、价格、状态机、权限、服务位或画像字段等跨端契约发生变化时，业务实现、合同测试、`docs/TEAM-MEMORY.md` 和相关 `docs/contracts/` 必须在同一个受审提交批次更新，并随异步 GitHub 备份同步。
 - 实际执行生产发布的窗口负责更新 `docs/CURRENT-STATE.md`，并在 `docs/WORK-STATUS.md` 顶部追加已核验事实。
-- Obsidian 只作为本仓库 Markdown 的阅读和编辑工具；共享记忆以合并后的 Git 主干为准。
+- Obsidian 只作为本仓库 Markdown 的阅读和编辑工具；共享记忆以服务器 `server-accepted` 的受审 Markdown 为准；生产状态仍以实际 current 和回执为准。
 
 ## 三端统一脚本优先交付
 

@@ -9,6 +9,8 @@ import json
 import os
 import subprocess
 import tempfile
+import shutil
+from unittest import mock
 import unittest
 from pathlib import Path
 
@@ -127,7 +129,8 @@ def make_acceptance(sha, previous, manifest_sha256, release_id, evidence):
     return {'schema': 'server-release-acceptance@1', 'release_id': release_id,
             'source_sha': sha, 'previous_release': previous,
             'manifest_sha256': manifest_sha256, 'evidence': evidence,
-            'accepted_at': '2026-11-14T00:00:00Z'}
+            'accepted_at': SR.utcnow(), 'build_report_sha256': 'b' * 64,
+            'required_checks': ['test']}
 
 
 def prepare_workspace(tmp, root, sha):
@@ -188,7 +191,9 @@ class AcceptanceTests(unittest.TestCase):
     def test_acceptance_rejects_missing_evidence(self):
         record = {'schema': 'server-release-acceptance@1', 'source_sha': 'a' * 40,
                   'previous_release': PREV_RELEASE, 'manifest_sha256': 'c' * 64,
-                  'evidence': []}
+                  'evidence': [], 'build_report_sha256': 'b' * 64,
+                  'release_id': 'server-aaaaaaaaaaaa-1', 'accepted_at': SR.utcnow(),
+                  'required_checks': ['test']}
         with self.assertRaises(ValueError) as caught:
             SR.validate_acceptance(record, PREV_RELEASE)
         self.assertIn('acceptance_evidence_missing', str(caught.exception))
@@ -197,7 +202,9 @@ class AcceptanceTests(unittest.TestCase):
         record = {'schema': 'server-release-acceptance@1', 'source_sha': 'a' * 40,
                   'previous_release': 'github-d50941d67579-43457778128',
                   'manifest_sha256': 'c' * 64,
-                  'evidence': [{'kind': 'test', 'path': 'x.json', 'sha256': 'd' * 64}]}
+                  'evidence': [{'kind': 'test', 'path': 'x.json', 'sha256': 'd' * 64}],
+                  'build_report_sha256': 'b' * 64, 'accepted_at': SR.utcnow(),
+                  'release_id': 'server-aaaaaaaaaaaa-1', 'required_checks': ['test']}
         with self.assertRaises(ValueError) as caught:
             SR.validate_acceptance(record, PREV_RELEASE)
         self.assertIn('unexpected_current_release', str(caught.exception))
@@ -205,7 +212,9 @@ class AcceptanceTests(unittest.TestCase):
     def test_acceptance_rejects_invalid_source_sha(self):
         record = {'schema': 'server-release-acceptance@1', 'source_sha': 'not-a-sha',
                   'previous_release': PREV_RELEASE, 'manifest_sha256': 'c' * 64,
-                  'evidence': [{'kind': 'test', 'path': 'x.json', 'sha256': 'd' * 64}]}
+                  'evidence': [{'kind': 'test', 'path': 'x.json', 'sha256': 'd' * 64}],
+                  'build_report_sha256': 'b' * 64, 'accepted_at': SR.utcnow(),
+                  'release_id': 'server-aaaaaaaaaaaa-1', 'required_checks': ['test']}
         with self.assertRaises(ValueError) as caught:
             SR.validate_acceptance(record, PREV_RELEASE)
         self.assertIn('acceptance_source_sha_invalid', str(caught.exception))
@@ -318,102 +327,219 @@ class PublishTests(unittest.TestCase):
         self.tmp = Path(self._td.name)
         self.root = make_root(self.tmp)
         self.repo, self.sha = make_git_repo_with_source(self.tmp)
+        SR.init_accepted_ref(str(self.repo), self.sha)
         self.release_id, self.workspace, self.manifest = prepare_workspace(
             self.tmp, self.root, self.sha)
         self.evidence = self.workspace / 'evidence' / 'api.json'
-        self.evidence.write_text('{"passed": 12}\n', encoding='utf-8')
+        self.set_evidence()
+
+    def set_evidence(self, **overrides):
+        data = {'check': 'test', 'source_sha': self.sha, 'status': 'passed',
+                'failed': 0, 'command': 'python3 -m unittest',
+                'environment': 'isolated-fixture', 'timestamp': SR.utcnow()}
+        data.update(overrides)
+        self.evidence.write_text(json.dumps(data))
         self.evidence_item = {'kind': 'test', 'path': 'api.json',
                               'sha256': SR.digest_file(self.evidence)}
 
     def acceptance(self, **overrides):
         record = make_acceptance(self.sha, PREV_RELEASE, self.manifest,
                                  self.release_id, [self.evidence_item])
+        record['build_report_sha256'] = SR.digest_file(self.workspace / 'build-report.json')
         record.update(overrides)
         return record
 
-    def test_rejection_never_dispatches_deploy(self):
-        cases = [
-            ('wrong_source_sha', {'source_sha': '0' * 40}),
-            ('wrong_previous', {'previous_release': 'github-d50941d67579-43457778128'}),
-            ('wrong_manifest', {'manifest_sha256': '0' * 64}),
-            ('empty_evidence', {'evidence': []}),
-        ]
-        for name, overrides in cases:
-            run = GuardedRun(allow_deploy=False)
-            with self.subTest(case=name), self.assertRaises(ValueError):
-                SR.publish(self.root, self.release_id, self.acceptance(**overrides),
-                           repo=str(self.repo), run=run)
-            self.assertFalse(run.deployed(), name)
+    def invoke(self, run, acceptance=None):
+        return SR.publish(self.root, self.release_id, acceptance or self.acceptance(),
+                          repo=str(self.repo), run=run)
 
-    def test_changed_current_before_dispatch_rejected(self):
-        other = self.root / 'releases' / 'github-d50941d67579-43457778128'
-        other.mkdir()
-        (self.root / 'current').unlink()
-        (self.root / 'current').symlink_to(other, target_is_directory=True)
-        run = GuardedRun(allow_deploy=False)
-        with self.assertRaises(ValueError) as caught:
-            SR.publish(self.root, self.release_id, self.acceptance(),
-                       repo=str(self.repo), run=run)
-        self.assertIn('unexpected_current_release', str(caught.exception))
-        self.assertFalse(run.deployed())
-
-    def test_existing_receipt_reconciled_without_repeat(self):
-        release_dir = self.root / 'releases' / self.release_id
-        release_dir.mkdir()
-        (release_dir / 'MANIFEST.sha256').write_text('', encoding='utf-8')
-        (self.root / 'current').unlink()
-        (self.root / 'current').symlink_to(release_dir, target_is_directory=True)
-        run = GuardedRun(allow_deploy=False)
-        result = SR.publish(self.root, self.release_id, self.acceptance(),
-                            repo=str(self.repo), run=run)
-        self.assertEqual(result['status'], 'already_deployed')
-        self.assertFalse(run.deployed())
-
-    def test_inconsistent_existing_release_rejected(self):
-        (self.root / 'releases' / self.release_id).mkdir()
-        run = GuardedRun(allow_deploy=False)
-        with self.assertRaises(ValueError) as caught:
-            SR.publish(self.root, self.release_id, self.acceptance(),
-                       repo=str(self.repo), run=run)
-        self.assertIn('inconsistent_existing_release', str(caught.exception))
-        self.assertFalse(run.deployed())
-
-    def test_competing_deploy_between_validation_and_activation_rejected(self):
-        stdout = ('deployed release=%s previous=github-d50941d67579-43457778128 '
-                  'backup=/tmp/x.dump\n' % self.release_id)
-        run = GuardedRun(allow_deploy=True, deploy_stdout=stdout)
-        with self.assertRaises(ValueError) as caught:
-            SR.publish(self.root, self.release_id, self.acceptance(),
-                       repo=str(self.repo), run=run)
-        self.assertIn('deploy_previous_changed', str(caught.exception))
-        self.assertEqual(sum(1 for c in run.calls
-                             if 'deploy-production.sh' in ' '.join(c)), 1)
-
-    def test_publish_success_emits_pending_backup_and_dispatches_once(self):
-        stdout = ('deployed release=%s previous=%s backup=/tmp/x.dump\n'
-                  % (self.release_id, PREV_RELEASE))
-
+    def successful_run(self):
+        backup = self.root / 'backups' / 'test.dump'
+        backup.parent.mkdir(exist_ok=True)
+        backup.write_bytes(b'isolated backup fixture')
+        stdout = ('deployed release=%s previous=%s backup=%s\n' %
+                  (self.release_id, self.root / 'releases' / PREV_RELEASE, backup))
         def activate():
             target = self.root / 'releases' / self.release_id
-            target.mkdir()
+            shutil.copytree(self.workspace, target)
             (self.root / 'current').unlink()
             (self.root / 'current').symlink_to(target, target_is_directory=True)
+        return GuardedRun(allow_deploy=True, deploy_stdout=stdout, deploy_side_effect=activate)
 
-        run = GuardedRun(allow_deploy=True, deploy_stdout=stdout,
-                         deploy_side_effect=activate)
-        result = SR.publish(self.root, self.release_id, self.acceptance(),
-                            repo=str(self.repo), run=run)
-        self.assertEqual(result['status'], 'published')
-        self.assertEqual(sum(1 for c in run.calls
-                             if 'deploy-production.sh' in ' '.join(c)), 1)
-        record_path = (self.root / 'release-records' /
-                       ('pending-github-backup-' + self.release_id + '.json'))
-        self.assertTrue(record_path.is_file())
-        record = json.loads(record_path.read_text(encoding='utf-8'))
+    def test_rejection_never_dispatches_deploy(self):
+        cases = [
+            {'source_sha': '0' * 40}, {'previous_release': 'other'},
+            {'manifest_sha256': '0' * 64}, {'evidence': []},
+            {'build_report_sha256': '0' * 64}, {'required_checks': ['missing']},
+            {'release_id': 'server-' + self.sha[:12] + '-999'},
+        ]
+        for overrides in cases:
+            run = GuardedRun()
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                self.invoke(run, self.acceptance(**overrides))
+            self.assertFalse(run.deployed())
+
+    def test_failed_foreign_stale_and_contradictory_evidence_rejected(self):
+        cases = [
+            {'status': 'failed'}, {'source_sha': 'f' * 40},
+            {'timestamp': '2000-01-01T00:00:00Z'},
+            {'status': 'failed', 'success': True},
+            {'status': 'passed', 'success': False},
+            {'status': 'passed', 'failed': 1},
+            {'command': ''}, {'environment': ''},
+        ]
+        for overrides in cases:
+            self.set_evidence(**overrides)
+            run = GuardedRun()
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                self.invoke(run)
+            self.assertFalse(run.deployed())
+
+    def test_acceptance_must_be_current_and_timezone_aware(self):
+        for timestamp in ('2000-01-01T00:00:00Z', '2099-01-01T00:00:00Z', '2026-11-14T12:00:00'):
+            with self.subTest(timestamp=timestamp), self.assertRaises(ValueError):
+                self.invoke(GuardedRun(), self.acceptance(accepted_at=timestamp))
+
+    def test_missing_server_accepted_rejected(self):
+        subprocess.run(['git', '-C', str(self.repo), 'update-ref', '-d', SR.SERVER_ACCEPTED_REF], check=True)
+        run = GuardedRun()
+        with self.assertRaises(ValueError):
+            self.invoke(run)
+        self.assertFalse(run.deployed())
+
+    def test_existing_directory_without_success_receipt_rejected(self):
+        target = self.root / 'releases' / self.release_id
+        target.mkdir()
+        (target / 'MANIFEST.sha256').write_text('')
+        run = GuardedRun()
+        with self.assertRaises(ValueError):
+            self.invoke(run)
+        self.assertFalse(run.deployed())
+
+    def test_success_and_duplicate_use_real_previous_path_contract(self):
+        acceptance = self.acceptance()
+        run = self.successful_run()
+        self.assertEqual(self.invoke(run, acceptance)['status'], 'published')
+        replay = GuardedRun()
+        self.assertEqual(self.invoke(replay, acceptance)['status'], 'already_deployed')
+        self.assertFalse(replay.deployed())
+        record = SR.load_json(SR._attempt_record_path(self.root, self.release_id))
+        self.assertEqual(record['status'], 'succeeded')
         self.assertEqual(record['source_sha'], self.sha)
-        self.assertEqual(record['github_backup'], 'pending')
-        self.assertTrue((self.root / 'release-records' /
-                         (self.release_id + '.bundle')).is_file())
+        self.assertEqual(record['installed_manifest_sha256'], SR.digest_file(self.root / 'current' / 'MANIFEST.sha256'))
+
+    def test_tampered_deployed_content_cannot_reconcile(self):
+        acceptance = self.acceptance()
+        self.invoke(self.successful_run(), acceptance)
+        (self.root / 'current' / 'diy-web' / 'dist' / 'index.html').write_text('tampered')
+        with self.assertRaises(ValueError):
+            self.invoke(GuardedRun(), acceptance)
+
+    def test_timeout_leaves_uncertain_receipt_and_never_redispatches(self):
+        def timeout(args, **kwargs):
+            if 'deploy-production.sh' in ' '.join(args):
+                raise subprocess.TimeoutExpired(args, 1)
+            return subprocess.run(args, **kwargs)
+        acceptance = self.acceptance()
+        with self.assertRaises(subprocess.TimeoutExpired):
+            self.invoke(timeout, acceptance)
+        self.assertEqual(SR.load_json(SR._attempt_record_path(self.root, self.release_id))['status'], 'uncertain')
+        run = GuardedRun()
+        with self.assertRaises(ValueError):
+            self.invoke(run, acceptance)
+        self.assertFalse(run.deployed())
+
+    def test_backup_failure_does_not_fail_successful_deployment(self):
+        with mock.patch.object(SR, 'record_github_backup', side_effect=OSError('backup unavailable')):
+            result = self.invoke(self.successful_run())
+        self.assertEqual(result['status'], 'published')
+        self.assertEqual(result['github_backup'], 'failed')
+        self.assertEqual(SR.load_json(SR._attempt_record_path(self.root, self.release_id))['status'], 'succeeded')
+
+    def test_shell_handoff_rejects_competing_current_before_any_mutation(self):
+        guard = self.workspace / 'deploy' / 'diy' / 'deploy-production.sh'
+        shutil.copy2(ROOT / 'deploy' / 'diy' / 'deploy-production.sh', guard)
+        marker = self.tmp / 'capacity-was-run'
+        (self.workspace / 'deploy' / 'diy' / 'check-capacity.sh').write_text('#!/bin/bash\ntouch ' + str(marker) + '\nexit 99\n')
+        self.manifest = SR.write_manifest(self.workspace)
+        report = SR.read_build_report(self.workspace)
+        report['manifest_sha256'] = self.manifest
+        SR.save_json(self.workspace / 'build-report.json', report)
+        other = self.root / 'releases' / 'other'
+        other.mkdir()
+        def race(args, **kwargs):
+            if 'deploy-production.sh' in ' '.join(args):
+                (self.root / 'current').unlink()
+                (self.root / 'current').symlink_to(other, target_is_directory=True)
+            return subprocess.run(args, **kwargs)
+        with self.assertRaises(subprocess.CalledProcessError) as error:
+            self.invoke(race)
+        self.assertIn('unexpected current release', error.exception.stderr)
+        self.assertFalse(marker.exists(), 'guard must reject under lock before capacity/backup/activation')
+        self.assertEqual((self.root / 'current').resolve(), other)
+
+    def test_unsafe_bundle_path_is_a_backup_failure_not_publish_failure(self):
+        bundle = self.root / 'release-records' / (self.release_id + '.bundle')
+        protected = self.tmp / 'protected'
+        protected.write_text('unchanged')
+        bundle.symlink_to(protected)
+        result = self.invoke(self.successful_run())
+        self.assertEqual(result['status'], 'published')
+        self.assertEqual(result['github_backup'], 'failed')
+        self.assertEqual(protected.read_text(), 'unchanged')
+
+
+class EntryRegressionTests(unittest.TestCase):
+    def test_default_inspect_does_not_create_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            (root / 'release-records').rmdir()
+            env = dict(os.environ, HXY_DIY_RELEASE_ROOT=str(root))
+            result = subprocess.run(['python3', str(ROOT / 'deploy/diy/server_release.py')], env=env,
+                                    text=True, capture_output=True, check=True)
+            self.assertEqual(json.loads(result.stdout)['current'], PREV_RELEASE)
+            self.assertFalse((root / 'release-records').exists())
+
+    def test_resource_preflight_rejects_unsafe_build_headroom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                SR.preflight_resources(Path(tmp), free_disk_kb=10**8, available_memory_mb=700)
+
+    def test_git_archive_excludes_ignored_files_and_preserves_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sha = make_git_repo(Path(tmp))
+            (repo / '.gitignore').write_text('private.dump\n')
+            subprocess.run(['git', '-C', str(repo), 'add', '.gitignore'], check=True)
+            subprocess.run(['git', '-C', str(repo), 'commit', '-q', '-m', 'ignore private input'], check=True)
+            sha = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
+            (repo / 'private.dump').write_text('private fixture')
+            build_dir = Path(tmp) / 'build'; build_dir.mkdir()
+            exported = SR.materialize_archive(repo, sha, build_dir)
+            self.assertFalse((exported / 'private.dump').exists())
+            (exported / 'file.txt').write_text('isolated build changes')
+            self.assertEqual((repo / 'file.txt').read_text(), 'base')
+            SR.verify_source_clean(repo, sha)
+
+    def test_archive_rejects_tracked_symlink_before_extraction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, sha = make_git_repo(Path(tmp))
+            (repo / 'escape').symlink_to('/etc/passwd')
+            subprocess.run(['git', '-C', str(repo), 'add', 'escape'], check=True)
+            subprocess.run(['git', '-C', str(repo), 'commit', '-q', '-m', 'symlink fixture'], check=True)
+            sha = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
+            build_dir = Path(tmp) / 'build'; build_dir.mkdir()
+            with self.assertRaises(ValueError):
+                SR.materialize_archive(repo, sha, build_dir)
+            self.assertFalse((build_dir / 'src').exists())
+
+    def test_prepare_rejects_invalid_id_before_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            repo, sha = make_git_repo_with_source(Path(tmp))
+            with mock.patch.object(SR, 'build_source') as build:
+                with self.assertRaises(ValueError):
+                    SR.prepare(root, repo, sha, '../../escape')
+            build.assert_not_called()
 
 
 class BuildSettingsTests(unittest.TestCase):
@@ -428,12 +554,11 @@ class BuildSettingsTests(unittest.TestCase):
         self.assertTrue(settings['staff_learning_enabled'])
         self.assertEqual(settings['learning_source'], 'current-release-marker')
 
-    def test_read_build_settings_defaults_false_when_marker_absent(self):
+    def test_read_build_settings_refuses_to_guess_when_marker_absent(self):
         (self.root / 'releases' / PREV_RELEASE / 'admin-react' / 'dist' /
          'staff-learning-build.json').unlink()
-        settings = SR.read_build_settings(self.root)
-        self.assertFalse(settings['staff_learning_enabled'])
-        self.assertEqual(settings['learning_source'], 'default-false')
+        with self.assertRaises(ValueError):
+            SR.read_build_settings(self.root)
 
     def test_build_preserves_flag_serial_order_and_writes_marker(self):
         make_source_tree(self.tmp / 'source')

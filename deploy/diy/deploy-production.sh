@@ -34,6 +34,16 @@ if ! flock -n 9; then
   exit 75
 fi
 
+# Validate the coordinator's observed release while holding the same deployment
+# lock used by every activation. No backup, migration or activation has run yet.
+if [[ -n "${HXY_DIY_EXPECTED_PREVIOUS:-}" ]]; then
+  expected_previous="$release_root/releases/$HXY_DIY_EXPECTED_PREVIOUS"
+  if [[ "$HXY_DIY_EXPECTED_PREVIOUS" == *[!A-Za-z0-9._-]* ]] ||      [[ "$(readlink -f "$release_root/current")" != "$expected_previous" ]]; then
+    echo "unexpected current release; refusing deployment" >&2
+    exit 1
+  fi
+fi
+
 bash "$workspace_root/deploy/diy/check-capacity.sh" "$release_root" "${DIY_MIN_FREE_KB:-3145728}"
 
 current="$release_root/current"
