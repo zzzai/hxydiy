@@ -303,4 +303,3 @@ def build_customer_consumption_history(
         "generated_at": datetime.now(UTC).isoformat(),
         "read_only": True,
     }
-
