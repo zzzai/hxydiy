@@ -1,5 +1,13 @@
 # hxy-diy 当前状态
 
+## 2026-11-14 会员消费只读展示与四张空表已上线
+
+- [PR #501](https://github.com/zzzai/hxydiy/pull/501) 与 [PR #502](https://github.com/zzzai/hxydiy/pull/502) 已合并；发布提交 `386b572ce59938e4ef87a7ae840a158d994e22cf`；[主干 CI 43589165534](https://github.com/zzzai/hxydiy/actions/runs/43589165534) 成功；[Deploy 43589601497](https://github.com/zzzai/hxydiy/actions/runs/43589601497) 仅触发一次并成功。核验时 current 为 `github-386b572ce599-43589601497`，health 为 ok/production。
+- 用户单独授权本次仅新增消费批次、账单、明细、余额快照四张空表。真实备份、SHA 核验、独立数据库恢复及演练迁移通过后，生产 Alembic 为 `20261114_member_consumption`。四张新表均为空；70 张旧业务表的逐表数据指纹、行数及字段指纹保持不变，users447/cards102/orders0。
+- 顾客端与后台公网入口均 200；顾客消费接口匿名访问为 401；867 项发布文件清单和运行中 134 个 API 源文件核对通过。对应本机独立验收：API 12/12、余额 10/10（零路由 SQL 写入）、390px 实际构建页面隔离数据验收 7/7。
+- 本次只上线展示基础和空表，未导入真实历史消费、未刷新来源余额、未恢复暂停的 15 张卡。不能把显示能力上线说成真实历史已经同步；真实微信/门店现场验收仍待人工。
+- 备份 `pre-github-386b572ce599-43589601497-20261114T115054Z.dump`，890563 bytes，SHA256 `921877291f035277fa277bdd06e8d675f4a4b82385dc0d1fade428e5646e88bd`；完整脱敏回执见 [发布证据](release/evidence/member-consumption-20261114.json)。本次记录更新不重复部署应用。
+
 ## 2026-11-13 顾客会员卡只读概览已上线
 
 - [PR #497](https://github.com/zzzai/hxydiy/pull/497) 合并 `d50941d67579944a201464b4931e40aad3808efd`；[CI 43456867992](https://github.com/zzzai/hxydiy/actions/runs/43456867992) success；[Deploy 43457778128](https://github.com/zzzai/hxydiy/actions/runs/43457778128) success；current=`github-d50941d67579-43457778128`；health ok/production。

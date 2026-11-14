@@ -1,0 +1,68 @@
+{
+  "status": "production_verified",
+  "terminal": true,
+  "commit": "386b572ce59938e4ef87a7ae840a158d994e22cf",
+  "run_id": 43589601497,
+  "url": "https://github.com/zzzai/hxydiy/actions/runs/43589601497",
+  "release": "github-386b572ce599-43589601497",
+  "data_protection": {
+    "changed_old_tables": [],
+    "changed_old_columns": [],
+    "added_tables": [
+      "membership_balance_snapshots",
+      "membership_consumption_batches",
+      "membership_consumption_bills",
+      "membership_consumption_lines"
+    ],
+    "new_tables_empty": true,
+    "expected_revision": true,
+    "passed": true
+  },
+  "runtime_passed": true,
+  "production_imports": 0,
+  "remaining": "Real source history import and field acceptance remain separate tasks.",
+  "runtime": {
+    "release": "github-386b572ce599-43589601497",
+    "manifest_entries_verified": 867,
+    "api_source_files": 134,
+    "release_matches_reviewed_source": true,
+    "running_api_matches_reviewed_source": true,
+    "public": {
+      "/": {
+        "status": 200,
+        "scripts": [
+          {
+            "path": "/assets/index-BBnOb3rP.js",
+            "sha256": "bd712377ec7667e0386f83077dde4d2dc275255ed48a11bac5eb43fa2fb3a6cd"
+          }
+        ]
+      },
+      "/admin/": {
+        "status": 200,
+        "scripts": [
+          {
+            "path": "/admin/assets/index-CZl9shl6.js",
+            "sha256": "92b6facee02f09ef94b7c9f06c14dea370c153a0395002a036bc7c7cc7398ea5"
+          }
+        ]
+      }
+    },
+    "health": {
+      "status": "ok",
+      "service": "hxy-customer-api",
+      "environment": "production"
+    },
+    "anonymous_consumption_status": 401,
+    "passed": true
+  },
+  "backup": {
+    "filename": "pre-github-386b572ce599-43589601497-20261114T115054Z.dump",
+    "bytes": 890563,
+    "sha256": "921877291f035277fa277bdd06e8d675f4a4b82385dc0d1fade428e5646e88bd",
+    "checksum_verified": true,
+    "restore": "Isolated pg_restore --exit-on-error and rehearsal migration passed in deployment job; rehearsal database was removed by the release script."
+  },
+  "old_business_tables_checked": 70,
+  "verified_at": "2026-11-14T11:51:37.474644+00:00",
+  "paused_15_card_batch": "paused"
+}
