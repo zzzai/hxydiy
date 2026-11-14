@@ -1,0 +1,63 @@
+{
+  "status": "production_verified",
+  "release_id": "server-116b65aa6a5f-1794661064",
+  "source_sha": "116b65aa6a5f8e60762d8f70002180e8251a5cec",
+  "dispatched_at": "2026-11-14T13:04:34Z",
+  "finished_at": "2026-11-14T13:06:11Z",
+  "backup": "pre-server-116b65aa6a5f-1794661064-20261114T130434Z.dump",
+  "backup_bytes": 913454,
+  "backup_sha256": "0cb88613e738a5219e9f688474dcbb92c45f137ab8bdf1d2f1d01e139aaca4ad",
+  "protected_business_tables": 74,
+  "unchanged_counts": {
+    "users": 447,
+    "membership_cards": 102,
+    "orders": 0
+  },
+  "runtime": {
+    "release": "server-116b65aa6a5f-1794661064",
+    "manifest_entries_verified": 629,
+    "api_source_files": 134,
+    "release_matches_reviewed_source": true,
+    "running_api_matches_reviewed_source": true,
+    "public": {
+      "/": {
+        "status": 200,
+        "cache_control": "no-store, no-cache, must-revalidate",
+        "scripts": [
+          {
+            "path": "/assets/index-BBnOb3rP.js",
+            "sha256": "bd712377ec7667e0386f83077dde4d2dc275255ed48a11bac5eb43fa2fb3a6cd"
+          }
+        ]
+      },
+      "/admin/": {
+        "status": 200,
+        "cache_control": "no-store, no-cache, must-revalidate",
+        "scripts": [
+          {
+            "path": "/admin/assets/index-CZl9shl6.js",
+            "sha256": "92b6facee02f09ef94b7c9f06c14dea370c153a0395002a036bc7c7cc7398ea5"
+          }
+        ]
+      }
+    },
+    "health": {
+      "status": "ok",
+      "service": "hxy-customer-api",
+      "environment": "production"
+    },
+    "anonymous_consumption_status": 401,
+    "passed": true
+  },
+  "github_backup": {
+    "status": "completed",
+    "branch": "codex/member-consumption-readonly-server-release-20261114",
+    "sha": "116b65aa6a5f8e60762d8f70002180e8251a5cec"
+  },
+  "application_deployment_count": 1,
+  "schema_changes": 0,
+  "historical_imports": 0,
+  "field_acceptance": "not_performed",
+  "tooling_followup_sha": "01c98a28a0928bad9c59f3aed777d8d8449043e4",
+  "latest_tests_passed": 96
+}

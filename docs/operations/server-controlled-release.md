@@ -65,3 +65,7 @@ python3 deploy/diy/server_release.py publish --release-id server-<sha12>-<serial
 当前本机协调器位于 `C:/Users/gaoji/Documents/ChatGPT/dsh-control-bridge/`，复用 `github_transport.py`；它限制仓库、基线和任务分支，不是公共服务。每次发布由总控显式启动一次后台备份任务，不宣称已存在无人值守调度器。服务器上的本地 bundle 尚不等于异机备份；必须取得 GitHub 或本机已校验副本后才能声称异机备份完成。
 
 生产事实记录由发布总控更新到 CURRENT-STATE / WORK-STATUS，再推进 server-accepted 并异步备份。纯文档提交不重复部署。
+
+## 首次启用验收
+
+2026-11-14 已通过上述新入口发布 `server-116b65aa6a5f-1794661064`。完整生产验收、数据保护与 GitHub 异步备份事实见 [CURRENT-STATE](../CURRENT-STATE.md) 与 [脱敏回执](../release/evidence/server-controlled-release-20261114.json)。发布入口使用 `server-accepted` 上的受审工作区脚本；本次补充的离线 bundle 门禁已在开发入口验证，不原地修改 current 安装目录，也不为工具/文档更新重复部署顾客应用。

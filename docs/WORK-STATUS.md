@@ -1,5 +1,14 @@
 # hxy-diy 工作状态
 
+## 2026-11-14 服务器受控发布已启用，GitHub 异步备份已核验
+
+- 用户授权总控接手 DSH 额度中断的工作，采用服务器受控发布、GitHub 异步备份。实际 current 为 `server-116b65aa6a5f-1794661064`，发布源 `116b65aa6a5f8e60762d8f70002180e8251a5cec`。本次生产调用一次，UTC 13:04:34 开始、13:06:11 成功；未以 GitHub PR/CI 作为这次发布前置条件。
+- 发布前 94 项相关测试及实际隔离构建通过，顾客端/后台串行构建耗时 68.11 秒，学习开关保留开启。后续发现部分克隆本地 bundle 会补拉远端对象，总控补充禁止传输和超时处理；工具修复提交 `01c98a28a0928bad9c59f3aed777d8d8449043e4` 的 96 项测试通过。该修复在受审开发入口生效，不为发布工具和事实文档重复切换顾客应用。
+- 真实备份与隔离恢复通过；发布前后 74 张业务表数据/行数/字段指纹一致，75 个表名及 Alembic 修订均未变，users447/cards102/orders0。无迁移、旧数据修改、消费导入、余额刷新或暂停 15 卡恢复。
+- 已逐项核对 629 项发布文件及运行中 134 个 API 源文件；顾客端和后台公网入口均 200，实际 JS 哈希匹配当前发布物，HTML 为 no-store/no-cache，health ok/production，匿名消费接口 401。顾客可通过正常重新打开/刷新取得当前版本；未宣称已打开页面被强制热更新或真实微信/摄像头/现场验收完成。
+- 生产源已异步备份到 GitHub 分支 `codex/member-consumption-readonly-server-release-20261114`，完整 commit/tree/ref 核对通过。GitHub main 仍为 `386b572ce59938e4ef87a7ae840a158d994e22cf`，不把备份分支冒充主干合并。开发基线改为服务器 `server-accepted`；后续事实/工具提交由总控 CAS 推进该引用并异步备份。
+- 新备份 `pre-server-116b65aa6a5f-1794661064-20261114T130434Z.dump`，913454 bytes，SHA256 `0cb88613e738a5219e9f688474dcbb92c45f137ab8bdf1d2f1d01e139aaca4ad`。参见 [验收回执](release/evidence/server-controlled-release-20261114.json) 和 [运行说明](operations/server-controlled-release.md)。
+
 ## 2026-11-14 会员消费只读展示与四张空表已上线
 
 - [PR #501](https://github.com/zzzai/hxydiy/pull/501) 与 [PR #502](https://github.com/zzzai/hxydiy/pull/502) 已合并；发布提交 `386b572ce59938e4ef87a7ae840a158d994e22cf`；[主干 CI 43589165534](https://github.com/zzzai/hxydiy/actions/runs/43589165534) 成功；[Deploy 43589601497](https://github.com/zzzai/hxydiy/actions/runs/43589601497) 仅触发一次并成功。核验时 current 为 `github-386b572ce599-43589601497`，health 为 ok/production。
