@@ -26,6 +26,15 @@
 - `-Merge` 是单独的写操作开关，仅在用户已授权提交/合并本次变更时使用；脚本只合并指定 PR 的完整 SHA，不绕过检查，不强推、不自动重跑/回滚/修改业务。
 - 云端 AI 审查默认关闭，只有维护者明确启用才调用；脚本及 CI 等待本身不消耗模型 token，编写代码、人工请求 AI 审查和失败分析仍消耗。
 
+## 服务端受控发布与 GitHub 异步备份
+
+- 生产发布走服务端受控入口 `deploy/diy/server_release.py`（`prepare` / `inspect` / `publish`），复用 `deploy/diy/deploy-production.sh` 及既有 create/activate/capacity/backup/restore/migration/manifest/lock/health/rollback 门禁，不重复、不削弱这些门禁。
+- 发布必须来自 clean 且精确 SHA 的开发 worktree；禁止从脏工作区或 current 直接发布。`prepare` 只做串行锁定依赖构建并导出不可变 workspace，默认 `inspect` 只读；只有显式 `publish` 才消费精确 SHA 的协调者 acceptance 记录并单次派发部署。
+- acceptance 记录必须绑定 source SHA、previous release、checks 与 artifact manifest，不能是任意 true 标志；缺失/失败/过期证据、意外 current、错误产物哈希都拒绝，拒绝时不调用任何部署命令。
+- 前端按串行、低优先级、锁定依赖构建，并显式保留现有构建标志（`VITE_STAFF_LEARNING_ENABLED` / `staff-learning-build.json`、客户 base path）；不得静默关闭学习等当前前端构建特性。
+- 已评审发布基线为 `server-accepted` 引用（仅协调者在复核后以 compare-and-swap / fast-forward 移动）；`origin/main` 是异步镜像而非静默过期的权威源。生产 current 与部署回执仍是生产真相。
+- 接受/部署后生成绑定精确 SHA 的 pending GitHub backup 记录与本地已验证 Git bundle；服务器不安装凭证、不强推 GitHub、不更改分支保护、无回执不宣称镜像完成。GitHub PR/CI 保留为二级检查，不再是发布关键路径。
+
 ## `_build_plan/`
 
 `_build_plan/` 文件夹包含初始 PRD 和各里程碑提示，用于本项目初始建设阶段。它们仅用于文档和执行指引，不是功能代码；项目中的代码、配置、运行时逻辑和测试不得导入、读取或依赖其中内容。

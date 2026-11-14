@@ -2,6 +2,17 @@
 
 适用于顾客端、管理端、技师端。工具进入同一仓库，不依赖某个窗口的聊天或本机绝对路径。
 
+## 服务端受控发布（现行关键路径）
+
+生产发布已改为服务端受控入口 `deploy/diy/server_release.py`（详见 `docs/operations/server-controlled-release.md`）：
+
+- `prepare`：校验 clean 且精确 SHA 的开发 worktree，串行、低优先级、锁定依赖构建两个前端（显式保留 `VITE_STAFF_LEARNING_ENABLED` / `staff-learning-build.json` 等构建标志），导出不可变 workspace 并写 MANIFEST 与 build-report；不部署。
+- `inspect`（默认）：只读状态。
+- `publish`：消费精确 SHA 的协调者 acceptance 记录（绑定 source SHA、previous release、checks、artifact manifest 与实际证据哈希），复核全部门禁后单次派发 `deploy-production.sh`；拒绝时不调用任何部署命令。
+- 已评审基线为 `server-accepted` 引用；`origin/main` 是异步镜像。接受/部署后生成绑定精确 SHA 的 pending GitHub backup 记录与本地已验证 Git bundle。
+
+以下 PR/合并/CI 等待流程保留为**二级检查与 GitHub 异步镜像**，不再是发布关键路径（标注 legacy 的条目仅作历史说明）。
+
 ## 固定交付步骤
 
 1. 保护现有改动，基于最新主干完成本次开发及本地验证，提交明确文件、推送分支并创建 PR。脚本不替你扩大提交范围。
@@ -25,11 +36,11 @@ pwsh -File tools/release/start-release-watch.ps1 -Commit <40位main-SHA>
 - 报告存放在 Git 公共目录下 `hxy-release-reports/<提交或PR及head>/report.json`，跨 worktree 防重复等待、按任务隔离；操作系统锁在进程结束时自动释放。报告原子替换，不覆盖代码或生产数据。
 - `terminal=false`：仍在等待，不表示通过。`--once` 只读一次，进行中退出码为 2；成功/跳过/已被新主干取代为 0，需要处理的终态为 1。
 - `ci_succeeded`：精确 SHA 的 main push CI 成功；这不是已发布，也不等同当前生产版本或门店现场验收。`superseded`：main 已变化，不再等待或重发旧版本。失败、检查缺失或超时均不得宣称成功。
-- 生产发布只接受维护者手动触发的工作流；该等待器既不会触发生产，也不会把不存在的自动发布任务当作失败或继续等待。
-- 现有部署工作流继续负责 SHA 产物检查、服务器备份恢复演练、迁移拦截、Manifest、容器更新、健康检查和失败回滚。涉及现场交互或实时 current 核验仍按交付要求执行，不能因省 token 省掉验证。
+- （legacy）旧的 GitHub 关键路径下，生产发布只接受维护者手动触发的工作流；该等待器既不会触发生产，也不会把不存在的自动发布任务当作失败或继续等待。现行发布走服务端受控入口 `deploy/diy/server_release.py`，本等待器仅作二级 CI 检查。
+- 服务端受控入口复用并保留同一套门禁：SHA 产物检查、服务器备份恢复演练、迁移拦截、Manifest、容器更新、健康检查和失败回滚。涉及现场交互或实时 current 核验仍按交付要求执行，不能因省 token 省掉验证。
 - 生产记忆仍由实际发布负责人根据可验证报告及必要实时核对更新；脚本不自动把未知 current、备份或迁移信息写成事实。
 - `-Merge` 仅允许同仓库、非草稿、main 目标、指定 head 的 PR；必需静态/三端/可信检查全部成功。可选 `AI PR Review` 必须已完成且为 success 或 skipped，failure 不放行，缺失继续等待。GitHub 合并 API仍执行分支保护，拒绝就停止。
-- 通过本机已授权凭证合并会产生常规 main CI；生产仍须维护者手动触发，不要依赖旧 Auto Merge PR 对 skipped AI 的处理，也不要使用 GITHUB_TOKEN 合并后假设会自动发布。
+- （legacy）通过本机已授权凭证合并会产生常规 main CI；生产发布现在走服务端受控入口，`origin/main` 仅作异步镜像与二级检查，不再假设合并后自动发布。
 - 监控脚本不部署、不重跑失败工作流、不强推、不解冲突、不绕过门禁、不更改凭证或数据库；已有服务器发布脚本内部的健康重试/失败回滚不受影响。
 
 ## 紧凑交接与模型介入
