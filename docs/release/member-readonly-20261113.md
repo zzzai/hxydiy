@@ -32,3 +32,18 @@
 ## 待人工
 
 门店19项、Excel/WPS、真实微信/摄像头/现场本人核验。
+
+## 部署与恢复证据（2026-11-14 补录，只读）
+
+### 实际日志/命令证据（本次直接核验）
+
+- 备份 `pre-github-d50941d67579-43457778128-20261113T161859Z.dump`（890563 bytes）存在；`sha256sum -c` 返回 `OK`，SHA256 `8d8f73a21501d53e05fb0784aca6fb4899567a9474476b26ccb0b2d58eab87b6`。
+- 运行容器 `hxy-diy-api`：`customer_membership.py` SHA256 `e2d1bba7ad8d6e89a51367646ff05ee9f63ebe0c0156d04788515559d91f71da`、`member_sync_receipts.py` SHA256 `53095e5f222da3e4c89d61227b9bcca4548629512fa32017b5e0df2258ac963c`，与合并 `d50941d6` 期望一致。
+- 健康：`docker exec hxy-diy-api` 请求 `/api/v1/health` 返回 `{"status":"ok","service":"hxy-customer-api","environment":"production"}`。
+- GitHub Actions Deploy `43457778128` 状态 success（发布事实已记录）。
+
+### 由强制门禁推断（非独立恢复回执）
+
+- 部署脚本 `deploy-production.sh` 在切换新 release 前：`pg_dump` 备份并 `sha256sum -c` 校验；`pg_restore --exit-on-error` 到独立 rehearsal 库并 `SELECT 1`（L146–152），成功后才 guarded release 切换，演练库随后删除。
+- 因此「Deploy success + 备份 checksum OK」可推断本次隔离恢复演练通过；未保留独立 rehearsal 库回执，不声称有独立恢复回执。
+- `.deploy.lock`（0 字节）与 mtime 不能证明无活跃部署；发布是否活跃由受控锁/脚本状态判定，不以 0 字节锁文件作证据。

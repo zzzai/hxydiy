@@ -1,5 +1,14 @@
 # hxy-diy 共享记忆
 
+## 2026-11-14 消费历史与余额快照只读实现候选（未合并/未部署）
+
+- 隔离工作区 `member-consumption-readonly-20261114`，分支 `codex/member-consumption-readonly-20261114`，基于最新 main `2db878c30`，从方案分支 `7d5a1d0` 引入消费领域模块（来源 SHA 已记录）。
+- 语义摘要 `bill_content_sha256` 现纳入精确 Decimal 数量、occurred_at/settled_at、source_version_no/source_current_marker；持久化摘要不符即整组隔离（不展示被篡改事实）。冲突先按本人候选单号取整组跨归属判定，不泄漏他人组数/明细；覆盖完整性按批次声明分页/区间/缺失保守判定，区间不连续或声明缺失即“覆盖不完整”，原始缺失文本不外泄。
+- 余额只读投影：拒绝负数、本金+赠金≠总额、同刻原始卡事实与观测不一致；最新 0 对旧 active 卡给出仅展示对账态 `zero_balance_against_active_card_review`，不改权益/身份；卡事实时间与最新观测时间分离。
+- 前端：来源金额按精确分、币种感知格式化（1499 => ¥14.99，非 CNY 不用 ¥）；加载更多同步在途闸、按服务端 offset 推进并按账单 ID 去重；旧账号迟到响应隔离。
+- 新增 4 张只读来源表（`membership_consumption_batches/bills/lines`、`membership_balance_snapshots`）Alembic 草案 + SQLAlchemy 模型 + 本人只读 API `/auth/h5/membership-consumption` + 前端组件与 hook 行为测试；`tsc -b` 与 `vite build` 通过。隔离一次性 PostgreSQL 已证明“无四表基线 stamp 前驱→upgrade→空表 downgrade→re-upgrade→非空拒绝且旧基线行不变”。
+- 未执行生产迁移/真实数据导入/余额刷新/15卡恢复；新表即使空表也属数据库单独确认，需总控审核与用户确认。契约 `docs/contracts/member-consumption-history-plan-20261113.md`。
+
 ## 2026-11-13 女神草本泡单项价格
 
 - 已授权门店 1 `hxy-nvshen-60` 原价 119 元；会员价 79 元、团购价 89 元保持，主项 5 折券展示 59.50 元。

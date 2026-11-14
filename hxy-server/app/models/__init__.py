@@ -66,3 +66,15 @@ __all__.extend([
 
 from app.models.coupon_poster import CouponPosterLink
 __all__.append("CouponPosterLink")
+from app.models.member_consumption import (
+    MembershipBalanceSnapshot,
+    MembershipConsumptionBatch,
+    MembershipConsumptionBill,
+    MembershipConsumptionLine,
+)
+__all__.extend([
+    "MembershipBalanceSnapshot",
+    "MembershipConsumptionBatch",
+    "MembershipConsumptionBill",
+    "MembershipConsumptionLine",
+])

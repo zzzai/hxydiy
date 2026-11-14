@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.membership_entitlements import card_state, membership_snapshot
-from app.models import MembershipCard, Store, User
+from app.models import MembershipBalanceSnapshot, MembershipCard, MembershipConsumptionBatch, Store, User
 from app.core.config import settings
 
 
@@ -38,23 +38,157 @@ def _iso(value: datetime | None) -> str | None:
     return current.isoformat()
 
 
-def _source_balance(card: MembershipCard) -> dict:
+def _source_balance(db: Session, card: MembershipCard, state: str) -> dict:
     if card.card_type != "stored":
         return {
             "status": "not_applicable",
             "amount_cents": None,
+            "principal_cents": None,
+            "bonus_cents": None,
             "real_time": False,
             "observed_at": None,
             "split": "not_applicable",
             "semantics": "annual_card_has_no_stored_balance",
+            "evidence": "not_applicable",
+            "reconciliation": None,
         }
-    return {
-        "status": "source_snapshot",
+
+    card_fact = {
         "amount_cents": int(card.balance_cents),
-        "real_time": False,
         "observed_at": _iso(card.observed_at),
-        "split": "unverified",
-        "semantics": "source_snapshot_total_not_proven_principal_or_bonus",
+    }
+
+    def card_fact_payload() -> dict:
+        return {
+            "status": "source_snapshot",
+            "amount_cents": int(card.balance_cents),
+            "principal_cents": None,
+            "bonus_cents": None,
+            "real_time": False,
+            "observed_at": _iso(card.observed_at),
+            "split": "unverified",
+            "semantics": "original_card_fact_total_not_proven_principal_or_bonus",
+            "evidence": "card_fact",
+            "reconciliation": None,
+        }
+
+    # Eligible applied balance observations: exact card + source/store scope on
+    # both the snapshot and its batch. Display only; never changes card facts,
+    # status, entitlements or wallets.
+    snapshots = list(db.scalars(
+        select(MembershipBalanceSnapshot)
+        .join(MembershipConsumptionBatch, MembershipBalanceSnapshot.source_batch_id == MembershipConsumptionBatch.id)
+        .where(
+            MembershipBalanceSnapshot.card_id == card.id,
+            MembershipBalanceSnapshot.source == settings.member_source,
+            MembershipBalanceSnapshot.store_id == settings.member_source_store_id,
+            MembershipConsumptionBatch.source == settings.member_source,
+            MembershipConsumptionBatch.store_id == settings.member_source_store_id,
+            MembershipConsumptionBatch.status == "applied",
+        )
+    ))
+
+    if not snapshots:
+        return card_fact_payload()
+
+    newest_time = max(snapshot.observed_at for snapshot in snapshots)
+
+    if card.observed_at is not None and card.observed_at > newest_time:
+        # The original card fact is genuinely newer than every observation.
+        return card_fact_payload()
+
+    if card.observed_at is not None and card.observed_at == newest_time:
+        # An applied observation at the exact card-fact timestamp that disagrees
+        # with the original total is a conflict, never first-wins.
+        same_time = [snapshot for snapshot in snapshots if snapshot.observed_at == newest_time]
+        if any(snapshot.total_cents != card.balance_cents for snapshot in same_time):
+            return {
+                "status": "conflicted",
+                "amount_cents": None,
+                "principal_cents": None,
+                "bonus_cents": None,
+                "real_time": False,
+                "observed_at": _iso(newest_time),
+                "split": "unknown",
+                "semantics": "same_time_original_and_observation_disagree",
+                "evidence": "balance_snapshot",
+                "original": card_fact,
+                "reconciliation": None,
+            }
+        return card_fact_payload()
+
+    newest = [snapshot for snapshot in snapshots if snapshot.observed_at == newest_time]
+    contents = {(snapshot.principal_cents, snapshot.bonus_cents, snapshot.total_cents) for snapshot in newest}
+    if len(contents) > 1:
+        # Deterministic same-time conflict: do not first-win, do not infer.
+        return {
+            "status": "conflicted",
+            "amount_cents": None,
+            "principal_cents": None,
+            "bonus_cents": None,
+            "real_time": False,
+            "observed_at": _iso(newest_time),
+            "split": "unknown",
+            "semantics": "same_time_conflicting_observations_not_deterministic",
+            "evidence": "balance_snapshot",
+            "original": card_fact,
+            "reconciliation": None,
+        }
+
+    one = newest[0]
+    principal = one.principal_cents
+    bonus = one.bonus_cents
+    total = one.total_cents
+
+    if total is not None and total < 0:
+        return {
+            "status": "anomaly",
+            "amount_cents": None,
+            "principal_cents": None,
+            "bonus_cents": None,
+            "real_time": False,
+            "observed_at": _iso(newest_time),
+            "split": "unknown",
+            "semantics": "negative_balance_observation_rejected",
+            "evidence": "balance_snapshot",
+            "original": card_fact,
+            "reconciliation": None,
+        }
+
+    split = "unverified"
+    if principal is not None and bonus is not None and total is not None:
+        if principal + bonus != total:
+            return {
+                "status": "conflicted",
+                "amount_cents": None,
+                "principal_cents": None,
+                "bonus_cents": None,
+                "real_time": False,
+                "observed_at": _iso(newest_time),
+                "split": "unknown",
+                "semantics": "principal_bonus_do_not_reconcile_with_total",
+                "evidence": "balance_snapshot",
+                "original": card_fact,
+                "reconciliation": None,
+            }
+        split = "verified"
+
+    reconciliation = None
+    if state == "active" and total == 0:
+        reconciliation = "zero_balance_against_active_card_review"
+
+    return {
+        "status": "observed",
+        "amount_cents": total,
+        "principal_cents": principal,
+        "bonus_cents": bonus,
+        "real_time": False,
+        "observed_at": _iso(newest_time),
+        "split": split,
+        "semantics": "eligible_applied_balance_observation_total_not_principal",
+        "evidence": "balance_snapshot",
+        "original": card_fact,
+        "reconciliation": reconciliation,
     }
 
 
@@ -91,7 +225,7 @@ def build_customer_membership_overview(db: Session, user: User) -> dict:
             "expires_at": _iso(card.expires_at),
             "source": card.source,
             "observed_at": observed,
-            "balance": _source_balance(card),
+            "balance": _source_balance(db, card, state),
             "benefits": list(ANNUAL_BENEFITS if card.card_type == "annual" else STORED_BENEFITS),
             "benefits_note": "权益以本店有效卡和门店人工确认为准。",
         })

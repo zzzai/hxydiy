@@ -22887,6 +22887,78 @@
         ]
       }
     },
+    "/api/v1/auth/h5/membership-consumption": {
+      "get": {
+        "description": "Read-only consumption history for the logged-in customer only.",
+        "operationId": "h5_membership_consumption_api_v1_auth_h5_membership_consumption_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response H5 Membership Consumption Api V1 Auth H5 Membership Consumption Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "H5 Membership Consumption",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/h5/membership-overview": {
       "get": {
         "description": "Read-only identity/card/balance snapshot for the logged-in customer only.",

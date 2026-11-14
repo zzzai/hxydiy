@@ -30,6 +30,8 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                 "learning_course_versions", "staff_learning_assignments", "staff_learning_events",
                 "daily_store_checkins", "daily_area_photos", "daily_meeting_recordings", "training_assessments",
                 "coupon_poster_links",
+                "membership_consumption_batches", "membership_consumption_bills",
+                "membership_consumption_lines", "membership_balance_snapshots",
             }:
                 continue
             copied = table.to_metadata(previous_metadata)

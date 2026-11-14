@@ -18,7 +18,7 @@ const auth = (token = 'synthetic-a') => ({ token, user: { id: token === 'synthet
 const record = (id = 'record-1', pending = true) => ({ id, status: 'confirmed', items: [{ project_id: 1, name: '现煮草本泡', quantity: 1 }], submitted_at: '2026-10-24T04:00:00Z', service_completed_at: '2026-10-24T05:00:00Z', can_evaluate: true, evaluated: !pending, occupancy_status: 'released', store_total_cents: 2990, member_total_cents: 2590 });
 const textOf = (node: any): string => typeof node === 'string' ? node : (node.children || []).map(textOf).join('');
 
-async function subject({ sessions = [record()], load = undefined as undefined | ((token: string) => Promise<any[]>), save = async () => ({ id: 1 }) } = {}) {
+async function subject({ sessions = [record()], load = undefined as undefined | ((token: string) => Promise<any[]>), save = async () => ({ id: 1 }), consumption = null as any, membership = null as any } = {}) {
   const saved: unknown[] = [], scroll: string[] = [], coupons: string[] = [];
   let rows = sessions;
   const storage = { getItem: () => null, setItem() {}, removeItem() {} };
@@ -28,7 +28,7 @@ async function subject({ sessions = [record()], load = undefined as undefined | 
     '../profile': profile, '../domain': domain, '../customerCopy': copy,
     '../guestCoupon': { bindPendingGuestCoupons: async () => undefined, GUEST_COUPON_KEY_PREFIX: 'hxy_coupon_guest_' },
     '../customerAuth': { ...customerAuth, clearCustomerAuth() {} },
-    './MembershipBanner': { __esModule: true, default: () => null }, './useCustomerMembership': { useCustomerMembership: () => ({ data: null, loading: false, error: '' }) }, './MyReports': { __esModule: true, default: () => React.createElement('p', null, '报告页面') },
+    './MembershipBanner': { __esModule: true, default: () => null }, './useCustomerMembership': { useCustomerMembership: () => membership ?? { data: null, loading: false, error: '', retry() {} } }, './useCustomerConsumption': { useCustomerConsumption: () => consumption ?? { data: null, bills: [], loading: false, loadingMore: false, hasMore: false, error: '', retry() {}, loadMore() {} } }, './MyReports': { __esModule: true, default: () => React.createElement('p', null, '报告页面') },
     './CustomerReturnTools': { ProfileReturnTools: () => null, ReturnDialog: ({ panel }: any) => panel ? React.createElement('div', { role: 'dialog', 'aria-label': panel === 'save' ? '服务号入口' : panel === 'tuesday' ? '超级星期二' : '联系门店' }, panel) : null },
   };
   function loadComponent(name: string): any {
@@ -135,5 +135,155 @@ test('home keeps records collapsed and all six shortcuts work without showing re
     await page.click('服务号'); assert.equal(page.app.root.findAllByProps({ 'aria-label': '服务号入口' }).length, 1);
     await page.click('超级星期二'); assert.equal(page.app.root.findAllByProps({ 'aria-label': '超级星期二' }).length, 1);
     assert.equal(page.app.root.findAllByProps({ className: 'profile-record-main' }).length, 0);
+  } finally { await page.close(); }
+});
+
+
+function makeConsumption(hasMore: boolean) {
+  const bills = [
+    { id: 1, source_bill_no: 'SYN-V1', bill_type: 'service', bill_status: 'normal_settled', store_id: 1, currency: 'CNY', occurred_at: '2026-11-01T00:00:00Z', settled_at: null, store_price_total_cents: 30000, settled_total_cents: 24000, coupon_payment_cents: 9000, card_principal_debit_cents: 15000, card_bonus_debit_cents: 0, cash_payment_cents: 0, other_payment_cents: 0, savings: { status: 'verified', amount_cents: 6000, reason: null }, lines: [{ description: '合成服务', quantity: 1, store_price_cents: 30000, settled_cents: 24000 }] },
+    { id: 2, source_bill_no: 'SYN-UNKNOWN', bill_type: 'service', bill_status: 'normal_settled', store_id: 1, currency: 'CNY', occurred_at: '2026-11-02T00:00:00Z', settled_at: null, store_price_total_cents: 11900, settled_total_cents: 7900, coupon_payment_cents: 0, card_principal_debit_cents: 7900, card_bonus_debit_cents: 0, cash_payment_cents: 0, other_payment_cents: 0, savings: { status: 'unknown', amount_cents: null, reason: 'payment_breakdown_unknown_or_incomplete' }, lines: [{ description: '合成服务', quantity: 1, store_price_cents: 11900, settled_cents: 7900 }] },
+  ];
+  return {
+    data: {
+      coverage: { source: 'meiguanjia_export', store_ids: [1], history: 'returned', applied_batch_count: 1, complete: true, query_range_start: '2026-11-01T00:00:00Z', query_range_end: '2026-11-14T00:00:00Z', observed_at: '2026-11-14T00:00:00Z', coverage_gaps: null, conflict_bill_groups: 0, note: 'n' },
+      bills,
+      pagination: { offset: 0, limit: 20, total: 2, has_more: hasMore },
+      savings: { status: 'verified', amount_cents: 6000, bill_count: 1, note: 'n' },
+      generated_at: '2026-11-14T00:00:00Z', read_only: true,
+    },
+    bills, loading: false, loadingMore: false, hasMore, error: '', retry() {}, loadMore() {},
+  };
+}
+
+test('consumption history shows verified/unknown savings and coverage without misleading zero', async () => {
+  const page = await subject({ consumption: makeConsumption(false) });
+  try {
+    const text = page.text();
+    assert.match(text, /累计消费优惠/);
+    assert.match(text, /优惠未核实/);
+    assert.match(text, /统计覆盖期/);
+    assert.doesNotMatch(text, /加载更多/);
+  } finally { await page.close(); }
+});
+
+test('consumption history renders a load-more button when more pages exist', async () => {
+  const page = await subject({ consumption: makeConsumption(true) });
+  try {
+    assert.match(page.text(), /加载更多/);
+    assert.ok(page.app.root.findByProps({ className: 'profile-consumption-more' }));
+  } finally { await page.close(); }
+});
+
+
+function memberBill(id: number, overrides: any = {}) {
+  return {
+    id, source_bill_no: `SYN-${id}`, bill_type: 'service', bill_status: 'normal_settled', store_id: 1, currency: 'CNY',
+    occurred_at: '2026-11-01T00:00:00Z', settled_at: null, store_price_total_cents: 24000, settled_total_cents: 24000,
+    coupon_payment_cents: 0, card_principal_debit_cents: 24000, card_bonus_debit_cents: 0, cash_payment_cents: 0, other_payment_cents: 0,
+    savings: { status: 'verified', amount_cents: 6000, reason: null },
+    lines: [{ description: '合成服务', quantity: 1, store_price_cents: 24000, settled_cents: 24000 }],
+    ...overrides,
+  };
+}
+
+function memberConsumption(bills: any[], opts: any = {}) {
+  const complete = 'complete' in opts ? opts.complete : true;
+  const rangeStart = 'rangeStart' in opts ? opts.rangeStart : '2026-11-01T00:00:00Z';
+  const rangeEnd = 'rangeEnd' in opts ? opts.rangeEnd : '2026-11-14T00:00:00Z';
+  return {
+    data: {
+      coverage: { source: 'meiguanjia_export', store_ids: [1], history: 'returned', applied_batch_count: 1, complete, query_range_start: rangeStart, query_range_end: rangeEnd, observed_at: '2026-11-14T00:00:00Z', coverage_gaps: opts.coverageGaps ?? null, conflict_bill_groups: opts.conflictGroups ?? 0, note: 'n' },
+      bills,
+      pagination: { offset: 0, limit: 20, total: bills.length, has_more: opts.hasMore ?? false },
+      savings: { status: opts.savingsStatus ?? 'verified', amount_cents: opts.savingsAmount ?? null, bill_count: opts.savingsAmount != null ? 1 : null, note: 'n' },
+      generated_at: '2026-11-14T00:00:00Z', read_only: true,
+    },
+    bills, loading: false, loadingMore: false, hasMore: opts.hasMore ?? false, error: '', retry() {}, loadMore() {},
+  };
+}
+
+test('member source money shows exact cents (1499 => ¥14.99, never ¥15.0)', async () => {
+  const b = memberBill(1, { settled_total_cents: 1499, savings: { status: 'verified', amount_cents: 1499, reason: null }, lines: [{ description: '合成服务', quantity: 1, store_price_cents: 1499, settled_cents: 1499 }] });
+  const page = await subject({ consumption: memberConsumption([b], { savingsAmount: 1499 }) });
+  try {
+    const text = page.text();
+    assert.match(text, /¥14\.99/);
+    assert.doesNotMatch(text, /¥15\.0/);
+  } finally { await page.close(); }
+});
+
+test('non-CNY member amounts never use the yuan symbol', async () => {
+  const b = memberBill(1, { currency: 'USD', settled_total_cents: 1499, savings: { status: 'unknown', amount_cents: null, reason: 'currency=USD_no_conversion_evidence' }, lines: [{ description: '合成服务', quantity: 1, store_price_cents: 1499, settled_cents: 1499 }] });
+  const page = await subject({ consumption: memberConsumption([b], { savingsAmount: null, savingsStatus: 'unverified' }) });
+  try {
+    const text = page.text();
+    assert.match(text, /USD 14\.99/);
+    assert.doesNotMatch(text, /¥14\.99/);
+  } finally { await page.close(); }
+});
+
+test('null savings stays unverified and is never rendered as zero', async () => {
+  const b = memberBill(1, { savings: { status: 'unknown', amount_cents: null, reason: 'payment_breakdown_unknown_or_incomplete' } });
+  const page = await subject({ consumption: memberConsumption([b], { savingsAmount: null, savingsStatus: 'unverified' }) });
+  try {
+    const text = page.text();
+    assert.match(text, /优惠未核实/);
+    assert.doesNotMatch(text, /¥0\.00/);
+  } finally { await page.close(); }
+});
+
+test('coverage with declared gaps is visibly incomplete', async () => {
+  const page = await subject({ consumption: memberConsumption([memberBill(1)], { complete: false, coverageGaps: true }) });
+  try {
+    assert.match(page.text(), /存在缺失，覆盖不完整/);
+  } finally { await page.close(); }
+});
+
+test('disjoint coverage shows incomplete without fabricating a gap', async () => {
+  const page = await subject({ consumption: memberConsumption([memberBill(1)], { complete: false, coverageGaps: false }) });
+  try {
+    assert.match(page.text(), /覆盖不完整/);
+    assert.doesNotMatch(page.text(), /存在缺失/);
+  } finally { await page.close(); }
+});
+
+test('a zero balance against an active stored card shows a display-only review note', async () => {
+  const membership = {
+    data: {
+      identity: { is_member: true, member_type: 'stored', member_expire_at: null, note: 'n' },
+      cards: [{ id: 1, card_type: 'stored', card_type_label: '储值会员卡', status: 'active', usable: true, store_id: 1, store_name: '紫薇壹号店', started_at: '2026-01-01T00:00:00Z', expires_at: null, source: 'meiguanjia_export', observed_at: '2026-11-09T00:00:00Z', balance: { status: 'observed', amount_cents: 0, principal_cents: null, bonus_cents: null, real_time: false, observed_at: '2026-11-10T00:00:00Z', split: 'unverified', semantics: 'eligible_applied_balance_observation_total_not_principal', evidence: 'balance_snapshot', reconciliation: 'zero_balance_against_active_card_review', original: { amount_cents: 15000, observed_at: '2026-11-09T00:00:00Z' } }, benefits: [], benefits_note: 'n' }],
+      card_count: 1,
+      coverage: { source: 'meiguanjia_export', store_ids: [1], card_snapshot: 'returned', history: 'unverified', history_reason: 'n', as_of: '2026-11-09T00:00:00Z' },
+      consumption: { status: 'unverified', amount_cents: null, bill_count: null, coverage: null, label: '未核实', note: 'n' },
+      savings: { status: 'unverified', amount_cents: null, coverage: null, label: '累计消费优惠未核实', note: 'n' },
+      generated_at: '2026-11-14T00:00:00Z', read_only: true,
+    },
+    loading: false, error: '', retry() {},
+  };
+  const page = await subject({ membership });
+  try {
+    assert.match(page.text(), /余额观测为 0，状态待门店核实/);
+    assert.match(page.text(), /状态待门店核实/);
+    assert.doesNotMatch(page.text(), /· 当前可用/);
+  } finally { await page.close(); }
+});
+
+
+test('unknown coverage (complete null) is visibly unknown, not complete', async () => {
+  const page = await subject({ consumption: memberConsumption([memberBill(1)], { complete: null }) });
+  try {
+    assert.match(page.text(), /覆盖未核实/);
+    assert.doesNotMatch(page.text(), /覆盖完整/);
+  } finally { await page.close(); }
+});
+
+test('missing coverage dates render unknown dates even when bills are empty', async () => {
+  const page = await subject({ consumption: memberConsumption([], { complete: null, rangeStart: null, rangeEnd: null }) });
+  try {
+    assert.match(page.text(), /统计覆盖期：/);
+    assert.match(page.text(), /未记录/);
+    assert.match(page.text(), /覆盖未核实/);
+    assert.doesNotMatch(page.text(), /覆盖完整/);
   } finally { await page.close(); }
 });

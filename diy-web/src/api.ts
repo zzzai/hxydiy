@@ -293,10 +293,15 @@ export type CustomerMembershipOverview = {
     balance: {
       status: string;
       amount_cents: number | null;
+      principal_cents: number | null;
+      bonus_cents: number | null;
       real_time: boolean;
       observed_at: string | null;
       split: string;
       semantics: string;
+      evidence: string;
+      reconciliation: string | null;
+      original?: { amount_cents: number; observed_at: string | null };
     };
     benefits: string[];
     benefits_note: string;
@@ -572,5 +577,39 @@ export function getCouponPosterStatus(code: string, authToken?: string) {
 export function claimPosterCoupon(code: string, authToken: string) {
   return request<PosterCoupon>('/coupons/claim-half-price', {
     method: 'POST', headers: { Authorization: 'Bearer ' + authToken }, body: JSON.stringify({ code }),
+  });
+}
+
+export type CustomerConsumptionOverview = {
+  coverage: { source: string; store_ids: number[]; history: string; applied_batch_count: number; complete: boolean | null; query_range_start: string | null; query_range_end: string | null; observed_at: string | null; coverage_gaps: boolean | null; conflict_bill_groups: number; note: string };
+  bills: Array<{
+    id: number;
+    source_bill_no: string;
+    bill_type: string;
+    bill_status: string;
+    store_id: number;
+    currency: string;
+    occurred_at: string | null;
+    settled_at: string | null;
+    store_price_total_cents: number | null;
+    settled_total_cents: number | null;
+    coupon_payment_cents: number | null;
+    card_principal_debit_cents: number | null;
+    card_bonus_debit_cents: number | null;
+    cash_payment_cents: number | null;
+    other_payment_cents: number | null;
+    savings: { status: string; amount_cents: number | null; reason: string | null };
+    lines: Array<{ description: string; quantity: number | null; store_price_cents: number | null; settled_cents: number | null }>;
+  }>;
+  pagination: { offset: number; limit: number; total: number; has_more: boolean };
+  savings: { status: string; amount_cents: number | null; bill_count: number | null; note: string };
+  generated_at: string;
+  read_only: boolean;
+};
+
+export function getMyMembershipConsumption(token: string, offset = 0, limit = 20) {
+  return request<CustomerConsumptionOverview>(`/auth/h5/membership-consumption?offset=${offset}&limit=${limit}`, {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${token}` },
   });
 }

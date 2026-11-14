@@ -15,6 +15,7 @@ from app.db.session import get_db
 from app.domain.coupon_issuance import lock_coupon_template, try_issue_coupon
 from app.domain.membership_entitlements import has_membership, membership_snapshot
 from app.services.customer_membership import build_customer_membership_overview
+from app.services.customer_consumption import build_customer_consumption_history
 from app.models import AuditLog, CouponTemplate, CustomerTrustedDevice, CustomerVerificationCode, MembershipCode, Order, SelectionSession, ServiceFeedback, User, UserCoupon
 from app.models.service import Visit
 from app.schemas.auth import (
@@ -324,6 +325,20 @@ def h5_membership_overview(
     if user is None:
         raise HTTPException(status_code=401, detail="登录已失效，请重新登录")
     return build_customer_membership_overview(db, user)
+
+
+@router.get("/h5/membership-consumption")
+def h5_membership_consumption(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+    offset: int = 0,
+    limit: int = 20,
+) -> dict:
+    """Read-only consumption history for the logged-in customer only."""
+    user = db.get(User, current_customer_id(authorization, db))
+    if user is None:
+        raise HTTPException(status_code=401, detail="登录已失效，请重新登录")
+    return build_customer_consumption_history(db, user, offset=max(0, offset), limit=min(max(1, limit), 100))
 
 
 @router.get("/h5/me", response_model=UserOut)
