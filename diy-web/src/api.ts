@@ -576,13 +576,14 @@ export function claimPosterCoupon(code: string, authToken: string) {
 }
 
 export type CustomerConsumptionOverview = {
-  coverage: { source: string; store_ids: number[]; history: string; conflict_bill_groups: number; note: string };
+  coverage: { source: string; store_ids: number[]; history: string; applied_batch_count: number; complete: boolean | null; query_range_start: string | null; query_range_end: string | null; observed_at: string | null; coverage_gaps: unknown; conflict_bill_groups: number; note: string };
   bills: Array<{
     id: number;
     source_bill_no: string;
     bill_type: string;
     bill_status: string;
     store_id: number;
+    currency: string;
     occurred_at: string | null;
     settled_at: string | null;
     store_price_total_cents: number | null;
@@ -592,7 +593,7 @@ export type CustomerConsumptionOverview = {
     card_bonus_debit_cents: number | null;
     cash_payment_cents: number | null;
     other_payment_cents: number | null;
-    savings: { status: string; amount_cents: number | null };
+    savings: { status: string; amount_cents: number | null; reason: string | null };
     lines: Array<{ description: string; quantity: number | null; store_price_cents: number | null; settled_cents: number | null }>;
   }>;
   pagination: { offset: number; limit: number; total: number; has_more: boolean };

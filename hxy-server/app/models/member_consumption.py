@@ -147,7 +147,7 @@ class MembershipBalanceSnapshot(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    card_id: Mapped[int] = mapped_column(ForeignKey("membership_cards.id"), nullable=False)
+    card_id: Mapped[int] = mapped_column(ForeignKey("membership_cards.id"), nullable=False, index=True)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -40,6 +40,7 @@ class ConsumptionBill:
     refund_status: str = "unknown"  # none/partial/refunded/void/unknown
     payment_evidence_complete: bool = False
     source_bill_version: str | None = None
+    currency: str = "CNY"  # ISO 4217; only CNY aggregates into savings without conversion evidence
     store_price_total_cents: int | None = None
     settled_total_cents: int | None = None
     coupon_payment_cents: int | None = None
@@ -83,6 +84,7 @@ def bill_semantic_key(bill: ConsumptionBill) -> tuple:
         bill.refund_status,
         bill.payment_evidence_complete,
         bill.source_bill_version,
+        bill.currency,
         bill.store_price_total_cents,
         bill.settled_total_cents,
         bill.coupon_payment_cents,
@@ -115,6 +117,8 @@ def bill_content_sha256(bill: ConsumptionBill) -> str:
 def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
     if bill.bill_type != "service":
         return SavingsResult("excluded", None, f"bill_type={bill.bill_type}_not_consumption")
+    if bill.currency != "CNY":
+        return SavingsResult("unknown", None, f"currency={bill.currency}_no_conversion_evidence")
     if bill.bill_status != "normal_settled":
         return SavingsResult("blocked", None, f"bill_status={bill.bill_status}_not_current_normal")
     if bill.attribution_status != "owned":

@@ -18,7 +18,7 @@ const auth = (token = 'synthetic-a') => ({ token, user: { id: token === 'synthet
 const record = (id = 'record-1', pending = true) => ({ id, status: 'confirmed', items: [{ project_id: 1, name: '现煮草本泡', quantity: 1 }], submitted_at: '2026-10-24T04:00:00Z', service_completed_at: '2026-10-24T05:00:00Z', can_evaluate: true, evaluated: !pending, occupancy_status: 'released', store_total_cents: 2990, member_total_cents: 2590 });
 const textOf = (node: any): string => typeof node === 'string' ? node : (node.children || []).map(textOf).join('');
 
-async function subject({ sessions = [record()], load = undefined as undefined | ((token: string) => Promise<any[]>), save = async () => ({ id: 1 }) } = {}) {
+async function subject({ sessions = [record()], load = undefined as undefined | ((token: string) => Promise<any[]>), save = async () => ({ id: 1 }), consumption = null as any } = {}) {
   const saved: unknown[] = [], scroll: string[] = [], coupons: string[] = [];
   let rows = sessions;
   const storage = { getItem: () => null, setItem() {}, removeItem() {} };
@@ -28,7 +28,7 @@ async function subject({ sessions = [record()], load = undefined as undefined | 
     '../profile': profile, '../domain': domain, '../customerCopy': copy,
     '../guestCoupon': { bindPendingGuestCoupons: async () => undefined, GUEST_COUPON_KEY_PREFIX: 'hxy_coupon_guest_' },
     '../customerAuth': { ...customerAuth, clearCustomerAuth() {} },
-    './MembershipBanner': { __esModule: true, default: () => null }, './useCustomerMembership': { useCustomerMembership: () => ({ data: null, loading: false, error: '' }) }, './MyReports': { __esModule: true, default: () => React.createElement('p', null, '报告页面') },
+    './MembershipBanner': { __esModule: true, default: () => null }, './useCustomerMembership': { useCustomerMembership: () => ({ data: null, loading: false, error: '' }) }, './useCustomerConsumption': { useCustomerConsumption: () => consumption ?? { data: null, loading: false, error: '', retry() {} } }, './MyReports': { __esModule: true, default: () => React.createElement('p', null, '报告页面') },
     './CustomerReturnTools': { ProfileReturnTools: () => null, ReturnDialog: ({ panel }: any) => panel ? React.createElement('div', { role: 'dialog', 'aria-label': panel === 'save' ? '服务号入口' : panel === 'tuesday' ? '超级星期二' : '联系门店' }, panel) : null },
   };
   function loadComponent(name: string): any {
@@ -135,5 +135,29 @@ test('home keeps records collapsed and all six shortcuts work without showing re
     await page.click('服务号'); assert.equal(page.app.root.findAllByProps({ 'aria-label': '服务号入口' }).length, 1);
     await page.click('超级星期二'); assert.equal(page.app.root.findAllByProps({ 'aria-label': '超级星期二' }).length, 1);
     assert.equal(page.app.root.findAllByProps({ className: 'profile-record-main' }).length, 0);
+  } finally { await page.close(); }
+});
+
+
+test('consumption history shows verified/unknown savings and coverage without misleading zero', async () => {
+  const consumption = {
+    data: {
+      coverage: { source: 'meiguanjia_export', store_ids: [1], history: 'returned', applied_batch_count: 1, complete: true, query_range_start: '2026-11-01T00:00:00Z', query_range_end: '2026-11-14T00:00:00Z', observed_at: '2026-11-14T00:00:00Z', coverage_gaps: null, conflict_bill_groups: 0, note: 'n' },
+      bills: [
+        { id: 1, source_bill_no: 'SYN-V1', bill_type: 'service', bill_status: 'normal_settled', store_id: 1, currency: 'CNY', occurred_at: '2026-11-01T00:00:00Z', settled_at: null, store_price_total_cents: 30000, settled_total_cents: 24000, coupon_payment_cents: 9000, card_principal_debit_cents: 15000, card_bonus_debit_cents: 0, cash_payment_cents: 0, other_payment_cents: 0, savings: { status: 'verified', amount_cents: 6000, reason: null }, lines: [{ description: '合成服务', quantity: 1, store_price_cents: 30000, settled_cents: 24000 }] },
+        { id: 2, source_bill_no: 'SYN-UNKNOWN', bill_type: 'service', bill_status: 'normal_settled', store_id: 1, currency: 'CNY', occurred_at: '2026-11-02T00:00:00Z', settled_at: null, store_price_total_cents: 11900, settled_total_cents: 7900, coupon_payment_cents: 0, card_principal_debit_cents: 7900, card_bonus_debit_cents: 0, cash_payment_cents: 0, other_payment_cents: 0, savings: { status: 'unknown', amount_cents: null, reason: 'payment_breakdown_unknown_or_incomplete' }, lines: [{ description: '合成服务', quantity: 1, store_price_cents: 11900, settled_cents: 7900 }] },
+      ],
+      pagination: { offset: 0, limit: 20, total: 2, has_more: false },
+      savings: { status: 'verified', amount_cents: 6000, bill_count: 1, note: 'n' },
+      generated_at: '2026-11-14T00:00:00Z', read_only: true,
+    },
+    loading: false, error: '', retry() {},
+  };
+  const page = await subject({ consumption });
+  try {
+    const text = page.text();
+    assert.match(text, /累计消费优惠/);
+    assert.match(text, /优惠未核实/);
+    assert.match(text, /统计覆盖期/);
   } finally { await page.close(); }
 });

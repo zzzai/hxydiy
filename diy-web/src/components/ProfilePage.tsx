@@ -324,16 +324,20 @@ function ConsumptionHistory({ data, loading, error, onRetry }: { data: CustomerC
   if (error) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-error" role="alert">{error}</p><button type="button" className="profile-membership-retry" onClick={onRetry}>重新加载</button></section>;
   if (!data) return null;
   const hasBills = data.bills.length > 0;
+  const range = data.coverage.query_range_start && data.coverage.query_range_end
+    ? `${formatDateTime(data.coverage.query_range_start).slice(0, 10)} ~ ${formatDateTime(data.coverage.query_range_end).slice(0, 10)}`
+    : null;
   return <section className="profile-consumption" aria-label="历史消费">
-    <div className="profile-membership-heading"><div><h2>历史消费</h2><small>来源可核实记录，独立于 DIY 钱包</small></div>{hasBills && <span>{data.savings.bill_count ?? 0} 笔可核实</span>}</div>
+    <div className="profile-membership-heading"><div><h2>历史消费</h2><small>来源可核实记录，独立于 DIY 钱包</small></div><span>{data.pagination.total} 笔记录</span></div>
     {!hasBills
       ? <p className="profile-membership-empty">暂无可核实的来源消费记录{data.coverage.conflict_bill_groups > 0 ? `（${data.coverage.conflict_bill_groups} 组待核对）` : ''}。</p>
       : <>
         <div className="profile-consumption-savings"><span>累计消费优惠</span><strong>{data.savings.amount_cents !== null ? formatMoney(data.savings.amount_cents) : '未核实'}</strong><small>{data.savings.note}</small></div>
+        {range && <p className="profile-consumption-scope">统计覆盖期：{range}{data.coverage.complete === false ? '（覆盖不完整）' : ''}；金额未核实不计入。</p>}
         <ul className="profile-consumption-bills">
           {data.bills.map(bill => <li key={bill.id} className="profile-consumption-bill">
-            <div><strong>{bill.source_bill_no}</strong><span>{bill.savings.amount_cents !== null ? `优惠 ${formatMoney(bill.savings.amount_cents)}` : '未核实'}</span></div>
-            <small>{bill.occurred_at ? `消费于 ${formatDateTime(bill.occurred_at).slice(0, 10)}` : '时间未记录'}{bill.settled_total_cents !== null ? ` · 结算 ${formatMoney(bill.settled_total_cents)}` : ''}</small>
+            <div><strong>{bill.source_bill_no}</strong><span>{bill.savings.amount_cents !== null ? `优惠 ${formatMoney(bill.savings.amount_cents)}` : '优惠未核实'}</span></div>
+            <small>{bill.occurred_at ? `消费于 ${formatDateTime(bill.occurred_at).slice(0, 10)}` : '时间未记录'}{bill.settled_total_cents !== null ? ` · 结算 ${formatMoney(bill.settled_total_cents)}${bill.currency !== 'CNY' ? ` ${bill.currency}` : ''}` : ''}</small>
             {bill.lines.length > 0 && <details><summary>查看明细</summary><ul>{bill.lines.map((line, i) => <li key={i}>{line.description}{line.quantity !== null ? ` × ${line.quantity}` : ''}{line.settled_cents !== null ? ` · ${formatMoney(line.settled_cents)}` : ''}</li>)}</ul></details>}
           </li>)}
         </ul>

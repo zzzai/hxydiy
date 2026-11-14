@@ -221,3 +221,10 @@ def test_duplicate_identical_service_lines_preserved_in_semantic_key():
                card_principal_debit_cents=15800, card_bonus_debit_cents=0,
                coupon_payment_cents=0, cash_payment_cents=0, other_payment_cents=0)
     assert bill_content_sha256(one) != bill_content_sha256(two)
+
+def test_foreign_currency_is_unknown_not_verified():
+    usd = bill(source_bill_no="SYN-USD", currency="USD")
+    result = compute_bill_savings(usd)
+    assert result.status == "unknown"
+    assert "currency" in result.reason
+    assert aggregate_verified([usd])["savings_cents"] is None

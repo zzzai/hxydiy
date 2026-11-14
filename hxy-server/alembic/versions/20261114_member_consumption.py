@@ -8,7 +8,7 @@ backup and isolated restore rehearsal.
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20261114_member_consumption_readonly"
+revision = "20261114_member_consumption"
 down_revision = "20261112_coupon_poster_links"
 branch_labels = None
 depends_on = None
@@ -129,6 +129,7 @@ def upgrade():
 
 
 def downgrade():
+    bind = op.get_bind()
     tables = [
         "membership_balance_snapshots",
         "membership_consumption_lines",
@@ -136,7 +137,11 @@ def downgrade():
         "membership_consumption_batches",
     ]
     for table in tables:
-        count = op.get_bind().execute(sa.text(f"SELECT count(*) FROM {table}")).scalar_one()
+        # On PostgreSQL, ACCESS EXCLUSIVE blocks concurrent writers so the
+        # zero-row check cannot race with an insert before the table is dropped.
+        if bind.dialect.name == "postgresql":
+            bind.execute(sa.text(f"LOCK TABLE {table} IN ACCESS EXCLUSIVE MODE"))
+        count = bind.execute(sa.text(f"SELECT count(*) FROM {table}")).scalar_one()
         if count:
             raise RuntimeError(f"{table} has rows; retain source records and use a forward rollback")
     op.drop_index("ix_membership_balance_snapshots_card_id", table_name="membership_balance_snapshots")
