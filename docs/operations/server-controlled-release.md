@@ -58,7 +58,7 @@ python3 deploy/diy/server_release.py publish --release-id server-<sha12>-<serial
 
 ## 4. GitHub 异步备份
 
-成功回执先独立持久化，再生成绑定精确 SHA 的本地 Git bundle 和 pending-github-backup 记录。备份失败记录为 failed/pending，不回滚已经成功的生产，不触发重复发布。
+成功回执先独立持久化，再生成绑定精确 SHA 的本地 Git bundle 和 pending-github-backup 记录。 本地 bundle 禁止所有 Git 传输协议并设置 120 秒命令超时；部分克隆缺对象时记为失败，不能向 GitHub 补拉旧对象。规则依据 [Git 环境变量说明](https://git-scm.com/docs/git#Documentation/git.txt-GITALLOWPROTOCOL)。备份失败记录为 failed/pending，不回滚已经成功的生产，不触发重复发布。
 
 本机总控随后启动已有 GCM/官方 GitHub API 后台传输工具，把完整 Git 对象写到指定备份分支；校验 commit/tree 与实际远端 ref 后保存回执。只允许非强制更新，不改分支保护，不把凭据复制到服务器。传输失败保留 pending/failed，核对远端事实后再单独补备份；生产不等 GitHub。
 

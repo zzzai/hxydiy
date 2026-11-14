@@ -697,26 +697,31 @@ def _bundle_head_sha(repo: str, bundle: Path, run=subprocess.run) -> list:
 
 def ensure_bundle(bundle: Path, repo: str, source_sha: str, run=subprocess.run) -> None:
     """Create (or reconcile) a bundle whose advertised head is exactly source_sha."""
+    def local_run(args, **kwargs):
+        # A partial clone must never turn a local backup into a remote fetch.
+        env = dict(os.environ, GIT_ALLOW_PROTOCOL='')
+        return run(args, env=env, timeout=120, **kwargs)
+
     if bundle.is_symlink():
         raise ValueError('unsafe_bundle_path')
     if bundle.exists():
-        run(['git', '-C', repo, 'bundle', 'verify', str(bundle)],
+        local_run(['git', '-C', repo, 'bundle', 'verify', str(bundle)],
             check=True, capture_output=True, text=True)
-        if source_sha not in _bundle_head_sha(repo, bundle, run=run):
+        if source_sha not in _bundle_head_sha(repo, bundle, run=local_run):
             raise ValueError('bundle_head_mismatch')
         return
     temporary_ref = _unique_temp_ref()
     try:
-        run(['git', '-C', repo, 'update-ref', temporary_ref, source_sha],
+        local_run(['git', '-C', repo, 'update-ref', temporary_ref, source_sha],
             check=True, capture_output=True, text=True)
-        run(['git', '-C', repo, 'bundle', 'create', str(bundle), temporary_ref],
+        local_run(['git', '-C', repo, 'bundle', 'create', str(bundle), temporary_ref],
             check=True, capture_output=True, text=True)
     finally:
-        run(['git', '-C', repo, 'update-ref', '-d', temporary_ref, source_sha],
+        local_run(['git', '-C', repo, 'update-ref', '-d', temporary_ref, source_sha],
             check=False, capture_output=True, text=True)
-    run(['git', '-C', repo, 'bundle', 'verify', str(bundle)],
+    local_run(['git', '-C', repo, 'bundle', 'verify', str(bundle)],
         check=True, capture_output=True, text=True)
-    if source_sha not in _bundle_head_sha(repo, bundle, run=run):
+    if source_sha not in _bundle_head_sha(repo, bundle, run=local_run):
         raise ValueError('bundle_head_mismatch')
 
 
@@ -730,7 +735,7 @@ def record_github_backup(root: Path, release_id: str, source_sha: str,
         bundle_sha256 = digest_file(bundle)
         state = 'pending'
         error = None
-    except (ValueError, subprocess.CalledProcessError, OSError) as exc:
+    except (ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
         bundle_sha256 = None
         state = 'failed'
         error = repr(exc)

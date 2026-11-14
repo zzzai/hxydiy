@@ -491,6 +491,38 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(protected.read_text(), 'unchanged')
 
 
+class BackupIsolationTests(unittest.TestCase):
+    def test_partial_clone_backup_does_not_fetch_missing_objects(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            origin, sha = make_git_repo(root)
+            subprocess.run(['git', '-C', str(origin), 'config', 'uploadpack.allowFilter', 'true'], check=True)
+            clone = root / 'partial'
+            subprocess.run(['git', 'clone', '-q', '--filter=blob:none', '--no-checkout',
+                            origin.as_uri(), str(clone)], check=True)
+            def missing():
+                result = subprocess.check_output(['git', '-C', str(clone), 'rev-list',
+                    '--objects', '--missing=print', 'HEAD'], text=True)
+                return [line for line in result.splitlines() if line.startswith('?')]
+            before = missing()
+            self.assertTrue(before, 'fixture must contain a missing promised blob')
+            release_root = make_root(root)
+            result = SR.record_github_backup(release_root, 'server-' + sha[:12] + '-123', sha, str(clone))
+            self.assertEqual(result['github_backup'], 'failed')
+            self.assertEqual(missing(), before, 'backup must not fetch from any remote')
+            refs = subprocess.check_output(['git', '-C', str(clone), 'for-each-ref',
+                '--format=%(refname)', 'refs/server-release-bundle-tmp-'], text=True)
+            self.assertEqual(refs, '')
+
+    def test_backup_timeout_is_recorded_without_escaping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            with mock.patch.object(SR, 'ensure_bundle', side_effect=subprocess.TimeoutExpired('git bundle', 120)):
+                record = SR.record_github_backup(root, 'server-' + 'a' * 12 + '-123', 'a' * 40, '/unused')
+            self.assertEqual(record['github_backup'], 'failed')
+            self.assertIn('TimeoutExpired', record['error'])
+
+
 class EntryRegressionTests(unittest.TestCase):
     def test_prepare_cli_dispatches_to_builder(self):
         with mock.patch.object(SR, 'prepare', return_value={}) as prepare:
