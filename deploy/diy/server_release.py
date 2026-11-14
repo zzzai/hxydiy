@@ -1007,11 +1007,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command')
 
-    prepare = sub.add_parser('prepare', help='build and export an immutable workspace')
-    prepare.add_argument('--source', required=True)
-    prepare.add_argument('--sha', required=True)
-    prepare.add_argument('--release-id')
-    prepare.add_argument('--release-root', default=os.environ.get(
+    prepare_parser = sub.add_parser('prepare', help='build and export an immutable workspace')
+    prepare_parser.add_argument('--source', required=True)
+    prepare_parser.add_argument('--sha', required=True)
+    prepare_parser.add_argument('--release-id')
+    prepare_parser.add_argument('--release-root', default=os.environ.get(
         'HXY_DIY_RELEASE_ROOT', DEFAULT_ROOT))
 
     inspect_p = sub.add_parser('inspect', help='read-only release status (default)')

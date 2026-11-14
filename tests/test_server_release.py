@@ -10,6 +10,8 @@ import os
 import subprocess
 import tempfile
 import shutil
+import io
+from contextlib import redirect_stdout
 from unittest import mock
 import unittest
 from pathlib import Path
@@ -490,6 +492,14 @@ class PublishTests(unittest.TestCase):
 
 
 class EntryRegressionTests(unittest.TestCase):
+    def test_prepare_cli_dispatches_to_builder(self):
+        with mock.patch.object(SR, 'prepare', return_value={}) as prepare:
+            with redirect_stdout(io.StringIO()):
+                result = SR.main(['prepare', '--source', '/tmp/source', '--sha', 'a' * 40,
+                                  '--release-root', '/tmp/release-root'])
+        self.assertEqual(result, 0)
+        prepare.assert_called_once()
+
     def test_default_inspect_does_not_create_records(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_root(Path(tmp))
