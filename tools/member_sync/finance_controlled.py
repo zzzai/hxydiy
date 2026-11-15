@@ -33,8 +33,9 @@ def main():
     RUN_ROOT=root
     request=json.loads((root/'request.json').read_bytes());manifest=request['manifest_sha256']
     if not re.fullmatch(r'[a-f0-9]{64}',manifest):raise ValueError('invalid_manifest')
-    container='/tmp/hxy-finance-'+manifest[:12];restore='hxy_diy_rehearsal_finance_'+manifest[:12]
     runtime=request['runtime_sha256']
+    container='/tmp/hxy-finance-'+manifest[:12]+'-'+runtime[:8]
+    restore='hxy_diy_rehearsal_finance_'+manifest[:12]+'_'+runtime[:8]
     if digest(root/'runtime-index.json')!=runtime:raise ValueError('runtime_mismatch')
     if digest(Path(__file__))!=request['host_runner_sha256']:raise ValueError('host_runner_changed')
     if digest(root/'packet.json')!=request['input_sha256']:raise ValueError('packet_changed')

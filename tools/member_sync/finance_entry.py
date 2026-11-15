@@ -48,7 +48,7 @@ def main():
     rebuilt,source_index,_=compile_packet(root/'source',packet.batch_key)
     if encode_packet(packet)!=encode_packet(rebuilt):raise ValueError('source_packet_mismatch')
     if json.loads((root/'source-index.json').read_bytes())!=source_index:raise ValueError('source_index_mismatch')
-    if args.database!='hxy_diy' and not re.fullmatch(r'hxy_diy_rehearsal_finance_[a-f0-9]{12}',args.database):raise ValueError('database_outside_scope')
+    if args.database!='hxy_diy' and not re.fullmatch(r'hxy_diy_rehearsal_finance_[a-f0-9]{12}(?:_[a-f0-9]{8})?',args.database):raise ValueError('database_outside_scope')
     if args.mode=='rehearse' and args.database=='hxy_diy':raise ValueError('rehearsal_must_be_isolated')
     if args.mode in ('baseline','preview','apply') and args.database!='hxy_diy':raise ValueError('production_mode_database_mismatch')
     target=create_engine(engine.url.set(database=args.database),pool_pre_ping=True)

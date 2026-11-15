@@ -173,8 +173,10 @@ def execute(sessions, packet: FinancialBatch, *, apply=False, protection=None):
                 cents(line.settled_cents)
                 require(line.quantity is None or (type(line.quantity) in (int, Decimal) and line.quantity > 0 and line.quantity <= Decimal("999999999.999") and line.quantity * 1000 == int(line.quantity * 1000)),
                         "invalid_line_quantity")
+            normalized_lines = tuple(replace(line, quantity=int(line.quantity)
+                if line.quantity is not None and line.quantity == int(line.quantity) else line.quantity) for line in source.lines)
             bill = replace(source, user_id=user.id if source.attribution_status == "owned" else None,
-                           linked_card_ids=(card.id,))
+                           linked_card_ids=(card.id,), lines=normalized_lines)
             require(compute_bill_savings(bill).status != "anomaly", "bill_amount_reconciliation_failed")
             digest = bill_content_sha256(bill)
             identity = (bill.source_bill_no, digest)

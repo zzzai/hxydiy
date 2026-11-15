@@ -231,3 +231,16 @@ def test_protection_wrong_expected_count_rolls_back(factory):
     with pytest.raises(ValueError,match="append_count_mismatch"):
         imp.execute(factory,packet(),apply=True,protection=Protection(baseline,expected=expected))
     with factory() as db:assert snapshot(db)==baseline
+
+
+def test_decoded_whole_decimal_quantity_stays_visible_after_persistence(factory):
+    from decimal import Decimal
+    from app.services.customer_consumption import build_customer_consumption_history
+    p=packet();source=p.bills[0]
+    line=replace(source.bill.lines[0],quantity=Decimal("1"))
+    changed=seal(replace(p,bills=(replace(source,bill=replace(source.bill,lines=(line,))),)))
+    imp.execute(factory,changed,apply=True)
+    with factory() as db:
+        history=build_customer_consumption_history(db,db.get(User,1))
+        assert history["pagination"]["total"]==1
+        assert history["savings"]["amount_cents"]==4000
