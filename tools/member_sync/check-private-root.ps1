@@ -1,5 +1,7 @@
 ﻿param([Parameter(Mandatory=$true)][string]$PrivateRoot)
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell must not autoload the incompatible PowerShell 7 security module.
+Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1') -ErrorAction Stop
 $syncItem = Get-Item -LiteralPath $PrivateRoot
 if (-not $syncItem.PSIsContainer -or ($syncItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     throw 'Private root must be a normal directory'
