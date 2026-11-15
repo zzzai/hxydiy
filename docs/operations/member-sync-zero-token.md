@@ -11,3 +11,11 @@
 运行 ID `20261115T080649Z-c6284288`；服务器私有回执 `/root/hxy-diy-private-operations/member-sync-agent/batches/20261115T080649Z-c6284288/`；本机 `hxy-diy-private-operations/member-sync-agent/runs/20261115T080649Z-c6284288/server-result/`。
 
 定时启用状态以 [脱敏验收记录](../release/evidence/member-sync-zero-token-20261115.json) 为准。应用 current 和容器未更换，未部署应用、迁移数据库、刷新旧余额或导入消费历史。
+
+## 定时任务实际验收
+
+2026-11-15 16:59 北京时间，独立浏览器持有进程由 Windows 任务发出的请求完成两遍 126 卡/9 页核验，`20261115T085908Z-c94f6581` 返回 `no_new`，新增0、业务写入0、模型调用0。`HXY-MemberSync-Controlled` 每日10:00及用户登录时触发，原 AI automation-2 已暂停。
+
+运行包来自 `7cb82210995e56a80339a4c2f2d89432605b58be`，本机包 manifest SHA `42afd43454e3acf1e8bc8259cf3c340e29f9155996bba850593612698cc17e33`。本机受限根目录保存 `activation-20261115.json`、`scheduled-task-enabled.xml` 和请求结果；实际任务业务报告保存在 runs 对应目录。
+
+首次定时验收的登录/页面上下文失败和查询加载超时均停在只读阶段，保留失败记录后修复正常页面并精确确认失败批次。没有重放已提交25卡，没有放宽租户、门店、保护基准或导入门禁。不要同时在专用窗口使用营业看板或分析模块；重新登录后从“顾客 → 会员卡查询”进入，确认顶部荷小悦1581452、门店筛选仅紫薇壹号店、搜索为空、每页15条。来源会话失效需要人工重新登录；程序不保存密码或自动输入验证码。
