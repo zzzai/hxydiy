@@ -14,8 +14,11 @@ TOP = """<html><body><span>荷小悦 (1581452)</span>
 <iframe src="https://gray.aizhb.net/shair/components/customerRelation/index.html#/card-search"></iframe>
 </body></html>"""
 FRAME = r"""<html><body>
-<div class="shop-selector__item" title="紫薇壹号店">紫薇壹号店</div>
-<input type="checkbox" value="1581453" checked hidden>
+<div class="shop-selector-input">紫薇壹号店 </div>
+<div hidden><label class="dialog-selector__item"><input type="checkbox" value="1582031">
+<div class="shop-selector__item">华富世家店</div></label>
+<label class="dialog-selector__item"><input type="checkbox" value="1581453" checked>
+<div class="shop-selector__item">紫薇壹号店</div></label></div>
 <input placeholder="请输入顾客姓名或手机号或卡号进行搜索" value="">
 <button onclick="render(1)">查询</button>
 <dl class="table_tips_item"><dt>总卡数</dt><dd class="table_tips_item-value">16</dd></dl>
@@ -73,7 +76,7 @@ def main():
         def route(request):
             url = request.request.url
             requested.append(url)
-            if url == "https://" + HOST + "/fixture":
+            if url == "https://" + HOST + "/shair/components/shair-web/base-system/index.html":
                 request.fulfill(status=200, body=TOP, content_type="text/html; charset=utf-8")
             elif "/customerRelation/index.html" in url and url.startswith("https://" + HOST + "/"):
                 request.fulfill(status=200, body=FRAME, content_type="text/html; charset=utf-8")
@@ -82,7 +85,7 @@ def main():
                 request.abort()
         context.route("**/*", route)
         page = context.new_page()
-        page.goto("https://" + HOST + "/fixture")
+        page.goto("https://" + HOST + "/shair/components/shair-web/base-system/index.html#/main/iframe?url=/shair/components/customerRelation/index.html%23/card-search")
         frame = page.frames[1]
         frame.wait_for_selector("#body tr")
         known = {source_key("TEST" + str(i).zfill(4)) for i in range(15)}

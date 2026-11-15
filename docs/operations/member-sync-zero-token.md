@@ -1,10 +1,13 @@
-# 零模型会员同步交付入口
+# 零模型会员同步运行说明
 
-运行说明、固定范围、异常处理、真实验收门禁和测试命令位于
-[tools/member_sync/README.md](../../tools/member_sync/README.md)。
+实现与运行边界见 [工具 README](../../tools/member_sync/README.md)。
 
-当前状态：只读规则与合成浏览器测试通过，真实独立采集未通过验收。
-旧 AI 日程已暂停，新 Windows 日程与受控新增均未启用。用户已授权专用 Chrome
-连接，但运行环境仍拒绝启动操作；不得把再次授权当作连接已经建立。
+2026-11-15 已解决原 Chrome 启动命令的策略阻塞：采用有沙箱、无 TCP 调试端口的 Playwright 自有进程管道，没有更改审批策略或导出浏览器认证。用户在专用窗口完成登录。
 
-这不是一次业务应用发布，也没有数据库迁移、会员导入或余额刷新。
+真实来源完整两遍 126 卡、9 页（15×8+6）核验通过，25 新卡（14 年度、11 储值）正式导入一次，新增 23 位会员，另 2 卡归属已有账号。447 用户/102 卡逐行保护，提交后 470 用户/127 卡；钱包和六类财务表不变；同 manifest 只读重复预览零新增。来源未包含的 1 张旧卡保留。真实备份和独立恢复通过，203 份回执/输入/备份已复制本机并逐项核验 SHA。
+
+本次 manifest `5442479234e2c47bc873c5d241557c4713b4250773a8eeb99399d63244932a8c` 已完成，禁止再次 apply。输入 SHA `fe36f9e293ec4e2f053be021de2052fcf30e3e986c5036a80378736a551041af`；source keyset SHA `d541865da9d9143c2edbd397eddb9b633e9dfc2f72ecb67348ce38e6d0ee25905`。
+
+运行 ID `20261115T080649Z-c6284288`；服务器私有回执 `/root/hxy-diy-private-operations/member-sync-agent/batches/20261115T080649Z-c6284288/`；本机 `hxy-diy-private-operations/member-sync-agent/runs/20261115T080649Z-c6284288/server-result/`。
+
+定时启用状态以 [脱敏验收记录](../release/evidence/member-sync-zero-token-20261115.json) 为准。应用 current 和容器未更换，未部署应用、迁移数据库、刷新旧余额或导入消费历史。

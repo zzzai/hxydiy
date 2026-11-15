@@ -6,7 +6,6 @@ from urllib.parse import urlsplit
 from contracts import SCOPE, SHOP, Stop, BAD_STATE, CARD_NAMES, require, source_key
 
 HOST = "gray.aizhb.net"
-CDP_ENDPOINT = "http://127.0.0.1:9333"
 SEARCH = "请输入顾客姓名或手机号或卡号进行搜索"
 FIELDS = {"手机号": "masked_phone", "门店": "store_name", "卡号": "card_number",
           "卡名称": "card_name", "卡类型": "source_card_type", "卡内余额": "balance_yuan",
@@ -26,14 +25,16 @@ class Collector:
         require(self.page.get_by_text(re.compile(r"荷小悦\s*[（(]1581452[)）]")).count() == 1,
                 "tenant_not_verified")
         frames = [f for f in self.page.frames if urlsplit(f.url).hostname == HOST
-                  and "/customerRelation/index.html" in f.url and "card-search" in f.url]
+                  and urlsplit(f.url).path.endswith("/customerRelation/index.html")
+                  and urlsplit(f.url).fragment.startswith("/card-search")]
         require(len(frames) == 1, "query_page_required")
         f = frames[0]
         require(f.get_by_placeholder(SEARCH).input_value() == "", "search_filter_present")
-        names = f.locator(".shop-selector__item").all_text_contents()
-        require([s.strip() for s in names] == [SHOP], "shop_filter_not_verified")
-        require(f.locator('input[type="checkbox"][value="1581453"]').is_checked(),
-                "shop_id_not_verified")
+        require(f.locator(".shop-selector-input").inner_text().strip() == SHOP,
+                "shop_filter_not_verified")
+        selected = f.locator("label.dialog-selector__item input:checked").evaluate_all(
+            "(xs)=>xs.map(x=>x.value)")
+        require(selected == ["1581453"], "shop_id_not_verified")
         require(f.locator(".el-pagination__sizes input").input_value() == "15条/页",
                 "page_size_changed")
         require(f.locator(".ant-drawer:visible,.ant-modal-wrap:visible").count() == 0,
@@ -185,19 +186,4 @@ class Collector:
 
 
 def collect(known):
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as pw:
-        # A pre-authorized dedicated browser must already be running. No auto launch/login.
-        try:
-            browser = pw.chromium.connect_over_cdp(CDP_ENDPOINT, timeout=5000)
-        except Exception:
-            raise Stop("source_browser_unavailable") from None
-        pages = [page for context in browser.contexts for page in context.pages]
-        require(all(urlsplit(p.url).hostname == HOST or p.url == "about:blank"
-                    for p in pages), "dedicated_browser_only")
-        sources = [p for p in pages if urlsplit(p.url).hostname == HOST]
-        require(len(sources) == 1, "single_source_tab_required")
-        page = sources[0]
-        page.set_default_timeout(15000)
-        # The client disconnects on exit; never close Chrome or export browser state.
-        return Collector(page, known).collect()
+    raise Stop("managed_session_required")

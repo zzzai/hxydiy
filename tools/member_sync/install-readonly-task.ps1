@@ -25,14 +25,14 @@ foreach ($syncPath in @($syncRoot, $syncPackage)) {
         }
     }
 }
-$syncName = 'HXY-MemberSync-ReadOnly'
+$syncName = 'HXY-MemberSync-Controlled'
 if (Get-ScheduledTask -TaskName $syncName -ErrorAction SilentlyContinue) {
     throw 'Task already exists; inspect it before replacement'
 }
-$syncArgs = '-B "' + (Join-Path $syncPackage 'runner.py') + '" --root "' + $syncRoot + '" --package-sha256 ' + $PackageSha256
+$syncArgs = '-B "' + (Join-Path $syncPackage 'session.py') + '" --root "' + $syncRoot + '" --package-sha256 ' + $PackageSha256
 $syncAction = New-ScheduledTaskAction -Execute $syncPython -Argument $syncArgs -WorkingDirectory $syncPackage
-$syncTrigger = New-ScheduledTaskTrigger -Daily -At '10:00'
+$syncTrigger = @((New-ScheduledTaskTrigger -Daily -At '10:00'), (New-ScheduledTaskTrigger -AtLogOn -User $syncIdentity.Name))
 $syncPrincipal = New-ScheduledTaskPrincipal -UserId $syncIdentity.Name -LogonType Interactive -RunLevel Limited
 $syncSettings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 25)
-Register-ScheduledTask -TaskName $syncName -Action $syncAction -Trigger $syncTrigger -Principal $syncPrincipal -Settings $syncSettings -Description 'Read-only source collection; no model calls and no membership writes' | Out-Null
+Register-ScheduledTask -TaskName $syncName -Action $syncAction -Trigger $syncTrigger -Principal $syncPrincipal -Settings $syncSettings -Description 'Verified additive member sync; no model calls; halt and notify on failures' | Out-Null
 Get-ScheduledTask -TaskName $syncName | Select-Object TaskName, State

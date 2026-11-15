@@ -45,7 +45,7 @@ def package_valid(expected):
         return False
     if not isinstance(entries, dict):
         return False
-    required = {"runner.py", "contracts.py", "collector.py", "probe_existing.py", "notify.ps1", "check-private-root.ps1"}
+    required = {"runner.py", "contracts.py", "collector.py", "probe_existing.py", "notify.ps1", "check-private-root.ps1", "session.py", "bridge.py", "server-runtime.json"}
     if not required.issubset(entries):
         return False
     for name, sha in entries.items():
@@ -57,8 +57,8 @@ def package_valid(expected):
 
 
 @contextmanager
-def single_instance(root):
-    lock = (root / "runner.lock").open("a+b")
+def single_instance(root, name="runner.lock"):
+    lock = (root / name).open("a+b")
     try:
         lock.seek(0)
         if os.name == "nt":
@@ -197,7 +197,7 @@ def main():
                 parser.error("invalid_acknowledgement_id")
             path = root / "state.json"
             state = json.loads(path.read_text(encoding="utf-8"))
-            if not state.get("blocked") or state.get("run_id") != args.acknowledge_run:
+            if not state.get("blocked") or state.get("run_id") != args.acknowledge_run or state.get("mode") != "readonly":
                 parser.error("exact_blocked_run_required")
             save(root / ("ack-" + args.acknowledge_run + ".json"),
                  {"run_id": args.acknowledge_run, "acknowledged_at_utc": utc()})
