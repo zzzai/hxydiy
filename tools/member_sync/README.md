@@ -53,3 +53,10 @@ python3 tools/member_sync/browser_smoke.py --chromium <isolated-test-browser>
 ```
 
 合成浏览器测试仅用虚构会员并阻断外网，覆盖外层 SPA 地址、隐藏门店选项、完整分页及零手机号确认保存。真实来源、生产一次新增、实际计划任务分别验收。
+
+
+## Member financial observations
+
+`financial_collector.py`, `ledger_collector.py` and `payment_collector.py` use an independently authenticated background Playwright page and normal read-only UI controls. They are not attached to the existing new-card timer. Never copy browser authentication state or operate the OS mouse/keyboard.
+
+`finance_packet.py` compiles cross-checked evidence into an exact append-only packet. `finance_controlled.py` is a coordinator-only, SHA-bound backup/rehearsal/apply entry, with one-attempt receipts. It does not migrate tables, deploy the application, alter old rows or enable unattended historical imports. Unknown refunds/payments cannot become verified savings. Inputs and backup artifacts belong in the restricted private operations directory outside Git.
