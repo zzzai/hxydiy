@@ -19,6 +19,7 @@ from app.domain.member_consumption import (
     ConsumptionBill,
     bill_content_sha256,
     compute_bill_savings,
+    compute_store_price_savings,
 )
 from app.models import (
     MembershipConsumptionBatch,
@@ -27,6 +28,18 @@ from app.models import (
     User,
 )
 
+
+
+def _price_comparison_summary(total: int, verified_count: int, amount: int) -> dict:
+    return {
+        "status": "verified" if verified_count else "unverified",
+        "amount_cents": amount if verified_count else None,
+        "bill_count": verified_count,
+        "unverified_bill_count": total - verified_count,
+        "basis": "historical_store_price_minus_settlement",
+        "refund_policy": "not_deducted",
+        "note": "按当次门店原价减结算金额，仅统计已核实的本人消费；未扣退款，不代表净节省。结算金额包含储值、券等支付，不是现金实付。",
+    }
 
 def _iso(value: datetime | None) -> str | None:
     if value is None:
@@ -196,6 +209,7 @@ def build_customer_consumption_history(
     if not applied_batches:
         return {
             "coverage": _coverage([], False, 0),
+            "store_price_comparison": _price_comparison_summary(0, 0, 0),
             "bills": [],
             "pagination": {"offset": offset, "limit": limit, "total": 0, "has_more": False},
             "savings": {
@@ -253,6 +267,8 @@ def build_customer_consumption_history(
     visible_bills: list[dict] = []
     verified_savings = 0
     verified_count = 0
+    comparison_count = 0
+    comparison_total = 0
     conflict_groups = 0
     for group in groups.values():
         domains = {row.id: to_domain_bill(row, lines_by_bill.get(row.id, [])) for row in group}
@@ -278,7 +294,17 @@ def build_customer_consumption_history(
             "amount_cents": result.savings_cents if result.status == "verified" else None,
             "reason": None if result.status == "verified" else result.reason,
         }
-        visible_bills.append(_bill_payload(row, lines, savings))
+        comparison = compute_store_price_savings(domains[row.id])
+        payload = _bill_payload(row, lines, savings)
+        payload["price_comparison"] = {
+            "status": comparison.status,
+            "amount_cents": comparison.savings_cents if comparison.status == "verified" else None,
+            "reason": None if comparison.status == "verified" else comparison.reason,
+        }
+        visible_bills.append(payload)
+        if comparison.status == "verified":
+            comparison_total += comparison.savings_cents or 0
+            comparison_count += 1
         if result.status == "verified":
             verified_savings += result.savings_cents or 0
             verified_count += 1
@@ -287,6 +313,7 @@ def build_customer_consumption_history(
     page = visible_bills[offset:offset + limit]
     return {
         "coverage": _coverage(applied_batches, bool(candidate_keys), conflict_groups),
+        "store_price_comparison": _price_comparison_summary(total, comparison_count, comparison_total),
         "bills": page,
         "pagination": {
             "offset": offset,

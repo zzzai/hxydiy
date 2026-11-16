@@ -136,7 +136,12 @@ def bill_content_sha256(bill: ConsumptionBill) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
+def compute_store_price_savings(bill: ConsumptionBill) -> SavingsResult:
+    """Compare historical source prices with settlement, before any refunds.
+
+    This is a price difference, not net savings or cash out-of-pocket cost.
+    Payment allocation and refund facts remain unchanged and may be unknown.
+    """
     if bill.bill_type != "service":
         return SavingsResult("excluded", None, f"bill_type={bill.bill_type}_not_consumption")
     if bill.currency != "CNY":
@@ -145,8 +150,6 @@ def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
         return SavingsResult("blocked", None, f"bill_status={bill.bill_status}_not_current_normal")
     if bill.attribution_status != "owned":
         return SavingsResult("blocked", None, f"attribution={bill.attribution_status}_not_personal")
-    if bill.refund_status != "none":
-        return SavingsResult("blocked", None, f"refund_status={bill.refund_status}_needs_evidence")
     if bill.settled_total_cents is None:
         return SavingsResult("unknown", None, "settled_total_missing")
     if bill.settled_total_cents < 0:
@@ -169,6 +172,20 @@ def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
     if line_settled_total != bill.settled_total_cents:
         return SavingsResult("anomaly", None, "header_and_line_settled_mismatch")
 
+    savings = store_total - bill.settled_total_cents
+    if savings < 0:
+        return SavingsResult("anomaly", None, "negative_savings")
+    return SavingsResult("verified", savings, "verified_store_price_settlement_before_refunds")
+
+
+def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
+    """Retain the stricter refund/payment-verified metric for existing callers."""
+    result = compute_store_price_savings(bill)
+    if result.status != "verified":
+        return result
+    if bill.refund_status != "none":
+        return SavingsResult("blocked", None, f"refund_status={bill.refund_status}_needs_evidence")
+
     # A savings number is only trustworthy when the source's payment breakdown
     # is explicitly complete and every component reconciles to the final amount.
     components = (
@@ -185,11 +202,8 @@ def compute_bill_savings(bill: ConsumptionBill) -> SavingsResult:
     if sum(components) != bill.settled_total_cents:
         return SavingsResult("anomaly", None, "payment_breakdown_does_not_reconcile")
 
-    savings = store_total - bill.settled_total_cents
-    if savings < 0:
-        return SavingsResult("anomaly", None, "negative_savings")
     card_payment = bill.card_principal_debit_cents + bill.card_bonus_debit_cents
-    return SavingsResult("verified", savings, "verified_historical_price_settlement_and_payment",
+    return SavingsResult("verified", result.savings_cents, "verified_historical_price_settlement_and_payment",
                          bill.coupon_payment_cents, card_payment)
 
 

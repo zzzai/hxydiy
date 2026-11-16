@@ -599,10 +599,12 @@ export type CustomerConsumptionOverview = {
     cash_payment_cents: number | null;
     other_payment_cents: number | null;
     savings: { status: string; amount_cents: number | null; reason: string | null };
+    price_comparison?: { status: string; amount_cents: number | null; reason: string | null };
     lines: Array<{ description: string; quantity: number | null; store_price_cents: number | null; settled_cents: number | null }>;
   }>;
   pagination: { offset: number; limit: number; total: number; has_more: boolean };
   savings: { status: string; amount_cents: number | null; bill_count: number | null; note: string };
+  store_price_comparison?: { status: string; amount_cents: number | null; bill_count: number; unverified_bill_count: number; basis: string; refund_policy: string; note: string };
   generated_at: string;
   read_only: boolean;
 };

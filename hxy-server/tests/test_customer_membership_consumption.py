@@ -201,7 +201,9 @@ def test_known_bill_visible_when_payment_evidence_incomplete(consumption_env):
     assert v1 is not None  # still visible history
     assert v1["savings"]["amount_cents"] is None
     assert v1["savings"]["status"] == "unknown"
-    assert body["savings"]["amount_cents"] == 4000  # SYN-V1 excluded from aggregate
+    assert body["savings"]["amount_cents"] == 4000
+    assert v1["price_comparison"]["amount_cents"] == 6000
+    assert body["store_price_comparison"]["amount_cents"] == 10000
 
 
 def test_foreign_currency_not_mixed_into_cny_savings(consumption_env):
@@ -252,3 +254,30 @@ def test_no_write(consumption_env):
     with factory() as db:
         after = [b.id for b in db.scalars(select(MembershipConsumptionBill).order_by(MembershipConsumptionBill.id))]
     assert after == before
+
+
+@pytest.mark.parametrize("refund", ["unknown", "partial", "refunded"])
+def test_price_comparison_uses_existing_facts_without_refund_backfill(consumption_env, refund):
+    client, factory, owner_token, other_token, owner_id, other_id = consumption_env
+    with factory() as db:
+        row = db.scalar(select(MembershipConsumptionBill).where(MembershipConsumptionBill.source_bill_no == "SYN-V1"))
+        row.refund_status = refund
+        row.payment_evidence_complete = False
+        row.card_principal_debit_cents = None
+        row.content_sha256 = content_sha256_for(row, list(db.scalars(select(MembershipConsumptionLine).where(MembershipConsumptionLine.bill_id == row.id))))
+        db.commit()
+        original_sha = row.content_sha256
+    body = _get(client, owner_token).json()
+    assert body["store_price_comparison"]["basis"] == "historical_store_price_minus_settlement"
+    assert body["store_price_comparison"]["refund_policy"] == "not_deducted"
+    assert body["store_price_comparison"]["amount_cents"] == 10000
+    assert body["store_price_comparison"]["bill_count"] == 2
+    assert body["store_price_comparison"]["unverified_bill_count"] == 0
+    assert body["savings"]["amount_cents"] == 4000
+    assert _bill(body, "SYN-V1")["savings"]["amount_cents"] is None
+    with factory() as db:
+        row = db.scalar(select(MembershipConsumptionBill).where(MembershipConsumptionBill.source_bill_no == "SYN-V1"))
+        assert row.refund_status == refund
+        assert row.payment_evidence_complete is False
+        assert row.card_principal_debit_cents is None
+        assert row.content_sha256 == original_sha

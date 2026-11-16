@@ -325,6 +325,9 @@ function ConsumptionHistory({ bills, data, loading, loadingMore, hasMore, error,
   if (error && !bills.length) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-error" role="alert">{error}</p><button type="button" className="profile-membership-retry" onClick={onRetry}>重新加载</button></section>;
   if (!data) return null;
   const hasBills = bills.length > 0;
+  const comparison = data.store_price_comparison;
+  const priceComparison = comparison?.basis === 'historical_store_price_minus_settlement';
+  const savings = priceComparison ? comparison : data.savings;
   const range = data.coverage.query_range_start && data.coverage.query_range_end
     ? `${formatDateTime(data.coverage.query_range_start).slice(0, 10)} ~ ${formatDateTime(data.coverage.query_range_end).slice(0, 10)}`
     : null;
@@ -335,13 +338,15 @@ function ConsumptionHistory({ bills, data, loading, loadingMore, hasMore, error,
     {!hasBills
       ? <p className="profile-membership-empty">暂无可核实的来源消费记录{data.coverage.conflict_bill_groups > 0 ? `（${data.coverage.conflict_bill_groups} 组待核对）` : ''}。</p>
       : <>
-        <div className="profile-consumption-savings"><span>累计消费优惠</span><strong>{data.savings.amount_cents !== null ? formatMemberCents(data.savings.amount_cents) : '未核实'}</strong><small>{data.savings.note}</small></div>
+        <div className="profile-consumption-savings"><span>{priceComparison ? '较门店价已省' : '累计消费优惠'}</span><strong>{savings.status === 'verified' && savings.amount_cents !== null ? formatMemberCents(savings.amount_cents) : '未核实'}</strong>{priceComparison && <small>已核实 {savings.bill_count ?? 0} 笔{comparison?.unverified_bill_count ? ` · ${comparison?.unverified_bill_count} 笔金额待核实，未计入` : ''} · 未扣退款</small>}<small>{savings.note}</small></div>
         <ul className="profile-consumption-bills">
-          {bills.map(bill => <li key={bill.id} className="profile-consumption-bill">
-            <div><strong>{bill.source_bill_no}</strong><span>{bill.savings.amount_cents !== null ? `优惠 ${formatMemberCents(bill.savings.amount_cents)}` : '优惠未核实'}</span></div>
-            <small>{bill.occurred_at ? `消费于 ${formatDateTime(bill.occurred_at).slice(0, 10)}` : '时间未记录'}{bill.settled_total_cents !== null ? ` · 结算 ${formatMemberCents(bill.settled_total_cents, bill.currency)}` : ''}</small>
+          {bills.map(bill => {
+            const billSavings = priceComparison ? bill.price_comparison : bill.savings;
+            return <li key={bill.id} className="profile-consumption-bill">
+            <div><strong>{bill.source_bill_no}</strong><span>{billSavings?.status === 'verified' && billSavings.amount_cents !== null ? `${priceComparison ? '较门店价省' : '优惠'} ${formatMemberCents(billSavings.amount_cents)}` : '优惠未核实'}</span></div>
+            <small>{bill.occurred_at ? `消费于 ${formatDateTime(bill.occurred_at).slice(0, 10)}` : '时间未记录'}{priceComparison && bill.store_price_total_cents !== null ? ` · 门店价 ${formatMemberCents(bill.store_price_total_cents, bill.currency)}` : ''}{bill.settled_total_cents !== null ? ` · 结算 ${formatMemberCents(bill.settled_total_cents, bill.currency)}` : ''}</small>
             {bill.lines.length > 0 && <details><summary>查看明细</summary><ul>{bill.lines.map((line, i) => <li key={i}>{line.description}{line.quantity !== null ? ` × ${line.quantity}` : ''}{line.settled_cents !== null ? ` · ${formatMemberCents(line.settled_cents, bill.currency)}` : ''}</li>)}</ul></details>}
-          </li>)}
+          </li>; })}
         </ul>
         {hasMore && <button type="button" className="profile-consumption-more" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? '加载中…' : '加载更多'}</button>}
         {error && hasBills && <p className="profile-membership-error" role="alert">{error}</p>}

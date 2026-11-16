@@ -1,3 +1,4 @@
+import pytest
 from app.domain.member_consumption import BillLine, ConsumptionBill, aggregate_verified, bill_content_sha256, compute_bill_savings, ingest_bills, visible_to
 
 
@@ -228,3 +229,43 @@ def test_foreign_currency_is_unknown_not_verified():
     assert result.status == "unknown"
     assert "currency" in result.reason
     assert aggregate_verified([usd])["savings_cents"] is None
+
+
+@pytest.mark.parametrize("refund", ["none", "unknown", "partial", "refunded", "void"])
+def test_store_price_comparison_does_not_infer_net_savings(refund):
+    from app.domain.member_consumption import compute_store_price_savings
+    item = bill(refund_status=refund, payment_evidence_complete=False,
+                card_principal_debit_cents=None, card_bonus_debit_cents=None,
+                coupon_payment_cents=None, cash_payment_cents=None, other_payment_cents=None)
+    result = compute_store_price_savings(item)
+    assert result.status == "verified"
+    assert result.savings_cents == 6000
+    assert result.reason == "verified_store_price_settlement_before_refunds"
+    assert compute_bill_savings(item).status != "verified"
+
+
+@pytest.mark.parametrize("changes, expected", [
+    ({"bill_type": "recharge"}, "excluded"),
+    ({"bill_status": "voided"}, "blocked"),
+    ({"attribution_status": "shared"}, "blocked"),
+    ({"currency": "USD"}, "unknown"),
+    ({"settled_total_cents": None}, "unknown"),
+    ({"lines": ()}, "unknown"),
+    ({"lines": (BillLine("Synthetic", 1, None, 24000),)}, "unknown"),
+    ({"store_price_total_cents": 29999}, "anomaly"),
+    ({"settled_total_cents": 23000}, "anomaly"),
+    ({"store_price_total_cents": 20000, "lines": (BillLine("Synthetic", 1, 20000, 24000),)}, "anomaly"),
+])
+def test_store_price_comparison_preserves_evidence_guards(changes, expected):
+    from app.domain.member_consumption import compute_store_price_savings
+    result = compute_store_price_savings(bill(**changes))
+    assert result.status == expected
+    assert result.savings_cents is None
+
+
+def test_store_price_comparison_verified_zero_and_derived_line_total():
+    from app.domain.member_consumption import compute_store_price_savings
+    result = compute_store_price_savings(bill(store_price_total_cents=None,
+        lines=(BillLine("Synthetic", 1, 24000, 24000),)))
+    assert result.status == "verified"
+    assert result.savings_cents == 0

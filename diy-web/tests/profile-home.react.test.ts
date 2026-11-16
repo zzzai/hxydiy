@@ -287,3 +287,40 @@ test('missing coverage dates render unknown dates even when bills are empty', as
     assert.doesNotMatch(page.text(), /覆盖完整/);
   } finally { await page.close(); }
 });
+
+
+test('historical store-price comparison explains verified coverage and refund exclusion', async () => {
+  const consumption = makeConsumption(false);
+  Object.assign(consumption.data, { store_price_comparison: { ...consumption.data.savings, basis: 'historical_store_price_minus_settlement', refund_policy: 'not_deducted', unverified_bill_count: 1 } });
+  consumption.bills.forEach(bill => Object.assign(bill, { price_comparison: bill.savings }));
+  const page = await subject({ consumption });
+  try {
+    const content = textOf(page.app.root.findByProps({ className: 'profile-consumption' }));
+    assert.match(content, /较门店价已省¥60\.00/);
+    assert.match(content, /已核实 1 笔/);
+    assert.match(content, /1 笔金额待核实，未计入/);
+    assert.match(content, /未扣退款/);
+    assert.match(content, /门店价 ¥300\.00 · 结算 ¥240\.00/);
+    assert.doesNotMatch(content, /累计会员节省|实际省了/);
+  } finally { await page.close(); }
+});
+
+test('unverified non-null amounts are never presented as savings', async () => {
+  const consumption = makeConsumption(false);
+  Object.assign(consumption.data, { store_price_comparison: { ...consumption.data.savings, basis: 'historical_store_price_minus_settlement', status: 'unverified', amount_cents: 12345 } });
+  Object.assign(consumption.bills[0], { price_comparison: { status: 'unknown', amount_cents: 12345 } });
+  const page = await subject({ consumption });
+  try {
+    const content = textOf(page.app.root.findByProps({ className: 'profile-consumption' }));
+    assert.match(content, /较门店价已省未核实/);
+    assert.doesNotMatch(content, /¥123\.45/);
+  } finally { await page.close(); }
+});
+
+test('a verified zero comparison remains a real zero', async () => {
+  const consumption = makeConsumption(false);
+  Object.assign(consumption.data, { store_price_comparison: { ...consumption.data.savings, basis: 'historical_store_price_minus_settlement', amount_cents: 0 } });
+  const page = await subject({ consumption });
+  try { assert.match(textOf(page.app.root.findByProps({ className: 'profile-consumption-savings' })), /较门店价已省¥0\.00/); }
+  finally { await page.close(); }
+});
