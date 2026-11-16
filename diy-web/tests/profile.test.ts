@@ -38,7 +38,7 @@ test('会员有效期映射为有效、临期和过期状态', () => {
 
 test('会员卡提供动态会员码且明确30秒刷新和可信设备边界', () => {
   const source = fs.readFileSync(new URL('../src/components/ProfilePage.tsx', import.meta.url), 'utf8');
-  assert.match(source, /出示动态会员码/);
+  assert.match(fs.readFileSync(new URL('../src/components/ProfileMemberOverview.tsx', import.meta.url), 'utf8'), /出示动态会员码/);
   assert.match(source, /30 秒/);
   assert.match(source, /issueMemberCode/);
   assert.match(source, /enrollTrustedDevice/);

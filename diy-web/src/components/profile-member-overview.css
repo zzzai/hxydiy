@@ -1,0 +1,106 @@
+/* Keep member identity, balance and verified savings together. */
+.profile-member-overview {
+  --member-ink: #263a30;
+  --member-muted: #4e594c;
+  --member-line: #bcad8d;
+  --member-accent: #284e3d;
+  margin: 22px 0 12px;
+  padding: 20px 20px 0;
+  border: 1px solid #cbbb98;
+  border-radius: 18px;
+  background: linear-gradient(115deg, #eee6d4 0%, #dccba6 54%, #e9dfc9 100%);
+  color: var(--member-ink);
+  text-align: left;
+}
+.profile-member-overview[data-kind="annual"] {
+  --member-ink: #465347;
+  --member-muted: #626b5e;
+  --member-line: #dbd5c6;
+  --member-accent: #486452;
+  background: #f4f1e8;
+  border-color: #e0dacb;
+}
+.profile-member-overview[data-kind="inactive"],
+.profile-member-overview[data-kind="guest"] {
+  --member-ink: #314b3b;
+  --member-muted: #58675d;
+  --member-line: #d9e3db;
+  --member-accent: #3d624a;
+  background: #f1f5f1;
+  border-color: #d9e3db;
+}
+.profile-overview-identity { display: flex; align-items: center; gap: 10px; }
+.profile-overview-avatar { display: flex; align-items: center; justify-content: center; flex: 0 0 44px; height: 44px; border-radius: 50%; background: #284e3d; color: #f3e3ba; }
+.profile-overview-name { flex: 1; min-width: 0; }
+.profile-overview-name h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.profile-overview-name p { margin: 3px 0 0; color: var(--member-muted); font-size: 12px; }
+.profile-overview-badge { display: inline-flex; align-items: center; flex-shrink: 0; gap: 4px; padding: 6px 8px; border: 1px solid #284e3d; border-radius: 6px; background: #284e3d; color: #fff5dd; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.profile-member-overview[data-kind="annual"] .profile-overview-avatar { background: #fffdf7; color: #80745d; border: 1px solid #ccc2ad; }
+.profile-member-overview[data-kind="annual"] .profile-overview-badge { background: #e9e2d2; color: #5d594c; border-color: #d1c7b0; font-weight: 500; }
+.profile-member-overview[data-kind="inactive"] .profile-overview-badge,
+.profile-member-overview[data-kind="guest"] .profile-overview-badge { background: #e3ece4; color: #465b4c; border-color: #cbd9ce; }
+.profile-overview-store { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 15px 0 0; color: var(--member-muted); font-size: 12px; }
+.profile-overview-expiry { margin: 8px 0 0; color: var(--member-muted); font-size: 12px; line-height: 1.6; }
+.profile-overview-card-picker { display: block; margin-top: 12px; color: var(--member-muted); font-size: 12px; }
+.profile-overview-card-picker select { display: block; width: 100%; min-height: 40px; margin-top: 5px; padding: 5px 8px; border: 1px solid var(--member-line); border-radius: 6px; background: #fffaf0; color: var(--member-ink); font: inherit; }
+.profile-overview-metrics { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin: 22px 0 20px; }
+.profile-overview-metrics.has-balance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.profile-member-overview .profile-overview-metric { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; box-shadow: none; font: inherit; text-align: left; cursor: pointer; }
+.profile-overview-metric > span { display: flex; align-items: center; gap: 4px; color: var(--member-muted); font-size: 12px; }
+.profile-overview-metric strong { max-width: 100%; font-size: clamp(24px, 7vw, 32px); font-weight: 600; line-height: 1.25; letter-spacing: -.6px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.profile-overview-metric strong.is-message { padding: 3px 0; font-size: 22px; letter-spacing: 0; }
+.profile-overview-metric small { color: var(--member-muted); font-size: 11px; line-height: 1.5; }
+.profile-overview-disclosure { color: #314b3b; text-align: left; }
+.profile-member-overview .profile-overview-disclosure { border-top: 1px solid var(--member-line); color: inherit; }
+.profile-overview-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; list-style: none; font-size: 13px; cursor: pointer; }
+.profile-overview-disclosure summary::-webkit-details-marker,
+.profile-overview-calculation summary::-webkit-details-marker,
+.profile-consumption-bill summary::-webkit-details-marker { display: none; }
+.profile-overview-disclosure-end { display: inline-flex; align-items: center; gap: 5px; color: #667369; font-size: 12px; }
+.profile-member-overview .profile-overview-disclosure-end { color: var(--member-muted); }
+.profile-overview-disclosure[open] > summary .profile-overview-disclosure-end > svg,
+.profile-overview-calculation[open] > summary > svg,
+.profile-consumption-bill details[open] > summary > svg { transform: rotate(90deg); }
+.profile-overview-benefits { padding: 0 0 16px; font-size: 12px; line-height: 1.75; color: var(--member-muted); }
+.profile-overview-benefits p { margin: 5px 0; }
+.profile-overview-benefits ul { margin: 8px 0; padding-left: 18px; list-style: disc; }
+.profile-overview-card-state { font-weight: 600; color: var(--member-ink); }
+.profile-overview-small { margin: 5px 0; font-size: 12px; line-height: 1.6; color: #58675d; }
+.profile-overview-benefits .profile-overview-small { color: var(--member-muted); }
+.profile-overview-balance-note { margin-top: 10px; padding-top: 7px; border-top: 1px solid var(--member-line); }
+.profile-consumption.profile-overview-disclosure { margin: 0; padding: 0; border: 0; border-bottom: 1px solid #e8ede8; border-radius: 0; background: #fff; }
+.profile-overview-history-content { padding-bottom: 12px; }
+.profile-overview-calculation { margin-bottom: 10px; font-size: 12px; line-height: 1.75; color: #58675d; }
+.profile-overview-calculation > summary { display: flex; align-items: center; gap: 5px; min-height: 40px; width: fit-content; list-style: none; color: #284e3d; cursor: pointer; }
+.profile-overview-calculation p { margin: 0; padding: 10px 12px; background: #f5f8f4; border-radius: 6px; }
+.profile-consumption-bills { list-style: none; margin: 0; padding: 0; }
+.profile-consumption-bill { padding: 14px 0; border-bottom: 1px solid #edf1ec; font-size: 12px; color: #58675d; }
+.profile-overview-bill-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.profile-overview-bill-heading > div { min-width: 0; flex: 1; }
+.profile-overview-bill-heading > div:last-child { text-align: right; }
+.profile-overview-bill-heading strong { display: block; color: #314b3b; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.profile-overview-bill-heading small { display: block; margin-top: 5px; font-size: 11px; line-height: 1.6; }
+.profile-consumption-bill details > summary { display: flex; align-items: center; gap: 4px; min-height: 40px; width: fit-content; list-style: none; color: #284e3d; cursor: pointer; }
+.profile-consumption-bill details p { margin: 4px 0; overflow-wrap: anywhere; }
+.profile-consumption-bill details ul { margin: 4px 0; padding-left: 16px; line-height: 1.8; list-style: disc; }
+.profile-consumption-scope { margin: 12px 0 0; color: #667369; font-size: 11px; line-height: 1.7; }
+.profile-home .profile-overview-retry,
+.profile-home .profile-consumption-more { min-height: 44px; padding: 8px 12px; border: 1px solid #cbd9ce; border-radius: 6px; background: #fff; color: #284e3d; font: inherit; font-size: 12px; cursor: pointer; }
+.profile-consumption-more { width: 100%; margin-top: 12px; }
+.profile-consumption-more:disabled { opacity: .55; cursor: wait; }
+.profile-overview-message { padding: 12px 0; color: #58675d; font-size: 12px; line-height: 1.7; }
+.profile-home .profile-overview-services-title { margin: 24px 0 10px; color: #536158; font-size: 13px; font-weight: 500; }
+.profile-home .profile-shortcuts { margin-top: 0; }
+.profile-member-overview button:focus-visible,
+.profile-member-overview select:focus-visible,
+.profile-overview-disclosure summary:focus-visible { outline: 2px solid #284e3d; outline-offset: 4px; }
+@media (max-width: 360px) {
+  .profile-member-overview { padding: 16px 14px 0; }
+  .profile-overview-identity { gap: 8px; }
+  .profile-overview-name h1 { font-size: 17px; }
+  .profile-overview-avatar { flex-basis: 36px; height: 36px; }
+  .profile-overview-badge { gap: 3px; padding: 5px 6px; font-size: 10px; }
+  .profile-overview-metrics { gap: 12px; }
+  .profile-overview-metric strong { font-size: 26px; }
+  .profile-overview-metric small { font-size: 10px; }
+}

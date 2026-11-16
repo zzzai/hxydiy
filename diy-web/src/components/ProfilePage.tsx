@@ -2,19 +2,20 @@ import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, Lo
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type CustomerConsumptionOverview, type CustomerMembershipOverview, type MyCoupon, type Order, type SelectionSession } from '../api';
-import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth, type CustomerUser } from '../customerAuth';
-import { formatMemberCents, formatMoney } from '../domain';
+import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
+import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
+import { formatMoney } from '../domain';
 import { useCustomerMembership } from './useCustomerMembership';
 import { useCustomerConsumption } from './useCustomerConsumption';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
 import { bindPendingGuestCoupons } from '../guestCoupon';
-import { canSelfCancelOrder, couponStatusLabel, formatDateTime, membershipState, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
+import { canSelfCancelOrder, couponStatusLabel, formatDateTime, orderStatusLabel, recordFilter, selectionDisplayAmount, selectionStatusLabel, type RecordFilter } from '../profile';
 import MembershipBanner from './MembershipBanner';
 import FeedbackDialog from './FeedbackDialog';
 import MyReports from './MyReports';
 import { ProfileReturnTools, ReturnDialog } from './CustomerReturnTools';
 import './profile-home.css';
+import ProfileMemberOverview from './ProfileMemberOverview';
 
 type TabKey = 'records' | 'coupons';
 
@@ -187,9 +188,8 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
         ? <div className="profile-anonymous-body">{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={openReports}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} />{!reportsOpen && <ProfileReturnTools storeId={storeId} compact />}</div>
         : reportsOpen ? <MyReports key={auth.token} token={auth.token} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
           <main className="profile-body">
-            <ProfileCard user={auth.user} onShowCode={() => setMemberCodeOpen(true)} />
-            <MembershipSnapshot data={membership.data} loading={membership.loading} error={membership.error} onRetry={membership.retry} />
-            <ConsumptionHistory bills={consumption.bills} data={consumption.data} loading={consumption.loading} loadingMore={consumption.loadingMore} hasMore={consumption.hasMore} error={consumption.error} onRetry={consumption.retry} onLoadMore={consumption.loadMore} />
+            <ProfileMemberOverview key={auth.token} user={auth.user} membership={membership} consumption={consumption} showMemberCode={SHOW_DYNAMIC_MEMBER_CODE} onShowCode={() => setMemberCodeOpen(true)} />
+            <h2 className="profile-overview-services-title">常用服务</h2>
             <nav className="profile-shortcuts" aria-label="常用功能">
               <button type="button" aria-expanded={recordsOpen && recordState !== 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('all', event.currentTarget)}><Clock3 size={23} aria-hidden="true" /><span>服务记录</span></button>
               <button type="button" aria-label={`待评价，${pendingCount}条`} aria-expanded={recordsOpen && recordState === 'pending-feedback'} aria-controls="profile-records" onClick={event => showRecords('pending-feedback', event.currentTarget)}><span className="profile-shortcut-icon"><MessageSquareText size={23} aria-hidden="true" />{pendingCount > 0 && <em aria-hidden="true">{pendingCount}</em>}</span><span>待评价</span></button>
@@ -280,88 +280,6 @@ function ProfileLogin({ onAuthChange }: { onAuthChange: (auth: CustomerAuth) => 
       <button className="profile-login-submit" type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button>
     </main>
   );
-}
-
-function ProfileCard({ user, onShowCode }: { user: CustomerUser; onShowCode: () => void }) {
-  const state = membershipState(user.member_expire_at);
-  const expiry = user.member_expire_at ? formatDateTime(user.member_expire_at).slice(0, 10) : '';
-  const memberLabel = user.member_type === 'annual' ? '年度权益卡' : user.member_type === 'stored' ? '储值会员卡' : '会员身份';
-  return <section className={`profile-identity-card ${user.is_member ? 'is-member' : 'is-guest'}`} aria-label="我的会员信息">
-    {user.is_member && <div className="profile-card-heading"><strong>荷小悦会员</strong><span className="profile-member-label"><BadgeCheck size={15} aria-hidden="true" />{memberLabel}</span></div>}
-    <div className="profile-avatar"><UserRound size={24} aria-hidden="true" /></div>
-    <div className="profile-identity-copy"><h1>{user.nickname || '荷小悦顾客'}</h1><p>{maskPhone(user.phone)}</p></div>
-    {user.is_member && <p className="profile-membership-expiry">{state.kind === 'expired' ? '会员权益已到期' : expiry ? `权益有效期至 ${expiry}` : '会员有效期以门店记录为准'}{state.kind === 'expiring' && <span> · 还有 {state.daysLeft} 天</span>}</p>}
-    {SHOW_DYNAMIC_MEMBER_CODE && user.is_member && state.kind !== 'expired' && <button className="profile-member-code-button" type="button" onClick={onShowCode}>出示动态会员码</button>}
-  </section>;
-}
-
-function MembershipSnapshot({ data, loading, error, onRetry }: { data: CustomerMembershipOverview | null; loading: boolean; error: string; onRetry: () => void }) {
-  if (loading) return <section className="profile-membership-detail" aria-label="会员卡与权益"><p className="profile-membership-loading" role="status">正在读取会员卡快照…</p></section>;
-  if (error) return <section className="profile-membership-detail" aria-label="会员卡与权益"><p className="profile-membership-error" role="alert">{error}</p><button type="button" className="profile-membership-retry" onClick={onRetry}>重新加载</button></section>;
-  if (!data) return null;
-  return <section className="profile-membership-detail" aria-label="会员卡与权益">
-    <div className="profile-membership-heading"><div><h2>会员卡与权益</h2><small>余额为来源快照，具体构成以门店记录为准</small></div><span>{data.card_count > 0 ? `${data.card_count} 张来源卡` : '暂无来源卡'}</span></div>
-    {data.cards.length === 0 ? <p className="profile-membership-empty">{data.identity.is_member ? '当前没有可展示的本店来源卡，权益以门店记录为准。' : '暂未关联本店来源会员卡。'}</p> : <ul className="profile-membership-cards">
-      {data.cards.map(card => <li key={card.id} className={`profile-membership-card ${card.usable ? 'is-usable' : 'is-inactive'}`}>
-        <div className="profile-membership-card-head"><strong>{card.card_type_label}</strong><span>{membershipCardStatusLabel(card.status)}</span></div>
-        <p>{card.store_name || `门店 #${card.store_id}`} · {card.usable ? (card.balance.reconciliation === 'zero_balance_against_active_card_review' ? '状态待门店核实' : '当前可用') : '当前不可用'}</p>
-        <small>{card.expires_at ? `有效期至 ${formatDateTime(card.expires_at).slice(0, 10)}` : '有效期以来源记录为准'}{card.observed_at ? ` · 核验于 ${formatDateTime(card.observed_at).slice(0, 10)}` : ' · 核验时间未记录'}</small>
-        {card.card_type === 'stored' && <div className="profile-membership-balance">
-          <span>{card.balance.evidence === 'balance_snapshot' ? '余额观测' : '来源余额快照'}</span>
-          <strong>{card.balance.amount_cents !== null ? formatMemberCents(card.balance.amount_cents) : '未核实'}</strong>
-          {card.balance.split === 'verified' && card.balance.principal_cents !== null && card.balance.bonus_cents !== null && <small>本金 {formatMemberCents(card.balance.principal_cents)} · 赠金 {formatMemberCents(card.balance.bonus_cents)}</small>}
-          <small>{card.balance.status === 'conflicted' ? '同一观测时间存在冲突，余额未核实（不按首次或任一取值）' : card.balance.status === 'anomaly' ? '余额观测异常，未核实' : card.balance.reconciliation === 'zero_balance_against_active_card_review' ? '余额观测为 0，状态待门店核实' : card.balance.evidence === 'balance_snapshot' ? '非实时观测，总额不等于本金，未知不计为 0' : '非实时余额，具体构成以门店记录为准'}{card.balance.observed_at ? ` · 观测于 ${formatDateTime(card.balance.observed_at).slice(0, 10)}` : ''}</small>
-          {card.balance.original && <small>原始快照 {formatMemberCents(card.balance.original.amount_cents)}{card.balance.original.observed_at ? `（${formatDateTime(card.balance.original.observed_at).slice(0, 10)}）` : ''}</small>}
-        </div>}
-        <details className="profile-membership-benefits"><summary>查看权益</summary><ul>{card.benefits.map(benefit => <li key={benefit}>{benefit}</li>)}</ul><small>{card.benefits_note}</small></details>
-      </li>)}
-    </ul>}
-    <p className="profile-membership-scope">{data.coverage.card_snapshot === 'returned' ? '会员卡信息为来源快照' : '暂无来源会员卡'}{data.coverage.as_of ? `，截至 ${formatDateTime(data.coverage.as_of).slice(0, 10)}` : ''}。</p>
-  </section>;
-}
-
-function ConsumptionHistory({ bills, data, loading, loadingMore, hasMore, error, onRetry, onLoadMore }: { bills: CustomerConsumptionOverview['bills']; data: CustomerConsumptionOverview | null; loading: boolean; loadingMore: boolean; hasMore: boolean; error: string; onRetry: () => void; onLoadMore: () => void }) {
-  if (loading) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-loading" role="status">正在读取消费记录…</p></section>;
-  if (error && !bills.length) return <section className="profile-consumption" aria-label="历史消费"><p className="profile-membership-error" role="alert">{error}</p><button type="button" className="profile-membership-retry" onClick={onRetry}>重新加载</button></section>;
-  if (!data) return null;
-  const hasBills = bills.length > 0;
-  const comparison = data.store_price_comparison;
-  const priceComparison = comparison?.basis === 'historical_store_price_minus_settlement';
-  const savings = priceComparison ? comparison : data.savings;
-  const range = data.coverage.query_range_start && data.coverage.query_range_end
-    ? `${formatDateTime(data.coverage.query_range_start).slice(0, 10)} ~ ${formatDateTime(data.coverage.query_range_end).slice(0, 10)}`
-    : null;
-  const observed = data.coverage.observed_at ? `观测 ${formatDateTime(data.coverage.observed_at).slice(0, 10)}` : '';
-  const coverageLabel = data.coverage.complete === true ? '覆盖完整' : data.coverage.complete === false ? (data.coverage.coverage_gaps ? '存在缺失，覆盖不完整' : '覆盖不完整') : '覆盖未核实';
-  return <section className="profile-consumption" aria-label="历史消费">
-    <div className="profile-membership-heading"><div><h2>历史消费</h2><small>来源可核实记录，独立于 DIY 钱包</small></div><span>{data.pagination.total} 笔记录</span></div>
-    {!hasBills
-      ? <p className="profile-membership-empty">暂无可核实的来源消费记录{data.coverage.conflict_bill_groups > 0 ? `（${data.coverage.conflict_bill_groups} 组待核对）` : ''}。</p>
-      : <>
-        <div className="profile-consumption-savings"><span>{priceComparison ? '较门店价已省' : '累计消费优惠'}</span><strong>{savings.status === 'verified' && savings.amount_cents !== null ? formatMemberCents(savings.amount_cents) : '未核实'}</strong>{priceComparison && <small>已核实 {savings.bill_count ?? 0} 笔{comparison?.unverified_bill_count ? ` · ${comparison?.unverified_bill_count} 笔金额待核实，未计入` : ''} · 未扣退款</small>}<small>{savings.note}</small></div>
-        <ul className="profile-consumption-bills">
-          {bills.map(bill => {
-            const billSavings = priceComparison ? bill.price_comparison : bill.savings;
-            return <li key={bill.id} className="profile-consumption-bill">
-            <div><strong>{bill.source_bill_no}</strong><span>{billSavings?.status === 'verified' && billSavings.amount_cents !== null ? `${priceComparison ? '较门店价省' : '优惠'} ${formatMemberCents(billSavings.amount_cents)}` : '优惠未核实'}</span></div>
-            <small>{bill.occurred_at ? `消费于 ${formatDateTime(bill.occurred_at).slice(0, 10)}` : '时间未记录'}{priceComparison && bill.store_price_total_cents !== null ? ` · 门店价 ${formatMemberCents(bill.store_price_total_cents, bill.currency)}` : ''}{bill.settled_total_cents !== null ? ` · 结算 ${formatMemberCents(bill.settled_total_cents, bill.currency)}` : ''}</small>
-            {bill.lines.length > 0 && <details><summary>查看明细</summary><ul>{bill.lines.map((line, i) => <li key={i}>{line.description}{line.quantity !== null ? ` × ${line.quantity}` : ''}{line.settled_cents !== null ? ` · ${formatMemberCents(line.settled_cents, bill.currency)}` : ''}</li>)}</ul></details>}
-          </li>; })}
-        </ul>
-        {hasMore && <button type="button" className="profile-consumption-more" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? '加载中…' : '加载更多'}</button>}
-        {error && hasBills && <p className="profile-membership-error" role="alert">{error}</p>}
-      </>}
-    <p className="profile-consumption-scope">统计覆盖期：{range ?? '未记录'}{observed ? ` · ${observed}` : ''}；{coverageLabel}；金额未核实不计入。</p>
-  </section>;
-}
-
-function membershipCardStatusLabel(status: string) {
-  return status === 'active' ? '有效' : status === 'disabled' ? '已停用' : status === 'expired' ? '已到期' : status === 'exhausted' ? '余额用尽' : status === 'scheduled' ? '未开始' : '待核实';
-}
-
-function maskPhone(phone: string) {
-  const normalized = phone.replace(/\D/g, '');
-  return normalized.length === 11 ? `${normalized.slice(0, 3)}****${normalized.slice(-4)}` : '手机号已绑定';
 }
 
 function OrderList({ orders, cancelling, onCancel }: {
