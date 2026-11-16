@@ -134,7 +134,7 @@ def main():
         result = request(root, args.package_sha256)
         with runner.single_instance(root, "owner.lock") as missing:
             if missing:
-                # A fresh browser always needs normal manual sign-in. No existing profile is read.
+                # A fresh browser uses the enrolled local credential flow. No existing profile is read.
                 subprocess.Popen([sys.executable, "-B", str(Path(__file__).resolve()),
                     "--root", str(root), "--package-sha256", args.package_sha256, "--serve"],
                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

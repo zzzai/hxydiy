@@ -38,11 +38,23 @@ def card_frame(page):
     return frames[0] if len(frames)==1 else None
 
 
+def select_store_dialog(page):
+    dialogs=page.get_by_role('dialog').filter(has=page.get_by_text('门店选择',exact=True))
+    if dialogs.count()==0:return False
+    require(dialogs.count()==1,'finance_initial_store_dialog_ambiguous')
+    require(page.get_by_text(re.compile(r'荷小悦\s*[（(]1581452[)）]')).count()==1,'tenant_not_verified')
+    target=dialogs.locator('.group-list__item[title="1581453 荷小悦"]').filter(has=page.get_by_text(SHOP,exact=True))
+    require(target.count()==1,'finance_initial_store_choice_ambiguous')
+    target.click()
+    return True
+
+
 def member_query(page):
     page.set_default_timeout(15000)
     require('/login' not in page.url,'finance_login_required')
     if card_frame(page) is None:navigate(page,'顾客','会员卡查询')
     wait(page,lambda:card_frame(page) is not None,'finance_card_page_missing')
+    select_store_dialog(page)
     f=card_frame(page)
     wait(page,lambda:f.locator('.shop-selector-input').count()==1,'finance_card_filter_missing')
     if f.locator('.shop-selector-input').inner_text().strip()!=SHOP:

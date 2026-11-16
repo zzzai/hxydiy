@@ -115,3 +115,15 @@ def test_account_picker_selects_only_verified_tenant(login_page):
     assert page.evaluate('window.selected')==2
     page.locator('.account_selecter_item').last.evaluate('(e)=>e.parentElement.append(e.cloneNode(true))')
     with pytest.raises(Stop,match='source_login_account_choice_ambiguous'):select_account(page)
+
+
+def test_pending_account_selection_resumes_without_password(login_page,tmp_path):
+    import runner
+    page=login_page
+    html="<div role='dialog'><div class='ant-modal-title'>选择要登录的账号</div><div class='account_selecter_item'><div class='shopname'><div class='name'>荷小悦</div></div><div class='info'><div class='name'>荷小悦</div></div></div></div><p id='tenant'></p>"
+    page.evaluate('(html)=>document.body.innerHTML=html',html)
+    page.evaluate("() => {document.querySelector('.account_selecter_item').onclick=()=>{location.hash='/main';document.querySelector('#tenant').innerText='荷小悦（1581452）'}}")
+    runner.save(tmp_path/'login-state.json',{'blocked':True,'status':'attempting'})
+    def forbidden(_):raise AssertionError('must finish picker without resubmitting credentials')
+    ensure_login(page,tmp_path,load=forbidden,timeout_seconds=1)
+    assert json.loads((tmp_path/'login-state.json').read_bytes())['status']=='authenticated'

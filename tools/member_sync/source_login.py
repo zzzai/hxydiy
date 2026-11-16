@@ -46,8 +46,18 @@ def ensure_login(page,root,load=load_credentials,timeout_seconds=45):
     root=Path(root);require(trusted_page(page.url),'source_login_origin_rejected')
     if not allowed_login_url(page.url):
         require(page.get_by_text(TENANT).count()==1,'source_login_tenant_unproven')
+        save(root/'login-state.json',{'status':'authenticated','blocked':False,'updated_at':utc()})
         return {'status':'already_authenticated'}
     state_path=root/'login-state.json'
+    if select_account(page):
+        deadline=time.monotonic()+timeout_seconds
+        while time.monotonic()<deadline:
+            require(trusted_page(page.url),'source_login_origin_rejected')
+            if page.get_by_text(TENANT).count()==1 and not allowed_login_url(page.url):
+                save(state_path,{'status':'authenticated','blocked':False,'updated_at':utc()})
+                return {'status':'authenticated'}
+            page.wait_for_timeout(200)
+        raise Stop('source_login_tenant_unproven')
     state=json.loads(state_path.read_bytes()) if state_path.exists() else {}
     require(state.get('blocked') is not True,'source_login_latched')
     account=page.get_by_placeholder('账户',exact=True);password=page.get_by_placeholder('密码',exact=True)
