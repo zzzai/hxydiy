@@ -1,0 +1,81 @@
+{
+  "schema": "profile-member-summary-release@1",
+  "status": "passed",
+  "release_id": "server-fb284ea91e99-1794838721",
+  "source_sha": "fb284ea91e9943ffa8d9275d2a7219e1d7661336",
+  "previous_release": "server-a09bfea0832d-1794827986",
+  "published_at": "2026-11-16T14:23:11Z",
+  "frontend_tests": {
+    "passed": 406,
+    "skipped": 1,
+    "failed": 0
+  },
+  "release_tests": {
+    "passed": 42,
+    "failed": 0
+  },
+  "build": {
+    "customer": "passed",
+    "admin": "passed",
+    "staff_learning_enabled": true
+  },
+  "ui": {
+    "candidate_widths": [
+      320,
+      390
+    ],
+    "member_types": [
+      "stored",
+      "annual"
+    ],
+    "production_synthetic_scenarios": 2,
+    "production_api_requests": 0,
+    "field_acceptance": false
+  },
+  "data_protection": {
+    "status": "passed",
+    "protected_tables": 75,
+    "rows_unchanged": true,
+    "schema_unchanged": true
+  },
+  "backup_restore_gate": "passed",
+  "backup_sha256": "5901cb33f34d7afdc1d515bc639aad1d438e511476a75dffcfdcefed695cd514",
+  "public_verification": {
+    "release_id": "server-fb284ea91e99-1794838721",
+    "source_sha": "fb284ea91e9943ffa8d9275d2a7219e1d7661336",
+    "/": {
+      "status": 200,
+      "cache_control": "no-store, no-cache, must-revalidate",
+      "scripts": [
+        "/assets/index-6X04kS-J.js"
+      ],
+      "script_hashes_match": true
+    },
+    "/admin/": {
+      "status": 200,
+      "cache_control": "no-store, no-cache, must-revalidate",
+      "scripts": [
+        "/admin/assets/index-CZl9shl6.js"
+      ],
+      "script_hashes_match": true
+    },
+    "health": {
+      "status": "ok",
+      "service": "hxy-customer-api",
+      "environment": "production"
+    },
+    "anonymous_consumption_status": 401,
+    "manifest_files_verified": 633,
+    "status": "passed",
+    "running_api_sources_match": true,
+    "running_api_source_files": 135
+  },
+  "scope": {
+    "frontend_only": true,
+    "api_and_calculation_unchanged": true,
+    "migration": false,
+    "history_import": false,
+    "scheduled_sync_unchanged": true
+  },
+  "github_backup": "pending"
+}
