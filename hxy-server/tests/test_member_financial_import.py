@@ -287,3 +287,37 @@ def test_incremental_acceptance_counts_only_new_rows_and_keeps_old_history(facto
         expected_counts(dict(preview, insert_bills=True))
     with pytest.raises(ValueError, match="source_revision_conflict"):
         expected_counts(dict(preview, conflicting_bill_groups=1))
+
+
+@pytest.mark.parametrize("offset,card_balance", [(1, 9000), (1, 9500), (0, 9000), (0, 9500)])
+def test_acceptance_preserves_newer_original_card_fact(factory, monkeypatch, offset, card_balance):
+    import sys
+    from pathlib import Path
+    from datetime import timedelta
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/member_sync"))
+    import finance_acceptance
+    with factory() as db:
+        card = db.get(MembershipCard, 1)
+        card.observed_at = NOW + timedelta(minutes=offset)
+        card.balance_cents = card_balance
+        db.commit()
+    source = packet()
+    source = seal(replace(source, bills=()))
+    preview = imp.execute(factory, source)
+    imp.execute(factory, source, apply=True)
+    with factory() as db:
+        batch = db.scalar(select(MembershipConsumptionBatch).where(MembershipConsumptionBatch.batch_key==source.batch_key))
+        if offset == 0 and card_balance != source.balances[0].total_cents:
+            with pytest.raises(ValueError, match="customer_balance_projection_mismatch"):
+                finance_acceptance.verify_projection(db, source, batch, preview)
+            return
+        result = finance_acceptance.verify_projection(db, source, batch, preview)
+        assert result["insert_balances"] == 1
+        original = finance_acceptance.build_customer_membership_overview
+        def wrong_balance(*args, **kwargs):
+            value = original(*args, **kwargs)
+            value["cards"][0]["balance"]["amount_cents"] += 1
+            return value
+        monkeypatch.setattr(finance_acceptance, "build_customer_membership_overview", wrong_balance)
+        with pytest.raises(ValueError, match="customer_balance_projection_mismatch"):
+            finance_acceptance.verify_projection(db, source, batch, preview)

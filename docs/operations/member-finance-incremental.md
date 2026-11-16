@@ -9,3 +9,5 @@ Customer verification includes the complete observed owned-bill subset, all exis
 A new batch still requires new normal-UI source observations, complete pages, exact source hashes, a current read-only protection baseline, a real backup, isolated restore/application/projection/replay verification, then one transaction and a zero-write duplicate preview. The host runner accepts only date-scoped member-history directories directly under /root/hxy-diy-private-operations. No old manifest is replayed.
 
 Validation and production outcome are recorded separately with the batch receipts. This document alone is not evidence of a production import or app deployment.
+
+When a new card was imported after the financial source collection, its original card fact can be newer than the appended observation. Acceptance follows the existing customer projection timestamp contract: retain that newer card fact, verify its exact amount and timestamp, and preserve the earlier observation as history. Equal-time disagreement still fails acceptance; no production display rule or old data is changed.

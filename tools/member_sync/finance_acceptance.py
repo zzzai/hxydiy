@@ -2,7 +2,7 @@
 from collections import defaultdict
 from datetime import datetime, UTC
 from sqlalchemy import select
-from app.models import (User, MembershipConsumptionBill, MembershipConsumptionLine,
+from app.models import (User, MembershipCard, MembershipConsumptionBill, MembershipConsumptionLine,
                         MembershipBalanceSnapshot)
 from app.services.member_financial_import import SOURCE, STORE_ID, owner
 from app.services.customer_consumption import build_customer_consumption_history
@@ -64,9 +64,18 @@ def verify_projection(db, packet, batch, preview):
         for balance in balances:
             if balance.card_id in by_card:
                 display = by_card[balance.card_id]["balance"]
-                if display["amount_cents"] != balance.total_cents or display["evidence"] != "balance_snapshot" or display["observed_at"] is None:
-                    raise ValueError("customer_balance_projection_mismatch")
                 observed = balance.observed_at.replace(tzinfo=UTC) if balance.observed_at.tzinfo is None else balance.observed_at
+                amount, evidence = balance.total_cents, "balance_snapshot"
+                card = db.get(MembershipCard, balance.card_id)
+                card_time = card.observed_at
+                if card_time is not None:
+                    card_time = card_time.replace(tzinfo=UTC) if card_time.tzinfo is None else card_time
+                    if card_time >= observed:
+                        # A card imported after collection already carries newer facts.
+                        # Keep the source observation as history, not as a display override.
+                        observed, amount, evidence = card_time, card.balance_cents, "card_fact"
+                if display["amount_cents"] != amount or display["evidence"] != evidence or display["observed_at"] is None:
+                    raise ValueError("customer_balance_projection_mismatch")
                 if datetime.fromisoformat(display["observed_at"]) != observed:
                     raise ValueError("customer_balance_timestamp_mismatch")
                 checked_balances.add(balance.id)
