@@ -148,7 +148,7 @@ def main():
         with sync_playwright() as pw:
             browser = None
             try:
-                browser = pw.chromium.launch(channel="chrome", headless=True, chromium_sandbox=True)
+                browser = pw.chromium.launch(channel="chrome", headless=False, chromium_sandbox=True, args=["--start-minimized"])
                 context = browser.new_context(accept_downloads=False)
                 page = context.new_page()
                 page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)
