@@ -1,0 +1,16 @@
+{
+  "task_name": "HXY-MemberSync-Controlled",
+  "request_id": "e2bc329f-60ad-46bf-a976-ecc6742122df",
+  "run_id": "20261116T045113Z-2f359f60",
+  "status": "no_new",
+  "source_cards": 128,
+  "new_cards": 0,
+  "business_writes": 0,
+  "model_calls": 0,
+  "package_sha256": "f36a9e407e0ddd2b8dc2f7d9060bf81150860483e09295c640edce030964bcd0",
+  "source_revision": "3f0bde153dc118bc3a9ebeb3e94aa4c590959be2",
+  "same_logged_in_browser_reused": true,
+  "os_mouse_keyboard_used": false,
+  "authentication_exported": false,
+  "history_timer_enabled": false
+}

@@ -1,0 +1,127 @@
+{
+  "application": {
+    "current": "server-116b65aa6a5f-1794661064",
+    "existing_customer_projection_uses_new_facts": true,
+    "real_device_acceptance": false,
+    "redeployed": false,
+    "schema_changed": false
+  },
+  "automation": {
+    "historical_finance_scheduled": false,
+    "new_card_timer_acceptance": "member-sync-zero-token-20261116.json"
+  },
+  "cards": {
+    "cards_after": 129,
+    "completed_at_utc": "2026-11-16T04:33:48.240212+00:00",
+    "deployment_unchanged": true,
+    "existing_member_cards_added": 0,
+    "formal_apply_count": 1,
+    "input_sha256": "bd35e5fad183d5178a0a2877efede79f7f1832cccb2a44652ebc4db87a7a8b13",
+    "manifest_sha256": "54d67368f22d6e3e7289816f02b059acabed531b1a208e7320d4ef84175e8ed8",
+    "new_cards": 2,
+    "new_users": 2,
+    "old_users_cards_wallets_unchanged": true,
+    "protected_cards": 127,
+    "protected_users": 470,
+    "repeat_preview_new_cards": 0,
+    "repeat_preview_new_users": 0,
+    "six_financial_tables_unchanged": true,
+    "status": "completed_and_verified",
+    "users_after": 472
+  },
+  "coverage": {
+    "old_card_statuses_unchanged": true,
+    "retirement": "skipped_no_completion_evidence_by_user_instruction",
+    "revised_bills_excluded": 3,
+    "savings_status": "unverified",
+    "shared_or_unresolved_excluded": 255,
+    "visible_owned_bills": 104
+  },
+  "date": "2026-11-16",
+  "finance": {
+    "finished_at": "2026-11-16T04:49:52.869648+00:00",
+    "input_sha256": "4b3896569ec9bb75351632d13577ac9e1098e03886cdf472f163f9c0f448038c",
+    "manifest_sha256": "e3e54b898b8ab4ca199d961d006af761e1e3c2e96d26c663b098b24d33d959a7",
+    "old_data_unchanged": true,
+    "result": {
+      "business_writes": 55,
+      "conflicting_bill_groups": 0,
+      "created_at": "2026-11-16T04:49:49.264146+00:00",
+      "database_identity": {
+        "database": "hxy_diy",
+        "database_oid": 16384,
+        "postmaster_started_at": "2026-11-13 14:16:09.680663+00",
+        "role": "hxy_diy",
+        "schema": "public"
+      },
+      "input_sha256": "4b3896569ec9bb75351632d13577ac9e1098e03886cdf472f163f9c0f448038c",
+      "insert_balances": 48,
+      "insert_bills": 3,
+      "insert_lines": 3,
+      "manifest_sha256": "e3e54b898b8ab4ca199d961d006af761e1e3c2e96d26c663b098b24d33d959a7",
+      "runtime_sha256": "83054319f15fb31242d669bfbebd81f6707e3f5951e3bd015659fe2ab5a81603",
+      "snapshot_sha256": "9a9ed4f736de6950dbc1ba69213d29400637637f871db00dc8a17f81679cbaaf",
+      "status": "applied"
+    },
+    "runtime_unchanged": true,
+    "status": "applied_verified",
+    "verification": {
+      "created_at": "2026-11-16T04:49:51.564784+00:00",
+      "database_identity": {
+        "database": "hxy_diy",
+        "database_oid": 16384,
+        "postmaster_started_at": "2026-11-13 14:16:09.680663+00",
+        "role": "hxy_diy",
+        "schema": "public"
+      },
+      "input_sha256": "4b3896569ec9bb75351632d13577ac9e1098e03886cdf472f163f9c0f448038c",
+      "insert_balances": 48,
+      "insert_bills": 3,
+      "insert_lines": 3,
+      "manifest_sha256": "e3e54b898b8ab4ca199d961d006af761e1e3c2e96d26c663b098b24d33d959a7",
+      "old_data_unchanged": true,
+      "replay_business_writes": 0,
+      "runtime_sha256": "83054319f15fb31242d669bfbebd81f6707e3f5951e3bd015659fe2ab5a81603",
+      "savings_status": "unverified",
+      "snapshot_sha256": "1d6d1baa71c8dee03ca5d80fd694874acee24651d8eb50fd73ad950c44b855a3",
+      "status": "verified",
+      "visible_owned_bills": 104
+    }
+  },
+  "protection": {
+    "finance_before_card_sync_unchanged": true,
+    "old_rows_unchanged": true,
+    "tables": 75
+  },
+  "source": {
+    "card_pages": 9,
+    "cards": 128,
+    "customers": 126,
+    "ledger_pages": 119,
+    "ledger_rows": 1181,
+    "os_input_used": false,
+    "payment_pages": 20,
+    "payment_rows": 293,
+    "personal_bill_records": 362,
+    "query_end": "2026-11-16T12:00:00+08:00",
+    "query_start": "2026-01-01T00:00:00+08:00",
+    "shop_id": 1581453,
+    "source_business_writes": 0,
+    "store_id": 1,
+    "tenant_id": 1581452,
+    "two_passes_match": true
+  },
+  "source_commit": "bda31b75735b642906ebe90158ea5e9ced18b910",
+  "status": "production_data_applied_verified",
+  "validation": {
+    "card_receipts_verified_local": 178,
+    "finance_receipts_verified_local": 26,
+    "financial_rehearsal_v1": "failed_newer_card_fact_acceptance_only_no_production_writes",
+    "financial_rehearsal_v2": "passed_same_business_key_manifest_and_input",
+    "postgresql_import_tests_passed": 24,
+    "real_backup_restore_and_projection_passed": true,
+    "sqlite_postgresql_only_skipped": 4,
+    "sqlite_projection_tests_passed": 33,
+    "sync_unit_tests_passed": 33
+  }
+}

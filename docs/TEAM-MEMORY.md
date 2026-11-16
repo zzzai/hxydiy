@@ -369,6 +369,8 @@
 101 笔本人服务账单/109 明细/47 储值余额快照已正式追加一次；旧表/旧余额保持，真实备份恢复和隔离真实输入演练通过，重复预览零新增。顾客累计消费优惠仍未核实，退款或支付分摊缺口不能当零；当前仅已核实归属的历史子集。整数量值在新导入器规范化后再生成持久化内容哈希，避免 Decimal 1 与整数 1 造成假冲突。已有顾客应用直接读新事实，无应用重部署或迁移；来源历史定时未启用，新卡定时未改。详见 CURRENT-STATE 顶部和 `release/evidence/member-finance-20261115.json`。
 
 
-## Member finance repeat batches (2026-11-16 candidate)
+## Member finance repeat batches (2026-11-16 verified)
 
 The controlled finance verifier binds newly inserted counts to the current preview, rather than packet lengths. Existing owned consumption remains visible. Retirement without queryable completion and exact-card evidence is skipped by user instruction; no membership or old balance change is authorized by absence alone. See operations/member-finance-incremental.md.
+
+2026-11-16 production: 2 new cards/users; 3 new bills/lines and 48 appended balance snapshots, 104 visible owned bills in total. All old rows preserved. The existing display uses a newer original card fact when appropriate; acceptance verifies that fact exactly. Retirement and unproven savings remain unverified. Evidence: release/evidence/member-finance-20261116.json.
