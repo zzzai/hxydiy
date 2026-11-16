@@ -49,7 +49,7 @@ def login_page():
     with sync_playwright() as pw:
         browser=pw.chromium.launch(channel='chrome',headless=True)
         context=browser.new_context()
-        html="""<form onsubmit="event.preventDefault(); document.getElementById('sent').value=String(Number(document.getElementById('sent').value)+1); if(window.mode==='success'){location.hash='/main';document.getElementById('tenant').innerText='荷小悦（1581452）';}">
+        html="""<form onsubmit="event.preventDefault(); document.getElementById('sent').value=String(Number(document.getElementById('sent').value)+1); if(window.mode==='success'||(window.mode==='blur_required'&&window.passwordCommitted)){location.hash='/main';document.getElementById('tenant').innerText='荷小悦（1581452）';}">
         <input placeholder="账户" type="text"><input placeholder="密码" type="password"><button type="submit">登 录</button></form>
         <output id="sent">0</output><p id="tenant"></p><p id="challenge"></p><script>window.mode='success'</script>"""
         context.route('**/*',lambda route:route.fulfill(status=200,content_type='text/html; charset=utf-8',body=html))
@@ -91,3 +91,17 @@ def test_debug_logging_blocks_secret_read(login_page,tmp_path,monkeypatch):
     monkeypatch.setenv('DEBUG','pw:api')
     def forbidden(_):raise AssertionError('debug must not load credentials')
     with pytest.raises(Stop,match='source_login_debug_logging_enabled'):ensure_login(login_page,tmp_path,load=forbidden)
+
+
+def test_login_completes_password_change_before_submit(login_page,tmp_path):
+    page=login_page
+    page.evaluate("window.mode='blur_required';document.querySelector('input[type=password]').addEventListener('change',()=>window.passwordCommitted=true)")
+    ensure_login(page,tmp_path,load=lambda _:Credentials('synthetic-user','synthetic-pass'),timeout_seconds=.5)
+    assert page.locator('#sent').inner_text()=='1'
+
+
+def test_source_error_is_redacted_and_latched(login_page,tmp_path):
+    page=login_page;page.evaluate("window.mode='failure';document.querySelector('button').addEventListener('click',()=>document.getElementById('tenant').innerText='账号或密码错误')")
+    with pytest.raises(Stop,match='source_login_credentials_rejected'):
+        ensure_login(page,tmp_path,load=lambda _:Credentials('synthetic-user','synthetic-pass'),timeout_seconds=.5)
+    assert json.loads((tmp_path/'login-state.json').read_bytes())['stage']=='verify_tenant'

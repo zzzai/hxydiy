@@ -48,13 +48,17 @@ def ensure_login(page,root,load=load_credentials,timeout_seconds=45):
     credentials=load(root)
     # A durable one-attempt latch is written before filling or submitting.
     save(state_path,{'status':'attempting','blocked':True,'started_at':utc()})
+    stage='fill_account'
     try:
         require(allowed_login_url(page.url),'source_login_origin_rejected')
         account.fill(credentials.account)
+        stage='fill_password'
         require(allowed_login_url(page.url),'source_login_origin_rejected')
         password.fill(credentials.password)
         require(allowed_login_url(page.url) and not challenge(page),'source_login_challenge_required')
-        button.dispatch_event('click')
+        stage='submit'
+        button.click()
+        stage='verify_tenant'
         credentials=None
         deadline=time.monotonic()+timeout_seconds
         while time.monotonic()<deadline:
@@ -63,12 +67,14 @@ def ensure_login(page,root,load=load_credentials,timeout_seconds=45):
                 save(state_path,{'status':'authenticated','blocked':False,'updated_at':utc()})
                 return {'status':'authenticated'}
             require(not challenge(page),'source_login_challenge_required')
+            errors=page.get_by_text(re.compile('账号.*密码.*错误|账户.*密码.*错误|密码错误|账号不存在|账户不存在'))
+            require(not any(error.is_visible() for error in errors.all()),'source_login_credentials_rejected')
             page.wait_for_timeout(200)
         raise Stop('source_login_failed')
     except Exception as exc:
         credentials=None
         code=str(exc) if isinstance(exc,Stop) else 'source_login_failed'
-        save(state_path,{'status':'blocked','blocked':True,'code':code,'updated_at':utc()})
+        save(state_path,{'status':'blocked','blocked':True,'code':code,'stage':stage,'updated_at':utc()})
         # Never propagate Playwright call logs, which can include fill arguments.
         try:
             if allowed_login_url(page.url):account.fill('');password.fill('')
