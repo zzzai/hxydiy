@@ -43,3 +43,8 @@ Windows 端19项隔离浏览器验证通过（仅虚构账号；全部网络请�
 隔离浏览器已复现渲染帧暂停时，默认 `wait_for_function` 即使页面数据已更新仍会超时。营业/收款分页等待改为每200ms检查相同DOM条件，保持原20秒上限、页码/行变化/总数/完整分页等门禁。回归先失败后通过；未增加业务重试或改动导入器。依据 [Playwright polling](https://playwright.dev/python/docs/api/class-page#page-wait-for-function-option-polling) 与 [MDN background animation frames](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame)。
 
 意外失败报告只增加本工具内的文件名、函数名和行号，避免保存原始异常文本中的个人资料或密码。实际启用仍需修复后的完整计划任务验收。
+
+
+## Windows 证据文件临时占用（2026-11-16）
+
+第二次验收在第二轮个人消费证据落盘时因 `os.replace` 的 PermissionError 停止，仍处于本机采集阶段，未上传服务器或执行生产写入。Windows 实测复现：只读进程短暂打开目标文件也可能拒绝原子替换。保存流程只对 Windows 文件占用错误重试同一个本地原子替换，最多2秒；持续占用保留旧文件并停止，磁盘等其他错误立即停止。没有重试来源请求、数据库事务或导入请求，没有扩大目录权限。3项真实Windows文件行为验证通过，含短暂释放、持续占用和其他I/O错误。此前全部失败证据保留，启用仍须新整轮验收。

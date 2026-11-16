@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 
 HERE = Path(__file__).resolve().parent
@@ -29,7 +30,15 @@ def save(path, value):
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        # Windows readers/indexers may briefly deny replacement. Retry only this local rename.
+        for attempt in range(21):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as exc:
+                if getattr(exc, "winerror", None) not in (5, 32, 33) or attempt == 20:
+                    raise
+                time.sleep(0.1)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
