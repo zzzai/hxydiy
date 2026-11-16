@@ -29,6 +29,20 @@ def wait_source_change(page,predicate,previous,timeout=20000):
     return page.wait_for_function(predicate,arg=previous,timeout=timeout,polling=200)
 
 
+def wait_finance_page(page,number,previous=None,timeout=20000):
+    # A changed/temporarily empty table does not prove that the requested page is ready.
+    return wait_source_change(page,r"""args=>{
+      const active=document.querySelectorAll('.ant-pagination-item-active');
+      if(active.length!==1 || active[0].textContent.trim()!==String(args.number))return false;
+      if(document.querySelectorAll('.ant-pagination-next').length!==1)return false;
+      if([...document.querySelectorAll('.ant-spin-spinning')].some(e=>e.getClientRects().length && getComputedStyle(e).visibility!=='hidden'))return false;
+      const rows=[...document.querySelectorAll('table.vxe-table--body tbody tr')];
+      const keys=rows.map(e=>e.getAttribute('rowid')).join('|');
+      const empty=[...document.querySelectorAll('.ant-pagination-total-text')].some(e=>/^共计\s*0\s*条$/.test(e.textContent.trim()));
+      return (rows.length>0 || empty) && (args.previous===null || keys!==args.previous);
+    }""",previous={'number':number,'previous':previous},timeout=timeout)
+
+
 class FinancialCollector(Collector):
     def __init__(self, page, checkpoint):
         super().__init__(page, set())

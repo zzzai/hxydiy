@@ -51,7 +51,9 @@ def collection_failure_state(page):
                 'login_form':page.get_by_placeholder('账户',exact=True).count()>0,
                 'active_page_count':page.locator('.ant-pagination-item-active').count(),
                 'ledger_table_count':page.locator('table.vxe-table--body').count(),
-                'loading_count':page.locator('.ant-spin-spinning').count()}
+                'loading_count':page.locator('.ant-spin-spinning').count(),
+                'loading_visible_count':sum(item.is_visible() for item in page.locator('.ant-spin-spinning').all()),
+                'next_page_count':page.locator('.ant-pagination-next').count()}
     except Exception:return {'unavailable':True}
 
 

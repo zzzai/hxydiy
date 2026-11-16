@@ -36,3 +36,20 @@ def test_failure_state_excludes_url_secrets_and_page_content(login_page):
     assert result['expected_host'] and result['login_route'] and result['login_form']
     assert result['active_page_count']==0
     assert 'synthetic' not in str(result)
+
+
+def test_finance_page_wait_requires_completed_target_page(login_page):
+    from financial_collector import wait_finance_page
+    from playwright.sync_api import TimeoutError
+    page=login_page
+    page.evaluate("""()=>document.body.innerHTML='<div class="ant-pagination-item-active">2</div><div class="ant-pagination-next"></div><div class="ant-pagination-total-text">共计 10 条</div><div class="ant-spin-spinning">Loading</div><table class="vxe-table--body"><tbody><tr rowid="new"><td>row</td></tr></tbody></table>'""")
+    with pytest.raises(TimeoutError):wait_finance_page(page,2,'old',timeout=100)
+    page.evaluate("()=>document.querySelector('.ant-spin-spinning').remove()")
+    with pytest.raises(TimeoutError):wait_finance_page(page,3,'old',timeout=100)
+    with pytest.raises(TimeoutError):wait_finance_page(page,2,'new',timeout=100)
+    page.evaluate("()=>document.querySelector('tbody').innerHTML=''")
+    with pytest.raises(TimeoutError):wait_finance_page(page,2,'old',timeout=100)
+    page.evaluate("()=>setTimeout(()=>document.querySelector('tbody').innerHTML='<tr rowid=ready><td>row</td></tr>',50)")
+    wait_finance_page(page,2,'old',timeout=1000)
+    page.evaluate("()=>{document.querySelector('tbody').innerHTML='';document.querySelector('.ant-pagination-total-text').textContent='共计 0 条'}")
+    wait_finance_page(page,2,timeout=1000)
