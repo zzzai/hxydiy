@@ -379,3 +379,6 @@ The controlled finance verifier binds newly inserted counts to the current previ
 ## 2026-11-16 消费/余额普通定时接入候选
 
 新增确定性后台调度，复用受审消费追加入口，顺序衔接新卡。旧数据逐表保护、余额仅追加观测、节省缺证据留空；异常保留已完成阶段并锁定。新卡受审包装器不变。源码/合成测试通过不等于已启用；真实来源与 Windows 请求验收状态见 CURRENT-STATE 和对应 release/evidence。会话移交采用受限 owner-stop 文件，避免控制台中断影响私有浏览器。
+
+
+2026-11-16 用户另行授权账号密码自动填充：仅本机GUI录入、CurrentUser DPAPI保护、固定智荟宝登录表单一次提交，验证码/失败停写通知。不是读取浏览器密码或复制会话的授权；凭据不入Git/服务器/日志。配置登录不等于解除业务锁或已启用消费定时，仍须真实验收。

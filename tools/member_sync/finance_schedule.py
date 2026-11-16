@@ -48,7 +48,10 @@ def scheduled_sync(root,page,card_sync=None,finance_sync=None,prepare=None,notif
     try:
         if prepare is None:
             from financial_ui import member_query
-            prepare=member_query
+            from source_login import ensure_login
+            def prepare(page):
+                ensure_login(page,root)
+                member_query(page)
         prepare(page)
         if card_sync is None:
             from bridge import sync_once

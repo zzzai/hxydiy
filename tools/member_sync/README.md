@@ -77,3 +77,12 @@ Before adding facts: hash-bound source compilation, read-only preview, full data
 Local `finance-runs/<run-id>/server-result` receives every receipt and backup with SHA validation before success. A failure after production commit remains blocked until the exact receipt is inspected; it is never automatically reapplied. The existing card importer hash and continuity are unchanged by finance-only success.
 
 Activation requires the final package hash, actual scheduled-request acceptance and fresh login. See the operation and release evidence documents for enabled status; building this package alone does not enable it. `owner-stop.json` with the current package hash and action `handoff` permits a graceful owner loop exit; never use a console interrupt to transfer a live private browser.
+
+
+## Locally enrolled automatic login
+
+When the source session expires, `source_login.py` may submit the normal account/password form exactly once on the allowlisted HTTPS origin/path. Credentials are entered by the user in `source_credentials.py --configure --root <private-root>` and encrypted with Windows CurrentUser DPAPI, bound to the source tenant/store. The encrypted file stays on the workstation; no password, browser cookie/profile or login state is copied to the server. Do not enroll credentials through chat, command arguments, environment variables or logs.
+
+The source page must have the observed normal login form. An unexpected origin, changed form, CAPTCHA/security challenge, wrong tenant or unsuccessful login stops the task. A durable login-attempt latch prevents repeated submissions after unknown outcomes. Updating credentials through the local form resets only this login latch; it never clears a business import failure. Playwright traces/video and debug call logging must remain disabled for this context. Login result reports contain status only.
+
+Configured auto-login does not enable an unaccepted finance schedule. Fresh source collection and the controlled import/real task acceptance remain mandatory. Ordinary runtime still makes zero model calls; occasional interactive verification can be required by the source service.

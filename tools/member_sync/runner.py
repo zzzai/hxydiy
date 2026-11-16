@@ -45,7 +45,7 @@ def package_valid(expected):
         return False
     if not isinstance(entries, dict):
         return False
-    required = {"runner.py", "contracts.py", "collector.py", "probe_existing.py", "notify.ps1", "check-private-root.ps1", "session.py", "bridge.py", "server-runtime.json", "finance_schedule.py", "finance_bridge.py", "financial_ui.py", "financial_collector.py", "financial_contracts.py", "ledger_collector.py", "payment_collector.py"}
+    required = {"runner.py", "contracts.py", "collector.py", "probe_existing.py", "notify.ps1", "check-private-root.ps1", "session.py", "bridge.py", "server-runtime.json", "source_credentials.py", "source_login.py", "finance_schedule.py", "finance_bridge.py", "financial_ui.py", "financial_collector.py", "financial_contracts.py", "ledger_collector.py", "payment_collector.py"}
     if not required.issubset(entries):
         return False
     for name, sha in entries.items():

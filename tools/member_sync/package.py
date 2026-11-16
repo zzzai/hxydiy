@@ -7,7 +7,7 @@ import subprocess
 import zipfile
 
 FILES = ["runner.py", "contracts.py", "collector.py", "probe_existing.py", "session.py", "bridge.py",
-         "finance_schedule.py", "finance_bridge.py", "financial_ui.py", "financial_collector.py", "financial_contracts.py", "ledger_collector.py", "payment_collector.py",
+         "source_credentials.py", "source_login.py", "finance_schedule.py", "finance_bridge.py", "financial_ui.py", "financial_collector.py", "financial_contracts.py", "ledger_collector.py", "payment_collector.py",
          "notify.ps1", "check-private-root.ps1", "install-readonly-task.ps1", "requirements.txt", "README.md"]
 
 
