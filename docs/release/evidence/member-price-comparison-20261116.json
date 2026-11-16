@@ -1,0 +1,102 @@
+{
+  "status": "passed",
+  "counts": {
+    "owners_checked": 67,
+    "visible_bills": 105,
+    "verified_bills": 104,
+    "unknown_bills": 1,
+    "verified_zero_bills": 40,
+    "positive_bills": 64
+  },
+  "unknown_reasons": {
+    "line_price_quantity_invalid_or_missing": 1
+  },
+  "read_only": true,
+  "business_writes": 0,
+  "all_tables_unchanged": true,
+  "protected_tables": 75,
+  "release_id": "server-a09bfea0832d-1794827986",
+  "source_sha": "a09bfea0832d7b8a012a55f695d85b83856a496f",
+  "old_data_and_schema_unchanged": true,
+  "manifest_files_verified": 633,
+  "running_api_sources_match": true,
+  "backup_sha256": "f66a26ac8994bb2d97dd6ea7e29c9e7cda6146e0ac2e916fff604b26641716cc",
+  "public": {
+    "/": {
+      "status": 200,
+      "cache_control": "no-store, no-cache, must-revalidate",
+      "script_hashes_match": true,
+      "scripts": [
+        "/assets/index-DJIuoJ_8.js"
+      ]
+    },
+    "/admin/": {
+      "status": 200,
+      "cache_control": "no-store, no-cache, must-revalidate",
+      "script_hashes_match": true,
+      "scripts": [
+        "/admin/assets/index-CZl9shl6.js"
+      ]
+    },
+    "health": {
+      "status": "ok",
+      "service": "hxy-customer-api",
+      "environment": "production"
+    },
+    "anonymous_consumption_status": 401,
+    "status": "passed",
+    "release_id": "server-a09bfea0832d-1794827986"
+  },
+  "ui": {
+    "status": "passed",
+    "checks": {
+      "amount": true,
+      "refund_note": true,
+      "partial": true,
+      "original": true,
+      "settlement": true,
+      "unknown": true,
+      "no_document_overflow": true,
+      "no_history_overflow": true
+    },
+    "fixture_only": true,
+    "production_requests": 0,
+    "unexpected_fixture_requests": []
+  },
+  "source_audit": {
+    "schema": "member-price-comparison-source-audit@1",
+    "status": "passed",
+    "observed_source_run": "20261116T094616Z-dbe112f8",
+    "source_snapshot_sha256": "62e090930937643dd7cd524e1206885142a94b0efd16bed74f89c36779894fe4",
+    "packet_input_sha256": "184e2893f9b1caf4b68f4e353ece2608b764c145c097cab080ee79922f2d6520",
+    "checked_at": "2026-11-16T11:14:40.799751+00:00",
+    "scope": {
+      "tenant_id": 1581452,
+      "shop_id": 1581453,
+      "target_store_id": 1
+    },
+    "basis": "historical_store_price_minus_settlement",
+    "refund_policy": "not_deducted",
+    "uses_current_catalog_prices": false,
+    "business_writes": 0,
+    "counts": {
+      "bills_checked": 105,
+      "source_ledger_prices_and_settlement_agree": 104,
+      "positive_difference": 64,
+      "verified_zero_difference": 40,
+      "missing_evidence_excluded": 1
+    }
+  },
+  "backend_tests": {
+    "passed": 73,
+    "skipped": 4
+  },
+  "frontend_tests": {
+    "passed": 37
+  },
+  "deployed_once": true,
+  "schema_changes": 0,
+  "data_updates": 0,
+  "scope": "historical_store_price_minus_settlement_before_refunds",
+  "completed_at": "2026-11-16T11:28:43.205087+00:00"
+}
