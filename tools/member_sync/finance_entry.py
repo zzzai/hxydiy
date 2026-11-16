@@ -42,6 +42,7 @@ def main():
     from member_finance_guard import Protection,snapshot,fingerprint,APPEND_TABLES
     from finance_packet import compile_packet,decode_packet,encode_packet
     from finance_acceptance import expected_counts,verify_projection
+    from finance_schedule import empty_preview
     packet=decode_packet(json.loads((root/'packet.json').read_bytes()))
     if packet.manifest_sha256!=args.manifest or packet_sha256(packet)!=args.manifest:raise ValueError('manifest_mismatch')
     rebuilt,source_index,_=compile_packet(root/'source',packet.batch_key)
@@ -94,6 +95,10 @@ def main():
         expected=expected_counts(preview)
     guard=Protection(baseline,expected=expected)
     result=execute(sessions,packet,apply=args.mode in ('rehearse','apply'),protection=guard)
+    if args.mode=='preview' and empty_preview(result):
+        report=dict(base,**result,protection=guard.result)
+        save(root/'preview-result.json',report)
+        print(json.dumps({k:v for k,v in report.items() if k!='protection'}));return
     if args.mode=='preview':expected_counts(result)
     expected='preview' if args.mode=='preview' else 'applied'
     if result['status']!=expected:raise ValueError('unexpected_import_status')

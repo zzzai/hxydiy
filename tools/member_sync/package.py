@@ -7,6 +7,7 @@ import subprocess
 import zipfile
 
 FILES = ["runner.py", "contracts.py", "collector.py", "probe_existing.py", "session.py", "bridge.py",
+         "finance_schedule.py", "finance_bridge.py", "financial_ui.py", "financial_collector.py", "financial_contracts.py", "ledger_collector.py", "payment_collector.py",
          "notify.ps1", "check-private-root.ps1", "install-readonly-task.ps1", "requirements.txt", "README.md"]
 
 
@@ -35,7 +36,7 @@ def main():
         for name, content in files.items():
             z.writestr("member_sync/" + name, content)
         z.writestr("member_sync/package-manifest.json", manifest)
-    receipt = {"source_revision": head, "archive": archive.name, "mode": "controlled_additive",
+    receipt = {"source_revision": head, "archive": archive.name, "mode": "controlled_membership_and_finance",
                "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
                "package_manifest_sha256": manifest_sha, "apply_enabled": True,
                "scheduled_task_installed": False}

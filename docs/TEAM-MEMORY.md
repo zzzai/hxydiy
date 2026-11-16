@@ -374,3 +374,8 @@
 The controlled finance verifier binds newly inserted counts to the current preview, rather than packet lengths. Existing owned consumption remains visible. Retirement without queryable completion and exact-card evidence is skipped by user instruction; no membership or old balance change is authorized by absence alone. See operations/member-finance-incremental.md.
 
 2026-11-16 production: 2 new cards/users; 3 new bills/lines and 48 appended balance snapshots, 104 visible owned bills in total. All old rows preserved. The existing display uses a newer original card fact when appropriate; acceptance verifies that fact exactly. Retirement and unproven savings remain unverified. Evidence: release/evidence/member-finance-20261116.json.
+
+
+## 2026-11-16 消费/余额普通定时接入候选
+
+新增确定性后台调度，复用受审消费追加入口，顺序衔接新卡。旧数据逐表保护、余额仅追加观测、节省缺证据留空；异常保留已完成阶段并锁定。新卡受审包装器不变。源码/合成测试通过不等于已启用；真实来源与 Windows 请求验收状态见 CURRENT-STATE 和对应 release/evidence。会话移交采用受限 owner-stop 文件，避免控制台中断影响私有浏览器。

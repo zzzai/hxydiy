@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+from finance_schedule import empty_preview
 
 DEPLOY=Path('/root/hxy-diy-20260811')
 PRIVATE=Path('/root/hxy-diy-private-operations')
@@ -67,7 +68,11 @@ def main():
             run(['docker','cp',str(root)+'/.','hxy-diy-api:'+container])
             before=entry('baseline','hxy_diy');copyout('baseline-private.json');copyout('baseline.json')
             preview=entry('preview','hxy_diy');copyout('preview-result.json')
-            if preview['status']!='preview' or preview['business_writes']!=0:raise ValueError('preview_not_readonly')
+            if empty_preview(preview):
+                entry('snapshot-check','hxy_diy');identity()
+                result={'status':'no_new','manifest_sha256':manifest,'input_sha256':request['input_sha256'],
+                        'business_writes':0,'preview':preview,'old_data_unchanged':True,'runtime_unchanged':True}
+                save(root/'PRODUCTION-RESULT.json',result);print(json.dumps(result));return
             memory={p[0].rstrip(':'):int(p[1])*1024 for line in Path('/proc/meminfo').read_text().splitlines() if len(p:=line.split())>=2}
             if os.statvfs(root).f_bavail*os.statvfs(root).f_frsize<3*1024**3 or memory['MemAvailable']<1024**3:raise ValueError('resource_gate_failed')
             exists=run(['docker','exec','hxy-diy-db','psql','-v','ON_ERROR_STOP=1','-U','hxy_diy','-d','postgres','-At','-c',"SELECT count(*) FROM pg_database WHERE datname='"+restore+"'"])

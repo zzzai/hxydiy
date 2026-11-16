@@ -268,3 +268,13 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 ### Incremental acceptance (2026-11-16)
 
 Repeat packets may include already stored bills. Protection must use hash-bound preview additions; customer acceptance must preserve existing owned history, verify every returned row belongs to the authenticated person and approved source/store, and verify each new balance snapshot. Any new bill-version conflict stops this controlled batch. Unqueryable retirement/refund evidence remains unknown and is not treated as no refund or a cancelled card. No old rows are updated.
+
+
+## 2026-11-16 普通定时消费同步契约（启用以验收回执为准）
+
+- 同一个 Windows 日程顺序执行新卡、双轮个人消费、营业流水和收款流水；普通 Python/Playwright/SSH 程序执行，正常运行不调用模型。浏览器使用私有进程管道，仅操作来源正常查询控件，不使用系统鼠标键盘，不导出认证。
+- 查询范围从本轮可见最早个人账单当天开始，截止本轮采集的北京时间当前分钟上界。营业与收款日期完全一致、分页完整；不因此声称历史覆盖、退款关联或支付分摊完整。
+- 编译、预览、保护基准、真实备份、独立恢复、实际候选演练、顾客本人投影、一次事务提交、旧行保护及同输入重复预览必须通过。新观测的余额追加新时间快照，旧余额行、会员卡与钱包保持不变；消费按原来源账单语义判重。
+- 零候选只读结束，不创建空业务批次、不调用 apply。来源变动/身份冲突/分页不完整/登录失效/门禁失败停止后续写入。已完成阶段保留回执，未知提交结果不得自动换请求重试；本机锁定覆盖后续整轮，服务器操作锁与失败锁和新卡流程共用。
+- 本机收齐服务器输入/备份/回执并逐项验证 SHA 后才能报成功。异常桌面通知指向受限报告；不会将阶段失败误报成全程零写入。调度启用必须另有实际任务请求回执，不能用测试通过或计划任务退出码代替。
+- 退卡无明确证据仍跳过，其他有效卡不受影响；累计实际节省没有完整真实依据继续 null/待核实。

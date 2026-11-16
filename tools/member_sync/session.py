@@ -47,7 +47,7 @@ def request(root, package_sha):
 def status(root, package_sha, state):
     runner.save(root / "owner-status.json", {"state": state, "pid": os.getpid(),
                 "updated_at_utc": runner.utc(), "package_sha256": package_sha,
-                "mode": "controlled_additive", "apply_enabled": True, "model_calls": 0})
+                "mode": "controlled_membership_and_finance", "apply_enabled": True, "model_calls": 0})
 
 
 def serve(root, package_sha, page, owner_held=False):
@@ -63,6 +63,14 @@ def serve(root, package_sha, page, owner_held=False):
             if time.monotonic() - last_heartbeat >= 20:
                 status(root, package_sha, "waiting")
                 last_heartbeat = time.monotonic()
+            stop = root / "owner-stop.json"
+            if stop.exists():
+                value = json.loads(stop.read_bytes())
+                if value == {"package_sha256": package_sha, "action": "handoff"}:
+                    stop.unlink()
+                    status(root, package_sha, "handoff")
+                    return {"status": "handoff", "business_writes": 0}
+                raise Stop("invalid_owner_handoff")
             path = root / "request.json"
             if path.exists():
                 with runner.single_instance(root, "request.lock") as request_owned:
@@ -83,8 +91,8 @@ def serve(root, package_sha, page, owner_held=False):
                 with runner.single_instance(root) as run_owned:
                     if run_owned:
                         check_runtime(root, package_sha)
-                        from bridge import sync_once
-                        report = sync_once(root, lambda keys: Collector(page, keys).collect())
+                        from finance_schedule import scheduled_sync
+                        report = scheduled_sync(root, page)
                     else:
                         report = {"status": "already_running", "business_writes": 0}
                 runner.save(root / "request-result.json", {"request_id": ident, "report": report})
@@ -140,7 +148,7 @@ def main():
         with sync_playwright() as pw:
             browser = None
             try:
-                browser = pw.chromium.launch(channel="chrome", headless=False, chromium_sandbox=True)
+                browser = pw.chromium.launch(channel="chrome", headless=False, chromium_sandbox=True, args=["--start-minimized"])
                 context = browser.new_context(accept_downloads=False)
                 page = context.new_page()
                 page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)

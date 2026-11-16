@@ -62,3 +62,18 @@ python3 tools/member_sync/browser_smoke.py --chromium <isolated-test-browser>
 `financial_collector.py`, `ledger_collector.py` and `payment_collector.py` use an independently authenticated background Playwright page and normal read-only UI controls. They are not attached to the existing new-card timer. Never copy browser authentication state or operate the OS mouse/keyboard.
 
 `finance_packet.py` compiles cross-checked evidence into an exact append-only packet. `finance_controlled.py` is a coordinator-only, SHA-bound backup/rehearsal/apply entry, with one-attempt receipts. It does not migrate tables, deploy the application, alter old rows or enable unattended historical imports. Unknown refunds/payments cannot become verified savings. Inputs and backup artifacts belong in the restricted private operations directory outside Git.
+
+
+## Historical finance scheduling (2026-11-16 candidate)
+
+The same `controlled_sync` request now runs cards, personal consumption, the business ledger and payment receipts sequentially. The browser stays in its private process pipe. Navigation uses normal query/filter controls only; no OS mouse, keyboard, credential export, direct business HTTP calls or model API is used.
+
+`finance_schedule.py` retains the completed card-stage result if the finance stage fails. Every unresolved stage latches the workstation; server-side finance also shares the card coordinator's operation lock and failure state. No new request key bypasses a failed attempt. Desktop notification points to the private report; it does not claim that earlier successful stages were unwritten.
+
+Finance evidence consists of two complete card/personal-history passes plus complete ledger/payment pages for the same explicitly selected Beijing date range. The lower bound is the earliest observed personal bill date; the upper bound covers the current collection minute. The existing packet compiler cross-checks source identity, amounts, pagination, revisions and ownership. Unresolved/shared bills remain excluded, unknown savings stay null, and absent retirement evidence never changes card status.
+
+Before adding facts: hash-bound source compilation, read-only preview, full database backup, isolated restore, actual candidate rehearsal and customer projection/replay verification. Production uses one protected transaction. Existing rows remain unchanged; only the four finance tables accept new rows. An empty preview checks the baseline again and returns without backup or apply. Fresh balance observations append at their real observation time, even if the amount is unchanged; exact packet replay writes zero.
+
+Local `finance-runs/<run-id>/server-result` receives every receipt and backup with SHA validation before success. A failure after production commit remains blocked until the exact receipt is inspected; it is never automatically reapplied. The existing card importer hash and continuity are unchanged by finance-only success.
+
+Activation requires the final package hash, actual scheduled-request acceptance and fresh login. See the operation and release evidence documents for enabled status; building this package alone does not enable it. `owner-stop.json` with the current package hash and action `handoff` permits a graceful owner loop exit; never use a console interrupt to transfer a live private browser.
