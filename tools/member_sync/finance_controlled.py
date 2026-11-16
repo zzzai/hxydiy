@@ -12,7 +12,7 @@ import stat
 import subprocess
 
 DEPLOY=Path('/root/hxy-diy-20260811')
-PRIVATE=Path('/root/hxy-diy-private-operations/member-history-20261115')
+PRIVATE=Path('/root/hxy-diy-private-operations')
 
 def digest(path):return sha256(Path(path).read_bytes()).hexdigest()
 def save(path,value):
@@ -28,7 +28,7 @@ def run(args,timeout=180,stdin=None,stdout=None):
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('mode',choices=['prepare','apply']);parser.add_argument('--root',type=Path,required=True)
     args=parser.parse_args();root=args.root.resolve();os.umask(0o077)
-    if root.parent!=PRIVATE or root.stat().st_mode&0o077 or root.is_symlink():raise ValueError('private_batch_root_invalid')
+    if root.parent.parent!=PRIVATE or not re.fullmatch(r'member-history-20[0-9]{6}',root.parent.name) or root.stat().st_mode&0o077 or root.is_symlink():raise ValueError('private_batch_root_invalid')
     global RUN_ROOT
     RUN_ROOT=root
     request=json.loads((root/'request.json').read_bytes());manifest=request['manifest_sha256']

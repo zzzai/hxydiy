@@ -37,12 +37,11 @@ def main():
     from app.db.session import engine
     from sqlalchemy import create_engine, select, text
     from sqlalchemy.orm import sessionmaker
-    from app.models import User,MembershipConsumptionBatch,MembershipConsumptionBill,MembershipBalanceSnapshot
-    from app.services.member_financial_import import execute,packet_sha256
-    from app.services.customer_consumption import build_customer_consumption_history
-    from app.services.customer_membership import build_customer_membership_overview
+    from app.models import MembershipConsumptionBatch
+    from app.services.member_financial_import import execute,packet_sha256,SOURCE,STORE_ID
     from member_finance_guard import Protection,snapshot,fingerprint,APPEND_TABLES
     from finance_packet import compile_packet,decode_packet,encode_packet
+    from finance_acceptance import expected_counts,verify_projection
     packet=decode_packet(json.loads((root/'packet.json').read_bytes()))
     if packet.manifest_sha256!=args.manifest or packet_sha256(packet)!=args.manifest:raise ValueError('manifest_mismatch')
     rebuilt,source_index,_=compile_packet(root/'source',packet.batch_key)
@@ -73,29 +72,11 @@ def main():
         replay=execute(sessions,packet)
         if replay['status']!='already_applied' or replay['business_writes']!=0:raise ValueError('replay_not_zero')
         with sessions() as db:
-            batch=db.scalar(select(MembershipConsumptionBatch).where(MembershipConsumptionBatch.batch_key==packet.batch_key))
+            batch=db.scalar(select(MembershipConsumptionBatch).where(MembershipConsumptionBatch.batch_key==packet.batch_key,MembershipConsumptionBatch.source==SOURCE,MembershipConsumptionBatch.store_id==STORE_ID))
             if batch is None:raise ValueError('batch_missing')
-            bills=db.scalars(select(MembershipConsumptionBill).where(MembershipConsumptionBill.batch_id==batch.id)).all()
-            balances=db.scalars(select(MembershipBalanceSnapshot).where(MembershipBalanceSnapshot.source_batch_id==batch.id)).all()
-            if len(bills)!=len(packet.bills) or len(balances)!=len(packet.balances):raise ValueError('actual_count_mismatch')
-            phones={x.phone for x in packet.bills}|{x.phone for x in packet.balances}
-            users=db.scalars(select(User).where(User.phone.in_(phones))).all()
-            visible=0
-            for user in users:
-                history=build_customer_consumption_history(db,user,limit=5000)
-                expected={b.source_bill_no for b in bills if b.user_id==user.id}
-                actual={b['source_bill_no'] for b in history['bills']}
-                if actual!=expected or history['savings']['amount_cents'] is not None:raise ValueError('customer_history_projection_mismatch')
-                visible+=len(actual)
-                overview=build_customer_membership_overview(db,user)
-                by_card={c["id"]:c for c in overview["cards"]}
-                for balance in balances:
-                    if balance.card_id in by_card:
-                        display=by_card[balance.card_id]["balance"]
-                        if display["amount_cents"]!=balance.total_cents or display["evidence"]!="balance_snapshot" or display["observed_at"] is None:raise ValueError("customer_balance_projection_mismatch")
-            other=db.scalar(select(User).where(User.phone.not_in(phones)).order_by(User.id))
-            if other is not None and build_customer_consumption_history(db,other)["bills"]:raise ValueError("other_customer_history_leak")
-        print(json.dumps(dict(base,status='verified',old_data_unchanged=True,insert_bills=len(bills),insert_balances=len(balances),visible_owned_bills=visible,replay_business_writes=0,savings_status='unverified')));return
+            preview=json.loads((root/'preview-result.json').read_bytes())
+            accepted=verify_projection(db,packet,batch,preview)
+        print(json.dumps(dict(base,status='verified',old_data_unchanged=True,replay_business_writes=0,**accepted)));return
     if args.mode=='apply':
         if not args.recovery_sha or digest(root/'recovery.json')!=args.recovery_sha:raise ValueError('recovery_sha_mismatch')
         recovery=json.loads((root/'recovery.json').read_bytes())
@@ -104,9 +85,16 @@ def main():
         age=(datetime.now(timezone.utc)-datetime.fromisoformat(recovery['completed_at'])).total_seconds()
         if not 0<=age<=3600:raise ValueError('recovery_evidence_expired')
         save(root/'apply-attempt.json',dict(base,recovery_sha256=args.recovery_sha))
-    guard=Protection(baseline,expected={"membership_consumption_batches":1,"membership_consumption_bills":len(packet.bills),
-        "membership_consumption_lines":sum(len(x.bill.lines) for x in packet.bills),"membership_balance_snapshots":len(packet.balances)})
+    if args.mode == 'preview':
+        expected=None
+    else:
+        preview=json.loads((root/'preview-result.json').read_bytes())
+        if any(preview[key] != base[key] for key in ('manifest_sha256','input_sha256','runtime_sha256')):
+            raise ValueError('preview_binding_mismatch')
+        expected=expected_counts(preview)
+    guard=Protection(baseline,expected=expected)
     result=execute(sessions,packet,apply=args.mode in ('rehearse','apply'),protection=guard)
+    if args.mode=='preview':expected_counts(result)
     expected='preview' if args.mode=='preview' else 'applied'
     if result['status']!=expected:raise ValueError('unexpected_import_status')
     report=dict(base,**result,protection=guard.result)

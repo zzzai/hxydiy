@@ -263,3 +263,8 @@ bill_savings_cents = store_price_total_cents - settled_total_cents
 - 本批正常导入只增加独立消费四表中的事实，复用已上线顾客只读接口，不更改会员卡、用户、钱包、订单、价格、权限或结构。脚本及测试完成不代表生产已经导入，以批次 PRODUCTION-RESULT 为准。
 
 - 首次隔离恢复中发现整数 Decimal 数量与顾客查询整数表示的内容哈希不一致，101 笔被隐藏；生产零写入。已补真实持久化回归，并在新导入器内规范化整数量值；不更改已上线哈希规则或任何旧行。修复后沿用同一业务批次键/输入，使用独立运行目录保留原失败证据，再完成完整恢复演练。
+
+
+### Incremental acceptance (2026-11-16)
+
+Repeat packets may include already stored bills. Protection must use hash-bound preview additions; customer acceptance must preserve existing owned history, verify every returned row belongs to the authenticated person and approved source/store, and verify each new balance snapshot. Any new bill-version conflict stops this controlled batch. Unqueryable retirement/refund evidence remains unknown and is not treated as no refund or a cancelled card. No old rows are updated.

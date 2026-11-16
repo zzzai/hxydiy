@@ -244,3 +244,46 @@ def test_decoded_whole_decimal_quantity_stays_visible_after_persistence(factory)
         history=build_customer_consumption_history(db,db.get(User,1))
         assert history["pagination"]["total"]==1
         assert history["savings"]["amount_cents"]==4000
+
+
+def test_incremental_acceptance_counts_only_new_rows_and_keeps_old_history(factory, monkeypatch):
+    import sys
+    from pathlib import Path
+    from datetime import timedelta
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/member_sync"))
+    from finance_acceptance import expected_counts, verify_projection
+    first = packet()
+    first = seal(replace(first, bills=(replace(first.bills[0], bill=replace(first.bills[0].bill,
+                        refund_status="unknown", payment_evidence_complete=False)),)))
+    imp.execute(factory, first, apply=True)
+    later = NOW + timedelta(days=1)
+    added = replace(first.bills[0], bill=replace(first.bills[0].bill, source_bill_no="SYN-02"))
+    second = seal(replace(first, batch_key="synthetic-increment", observed_at=later,
+                  bills=(*first.bills, added),
+                  balances=(replace(first.balances[0], observed_at=later, total_cents=8000),)))
+    preview = imp.execute(factory, second)
+    assert expected_counts(preview) == {"membership_consumption_batches":1,
+        "membership_consumption_bills":1,"membership_consumption_lines":1,"membership_balance_snapshots":1}
+    imp.execute(factory, second, apply=True)
+    with factory() as db:
+        batch = db.scalar(select(MembershipConsumptionBatch).where(MembershipConsumptionBatch.batch_key==second.batch_key))
+        accepted = verify_projection(db, second, batch, preview)
+        assert accepted["insert_bills"] == 1
+        assert accepted["visible_owned_bills"] == 2
+        assert len(db.scalars(select(MembershipBalanceSnapshot)).all()) == 2
+        import finance_acceptance
+        original = finance_acceptance.build_customer_consumption_history
+        def foreign_row(*args, **kwargs):
+            value = original(*args, **kwargs)
+            value["bills"].append({"id": 999999, "source_bill_no": "FOREIGN"})
+            return value
+        monkeypatch.setattr(finance_acceptance, "build_customer_consumption_history", foreign_row)
+        with pytest.raises(ValueError, match="customer_history_owner_leak"):
+            verify_projection(db, second, batch, preview)
+        monkeypatch.setattr(finance_acceptance, "build_customer_consumption_history", original)
+        with pytest.raises(ValueError, match="actual_count_mismatch"):
+            verify_projection(db, second, batch, dict(preview, insert_bills=2))
+    with pytest.raises(ValueError, match="preview_count_invalid"):
+        expected_counts(dict(preview, insert_bills=True))
+    with pytest.raises(ValueError, match="source_revision_conflict"):
+        expected_counts(dict(preview, conflicting_bill_groups=1))
