@@ -26,3 +26,13 @@ def test_background_wait_survives_paused_render_frames(login_page):
     assert page.evaluate('window.queryReady') is True
     from playwright.sync_api import TimeoutError
     with pytest.raises(TimeoutError):wait_source_change(page,'()=>false',None,timeout=100)
+
+
+def test_failure_state_excludes_url_secrets_and_page_content(login_page):
+    from finance_schedule import collection_failure_state
+    page=login_page
+    page.evaluate("() => { history.replaceState(null,'','#/login?token=synthetic-secret'); document.body.innerHTML='<input placeholder=账户><p>synthetic-customer</p>'; }")
+    result=collection_failure_state(page)
+    assert result['expected_host'] and result['login_route'] and result['login_form']
+    assert result['active_page_count']==0
+    assert 'synthetic' not in str(result)

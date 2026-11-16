@@ -40,6 +40,21 @@ def verify_evidence(source, now=None):
         require(observed.tzinfo is not None and 0<=(now-observed).total_seconds()<=7200,'finance_observation_expired')
 
 
+def collection_failure_state(page):
+    """Record only fixed DOM presence flags, never URL query values or customer text."""
+    from urllib.parse import urlsplit
+    try:
+        if page.is_closed():return {'closed':True}
+        url=urlsplit(page.url)
+        return {'closed':False,'expected_host':url.hostname=='gray.aizhb.net',
+                'login_route':'/login' in url.fragment,
+                'login_form':page.get_by_placeholder('账户',exact=True).count()>0,
+                'active_page_count':page.locator('.ant-pagination-item-active').count(),
+                'ledger_table_count':page.locator('table.vxe-table--body').count(),
+                'loading_count':page.locator('.ant-spin-spinning').count()}
+    except Exception:return {'unavailable':True}
+
+
 def scheduled_sync(root,page,card_sync=None,finance_sync=None,prepare=None,notify=None):
     root=Path(root)
     state=json.loads((root/'state.json').read_bytes()) if (root/'state.json').exists() else {}
@@ -74,6 +89,7 @@ def scheduled_sync(root,page,card_sync=None,finance_sync=None,prepare=None,notif
     except Exception as exc:
         report.update(status='blocked',code=str(exc) if isinstance(exc,Stop) else 'scheduled_finance_failed_no_retry',
                       exception_type=type(exc).__name__,business_outcome='inspect_completed_stages_and_exact_receipts')
+        report['source_page']=collection_failure_state(page)
         report['failure_locations']=[{'file':Path(f.filename).name,'function':f.name,'line':f.lineno}
                                      for f in traceback.extract_tb(exc.__traceback__) if Path(f.filename).parent==Path(__file__).parent]
         current=json.loads((root/'state.json').read_bytes()) if (root/'state.json').exists() else {}
