@@ -16,3 +16,13 @@ def test_initial_store_picker_requires_id_and_name(login_page):
     with pytest.raises(Stop,match='finance_initial_store_choice_ambiguous'):select_store_dialog(page)
     page.evaluate('(html)=>document.body.innerHTML=html',html.replace('紫薇壹号店','other store'))
     with pytest.raises(Stop,match='finance_initial_store_choice_ambiguous'):select_store_dialog(page)
+
+
+def test_background_wait_survives_paused_render_frames(login_page):
+    from financial_collector import wait_source_change
+    page=login_page
+    page.evaluate("() => { window.requestAnimationFrame=()=>0; window.queryReady=false; setTimeout(()=>{window.queryReady=true},100); }")
+    wait_source_change(page,'()=>window.queryReady',None,timeout=700)
+    assert page.evaluate('window.queryReady') is True
+    from playwright.sync_api import TimeoutError
+    with pytest.raises(TimeoutError):wait_source_change(page,'()=>false',None,timeout=100)

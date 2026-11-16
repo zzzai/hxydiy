@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timezone
 
 from contracts import require, SHOP
-from financial_collector import activate
+from financial_collector import activate,wait_source_change
 
 FIELDS = ["单号", "状态", "消费内容", "数量", "消费门店", "顾客门店", "原价", "优惠", "售价",
           "金额总计", "入账", "现金", "银联", "微信", "支付宝", "抖音团购", "美团点评", "商城订单",
@@ -77,7 +77,7 @@ def collect_ledger(page, target_bills, checkpoint):
         if not last:
             previous_keys = page.locator("table.vxe-table--body").first.locator("tbody tr").evaluate_all("es=>es.map(e=>e.getAttribute('rowid')).join('|')")
             activate(page.locator(".ant-pagination-next button"))
-            page.wait_for_function("previous=>{const table=document.querySelector('table.vxe-table--body');return table && [...table.querySelectorAll('tbody tr')].map(e=>e.getAttribute('rowid')).join('|')!==previous}", arg=previous_keys, timeout=20000)
+            wait_source_change(page,"previous=>{const table=document.querySelector('table.vxe-table--body');return table && [...table.querySelectorAll('tbody tr')].map(e=>e.getAttribute('rowid')).join('|')!==previous}", previous=previous_keys, timeout=20000)
             page.wait_for_timeout(150)
     result.update(status="collected_unverified",observed_at=datetime.now(timezone.utc).isoformat())
     checkpoint(result)

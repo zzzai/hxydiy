@@ -108,3 +108,13 @@ def test_card_failure_never_starts_finance(tmp_path):
     def forbidden(*args):raise AssertionError('finance must not run')
     result=scheduled_sync(tmp_path,None,prepare=lambda _:None,card_sync=lambda *a:{'status':'blocked','run_id':'card-error'},finance_sync=forbidden)
     assert result=={'status':'blocked','run_id':'card-error'}
+
+
+def test_unexpected_error_reports_only_code_locations(tmp_path):
+    runner.save(tmp_path/'state.json',{'blocked':False})
+    def failed_collection(*args):raise TimeoutError('sensitive source value must not escape')
+    result=scheduled_sync(tmp_path,None,prepare=lambda _:None,
+        card_sync=lambda *a:{'status':'no_new'},finance_sync=failed_collection,notify=lambda _:None)
+    assert 'failed_collection' in [frame['function'] for frame in result['failure_locations']]
+    assert 'sensitive source value' not in json.dumps(result)
+    assert all(set(frame)=={'file','function','line'} for frame in result['failure_locations'])

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import re
 import uuid
+import traceback
 
 from contracts import Stop, require
 import runner
@@ -73,6 +74,8 @@ def scheduled_sync(root,page,card_sync=None,finance_sync=None,prepare=None,notif
     except Exception as exc:
         report.update(status='blocked',code=str(exc) if isinstance(exc,Stop) else 'scheduled_finance_failed_no_retry',
                       exception_type=type(exc).__name__,business_outcome='inspect_completed_stages_and_exact_receipts')
+        report['failure_locations']=[{'file':Path(f.filename).name,'function':f.name,'line':f.lineno}
+                                     for f in traceback.extract_tb(exc.__traceback__) if Path(f.filename).parent==Path(__file__).parent]
         current=json.loads((root/'state.json').read_bytes()) if (root/'state.json').exists() else {}
         report['run_id']=current.get('run_id',report.get('cards',{}).get('run_id'))
         runner.save(root/'state.json',dict(report,blocked=True))

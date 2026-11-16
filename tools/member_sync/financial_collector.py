@@ -24,6 +24,11 @@ def activate(locator):
     locator.dispatch_event("click")
 
 
+def wait_source_change(page,predicate,previous,timeout=20000):
+    # Background/minimized pages can pause animation frames; keep the same readiness and timeout.
+    return page.wait_for_function(predicate,arg=previous,timeout=timeout,polling=200)
+
+
 class FinancialCollector(Collector):
     def __init__(self, page, checkpoint):
         super().__init__(page, set())

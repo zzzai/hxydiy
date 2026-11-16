@@ -1,6 +1,6 @@
 # 智荟宝会员同步：普通程序定时运行
 
-本工具在本机专用 Chrome 中通过正常查询页面采集紫薇壹号店会员卡，再通过服务器受控新增入口处理新卡。正常运行只有 Python、Playwright、SSH 和 Windows 任务计划程序，不调用 Codex、DSH 或其他模型。开发与异常人工分析不属于零 token 运行。
+本工具在本机专用 Chrome 中通过正常查询页面采集紫薇壹号店会员卡、个人消费和余额，再通过服务器受控入口顺序处理新卡与财务事实追加。正常运行只有 Python、Playwright、SSH 和 Windows 任务计划程序，不调用 Codex、DSH 或其他模型。开发与异常人工分析不属于零 token 运行。
 
 ## 业务边界
 
@@ -11,7 +11,7 @@
 - 复用原受审 `import_member_card_batch.py`，LF SHA256 固定 `3f30e71c3909725e255d8ae7c41362e8f65938cbef384062261dc0c9faf23925`。核心导入器版本、当前保护基准、上批审计、候选归属、预览、真实备份、隔离恢复、提交前复核、一次事务和重复只读预览全部保留。
 - 当前用户、卡片、钱包及六类财务表保持保护；新增无关注册用户只能在旧行不变且候选手机号零交集时纳入基准。新出现的登录差异或新注册账号交集停写，不自动豁免。
 - 首次接线精确验证 11/13 已授权状态的原文件 SHA、两项登录字段差异、原 15 卡身份及原有唯一账户匹配；没有重放 11/13 manifest，也不将该授权扩展为未来通用例外。成功后以本次新增后的完整保护基准接续。
-- 不采集消费历史，不刷新已有余额快照，不部署应用或清理服务器。
+- 消费与余额仅在交叉核验通过后追加到既有四张财务事实表，不改旧快照、旧卡余额或钱包，不部署应用或清理服务器。
 
 ## 专用浏览器与定时任务
 
@@ -19,7 +19,7 @@
 
 `session.py` 持有单个浏览器。Windows 任务 `HXY-MemberSync-Controlled` 每天本机时间 10:00（本机配置为北京时间）及用户登录时发出固定同步请求。请求仅包含 UUID、固定动作和程序包 SHA，不能执行任意命令。另一个进程持有浏览器时，只发送请求，不启动第二个采集者。
 
-电脑必须开机、联网并登录 Windows；专用 Chrome 会话必须有效。重启、关闭 Chrome 或源登录失效时会停止并通知，需要正常重新登录。程序不会保存密码、输入验证码或自动恢复认证。重新登录后从“顾客 → 会员卡查询”进入，仅选择紫薇壹号店，清空搜索并使用每页15条。专用窗口只保留该查询页；其他营业看板或分析页面可能持续发起请求，影响来源页面稳定等待。异常保持锁定，修复后按下节精确确认失败运行。
+电脑必须开机、联网并登录 Windows。用户在独立本机凭据设置窗口录入的账号密码，以 CurrentUser DPAPI 加密保存在受限目录；采集进程可在固定来源表单完成自动登录，选择经核验的荷小悦租户账号及紫薇壹号店查询范围，不读取其他浏览器的密码或会话。账号错误、验证码、页面变化和身份不明时停写通知，不反复试密码。重启后的新浏览器不复制原会话；已有业务失败锁仍须按下节核实，保存新密码不会解除业务锁。专用窗口由程序依次操作会员、营业流水和收款流水查询，请勿在该窗口另行操作。
 
 首次只读运行与实际计划任务验收分别记录在 [操作回执](../../docs/release/evidence/member-sync-zero-token-20261115.json)，不能把合成测试、注册成功或任务退出码单独当作同步完成。
 
@@ -59,9 +59,9 @@ python3 tools/member_sync/browser_smoke.py --chromium <isolated-test-browser>
 
 ## Member financial observations
 
-`financial_collector.py`, `ledger_collector.py` and `payment_collector.py` use an independently authenticated background Playwright page and normal read-only UI controls. They are not attached to the existing new-card timer. Never copy browser authentication state or operate the OS mouse/keyboard.
+`financial_collector.py`, `ledger_collector.py` and `payment_collector.py` use an independently authenticated background Playwright page and normal read-only UI controls. The scheduled coordinator runs them after the new-card stage. Never copy browser authentication state or operate the OS mouse/keyboard.
 
-`finance_packet.py` compiles cross-checked evidence into an exact append-only packet. `finance_controlled.py` is a coordinator-only, SHA-bound backup/rehearsal/apply entry, with one-attempt receipts. It does not migrate tables, deploy the application, alter old rows or enable unattended historical imports. Unknown refunds/payments cannot become verified savings. Inputs and backup artifacts belong in the restricted private operations directory outside Git.
+`finance_packet.py` compiles cross-checked evidence into an exact append-only packet. `finance_controlled.py` is a coordinator-only, SHA-bound backup/rehearsal/apply entry, with one-attempt receipts. It does not migrate tables, deploy the application or alter old rows. Unattended execution is only enabled through an accepted pinned scheduler package. Unknown refunds/payments cannot become verified savings. Inputs and backup artifacts belong in the restricted private operations directory outside Git.
 
 
 ## Historical finance scheduling (2026-11-16 candidate)
