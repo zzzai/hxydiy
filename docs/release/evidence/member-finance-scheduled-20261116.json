@@ -1,0 +1,91 @@
+{
+  "schema": "member-finance-scheduled-acceptance@1",
+  "verified_at": "2026-11-16T10:08:10.927581+00:00",
+  "status": "enabled_after_verified_acceptance",
+  "runtime_source_revision": "22142c97bcefc89c35d9cabd85ba367ac1ae8240",
+  "package_sha256": "9c976a494d343edac6d2b03ecea8279d368bf216d74ce07554455dd5b1a8ddc2",
+  "finance_run": "20261116T094616Z-dbe112f8",
+  "task": {
+    "name": "HXY-MemberSync-Controlled",
+    "priority": 6,
+    "state": "Ready",
+    "next_run_time": "2026-11-17T10:00:00.0000000+08:00",
+    "triggers": [
+      "daily_10_00_Asia_Shanghai",
+      "current_user_logon"
+    ],
+    "triggers_unchanged": true,
+    "principal_unchanged": true,
+    "other_settings_unchanged": true
+  },
+  "model_calls": 0,
+  "old_ai_automation": "PAUSED",
+  "source_summary": {
+    "balance_snapshots": 48,
+    "business_writes": 0,
+    "manifest_sha256": "d781375075f1cd609a2962d515efb1e99d0752355550a176dba300d1ea387c2b",
+    "non_service_bills": 0,
+    "revision_conflicts": 3,
+    "shared_or_unresolved_bills": 256,
+    "source_bills": 364,
+    "source_cards": 128,
+    "source_customers": 126,
+    "source_snapshot_sha256": "62e090930937643dd7cd524e1206885142a94b0efd16bed74f89c36779894fe4",
+    "verified_savings_bills": 0,
+    "visible_bills": 105
+  },
+  "page_counts": {
+    "member_pass1": 9,
+    "member_pass2": 9,
+    "ledger": 116,
+    "payments": 20
+  },
+  "new_cards": 0,
+  "card_business_writes": 0,
+  "finance_additions": {
+    "insert_bills": 1,
+    "insert_lines": 1,
+    "insert_balances": 48,
+    "business_writes": 51
+  },
+  "manifest_sha256": "d781375075f1cd609a2962d515efb1e99d0752355550a176dba300d1ea387c2b",
+  "input_sha256": "184e2893f9b1caf4b68f4e353ece2608b764c145c097cab080ee79922f2d6520",
+  "old_data_unchanged": true,
+  "replay_business_writes": 0,
+  "visible_owned_bills": 105,
+  "savings_status": "unverified",
+  "runtime_unchanged": true,
+  "production_current": "server-116b65aa6a5f-1794661064",
+  "backup_restore": {
+    "status": "passed",
+    "backup_sha256": "c02375cf28dded368ca78306c4dbb87be2ab1fa8824c96937a2ba02efa6712dc",
+    "restore_database": "hxy_diy_rehearsal_finance_d781375075f1_6f19ce43"
+  },
+  "local_receipt_files_sha_verified": 36,
+  "validation": {
+    "server_tools": {
+      "passed": 69,
+      "skipped": 15,
+      "subtests": 32
+    },
+    "windows_source_ui_checks": {
+      "passed": 4
+    },
+    "windows_atomic_write_checks": {
+      "passed": 3
+    },
+    "prior_windows_login_suite": {
+      "passed": 19
+    }
+  },
+  "boundaries": [
+    "append_only_finance_facts",
+    "no_old_customer_card_wallet_or_order_updates",
+    "no_unproven_card_retirement",
+    "no_estimated_savings",
+    "no_os_mouse_keyboard_or_focus_actions",
+    "no_application_deploy_or_schema_change",
+    "computer_online_current_windows_user_required",
+    "real_device_acceptance_not_claimed"
+  ]
+}

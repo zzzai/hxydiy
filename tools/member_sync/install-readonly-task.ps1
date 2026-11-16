@@ -34,5 +34,7 @@ $syncAction = New-ScheduledTaskAction -Execute $syncPython -Argument $syncArgs -
 $syncTrigger = @((New-ScheduledTaskTrigger -Daily -At '10:00'), (New-ScheduledTaskTrigger -AtLogOn -User $syncIdentity.Name))
 $syncPrincipal = New-ScheduledTaskPrincipal -UserId $syncIdentity.Name -LogonType Interactive -RunLevel Limited
 $syncSettings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 25)
+# Match the verified scheduled browser and driver execution priority.
+$syncSettings.Priority = 6
 Register-ScheduledTask -TaskName $syncName -Action $syncAction -Trigger $syncTrigger -Principal $syncPrincipal -Settings $syncSettings -Description 'Verified additive member sync; no model calls; halt and notify on failures' | Out-Null
 Get-ScheduledTask -TaskName $syncName | Select-Object TaskName, State
