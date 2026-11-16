@@ -29,6 +29,19 @@ def challenge(page):
     return any(label.is_visible() for label in labels.all())
 
 
+
+def select_account(page):
+    dialogs=page.get_by_role('dialog').filter(has=page.get_by_text('选择要登录的账号',exact=True))
+    if dialogs.count()==0:return False
+    require(dialogs.count()==1 and allowed_login_url(page.url),'source_login_account_choice_ambiguous')
+    # Preserve the tenant-account entry used by the reviewed collector; its store filter is separate.
+    target=dialogs.locator('.account_selecter_item').filter(
+        has=page.locator('.info .name').filter(has_text=re.compile('^荷小悦$'))).filter(
+        has=page.locator('.shopname .name').filter(has_text=re.compile('^荷小悦$')))
+    require(target.count()==1,'source_login_account_choice_ambiguous')
+    target.click()
+    return True
+
 def ensure_login(page,root,load=load_credentials,timeout_seconds=45):
     root=Path(root);require(trusted_page(page.url),'source_login_origin_rejected')
     if not allowed_login_url(page.url):
@@ -60,12 +73,15 @@ def ensure_login(page,root,load=load_credentials,timeout_seconds=45):
         button.click()
         stage='verify_tenant'
         credentials=None
+        selected=False
         deadline=time.monotonic()+timeout_seconds
         while time.monotonic()<deadline:
             require(trusted_page(page.url),'source_login_origin_rejected')
             if not allowed_login_url(page.url) and page.get_by_text(TENANT).count()==1:
                 save(state_path,{'status':'authenticated','blocked':False,'updated_at':utc()})
                 return {'status':'authenticated'}
+            if not selected:
+                selected=select_account(page)
             require(not challenge(page),'source_login_challenge_required')
             errors=page.get_by_text(re.compile('账号.*密码.*错误|账户.*密码.*错误|密码错误|账号不存在|账户不存在'))
             require(not any(error.is_visible() for error in errors.all()),'source_login_credentials_rejected')

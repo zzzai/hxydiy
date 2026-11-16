@@ -105,3 +105,13 @@ def test_source_error_is_redacted_and_latched(login_page,tmp_path):
     with pytest.raises(Stop,match='source_login_credentials_rejected'):
         ensure_login(page,tmp_path,load=lambda _:Credentials('synthetic-user','synthetic-pass'),timeout_seconds=.5)
     assert json.loads((tmp_path/'login-state.json').read_bytes())['stage']=='verify_tenant'
+
+
+def test_account_picker_selects_only_verified_tenant(login_page):
+    from source_login import select_account
+    page=login_page
+    page.evaluate('(html)=>document.body.innerHTML=html', "<div role='dialog'><div class='ant-modal-title'>选择要登录的账号</div><div class='account_selecter_item' onclick='window.selected=1'><div class='shopname'><div class='name'>荷小悦</div></div><div class='info'><div class='name'>紫薇壹号店</div></div></div><div class='account_selecter_item' onclick='window.selected=2'><div class='shopname'><div class='name'>荷小悦</div></div><div class='info'><div class='name'>荷小悦</div></div></div></div>")
+    assert select_account(page)
+    assert page.evaluate('window.selected')==2
+    page.locator('.account_selecter_item').last.evaluate('(e)=>e.parentElement.append(e.cloneNode(true))')
+    with pytest.raises(Stop,match='source_login_account_choice_ambiguous'):select_account(page)
