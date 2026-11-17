@@ -1,3 +1,5 @@
+from datetime import date
+
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
@@ -9,6 +11,14 @@ class LearningAssignmentIn(BaseModel):
     course_id: str = Field(min_length=1, max_length=48)
     course_version: str = Field(min_length=1, max_length=48)
     request_id: str = Field(min_length=8, max_length=100)
+    learning_date: date | None = None
+    due_time: str | None = Field(default=None, pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+
+    @model_validator(mode="after")
+    def validate_schedule(self):
+        if (self.learning_date is None) != (self.due_time is None):
+            raise ValueError("learning_date and due_time must be supplied together")
+        return self
 
 
 class LearningActionIn(BaseModel):
@@ -16,6 +26,7 @@ class LearningActionIn(BaseModel):
     kind: Literal["mark_section", "submit", "follow_up"]
     request_id: str = Field(min_length=8, max_length=100)
     expected_revision: int = Field(ge=0)
+    daily_plan_id: str | None = Field(default=None, min_length=1, max_length=36)
     section_id: str | None = Field(default=None, min_length=1, max_length=64)
     answers: dict[str, StrictInt] | None = None
     note: str | None = Field(default=None, min_length=1, max_length=500)

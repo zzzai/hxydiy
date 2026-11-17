@@ -5,23 +5,24 @@ import { client } from '../../api';
 import { requestErrorMessage } from '../../requestError';
 import type { LearningActor, LearningAssignment, LearningCommand, LearningCourse, LearningGateway } from './learningModel';
 import { learningIdentity } from './learningModel';
-import { isComplete, latestAttempt, orderedLessons, progressLabel, needsCoaching } from './dailyLearningModel';
+import { isComplete, latestAttempt, orderedLessons, progressLabel, needsCoaching, selectDailyTasks, learningStats, shanghaiDay, type DailyFilter } from './dailyLearningModel';
 
 import './dailyLearning.css';
 import { managerGuide } from './cultureManagerGuide';
 type CoachReply={answer:string;citations:Array<{section_id:string;title:string}>;grounded:boolean};
 type PlanSuggestion={staff_id:number;staff_name:string;course_id:string;course_version:string;title:string;reason:string;priority:number};
-type Props={actor:LearningActor;courses:LearningCourse[];gateway:LearningGateway;arrange?:ReactNode;storeName?:string;aiCoachEnabled?:boolean;aiPlanEnabled?:boolean};
-const stamp=(value:string)=>new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+type Props={actor:LearningActor;courses:LearningCourse[];gateway:LearningGateway;arrange?:ReactNode;scheduleControls?:ReactNode;learningDate?:string;dueTime?:string;today?:string;rosterIds?:number[];storeName?:string;aiCoachEnabled?:boolean;aiPlanEnabled?:boolean};
+const stamp=(value:string)=>new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'});
 const key=(actor:LearningActor,item:LearningAssignment)=>`hxy_learning_draft:v1:${learningIdentity(actor)}:${item.id}:${item.courseVersion}:${latestAttempt(item)?.id||'first'}`;
 function readDraft(actor:LearningActor,item:LearningAssignment,course:LearningCourse){try{const draft=JSON.parse(sessionStorage.getItem(key(actor,item))||'{}');return Object.fromEntries(course.questions.filter(q=>Number.isInteger(draft[q.id])&&draft[q.id]>=0&&draft[q.id]<q.choices.length).map(q=>[q.id,draft[q.id]]));}catch{return {};}}
-export default function DailyLearning({actor,courses,gateway,arrange,storeName,aiCoachEnabled=false,aiPlanEnabled=false}:Props){
+export default function DailyLearning({actor,courses,gateway,arrange,scheduleControls,learningDate=shanghaiDay(),dueTime='23:59',today=shanghaiDay(),rosterIds=[],storeName,aiCoachEnabled=false,aiPlanEnabled=false}:Props){
  const navigate=useNavigate();const [params,setParams]=useSearchParams();
  const [items,setItems]=useState<LearningAssignment[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [busy,setBusy]=useState(false);
  const [phase,setPhase]=useState<'read'|'quiz'|'result'>('read');const [step,setStep]=useState(0);const [question,setQuestion]=useState(0);const [answers,setAnswers]=useState<Record<string,number>>({});
- const [note,setNote]=useState('');const [saved,setSaved]=useState(false);const [managerFilter,setManagerFilter]=useState<'coach'|'pending'|'all'>('coach');
+ const [note,setNote]=useState('');const [saved,setSaved]=useState(false);const [managerFilter,setManagerFilter]=useState<DailyFilter>('pending');
  const [askOpen,setAskOpen]=useState(false);const [ask,setAsk]=useState('');const [askBusy,setAskBusy]=useState(false);const [askAnswer,setAskAnswer]=useState<CoachReply|null>(null);const [askError,setAskError]=useState('');
  const [plan,setPlan]=useState<PlanSuggestion[]|null>(null);const [planBusy,setPlanBusy]=useState(false);const [planError,setPlanError]=useState('');
+ const planRequest=useRef<{payload:string;key:string}>();
  const alive=useRef(false);const lock=useRef(false);const pending=useRef<{payload:string;command:LearningCommand}>();const opened=useRef('');
  const selected=params.get('lesson');const item=items.find(value=>value.id===selected);const course=courses.find(c=>c.id===item?.courseId&&c.version===item?.courseVersion);const manager=actor.role==='manager';
  const current=()=>alive.current&&!!gateway.currentActor()&&learningIdentity(gateway.currentActor()!)===learningIdentity(actor);
@@ -33,21 +34,28 @@ export default function DailyLearning({actor,courses,gateway,arrange,storeName,a
  const back=()=>{if(lock.current)return;opened.current='';setParams(p=>{p.delete('lesson');return p;});setError('');pending.current=undefined;top();};
  const run=async(body:Omit<LearningCommand,'assignmentId'|'requestId'|'expectedRevision'>)=>{
   if(!item||lock.current||!current())return false;
-  const payload=JSON.stringify({id:item.id,...body});if(pending.current?.payload!==payload)pending.current={payload,command:{...body,assignmentId:item.id,requestId:crypto.randomUUID(),expectedRevision:item.revision}};
+  const payload=JSON.stringify({id:item.id,...body});if(pending.current?.payload!==payload)pending.current={payload,command:{...body,assignmentId:item.assignmentId ?? item.id,dailyPlanId:item.dailyPlanId,requestId:crypto.randomUUID(),expectedRevision:item.revision}};
   lock.current=true;setBusy(true);setError('');try{const values=await gateway.execute(actor,pending.current.command);if(!current())return false;setItems(values);pending.current=undefined;return true;}catch(e){if(current()){setError(e instanceof Error?e.message:'保存失败，请重试；输入已保留');if((e as {code?:string}).code==='LEARNING_REVISION_CONFLICT')pending.current=undefined;}return false;}finally{lock.current=false;if(current())setBusy(false);}
  };
  const nextSection=async()=>{if(!course||!await run({kind:'mark_section',sectionId:course.sections[step].id}))return;if(step===course.sections.length-1){setPhase('quiz');setQuestion(0);}else setStep(value=>value+1);top();};
  const answer=(id:string,value:number)=>{if(!item)return;const next={...answers,[id]:value};setAnswers(next);pending.current=undefined;try{sessionStorage.setItem(key(actor,item),JSON.stringify(next));}catch{setError('选项暂不能缓存在本机，请保持此页完成练习');}};
  const submit=async()=>{if(!item||!course)return;const blank=course.questions.findIndex(q=>answers[q.id]===undefined);if(blank>=0){setQuestion(blank);setError('请完成这道题再提交');return;}const oldKey=key(actor,item);if(!await run({kind:'submit',answers}))return;try{sessionStorage.removeItem(oldKey);}catch{/* Server progress is already saved. */}setPhase('result');top();};
  const retry=()=>{if(!item)return;setAnswers({});try{sessionStorage.removeItem(key(actor,item));}catch{/* A fresh attempt can continue without a local draft. */}setQuestion(0);setPhase('quiz');pending.current=undefined;top();};
- const sorted=orderedLessons(items,courses);const next=sorted.find(value=>!isComplete(value));const nextCourse=courses.find(c=>c.id===next?.courseId&&c.version===next?.courseVersion);
+ const sorted=orderedLessons(items,courses);
+ const activeTasks=sorted.filter(value=>value.dailyPlanId&&(value.learningDate===today||value.overdue));
+ const next=activeTasks.find(value=>!isComplete(value));
+ const managerTasks=selectDailyTasks(sorted,learningDate,managerFilter);
+ const stats=learningStats(items,learningDate,rosterIds);
+ const older=sorted.filter(value=>!value.dailyPlanId||(!activeTasks.includes(value)&&value.dailyStatus!=='scheduled'));
+ const future=sorted.filter(value=>value.dailyStatus==='scheduled');
+ const nextCourse=courses.find(c=>c.id===next?.courseId&&c.version===next?.courseVersion);
  const last=item&&latestAttempt(item);const section=course?.sections[step];const visual=section&&{scene:section.paragraphs[0],action:section.paragraphs[1],remember:section.paragraphs[2],say:section.paragraphs[3]};const q=course?.questions[question];
  const review=course?.questions.map(question=>{const r=last?.review?.find(r=>r.questionId===question.id);return {...question,answer:r?.answer,explanation:r?.explanation};})||[];
  const wrong=last?review.filter(q=>q.answer!==undefined&&last.answers[q.id]!==q.answer):[];
  const askCoach=async()=>{
   if(!item||!ask.trim()||askBusy||!aiCoachEnabled)return;
   setAskBusy(true);setAskError('');setAskAnswer(null);
-  try{const {data}=await client.post<CoachReply>('/staff-learning/coach',{assignment_id:item.id,question:ask.trim(),section_id:section?.id,request_id:crypto.randomUUID()});setAskAnswer(data);}
+  try{const {data}=await client.post<CoachReply>('/staff-learning/coach',{assignment_id:item.assignmentId ?? item.id,question:ask.trim(),section_id:section?.id,request_id:crypto.randomUUID()});setAskAnswer(data);}
   catch(failure){setAskError(requestErrorMessage(failure));}
   finally{setAskBusy(false);}
  };
@@ -61,8 +69,12 @@ export default function DailyLearning({actor,courses,gateway,arrange,storeName,a
  const assignPlan=async(suggestion:PlanSuggestion)=>{
   if(planBusy)return;
   setPlanBusy(true);setPlanError('');
+  const payload=JSON.stringify({staff_id:suggestion.staff_id,course_id:suggestion.course_id,course_version:suggestion.course_version,learning_date:learningDate,due_time:dueTime});
+  if(planRequest.current?.payload!==payload)planRequest.current={payload,key:crypto.randomUUID()};
   try{
-   await client.post('/staff-learning/assignments',{staff_id:suggestion.staff_id,course_id:suggestion.course_id,course_version:suggestion.course_version,request_id:crypto.randomUUID()});
+   await client.post('/staff-learning/assignments',{...JSON.parse(payload),request_id:planRequest.current.key});
+   if(!current())return;
+   planRequest.current=undefined;
    setPlan(current=>current?.filter(value=>!(value.staff_id===suggestion.staff_id&&value.course_id===suggestion.course_id&&value.course_version===suggestion.course_version))||null);
    await load();
   }catch(failure){setPlanError(requestErrorMessage(failure));}
@@ -90,35 +102,45 @@ export default function DailyLearning({actor,courses,gateway,arrange,storeName,a
   {plan?.map(suggestion=><article className="dl-ai-suggestion" key={`${suggestion.staff_id}:${suggestion.course_id}:${suggestion.course_version}`}>
    <div><strong>{suggestion.staff_name}</strong> · {suggestion.title} <small>优先级 {suggestion.priority}</small></div>
    <p>{suggestion.reason}</p>
-   <button type="button" className="dl-secondary" disabled={planBusy} onClick={()=>void assignPlan(suggestion)}>安排这门课</button>
+   <button type="button" className="dl-secondary" disabled={planBusy} onClick={()=>void assignPlan(suggestion)}>安排到 {learningDate} · {dueTime}</button>
   </article>)}
  </section>:null;
  const notes=(value:LearningAssignment)=>value.followUps.length>0&&<section className="dl-notes"><h3>{manager?'辅导记录':'店长给你的建议'}</h3>{value.followUps.slice().reverse().map(n=><article key={n.id}><p>{n.note}</p><small>{n.managerName} · {stamp(n.createdAt)}</small></article>)}</section>;
  const summary=()=>last&&<><div className="dl-result"><span>{manager?'最近一次练习':last.correct===last.total?'这课练习全对了':'先把这点弄明白'}</span><strong>{last.correct}<small> / {last.total} 题</small></strong><p>{last.correct===last.total?course!.sections.slice(-1)[0]?.paragraphs.slice(-1)[0]:`${last.total-last.correct} 道题需要复习`}</p></div>{last.correct<last.total&&wrong.length===0&&<p role="alert">错题解析暂不可用，请重新读取。</p>}{wrong.map(q=><article className="dl-mistake" key={q.id}><h3>{q.prompt}</h3><p className="dl-muted">{manager?'本次选择':'你选了'}：{q.choices[last.answers[q.id]]}</p><p><strong>可以这样理解</strong><br/>{q.explanation}</p><p>参考答案：{q.choices[q.answer!]}</p></article>)}</>;
- const row=(value:LearningAssignment)=>{const c=courses.find(c=>c.id===value.courseId&&c.version===value.courseVersion);return c&&<button className="dl-row" key={value.id} onClick={()=>open(value)}><span className="dl-row-icon">{isComplete(value)?<CheckOutlined/>:<ReadOutlined/>}</span><span><small>{c.category} · {c.minutes}</small><strong>{c.title}</strong><span className={needsCoaching(value)?'dl-amber':'dl-muted'}>{progressLabel(value)}</span></span><ArrowRightOutlined/></button>;};
+ const row=(value:LearningAssignment)=>{const c=courses.find(c=>c.id===value.courseId&&c.version===value.courseVersion);return c&&<button className="dl-row" key={value.id} onClick={()=>open(value)}><span className="dl-row-icon">{isComplete(value)?<CheckOutlined aria-hidden/>:<ReadOutlined aria-hidden/>}</span><span><small>{value.learningDate ? value.learningDate+' · ' : '历史学习 · '}{c.category} · {c.minutes}</small><strong>{c.title}</strong><span className={value.overdue||needsCoaching(value)?'dl-amber':'dl-muted'}>{progressLabel(value)}</span></span><ArrowRightOutlined aria-hidden/></button>;};
  return <section className="dl-page">
- <header className="dl-title"><button aria-label={selected?'返回学习列表':'返回工作台'} disabled={busy} onClick={()=>selected?back():navigate(manager?'/store':'/today')}><ArrowLeftOutlined/></button><h1>{selected?(manager?'学习跟进':course?.category||'课程'):(manager?'团队学习':'日常学习')}</h1>{!selected&&<small>{storeName}</small>}</header>
+ <header className="dl-title"><button aria-label={selected?'返回学习列表':'返回工作台'} disabled={busy} onClick={()=>selected?back():navigate(manager?'/store':'/today')}><ArrowLeftOutlined/></button><h1>{selected?(manager?'学习跟进':course?.category||'课程'):(manager?'团队学习':'每日学习')}</h1>{!selected&&<small>{storeName}</small>}</header>
+ {!selected&&<button className="dl-refresh" disabled={busy||loading} onClick={()=>void load()}>刷新学习进度</button>}
  {error&&<div className="dl-error" role="alert">{error}{!busy&&<button onClick={()=>void load()}>重新读取</button>}</div>}
+ {item?.dailyPlanId&&<p className="dl-date-note">{item.learningDate} · 截止 {stamp(item.dueAt!)} · {progressLabel(item)}</p>}
  {loading?<p role="status">正在读取学习进度…</p>:selected&&!item?<div className="dl-empty"><p>当前身份下没有这项学习任务。</p><button onClick={back}>返回学习列表</button></div>:!selected?(manager?<>
- <div className="dl-lead"><h2>先看错题，再做辅导</h2><p>从具体错题开始，留下辅导建议。</p></div>
- {arrange}{planSection}<div className="dl-filters" aria-label="团队学习筛选">{([['coach','需辅导'],['pending','待学习'],['all','全部']] as const).map(([k,t])=><button key={k} aria-pressed={managerFilter===k} onClick={()=>setManagerFilter(k)}>{t}{k!=='all'&&<b>{new Set(items.filter(k==='coach'?needsCoaching:i=>!i.attempts.length).map(i=>i.staffId)).size}</b>}</button>)}</div>
- {Array.from(new Set(items.map(i=>i.staffId))).map(id=>{const person=sorted.filter(i=>i.staffId===id&&(managerFilter==='all'||(managerFilter==='coach'?needsCoaching(i):!i.attempts.length)));return person.length?<section className="dl-person" key={id}><h2>{person[0].staffName}</h2>{person.map(row)}</section>:null;})}
- {!sorted.some(i=>managerFilter==='all'||(managerFilter==='coach'?needsCoaching(i):!i.attempts.length))&&<p className="dl-empty">这里暂时没有需要跟进的学习任务。</p>}
+ <div className="dl-lead"><h2>安排一课，跟进到会</h2><p>按日期安排学习，看未完成和错题，辅导后再练。</p></div>
+ {scheduleControls}
+ <div className="dl-day-stats" aria-label="当日任务统计"><span><b>{stats.assigned}</b>已安排</span><span><b>{stats.completed}</b>已完成</span><span><b>{stats.incomplete}</b>未完成</span></div>
+ <p className="dl-muted">以上按任务统计 · 本店 {stats.unassigned} 位可安排技师当天未安排</p>
+ {arrange}{planSection}
+ <div className="dl-filters" aria-label="团队学习筛选">{([['pending','未完成'],['coach','待辅导'],['retry','待复练'],['overdue','逾期未完成'],['all','当日全部']] as const).map(([k,t])=><button key={k} aria-pressed={managerFilter===k} onClick={()=>setManagerFilter(k)}>{t}<b>{selectDailyTasks(items,learningDate,k).length}</b></button>)}</div>
+ {managerFilter==='overdue'&&<p className="dl-muted">显示所有日期逾期未完成的任务</p>}
+ {Array.from(new Set(managerTasks.map(i=>i.staffId))).map(id=>{const person=managerTasks.filter(i=>i.staffId===id);return <section className="dl-person" key={id}><h2>{person[0].staffName}</h2>{person.map(row)}</section>;})}
+ {!managerTasks.length&&<p className="dl-empty">当前筛选下没有学习任务。</p>}
+ {items.some(i=>!i.dailyPlanId)&&<details className="dl-history"><summary>历史学习（未按日期安排）</summary>{sorted.filter(i=>!i.dailyPlanId).map(row)}</details>}
  <details className="dl-history dl-manager-guide"><summary>店长辅导参考 · 6 个情境</summary><p className="dl-muted">用于自学和带教讨论，不计考试成绩。</p>{managerGuide.map(unit=><section key={unit.title}><h2>{unit.title}</h2><p>{unit.intro}</p>{unit.questions.map(q=><article className="dl-mistake" key={q.id}><h3>{q.prompt}</h3><ol type="A">{q.choices.map(c=><li key={c}>{c}</li>)}</ol><details><summary>展开参考做法</summary><p>{q.choices[q.answer]}</p><p>{q.explanation}</p></details></article>)}</section>)}</details><p className="dl-footnote">辅导要看实际服务中的改变，答题不能代替现场观察。</p>
  </>:<>
- <div className="dl-lead"><h2>每天学一点，服务更到位</h2><p>趁空闲学一课，有顾客来可随时返回工作台。</p></div>
- {next&&nextCourse?<article className="dl-feature"><div className="dl-eyebrow">{needsCoaching(next)?'先复习这课':next.sectionsRead.length?'接着上次学':'建议先学'}<span>{nextCourse.minutes}</span></div><h2>{nextCourse.title}</h2><p>{nextCourse.intro}</p><div className="dl-meta">{nextCourse.sections.length} 个要点 · {nextCourse.questions.length} 道情境题</div><button className="dl-primary" onClick={()=>open(next)}>{needsCoaching(next)?'查看错题':next.sectionsRead.length?'继续学习':'开始学习'}<ArrowRightOutlined/></button></article>:<article className="dl-feature"><h2>{items.length?'已安排的练习都答对了':'暂未安排课程'}</h2><p>{items.length?'把学到的用在下一次服务中。已学内容可以随时回来复习。':'店长安排后会在这里显示。'}</p></article>}
- {sorted.filter(i=>i.id!==next?.id&&!isComplete(i)).length>0&&<section className="dl-list"><h2>接下来学</h2>{sorted.filter(i=>i.id!==next?.id&&!isComplete(i)).map(row)}</section>}
- {sorted.some(isComplete)&&<details className="dl-history"><summary>已学课程 · {sorted.filter(isComplete).length}</summary>{sorted.filter(isComplete).map(row)}</details>}
+ <div className="dl-lead"><h2>每天学一点，服务更到位</h2><p>{today} · 趁空闲学一课，有顾客来可随时返回工作台。</p></div>
+ {next&&nextCourse?<article className="dl-feature"><div className="dl-eyebrow">{needsCoaching(next)?'先复习这课':next.sectionsRead.length?'接着上次学':'建议先学'}<span>{nextCourse.minutes}</span></div><h2>{nextCourse.title}</h2><p>{nextCourse.intro}</p><div className="dl-meta">{next.learningDate} · {progressLabel(next)}<br/>{nextCourse.sections.length} 个要点 · {nextCourse.questions.length} 道情境题</div><button className="dl-primary" onClick={()=>open(next)}>{needsCoaching(next)?'查看错题':next.sectionsRead.length?'继续学习':'开始学习'}<ArrowRightOutlined aria-hidden/></button></article>:<article className="dl-feature"><h2>{activeTasks.length?'今天的学习已完成':'今天暂未安排课程'}</h2><p>{activeTasks.length?'把学到的用在下一次服务中。已学内容可以随时回来复习。':'店长安排后会在这里显示。'}</p></article>}
+ {activeTasks.filter(i=>i.id!==next?.id&&!isComplete(i)).length>0&&<section className="dl-list"><h2>接下来学</h2>{activeTasks.filter(i=>i.id!==next?.id&&!isComplete(i)).map(row)}</section>}
+ {activeTasks.some(isComplete)&&<details className="dl-history"><summary>已学课程 · {activeTasks.filter(isComplete).length}</summary>{activeTasks.filter(isComplete).map(row)}</details>}
+ {older.length>0&&<details className="dl-history"><summary>历史学习 · {older.length} 项</summary>{older.map(row)}</details>}
+ {future.length>0&&<details className="dl-history"><summary>接下来的安排 · {future.length} 项</summary>{future.map(row)}</details>}
  </>):item&&course?(manager?<>
  <div className="dl-lead"><h2>{item.staffName}</h2><p>{course.title}</p></div><div className="dl-progress"><span>内容已读 {item.sectionsRead.length}/{course.sections.length}</span><strong>{progressLabel(item)}</strong></div>
  {last?summary():<p className="dl-empty">还没有交卷记录，可先安排合适的学习时间。</p>}
- <form className="dl-coach" onSubmit={async e=>{e.preventDefault();if(await run({kind:'follow_up',note})){setNote('');setSaved(true);}}}><label htmlFor="coach-note">这次怎么辅导</label><textarea id="coach-note" value={note} maxLength={500} disabled={busy} onChange={e=>{setNote(e.target.value);setSaved(false);pending.current=undefined;}} placeholder="例如：一起练了“轻一点”的回应；下次先调整，再简短确认。"/><button className="dl-primary" disabled={busy||!note.trim()}>{busy?'正在保存…':'保存辅导建议'}</button>{saved&&<p role="status">已保存，技师打开本课可看到。</p>}</form>{notes(item)}
- </>:<>
+ {(!item.dailyPlanId||last&&!isComplete(item))&&<form className="dl-coach" onSubmit={async e=>{e.preventDefault();if(await run({kind:'follow_up',note})){setNote('');setSaved(true);}}}><label htmlFor="coach-note">这次怎么辅导</label><textarea id="coach-note" value={note} maxLength={500} disabled={busy} onChange={e=>{setNote(e.target.value);setSaved(false);pending.current=undefined;}} placeholder="例如：一起练了“轻一点”的回应；下次先调整，再简短确认。"/><button className="dl-primary" disabled={busy||!note.trim()}>{busy?'正在保存…':'保存辅导建议'}</button>{saved&&<p role="status">已保存，技师可按建议复练；再次答对后完成本次学习。</p>}</form>}{notes(item)}
+ </>:item.dailyStatus==='scheduled'?<p className="dl-empty">这项学习安排在 {item.learningDate}，届时可开始学习。</p>:<>
  {notes(item)}
- {phase==='read'&&visual?<><div className="dl-step"><span>要点 {step+1}/{course.sections.length}</span><progress max={course.sections.length} value={step+1}/></div><h2 className="dl-lesson-title">{course.sections[step].title}</h2><article className="dl-scene"><small>{course.category==='经络穴位'?'知识例子':'服务情境'}</small><p>{visual.scene}</p></article><section className="dl-action"><h3>{course.category==='经络穴位'?'这样理解':'你要做的'}</h3><p>{visual.action}</p>{section?.paragraphs.slice(4).map((p,index)=><p key={index}>{p}</p>)}{visual.say&&<blockquote>{visual.say}</blockquote>}</section><div className="dl-remember"><CheckOutlined/><p>{visual.remember}</p></div><div className="dl-actions">{step>0&&<button disabled={busy} className="dl-secondary" onClick={()=>{setStep(s=>s-1);top();}}>上一页</button>}<button className="dl-primary" disabled={busy} onClick={()=>void nextSection()}>{busy?'正在保存…':step===course.sections.length-1?`做 ${course.questions.length} 道练习`:'下一要点'}<ArrowRightOutlined/></button></div>{coachSection}</>:phase==='quiz'&&q?<>
+ {phase==='read'&&visual?<><div className="dl-step"><span>要点 {step+1}/{course.sections.length}</span><progress max={course.sections.length} value={step+1}/></div><h2 className="dl-lesson-title">{course.sections[step].title}</h2><article className="dl-scene"><small>{course.category==='经络穴位'?'知识例子':'服务情境'}</small><p>{visual.scene}</p></article><section className="dl-action"><h3>{course.category==='经络穴位'?'这样理解':'你要做的'}</h3><p>{visual.action}</p>{section?.paragraphs.slice(4).map((p,index)=><p key={index}>{p}</p>)}{visual.say&&<blockquote>{visual.say}</blockquote>}</section><div className="dl-remember"><CheckOutlined aria-hidden/><p>{visual.remember}</p></div><div className="dl-actions">{step>0&&<button disabled={busy} className="dl-secondary" onClick={()=>{setStep(s=>s-1);top();}}>上一页</button>}<button className="dl-primary" disabled={busy} onClick={()=>void nextSection()}>{busy?'正在保存…':step===course.sections.length-1?`做 ${course.questions.length} 道练习`:'下一要点'}<ArrowRightOutlined aria-hidden/></button></div>{coachSection}</>:phase==='quiz'&&q?<>
  <div className="dl-step"><span>练习 {question+1}/{course.questions.length}</span><progress max={course.questions.length} value={question+1}/></div><fieldset className="dl-question" disabled={busy}><legend>{q.prompt}</legend>{q.choices.map((choice,index)=><label key={index} className={answers[q.id]===index?'is-selected':''}><input type="radio" name={q.id} checked={answers[q.id]===index} onChange={()=>answer(q.id,index)}/><span>{choice}</span></label>)}</fieldset><div className="dl-actions">{question>0&&<button className="dl-secondary" disabled={busy} onClick={()=>{setQuestion(q=>q-1);top();}}>上一题</button>}<button className="dl-primary" disabled={busy||answers[q.id]===undefined} onClick={()=>{if(question<course.questions.length-1){setQuestion(q=>q+1);top();}else void submit();}}>{busy?'正在提交…':question===course.questions.length-1?'提交练习':'下一题'}</button></div><p className="dl-footnote">提交后保存练习结果。</p>
- </>:<>{summary()}<div className="dl-actions"><button className="dl-secondary" onClick={()=>{setStep(0);setPhase('read');top();}}>复习要点</button>{last&&last.correct<last.total?<button className="dl-primary" onClick={retry}>再练一次</button>:<button className="dl-primary" onClick={back}>回到学习</button>}</div><p className="dl-footnote">知识练习不代替现场实操考核。</p></>}
+ </>:<>{summary()}<div className="dl-actions"><button className="dl-secondary" onClick={()=>{setStep(0);setPhase('read');top();}}>复习要点</button>{last&&!isComplete(item)?<button className="dl-primary" onClick={retry}>再练一次</button>:<button className="dl-primary" onClick={back}>回到学习</button>}</div><p className="dl-footnote">知识练习不代替现场实操考核。</p></>}
  {course.sources.length>0&&<details className="dl-sources"><summary>课程依据</summary>{course.sources.map(s=><p key={s.url}><span>{s.title}</span></p>)}</details>}
  </>):null}
  {item&&item.attempts.length>0&&<details className="dl-history"><summary>历次练习 · {item.attempts.length} 次</summary>{item.attempts.slice().reverse().map(a=><p key={a.id}>{stamp(a.createdAt)} · 答对 {a.correct}/{a.total}</p>)}</details>}

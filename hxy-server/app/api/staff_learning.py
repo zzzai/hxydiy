@@ -13,6 +13,7 @@ from app.api.admin import _current_staff, normalize_staff_role
 from app.api.technician import current_technician
 from app.core.config import settings
 from app.db.session import get_db
+from app.domain.learning_daily import SHANGHAI, daily_projection, normalize_plan
 from app.domain.service_record_status import pending_record_summary
 from app.models import AuditLog, ServiceFeedback, Staff, Store
 from app.models.operations import Technician
@@ -104,17 +105,34 @@ def snapshot(db, staff, role):
         grouped.setdefault(event.assignment_id, []).append(event)
     course_by_id = {c.id: c for c in courses}
     result = []
+    daily_tasks = []
+    now = datetime.now(UTC)
     for item in assignments:
         course = course_by_id[item.course_version_id]
         history = grouped.get(item.id, [])
-        result.append({
+        base = {
             "id": item.id, "storeId": item.store_id, "staffId": item.staff_id, "staffName": item.staff_name,
             "courseId": course.code, "courseVersion": course.version, "assignedAt": iso(item.assigned_at),
             "dueAt": None, "revision": item.revision, "sectionsRead": item.sections_read,
             "attempts": [{"id": e.id, **e.payload, "createdAt": iso(e.created_at)} for e in history if e.kind == "submit"],
             "followUps": [{"id": e.id, "managerId": e.actor_id, "managerName": e.actor_name, "note": e.payload["note"], "createdAt": iso(e.created_at)} for e in history if e.kind == "follow_up"],
-        })
+        }
+        # Keep the legacy response; daily clients consume independently scoped tasks.
+        result.append(base)
+        plans = [e for e in history if e.kind == "assign" and "daily_plan" in e.payload]
+        legacy = [e for e in history if not any(k in e.payload for k in ("daily_plan", "daily_plan_id", "daily_plan_replay"))]
+        if legacy or not plans:
+            daily_tasks.append({**base,
+                "attempts": [{"id": e.id, **e.payload, "createdAt": iso(e.created_at)} for e in legacy if e.kind == "submit"],
+                "followUps": [{"id": e.id, "managerId": e.actor_id, "managerName": e.actor_name, "note": e.payload["note"], "createdAt": iso(e.created_at)} for e in legacy if e.kind == "follow_up"],
+            })
+        for plan in plans:
+            daily_tasks.append({
+                **base, "id": "daily:" + plan.id, "assignmentId": item.id,
+                **daily_projection(plan, history, [section["id"] for section in checked_content(course)["sections"]], now),
+            })
     return {
+        "dailyTasks": daily_tasks, "learningToday": now.astimezone(SHANGHAI).date().isoformat(), "serverNow": now.isoformat(),
         "actor": {"id": staff.id, "storeId": staff.store_id, "role": role, "name": staff.name},
         "assignments": result,
         "courses": [public_course(c) for c in visible_courses],
@@ -164,11 +182,21 @@ def assign(body: LearningAssignmentIn, request: Request, authorization: str | No
     staff, role = actor(authorization, db, request)
     if role != "manager":
         raise error(403, "LEARNING_MANAGER_REQUIRED", "仅店长可安排本店学习")
-    fingerprint = content_hash({"kind": "assign", **body.model_dump()})
+    values = body.model_dump(mode="json")
+    if body.learning_date is None:
+        values.pop("learning_date")
+        values.pop("due_time")
+    fingerprint = content_hash({"kind": "assign", **values})
     lock_actor(db, staff)
     if receipt(db, staff, body.request_id, fingerprint):
         return snapshot(db, staff, role)
-    learner = db.scalar(roster_query(staff.store_id).where(Staff.id == body.staff_id))
+    plan = None
+    if body.learning_date is not None:
+        try:
+            plan = normalize_plan(body.learning_date, body.due_time, datetime.now(UTC))
+        except ValueError as exc:
+            raise error(422, "LEARNING_DATE_INVALID", str(exc))
+    learner = db.scalar(roster_query(staff.store_id).where(Staff.id == body.staff_id).with_for_update(of=Staff))
     course = db.scalar(select(LearningCourseVersion).where(LearningCourseVersion.code == body.course_id, LearningCourseVersion.version == body.course_version))
     if not learner:
         raise error(404, "LEARNING_STAFF_UNAVAILABLE", "该技师不在本店可安排学习名单中")
@@ -178,7 +206,7 @@ def assign(body: LearningAssignmentIn, request: Request, authorization: str | No
     item = db.scalar(select(StaffLearningAssignment).where(
         StaffLearningAssignment.store_id == staff.store_id, StaffLearningAssignment.staff_id == learner.id,
         StaffLearningAssignment.course_version_id == course.id
-    ))
+    ).with_for_update())
     if not item:
         # A savepoint handles two managers assigning the same course concurrently.
         try:
@@ -194,7 +222,19 @@ def assign(body: LearningAssignmentIn, request: Request, authorization: str | No
             ))
             if item is None:
                 raise
-    record(db, staff, item, "assign", body.request_id, fingerprint, {})
+    payload = {}
+    if plan is not None:
+        existing = next((event for event in db.scalars(select(StaffLearningEvent).where(
+            StaffLearningEvent.assignment_id == item.id, StaffLearningEvent.kind == "assign"
+        )) if event.payload.get("daily_plan", {}).get("learning_date") == plan["learning_date"]), None)
+        if existing:
+            if existing.payload["daily_plan"] != plan:
+                raise error(409, "LEARNING_DATE_ALREADY_ASSIGNED", "这一天已安排本课，请保留原截止时间")
+            payload = {"daily_plan_replay": existing.id}
+        else:
+            item.revision += 1
+            payload = {"daily_plan": plan}
+    record(db, staff, item, "assign", body.request_id, fingerprint, payload)
     db.commit()
     return snapshot(db, staff, role)
 
@@ -213,7 +253,10 @@ def action(assignment_id: str, body: LearningActionIn, request: Request, authori
     item = db.scalar(query.with_for_update())
     if not item:
         raise error(404, "LEARNING_TASK_NOT_FOUND", "学习任务不存在或不属于当前身份")
-    fingerprint = content_hash({"assignment_id": assignment_id, **body.model_dump()})
+    values = body.model_dump()
+    if body.daily_plan_id is None:
+        values.pop("daily_plan_id")
+    fingerprint = content_hash({"assignment_id": assignment_id, **values})
     if receipt(db, staff, body.request_id, fingerprint):
         return snapshot(db, staff, role)
     if item.revision != body.expected_revision:
@@ -223,15 +266,28 @@ def action(assignment_id: str, body: LearningActionIn, request: Request, authori
         raise error(409, "LEARNING_COURSE_UNAVAILABLE", "课程已停止新的学习操作")
     content = checked_content(course)
     payload = {}
+    sections_read = item.sections_read
+    if body.daily_plan_id:
+        history = list(db.scalars(select(StaffLearningEvent).where(StaffLearningEvent.assignment_id == item.id)))
+        plan = next((event for event in history if event.id == body.daily_plan_id and event.kind == "assign" and "daily_plan" in event.payload), None)
+        if plan is None:
+            raise error(404, "LEARNING_DAILY_TASK_NOT_FOUND", "每日任务不存在或不属于当前学习记录")
+        daily = daily_projection(plan, history, [section["id"] for section in content["sections"]], datetime.now(UTC))
+        if daily["dailyStatus"] == "scheduled":
+            raise error(409, "LEARNING_DATE_NOT_STARTED", "请在安排的学习日期开始学习")
+        if body.kind == "follow_up" and (not daily["attempts"] or daily["dailyStatus"] == "completed"):
+            raise error(409, "LEARNING_COACHING_NOT_REQUIRED", "请在有错题的练习后记录辅导建议")
+        sections_read = daily["sectionsRead"]
     if body.kind == "mark_section":
         ids = [section["id"] for section in content["sections"]]
-        if body.section_id not in ids or any(value not in item.sections_read for value in ids[:ids.index(body.section_id)]):
+        if body.section_id not in ids or any(value not in sections_read for value in ids[:ids.index(body.section_id)]):
             raise error(422, "LEARNING_SECTION_ORDER", "请先学习前面的内容")
-        item.sections_read = list(dict.fromkeys([*item.sections_read, body.section_id]))
+        if not body.daily_plan_id:
+            item.sections_read = list(dict.fromkeys([*item.sections_read, body.section_id]))
         payload = {"sectionId": body.section_id}
     elif body.kind == "submit":
         questions = content["questions"]
-        if any(section["id"] not in item.sections_read for section in content["sections"]):
+        if any(section["id"] not in sections_read for section in content["sections"]):
             raise error(422, "LEARNING_READING_REQUIRED", "请先读完本课内容")
         if set(body.answers) != {q["id"] for q in questions} or any(not 0 <= body.answers[q["id"]] < len(q["choices"]) for q in questions):
             raise error(422, "LEARNING_ANSWERS_INCOMPLETE", "请完整回答本课题目")
@@ -239,6 +295,8 @@ def action(assignment_id: str, body: LearningActionIn, request: Request, authori
             "total": len(questions), "review": [{"questionId": q["id"], "answer": q["answer"], "explanation": q["explanation"]} for q in questions]}
     else:
         payload = {"note": body.note.strip()}
+    if body.daily_plan_id:
+        payload["daily_plan_id"] = body.daily_plan_id
     item.revision += 1
     record(db, staff, item, body.kind, body.request_id, fingerprint, payload)
     db.commit()

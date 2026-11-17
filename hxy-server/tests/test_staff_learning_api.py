@@ -221,6 +221,10 @@ def test_learning_migration_roundtrip_preserves_existing_rows(learning):
     with factory() as db:
         engine = db.get_bind()
         before = [(s.id, s.username, s.role, s.store_id, s.credentials_version) for s in db.scalars(select(Staff).order_by(Staff.id))]
+    from app.models.daily_ops import TrainingAssessment
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(TrainingAssessment)) == 0
+    TrainingAssessment.__table__.drop(engine)
     for model in (StaffLearningEvent, StaffLearningAssignment, LearningCourseVersion):
         model.__table__.drop(engine)
     path = Path(__file__).resolve().parents[1] / 'alembic/versions/20261027_staff_learning.py'

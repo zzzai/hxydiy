@@ -5,9 +5,11 @@ import { requestErrorMessage } from '../../requestError';
 import { LearningEntry } from './LearningPage';
 import DailyLearningPage from './DailyLearningPage';
 import type { LearningActor, LearningAssignment, LearningCourse, LearningGateway } from './learningModel';
+import { shanghaiDay } from './dailyLearningModel';
 import { learningIdentity } from './learningModel';
 
-type Snapshot = { actor: LearningActor; assignments: LearningAssignment[]; courses: LearningCourse[]; roster: Array<{id:number;name:string}>; assignableCourses: Array<{id:string;version:string}> };
+type Snapshot = { actor: LearningActor; assignments: LearningAssignment[]; dailyTasks?: LearningAssignment[]; learningToday?: string; courses: LearningCourse[]; roster: Array<{id:number;name:string}>; assignableCourses: Array<{id:string;version:string}> };
+function tasks(data:Snapshot){return data.dailyTasks ?? data.assignments;}
 function currentActor(): LearningActor | null {
   const staff = getStaff();
   return staff && typeof staff.id === 'number' && staff.id > 0 && staff.store_id && (staff.role === 'manager' || staff.role === 'technician') ? {id:staff.id,storeId:staff.store_id,role:staff.role as LearningActor['role'],name:staff.name || ''} : null;
@@ -46,6 +48,9 @@ export default function LearningLive({ entry = false }: {entry?:boolean}) {
   const [courseKey,setCourseKey] = useState('');
   const [busy,setBusy] = useState(false);
   const [assigned,setAssigned] = useState(false);
+  const [learningDate,setLearningDate] = useState(()=>shanghaiDay());
+  const [today,setToday] = useState(()=>shanghaiDay());
+  const [dueTime,setDueTime] = useState('23:59');
  const [ai,setAi] = useState({coach:false,plan:false});
   const saving = useRef(false);
   const pending = useRef<{payload:string;key:string}>();
@@ -63,23 +68,24 @@ export default function LearningLive({ entry = false }: {entry?:boolean}) {
         if (!status.data.enabled) {setDisabled(true);return;}
         setAi({coach:!!status.data.ai_coach_enabled,plan:!!status.data.ai_plan_enabled});
         const snapshot=await readSnapshot(expected);
-        if(active)setData(snapshot);
+        if(active){setData(snapshot);setLearningDate(snapshot.learningToday ?? shanghaiDay());setToday(snapshot.learningToday ?? shanghaiDay());}
       } catch(failure) {if(active)setError(requestErrorMessage(failure));}
     })();
     return ()=>{active=false;alive.current=false;};
   },[identityKey,reload]);
   const gateway=useMemo<LearningGateway|null>(()=>!data ? null : {
     currentActor,
-    list: async actor => (await readSnapshot(actor)).assignments,
+    list: async actor => {const snapshot=await readSnapshot(actor);if(alive.current)setToday(snapshot.learningToday ?? shanghaiDay());return tasks(snapshot);},
     execute: async(actor,command)=>{
       assertIdentity(actor);
       const body={kind:command.kind,request_id:command.requestId,expected_revision:command.expectedRevision,
+        ...(command.dailyPlanId ? {daily_plan_id:command.dailyPlanId}:{}),
         ...(command.sectionId ? {section_id:command.sectionId}:{}),
         ...(command.answers ? {answers:command.answers}:{}),
         ...(command.note !== undefined ? {note:command.note}:{})};
       try {
         const response=await client.post<Snapshot>(`/staff-learning/assignments/${command.assignmentId}/actions`,body);
-        return checkedSnapshot(response.data, actor).assignments;
+        const snapshot=checkedSnapshot(response.data, actor);if(alive.current)setToday(snapshot.learningToday ?? shanghaiDay());return tasks(snapshot);
       } catch(failure) {throw learningError(failure);}
     }
   },[data?.actor.id,data?.actor.storeId,data?.actor.role]);
@@ -93,7 +99,7 @@ export default function LearningLive({ entry = false }: {entry?:boolean}) {
     if(saving.current)return;
     const course=data.assignableCourses.find(c=>JSON.stringify([c.id,c.version])===courseKey);
     if(!course||!learner)return;
-    const payload=JSON.stringify({staff_id:Number(learner),course_id:course.id,course_version:course.version});
+    const payload=JSON.stringify({staff_id:Number(learner),course_id:course.id,course_version:course.version,learning_date:learningDate,due_time:dueTime});
     if(pending.current?.payload!==payload)pending.current={payload,key:crypto.randomUUID()};
     saving.current=true;setBusy(true);setError('');setAssigned(false);
     try {
@@ -104,15 +110,19 @@ export default function LearningLive({ entry = false }: {entry?:boolean}) {
     }catch(failure){if(alive.current)setError(requestErrorMessage(failure));}
     finally{saving.current=false;if(alive.current)setBusy(false);}
   };
+  const scheduleControls=<div className="dl-schedule-controls">
+    <label htmlFor="learning-date">学习日期（北京时间）<input id="learning-date" type="date" required value={learningDate} disabled={busy} onChange={e=>{setLearningDate(e.target.value);setAssigned(false);pending.current=undefined;}}/></label>
+    <label htmlFor="learning-due">当天截止<input id="learning-due" type="time" required value={dueTime} disabled={busy} onChange={e=>{setDueTime(e.target.value);setAssigned(false);pending.current=undefined;}}/></label>
+  </div>;
   const arrangeForm=data.actor.role==='manager' && <section className="dl-arrange">
       <button className="dl-secondary" aria-expanded={assigning} onClick={()=>setAssigning(value=>!value)}>安排学习</button>
       {assigning&&<form onSubmit={arrange}>
         <label htmlFor="learning-person">技师</label><select id="learning-person" value={learner} disabled={busy} onChange={e=>{setLearner(e.target.value);pending.current=undefined;setAssigned(false);}} required><option value="">选择本店技师</option>{data.roster.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
         <label htmlFor="learning-course">课程</label><select id="learning-course" value={courseKey} disabled={busy} onChange={e=>{setCourseKey(e.target.value);pending.current=undefined;setAssigned(false);}} required><option value="">选择课程</option>{data.assignableCourses.map(c=><option key={JSON.stringify([c.id,c.version])} value={JSON.stringify([c.id,c.version])}>{data.courses.find(v=>v.id===c.id&&v.version===c.version)?.title}</option>)}</select>
         <button className="dl-primary" disabled={busy||!learner||!courseKey}>{busy?'正在安排…':'确认安排'}</button>
-        {assigned&&<p role="status">已安排，技师进入本次学习即可查看；相同课程版本不会重复分配。</p>}
+        {assigned&&<p role="status">已安排，技师进入每日学习即可查看；同人同课同日只保留一份安排。</p>}
         {error&&<p role="alert">{error}</p>}
       </form>}
     </section>;
-  return <DailyLearningPage key={identityKey+':'+data.assignments.map(a=>a.id).join(':')} actor={data.actor} courses={data.courses} gateway={gateway} arrange={arrangeForm} storeName={getStaff()?.store_name} aiCoachEnabled={ai.coach} aiPlanEnabled={ai.plan}/>;
+  return <DailyLearningPage key={identityKey+':'+tasks(data).map(a=>a.id).join(':')} actor={data.actor} courses={data.courses} gateway={gateway} arrange={arrangeForm} scheduleControls={scheduleControls} learningDate={learningDate} dueTime={dueTime} today={today} rosterIds={data.roster.map(s=>s.id)} storeName={getStaff()?.store_name} aiCoachEnabled={ai.coach} aiPlanEnabled={ai.plan}/>;
 }

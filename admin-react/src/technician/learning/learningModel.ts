@@ -4,9 +4,10 @@ export type LearningQuestion = { id: string; prompt: string; choices: string[]; 
 export type LearningCourse = { id: string; version: string; title: string; category: string; minutes: string; intro: string; sections: LearningSection[]; questions: LearningQuestion[]; sources: Array<{ title: string; url: string }> };
 export type LearningAttempt = { id: string; answers: Record<string, number>; correct: number; total: number; review?: Array<{questionId: string; answer: number; explanation: string}>; createdAt: string };
 export type LearningFollowUp = { id: string; managerId: number; managerName: string; note: string; createdAt: string };
-export type LearningAssignment = { id: string; storeId: number; staffId: number; staffName: string; courseId: string; courseVersion: string; assignedAt: string; dueAt: string | null; revision: number; sectionsRead: string[]; attempts: LearningAttempt[]; followUps: LearningFollowUp[] };
+export type DailyLearningStatus = 'scheduled' | 'not_started' | 'in_progress' | 'ready' | 'needs_coaching' | 'needs_retry' | 'completed';
+export type LearningAssignment = { id: string; assignmentId?: string; dailyPlanId?: string; learningDate?: string; dailyStatus?: DailyLearningStatus; overdue?: boolean; completedLate?: boolean; storeId: number; staffId: number; staffName: string; courseId: string; courseVersion: string; assignedAt: string; dueAt: string | null; revision: number; sectionsRead: string[]; attempts: LearningAttempt[]; followUps: LearningFollowUp[] };
 export type LearningState = { schema: 1; assignments: LearningAssignment[]; receipts: Record<string, string> };
-export type LearningCommand = { kind: 'mark_section' | 'submit' | 'follow_up'; assignmentId: string; requestId: string; expectedRevision: number; sectionId?: string; answers?: Record<string, number>; note?: string };
+export type LearningCommand = { dailyPlanId?: string; kind: 'mark_section' | 'submit' | 'follow_up'; assignmentId: string; requestId: string; expectedRevision: number; sectionId?: string; answers?: Record<string, number>; note?: string };
 export type LearningGateway = { list: (actor: LearningActor) => Promise<LearningAssignment[]>; execute: (actor: LearningActor, command: LearningCommand) => Promise<LearningAssignment[]>; currentActor: () => LearningActor | null };
 
 export function learningIdentity(actor: LearningActor): string { return `${actor.storeId}:${actor.id}:${actor.role}`; }
@@ -15,6 +16,7 @@ export function visibleLearning(state: LearningState, actor: LearningActor): Lea
   return structuredClone(state.assignments.filter(item => item.storeId === actor.storeId && (actor.role === 'manager' || item.staffId === actor.id)));
 }
 export function learningStatus(item: LearningAssignment, course: LearningCourse): string {
+  if (item.dailyStatus) return ({scheduled:'尚未开始',not_started:'未开始',in_progress:'学习中',ready:'待做练习',needs_coaching:'有错题待复习',needs_retry:'已辅导待复练',completed:'练习全对'})[item.dailyStatus];
   const latest = item.attempts[item.attempts.length - 1];
   if (latest) return latest.correct === latest.total ? '练习全对' : '有错题待复习';
   if (course.sections.every(section => item.sectionsRead.includes(section.id))) return '待做练习';

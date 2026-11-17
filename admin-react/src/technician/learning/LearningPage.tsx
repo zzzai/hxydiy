@@ -22,7 +22,7 @@ export function LearningEntry({ actor, courses, gateway }: Props) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let active = true;
-    void gateway.list(actor).then(data => { if (active) setItems(data); }).catch(() => { if (active) setFailed(true); });
+    void gateway.list(actor).then(data => { if (active) setItems(data.filter(item=>item.dailyStatus!=='scheduled')); }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [actor, gateway]);
   const manager = actor.role === 'manager';

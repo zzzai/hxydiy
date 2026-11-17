@@ -1,4 +1,5 @@
 """Loopback-only, synthetic HTTP harness; never part of the production application."""
+import hashlib
 import json
 import os
 import uuid
@@ -31,7 +32,14 @@ with SessionLocal() as db:
                     Staff(id=9003, username="learning-b", role="technician", store_id=1, technician_id=9003, name="技师 B（演示）", password_hash="unused"),
                     Staff(id=9004, username="learning-other", role="technician", store_id=2, technician_id=9004, name="异店技师（演示）", password_hash="unused")])
         db.commit()
-    for content in json.loads((Path(__file__).parent / "fixtures" / "learning-pilot-v8.json").read_text()):
+    content_path = Path(__file__).parent / "fixtures" / "learning-pilot-v8.json"
+    if os.getenv("LEARNING_PREVIEW_FORMAL") == "1":
+        root = Path(__file__).resolve().parents[1] / "content" / "staff-learning"
+        manifest = json.loads((root / "production-manifest.json").read_text())
+        content_path = root / manifest["content_file"]
+        if hashlib.sha256(content_path.read_bytes()).hexdigest() != manifest["content_sha256"]:
+            raise RuntimeError("Formal course fixture hash mismatch")
+    for content in json.loads(content_path.read_text()):
         existing = db.scalar(select(LearningCourseVersion).where(LearningCourseVersion.code == content["id"], LearningCourseVersion.version == content["version"]))
         if existing:
             if existing.content_sha256 != content_hash(content):

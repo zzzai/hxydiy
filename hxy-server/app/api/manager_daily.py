@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.admin import _current_staff
 from app.api.admin_v2 import _audit, _require_admin, _require_headquarters_admin, _resolve_target_store_id
 from app.core.config import settings
+from app.domain.learning_daily import SHANGHAI, daily_projection
 from app.db.session import SessionLocal, get_db
 from app.models import (
     DailyAreaPhoto,
@@ -419,6 +420,39 @@ def _learning_progress(db: Session, assignment: StaffLearningAssignment) -> dict
     }
 
 
+def _daily_learning_progress(db: Session, assignments: list, now: datetime):
+    """Return current daily tasks; None means this employee only has legacy learning."""
+    history = list(db.scalars(select(StaffLearningEvent).where(
+        StaffLearningEvent.assignment_id.in_([item.id for item in assignments])
+    ))) if assignments else []
+    plans = [event for event in history if event.kind == "assign" and "daily_plan" in event.payload]
+    if not plans:
+        return None
+    by_id = {item.id: item for item in assignments}
+    today = now.astimezone(SHANGHAI).date().isoformat()
+    tasks = []
+    for plan in plans:
+        assignment = by_id[plan.assignment_id]
+        course = db.get(LearningCourseVersion, assignment.course_version_id)
+        sections = (course.content or {}).get("sections", []) if course else []
+        daily = daily_projection(plan, history, [section["id"] for section in sections], now)
+        if daily["learningDate"] != today and not daily["overdue"]:
+            continue
+        latest = daily["attempts"][-1] if daily["attempts"] else {}
+        done = len(daily["sectionsRead"])
+        tasks.append({
+            "assignment_id": assignment.id, "daily_plan_id": plan.id,
+            "course": course.code if course else "", "course_version": course.version if course else "",
+            "title": (course.content or {}).get("title", "") if course else "",
+            "progress": round(done / max(1, len(sections)) * 100),
+            "sections_done": done, "sections_total": len(sections),
+            "submitted": bool(latest), "score": latest.get("correct"), "total_questions": latest.get("total"),
+            "daily_status": daily["dailyStatus"], "complete": daily["dailyStatus"] == "completed",
+            "overdue": daily["overdue"], "due_at": daily["dueAt"],
+        })
+    return sorted(tasks, key=lambda item: (item["complete"], item["due_at"], item["daily_plan_id"]))
+
+
 def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
@@ -436,6 +470,12 @@ def _team_view(db: Session, store_id: int) -> dict:
         due = _aware(assignments[0].assigned_at) + timedelta(days=7) if assignments else None
         complete = bool(latest and latest["submitted"] and (latest["score"] or 0) >= (latest["total_questions"] or 1))
         overdue = bool(assignments and not complete and due and due < now)
+        daily = _daily_learning_progress(db, assignments, now)
+        if daily is not None:
+            latest = daily[0] if daily else None
+            due = datetime.fromisoformat(latest["due_at"]) if latest else None
+            complete = bool(daily) and all(task["complete"] for task in daily)
+            overdue = any(task["overdue"] for task in daily)
         assessments = list(db.scalars(select(TrainingAssessment).where(
             TrainingAssessment.store_id == store_id,
             TrainingAssessment.staff_id == person.id,
