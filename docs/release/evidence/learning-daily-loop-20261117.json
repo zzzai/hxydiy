@@ -1,0 +1,145 @@
+{
+  "schema": "learning-daily-loop-release@1",
+  "status": "passed",
+  "release_id": "server-658d97edc41a-1794926800",
+  "source_sha": "658d97edc41adc2708b71fcd34075135602e8b36",
+  "previous_release": "server-fb284ea91e99-1794838721",
+  "published_at": "2026-11-17T14:49:25Z",
+  "backend": {
+    "sqlite_passed": 43,
+    "postgres_only_skipped_on_sqlite": 2,
+    "postgres_passed": 32
+  },
+  "frontend": {
+    "passed": 325
+  },
+  "release_gate_tests": {
+    "passed": 42
+  },
+  "courses_unchanged": {
+    "courses": 12,
+    "questions": 36
+  },
+  "behavior": [
+    "daily schedule Shanghai date",
+    "idempotent same-day plan",
+    "independent daily reading and grading",
+    "manager incomplete and mistakes",
+    "append coaching and retry",
+    "historical attempts retained",
+    "team status consistent"
+  ],
+  "ui_isolated": {
+    "status": "passed",
+    "environment": "375px/320px headless Chrome, actual HTTP full FastAPI and isolated PostgreSQL",
+    "courses": 12,
+    "questions": 36,
+    "same_day_plans": 1,
+    "attempts": 2,
+    "coaching": 1,
+    "daily_status": "completed",
+    "errors": [],
+    "learning_write_requests": 8,
+    "external_ai_calls": 0,
+    "checks": [
+      "arrange",
+      "date deduplication",
+      "read all sections",
+      "wrong answers",
+      "manager incomplete and mistakes",
+      "coaching",
+      "retry correct",
+      "retained attempts",
+      "scope isolation",
+      "no horizontal overflow"
+    ],
+    "real_device_acceptance": false
+  },
+  "ui_live_assets": {
+    "status": "passed",
+    "source_sha": "658d97edc41adc2708b71fcd34075135602e8b36",
+    "live_assets": true,
+    "all_api_intercepted": true,
+    "production_api_requests": 0,
+    "field_acceptance": false,
+    "scenarios": [
+      {
+        "role": "manager",
+        "api_mocked": 3,
+        "page_errors": 0,
+        "viewport": 375
+      },
+      {
+        "role": "technician",
+        "api_mocked": 4,
+        "page_errors": 0,
+        "viewport": 375
+      }
+    ]
+  },
+  "public_verification": {
+    "release_id": "server-658d97edc41a-1794926800",
+    "source_sha": "658d97edc41adc2708b71fcd34075135602e8b36",
+    "status": "passed",
+    "manifest_files_verified": 635,
+    "running_api_sources_match": true,
+    "running_api_source_files": 136,
+    "/": {
+      "status": 200,
+      "cache_control": "no-store, no-cache, must-revalidate",
+      "scripts": [
+        "/assets/index-6X04kS-J.js"
+      ],
+      "asset_hashes_match": true
+    },
+    "/admin/": {
+      "status": 200,
+      "cache_control": "no-store, no-cache, must-revalidate",
+      "scripts": [
+        "/admin/assets/index-Wn0cEkNi.js"
+      ],
+      "asset_hashes_match": true
+    },
+    "health": {
+      "status": "ok",
+      "service": "hxy-customer-api",
+      "environment": "production"
+    },
+    "/api/v1/staff-learning/bootstrap": {
+      "anonymous_status": 401
+    },
+    "/api/v1/auth/h5/membership-consumption": {
+      "anonymous_status": 401
+    },
+    "learning_readonly": {
+      "enabled": true,
+      "published_courses": 12,
+      "questions": 36,
+      "assignments": 0,
+      "events": 0
+    }
+  },
+  "data_protection": {
+    "status": "passed",
+    "protected_tables": 75,
+    "rows_unchanged": true,
+    "schema_unchanged": true,
+    "changed_tables": []
+  },
+  "backup_restore_gate": "passed",
+  "backup_sha256": "4a210421bb2e3e96d8bf7e78eb2c67f2876e99be9c8b734fc82e7f5195f64d77",
+  "production_test_writes": 0,
+  "schema_migrations": 0,
+  "course_content_changes": 0,
+  "scope": {
+    "automatic_assignments": false,
+    "automatic_ai_calls": false,
+    "notifications": false,
+    "professional_certification": false
+  },
+  "offhost_source_bundle": {
+    "local_sha256": "c1b3416afc0ec53a6ca5cdfafd9072929cb8b6c19e63a5c171851497ce471d20",
+    "verified": true
+  },
+  "evidence_directory": "/root/hxy-diy-private-operations/learning-daily-loop-20261117"
+}
