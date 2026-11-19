@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Empty, Spin, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { getTechnicianMyTasks } from '../api';
@@ -9,7 +9,7 @@ import TechnicianProfileSheet from './TechnicianProfileSheet';
 import { useTechnicianSession } from './useTechnicianSession';
 import './technician-customer.css';
 
-export default function TechnicianMyServicesPage() {
+export default function TechnicianMyServicesPage({ learningEntry }: { learningEntry?: ReactNode }) {
   const navigate = useNavigate();
   const current = useTechnicianSession();
   const [tasks, setTasks] = useState<TechnicianCustomerTask[]>([]);
@@ -40,10 +40,12 @@ export default function TechnicianMyServicesPage() {
     return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
   }, [load, closeCustomer]);
   return <section className="technician-my-services">
-    <header><h1>我的服务</h1><p>查看本人正在服务和已结束的顾客；确认与结束操作在服务看板完成。</p></header>
-    <Button block onClick={() => navigate('/positions')}>查看门店服务位</Button>
+    <header className="technician-page-title"><div><h1>今日服务</h1><p>查看本人服务，及时记录顾客反馈</p></div></header>
+    {learningEntry}
+    <div className="technician-service-section-head"><h2>本人服务</h2><Button type="link" onClick={() => navigate('/positions')}>查看门店服务位</Button></div>
+    <p className="technician-service-help">确认与结束操作在服务看板完成。</p>
     {error && <Alert type="error" message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
-    {loading ? <Spin /> : tasks.length ? tasks.map((task) => {
+    {loading ? <div className="technician-loading" role="status" aria-label="正在加载本人服务"><Spin /></div> : tasks.length ? tasks.map((task) => {
       const pricing = task.pricing;
       const mode = technicianPriceMode(pricing);
       const modeLabel = technicianPriceModeLabel(mode);
@@ -51,7 +53,7 @@ export default function TechnicianMyServicesPage() {
       const rows = technicianPricedItemRows(task.items, pricing);
       const itemNames = task.items.map(technicianOrderItemLabel).filter(Boolean).join('、') || '未记录项目';
       return <article key={task.occupancy_id} className="technician-customer-entry">
-        <h2>{task.room_name || '本次服务'} <Tag>{technicianStatusLabel(task.occupancy_status)}</Tag></h2>
+        <div className="technician-service-card-head"><h3>{task.room_name || '本次服务'}</h3><Tag>{technicianStatusLabel(task.occupancy_status)}</Tag></div>
         {pricing
           ? <div className="technician-my-service-items">
             {rows.length > 0 ? rows.map((row) => <div className="technician-my-service-item" key={row.key}>
@@ -73,13 +75,12 @@ export default function TechnicianMyServicesPage() {
           {total.pending_label && <p className="technician-order-pricing-hint">{total.pending_label}</p>}
         </section>}
         <div className="technician-my-service-actions">
-          <Button onClick={() => setCustomer(task.occupancy_id)}>顾客标签与资料</Button>
           {task.occupancy_status === 'post_service_present' && !task.record_completed && task.user_id && <Button type="primary" onClick={() => setRecordTask(task)}>填写服务记录</Button>}
-          <Button disabled={!task.user_id} onClick={() => navigate('/history')}>查看服务记录</Button>
+          <div className="technician-service-secondary-actions"><Button onClick={() => setCustomer(task.occupancy_id)}>顾客标签与资料</Button><Button disabled={!task.user_id} onClick={() => navigate('/history')}>查看服务记录</Button></div>
         </div>
         {!task.user_id && <p>匿名服务可正常完成，暂未关联顾客资料。</p>}
       </article>;
-    }) : <Empty description="目前没有本人正在服务的顾客" />}
+    }) : !error && <div className="technician-service-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="目前没有本人正在服务的顾客" /><p>有新的本人服务时，会在这里显示。</p></div>}
     {customer !== undefined && <TechnicianCustomerPanel key={customer} occupancyId={customer} onClose={closeCustomer} />}
     <TechnicianProfileSheet task={recordTask} onClose={() => setRecordTask(undefined)} onSaved={() => { setRecordTask(undefined); void load(); }} />
   </section>;

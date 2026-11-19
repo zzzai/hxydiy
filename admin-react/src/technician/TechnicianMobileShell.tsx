@@ -20,6 +20,7 @@ export default function TechnicianMobileShell({ children, onLogout, onOpenDeskto
   const [me, setMe] = useState<any>();
   const manager = isMobileManager(getStaff());
   const managerTechnician = manager && Boolean(getStaff()?.technician_id);
+  const technicianSurface = !manager || ['/today', '/positions', '/history', '/me'].includes(location.pathname);
   useEffect(() => {
     if (manager && !managerTechnician) return;
     let active = true;
@@ -33,10 +34,10 @@ export default function TechnicianMobileShell({ children, onLogout, onOpenDeskto
   const visibleTabs = manager ? [] : tabs.filter((tab) => visiblePaths.includes(tab.path));
   const logout = () => { onLogout(); message.success('已退出登录'); navigate(manager ? '/store/login' : '/login', { replace: true }); };
   return (
-    <div className={'technician-mobile-app' + (manager ? ' manager-mobile-app' : '')}>
+    <div className={'technician-mobile-app' + (manager ? ' manager-mobile-app' : '') + (technicianSurface ? ' technician-layout' : '')}>
       <header className="technician-mobile-header">
         <div><strong>{staff?.store_name || me?.store?.name || '当前门店'}</strong><span>{me?.technician?.name || staff?.name || (manager ? '店长' : '技师')}</span></div>
-        <>{manager ? <details className="manager-mobile-more"><summary>更多</summary><div><button onClick={() => navigate('/store')}>门店工作台</button><button onClick={onOpenDesktop}>电脑后台</button><button onClick={logout}>退出登录</button></div></details> : <Button type="text" aria-label="退出登录" icon={<LogoutOutlined />} onClick={logout} />}</>
+        <>{manager ? <details className="manager-mobile-more"><summary>更多</summary><div><button onClick={() => navigate('/store')}>门店工作台</button><button onClick={onOpenDesktop}>电脑后台</button><button onClick={logout}>退出登录</button></div></details> : <Button type="text" aria-label="退出登录" icon={<LogoutOutlined />} onClick={logout}>退出</Button>}</>
       </header>
       <main className="technician-mobile-content">{children}</main>
       {visibleTabs.length > 0 && <nav className="technician-mobile-tabbar" aria-label="技师端导航" style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, 1fr)` }}>

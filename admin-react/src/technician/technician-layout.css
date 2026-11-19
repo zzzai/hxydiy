@@ -1,0 +1,114 @@
+/* Technician-only refinement. Manager and desktop surfaces retain their layouts. */
+.technician-layout {
+  padding-bottom: 0;
+  --tech-space-xs: 4px;
+  --tech-space-sm: 8px;
+  --tech-space-md: 16px;
+  --tech-space-lg: 24px;
+}
+.technician-layout .technician-mobile-header { gap: var(--tech-space-md); padding-inline: var(--tech-space-md); }
+.technician-layout .technician-mobile-header > div { flex: 1; }
+.technician-layout .technician-mobile-header strong { font-size: 14px; }
+.technician-layout .technician-mobile-header .ant-btn { flex-shrink: 0; font-size: 12px; padding-inline: var(--tech-space-sm); }
+.technician-layout .technician-mobile-content { padding: var(--tech-space-lg) var(--tech-space-md) calc(96px + env(safe-area-inset-bottom)); }
+.technician-layout .technician-page-title { margin-bottom: var(--tech-space-lg); }
+.technician-layout .technician-page-title h1 { font-size: 28px; line-height: 1.35; font-weight: 600; margin: 0 0 var(--tech-space-sm); letter-spacing: normal; }
+.technician-layout .technician-page-title p { font-size: 13px; margin: 0; color: var(--mobile-muted); }
+.technician-layout .technician-mobile-tabbar { box-shadow: none; gap: var(--tech-space-sm); }
+.technician-layout .technician-mobile-tabbar button { font-size: 12px; font-weight: 400; }
+.technician-layout .technician-mobile-tabbar button.active { font-weight: 600; }
+.technician-layout :is(button, a, summary, input, textarea):focus-visible { outline: 2px solid var(--mobile-brand); outline-offset: 3px; }
+.technician-layout ::selection { background: var(--mobile-selected); color: var(--mobile-ink); }
+.technician-layout .learning-entry { gap: 12px; padding: var(--tech-space-md); margin: 0 0 var(--tech-space-lg); background: var(--mobile-selected); color: var(--mobile-brand); border: 0; border-radius: 14px; font: inherit; }
+.technician-layout .learning-entry > span:nth-child(2) { min-width: 0; }
+.technician-layout .learning-entry strong { font-size: 16px; font-weight: 600; }
+.technician-layout .learning-entry small { font-size: 12px; line-height: 1.5; color: var(--mobile-muted); }
+.technician-layout .learning-entry > .anticon { flex-shrink: 0; }
+.technician-layout .technician-service-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--tech-space-sm); }
+.technician-layout .technician-service-section-head h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.technician-layout .technician-service-section-head .ant-btn { min-height: 44px; padding-inline: 0; font-size: 13px; }
+.technician-layout .technician-service-help { color: var(--mobile-muted); font-size: 12px; margin: 0 0 12px; line-height: 1.5; }
+.technician-layout .technician-customer-entry { margin: 0 0 var(--tech-space-md); padding: var(--tech-space-md); border-radius: 14px; background: var(--mobile-surface); box-shadow: none; }
+.technician-layout .technician-service-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--tech-space-sm); margin-bottom: var(--tech-space-md); }
+.technician-layout .technician-service-card-head h3 { font-size: 18px; font-weight: 600; line-height: 1.5; margin: 0; }
+.technician-layout .technician-service-card-head .ant-tag { flex-shrink: 0; margin: var(--tech-space-xs) 0 0; }
+.technician-layout .technician-my-service-items { gap: var(--tech-space-sm); font-size: 14px; }
+.technician-layout .technician-my-service-item-name { font-weight: 400; }
+.technician-layout .technician-my-service-item-tail { max-width: 50%; text-align: right; }
+.technician-layout .technician-my-service-item-price,
+.technician-layout .technician-my-service-item-pending { font-size: 12px; white-space: normal; font-weight: 400; }
+.technician-layout .technician-order-pricing { padding: 12px 0; border: 0; border-top: 1px solid var(--mobile-line); border-radius: 0; background: var(--mobile-surface); }
+.technician-layout .technician-my-service-actions { display: grid; gap: var(--tech-space-sm); padding-top: var(--tech-space-sm); }
+.technician-layout .technician-my-service-actions .ant-btn { height: auto; min-height: 44px; white-space: normal; padding: var(--tech-space-sm); }
+.technician-layout .technician-service-secondary-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tech-space-sm); }
+.technician-layout .technician-service-empty { background: var(--mobile-surface); padding: var(--tech-space-lg) var(--tech-space-md); border-radius: 14px; text-align: center; }
+.technician-layout .technician-service-empty p { font-size: 12px; color: var(--mobile-muted); margin-bottom: 0; }
+.technician-layout .technician-history-toolbar { align-items: start; }
+.technician-layout .technician-history-toolbar .ant-btn { min-height: 44px; }
+.technician-layout .technician-history-toolbar .ant-segmented { padding: var(--tech-space-xs); }
+.technician-layout .technician-history-toolbar .ant-segmented-item-label { min-height: 44px; display: grid; place-content: center; padding-inline: var(--tech-space-xs); font-size: 13px; white-space: normal; line-height: 1.5; }
+.technician-layout .technician-own-history > .ant-checkbox-wrapper { min-height: 44px; align-items: center; margin: 0; font-size: 14px; }
+.technician-layout .technician-history-card { padding: var(--tech-space-md); background: var(--mobile-surface); border: 1px solid var(--mobile-line); border-radius: 14px; box-shadow: none; }
+.technician-layout .technician-history-card-main { display: flex; flex-direction: column; align-items: flex-start; gap: var(--tech-space-sm); }
+.technician-layout .technician-history-card-headline { width: 100%; flex-wrap: wrap; }
+.technician-layout .technician-history-card span { color: var(--mobile-muted); margin-top: 0; }
+.technician-layout .technician-history-card .ant-btn { min-height: 44px; max-width: 100%; white-space: normal; height: auto; }
+.technician-layout .technician-history-card .ant-btn span { color: inherit; }
+.technician-layout .technician-history-summary.ant-typography { align-self: stretch; font-size: 13px; margin: 0; padding-top: var(--tech-space-sm); }
+.technician-layout .technician-empty-state { min-height: 240px; background: var(--mobile-surface); border-radius: 14px; padding: var(--tech-space-md); }
+.technician-layout .technician-profile-hero { padding: 0 0 var(--tech-space-lg); margin-bottom: var(--tech-space-lg); border: 0; border-bottom: 1px solid var(--mobile-line); border-radius: 0; background: transparent; gap: var(--tech-space-md); }
+.technician-layout .technician-profile-hero .ant-avatar { background: var(--mobile-selected); color: var(--mobile-brand); flex-shrink: 0; font-size: 22px; }
+.technician-layout .technician-profile-hero > div { min-width: 0; }
+.technician-layout .technician-profile-hero h2 { font-size: 22px; line-height: 1.5; margin: 0 0 var(--tech-space-xs); overflow-wrap: anywhere; font-weight: 600; }
+.technician-layout .technician-profile-hero p { color: var(--mobile-muted); font-size: 13px; }
+.technician-layout .technician-account-details { padding: var(--tech-space-md); border-radius: 14px; background: var(--mobile-surface); }
+.technician-layout .technician-account-details h2 { font-size: 16px; font-weight: 600; margin: 0 0 var(--tech-space-md); }
+.technician-layout .technician-account-details .ant-descriptions-item-label { min-width: 80px; color: var(--mobile-muted); }
+.technician-layout .technician-account-details .ant-descriptions-item-content { overflow-wrap: anywhere; }
+.technician-layout .technician-schedule { margin-top: var(--tech-space-md); padding: 0 var(--tech-space-md); border-radius: 14px; background: var(--mobile-surface); }
+.technician-layout .technician-schedule summary { min-height: 56px; cursor: pointer; align-content: center; font-size: 14px; }
+.technician-layout .technician-schedule summary small { margin-left: 12px; color: var(--mobile-muted); font-size: 12px; }
+.technician-layout .technician-shift-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--tech-space-sm); border-top: 1px solid var(--mobile-line); padding: 12px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.technician-layout .technician-shift-row .ant-tag { margin: 0; }
+.technician-layout .technician-shift-row > span:last-child { color: var(--mobile-muted); }
+.technician-layout .technician-mobile-content:has(.dl-page) { background: var(--mobile-surface); padding-top: var(--tech-space-md); }
+.technician-layout .dl-page { padding: 0; color: var(--mobile-ink); font-size: 14px; line-height: 1.6; }
+.technician-layout .dl-title { gap: var(--tech-space-sm); padding-bottom: 12px; margin-bottom: var(--tech-space-lg); }
+.technician-layout .dl-title h1 { font-size: 22px; font-weight: 600; line-height: 1.5; }
+.technician-layout .dl-title > small { display: none; }
+.technician-layout .dl-title button { min-width: 44px; min-height: 44px; width: 44px; flex-shrink: 0; color: var(--mobile-brand); border-radius: 8px; }
+.technician-layout .dl-title .dl-refresh { width: auto; margin: 0; padding: 0 var(--tech-space-sm); font-size: 12px; }
+.technician-layout .dl-lead { margin-bottom: var(--tech-space-lg); }
+.technician-layout .dl-lead h2 { font-size: 18px; font-weight: 600; letter-spacing: normal; margin-bottom: var(--tech-space-sm); }
+.technician-layout .dl-lead p { font-size: 13px; color: var(--mobile-muted); }
+.technician-layout .dl-feature { border: 0; border-radius: 0; padding: 0 0 var(--tech-space-lg); margin: 0 0 var(--tech-space-lg); border-bottom: 1px solid var(--mobile-line); background: var(--mobile-surface); }
+.technician-layout .dl-feature h2 { font-size: 22px; font-weight: 600; margin-bottom: 12px; }
+.technician-layout .dl-feature p { font-size: 14px; margin-bottom: var(--tech-space-md); color: var(--mobile-muted); }
+.technician-layout .dl-eyebrow { font-size: 12px; color: var(--mobile-brand); margin-bottom: var(--tech-space-sm); }
+.technician-layout .dl-meta { font-size: 12px; margin-bottom: var(--tech-space-md); color: var(--mobile-muted); }
+.technician-layout :is(.dl-row small, .dl-muted, .dl-footnote, .dl-eyebrow span) { color: var(--mobile-muted); }
+.technician-layout .dl-row-icon { background: var(--mobile-selected); color: var(--mobile-brand); }
+.technician-layout .dl-row { color: var(--mobile-ink); gap: 12px; padding-block: var(--tech-space-md); }
+.technician-layout :is(.dl-primary, .dl-secondary) { border-radius: 10px; min-height: 48px; padding: 12px var(--tech-space-md); }
+.technician-layout .dl-primary { background: var(--mobile-brand); border-color: var(--mobile-brand); }
+.technician-layout .dl-secondary { background: var(--mobile-surface); color: var(--mobile-brand); border-color: var(--mobile-line); }
+.technician-layout .dl-scene { background: var(--mobile-selected); border: 0; border-radius: 12px; padding: var(--tech-space-md); }
+.technician-layout .dl-scene p { font-size: 18px; }
+.technician-layout .dl-scene small { color: var(--mobile-muted); }
+.technician-layout .dl-lesson-title { font-size: 22px; margin-bottom: var(--tech-space-lg); }
+.technician-layout .dl-action p, .technician-layout .dl-action blockquote { font-size: 16px; line-height: 1.6; }
+.technician-layout .dl-action blockquote, .technician-layout .dl-remember { color: var(--mobile-brand); }
+.technician-layout .dl-step { gap: var(--tech-space-md); }
+.technician-layout .dl-step progress { accent-color: var(--mobile-brand); }
+.technician-layout .dl-question legend { font-size: 18px; margin-bottom: var(--tech-space-md); }
+.technician-layout .dl-question label { margin-bottom: 12px; padding: var(--tech-space-md); }
+.technician-layout .dl-question label.is-selected { border-color: var(--mobile-brand); background: var(--mobile-selected); padding: 15px; }
+.technician-layout .dl-question input { accent-color: var(--mobile-brand); }
+.technician-layout .dl-result { background: var(--mobile-selected); border-radius: 14px; padding: var(--tech-space-md); }
+.technician-layout .dl-result > strong { color: var(--mobile-brand); font-size: 28px; }
+.technician-layout .dl-notes { border: 0; border-radius: 12px; background: var(--mobile-selected); }
+.technician-layout .dl-page summary { min-height: 44px; color: var(--mobile-brand); }
+@media (max-width: 350px) {
+  .technician-layout .technician-mobile-content { padding-inline: 12px; }
+  .technician-layout .technician-history-toolbar { gap: var(--tech-space-xs); }
+}

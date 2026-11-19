@@ -27,7 +27,7 @@ export function LearningEntry({ actor, courses, gateway }: Props) {
   }, [actor, gateway]);
   const manager = actor.role === 'manager';
   const count = items ? (manager ? learningPeople(items, courses) : items.filter(item => learningStatus(item, courses.find(course => course.id === item.courseId && course.version === item.courseVersion)!) !== '练习全对').length) : null;
-  return <button className="learning-entry" onClick={() => navigate('/learning')}><ReadOutlined aria-hidden /><span><strong>{manager ? '团队学习' : '本次学习'}</strong><small>{failed ? '暂未取得进度，点开重试' : count === null ? '正在读取学习进度' : count ? manager ? `${count} 人待学习或需复习` : `${count} 课待完成练习` : items?.length ? '本次练习已全部答对' : '暂未安排学习任务'}</small></span><ArrowRightOutlined aria-hidden /></button>;
+  return <button className="learning-entry" onClick={() => navigate('/learning')}><ReadOutlined aria-hidden /><span><strong>{manager ? '团队学习' : '每日学习'}</strong><small>{failed ? '暂未取得进度，点开重试' : count === null ? '正在读取学习进度' : count ? manager ? `${count} 人待学习或需复习` : `${count} 课待完成练习` : items?.length ? '本次练习已全部答对' : '暂未安排学习任务'}</small></span><ArrowRightOutlined aria-hidden /></button>;
 }
 
 export default function LearningPage({ actor, courses, gateway }: Props) {

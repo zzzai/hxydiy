@@ -17,6 +17,7 @@ import TechnicianMembershipPausedPage from './TechnicianMembershipPausedPage';
 import TechnicianWecomGate from './TechnicianWecomGate';
 import { technicianMobileHome } from './technicianMobile';
 import './technician-mobile.css';
+import './technician-layout.css';
 
 export { TECHNICIAN_MOBILE_ROUTES, technicianStatusLabel, technicianActions } from './technicianMobile';
 
@@ -79,7 +80,7 @@ function TechnicianSessionRoutes() {
     flushSync(() => setSuspended(true));
     window.location.assign('/admin/#/today');
   };
-  return <Routes><Route path="/store/login" element={loggedIn && manager ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} managerOnly onLogin={onLogin} />} /><Route path="/login" element={loggedIn ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} onLogin={onLogin} />} /><Route path="/*" element={loggedIn ? <TechnicianMobileShell key={epoch} onLogout={logout} onOpenDesktop={openDesktop}><Routes><Route path="store" element={manager ? <ManagerP0Page /> : <Navigate to="/store/login" replace />} />{(!manager || hasTechnician) && <><Route path="today" element={<>{learningEnabled && <LearningLive entry/>}<TechnicianMyServicesPage /></>} /><Route path="positions" element={<TechnicianTodayPage />} /><Route path="history" element={<TechnicianHistoryPage />} /><Route path="me" element={<TechnicianMePage />} /></>}{learningEnabled && <Route path="learning" element={<LearningLive/>} />}<Route path="member-verify" element={manager ? <TechnicianMembershipPausedPage /> : <Navigate to="/today" replace />} /><Route path="*" element={<Navigate to={home} replace />} /></Routes></TechnicianMobileShell> : <Navigate to={loginPath} replace />} /></Routes>;
+  return <Routes><Route path="/store/login" element={loggedIn && manager ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} managerOnly onLogin={onLogin} />} /><Route path="/login" element={loggedIn ? <Navigate to={home} replace /> : <TechnicianMobileLoginPage key={epoch} onLogin={onLogin} />} /><Route path="/*" element={loggedIn ? <TechnicianMobileShell key={epoch} onLogout={logout} onOpenDesktop={openDesktop}><Routes><Route path="store" element={manager ? <ManagerP0Page /> : <Navigate to="/store/login" replace />} />{(!manager || hasTechnician) && <><Route path="today" element={<TechnicianMyServicesPage learningEntry={learningEnabled && <LearningLive entry/>} />} /><Route path="positions" element={<TechnicianTodayPage />} /><Route path="history" element={<TechnicianHistoryPage />} /><Route path="me" element={<TechnicianMePage learningEntry={learningEnabled && <LearningLive entry/>} />} /></>}{learningEnabled && <Route path="learning" element={<LearningLive/>} />}<Route path="member-verify" element={manager ? <TechnicianMembershipPausedPage /> : <Navigate to="/today" replace />} /><Route path="*" element={<Navigate to={home} replace />} /></Routes></TechnicianMobileShell> : <Navigate to={loginPath} replace />} /></Routes>;
 }
 
 export default function TechnicianMobileApp() {
