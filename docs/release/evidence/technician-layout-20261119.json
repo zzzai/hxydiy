@@ -1,0 +1,36 @@
+{
+  "status": "passed",
+  "release_id": "server-1e82e3c69076-1795072236",
+  "source_sha": "1e82e3c69076499fc6eb860d8ca89441131a78dd",
+  "tables_unchanged": 75,
+  "rows_columns_indexes_unchanged": true,
+  "manifest_files": 635,
+  "running_api_files": 136,
+  "health": {
+    "status": "ok",
+    "service": "hxy-customer-api",
+    "environment": "production"
+  },
+  "staff_learning_enabled": true,
+  "customer_bundle_unchanged": true,
+  "assets": {
+    "diy-web": [
+      "/assets/index-6X04kS-J.js",
+      "/assets/index-BipzoEm2.css"
+    ],
+    "admin-react": [
+      "/admin/assets/index-gkQHJdCb.js",
+      "/admin/assets/index-B87tE7gg.css"
+    ]
+  },
+  "anonymous_learning_status": 401,
+  "database_writes": 0,
+  "field_acceptance": false,
+  "release_tests_passed": 42,
+  "frontend_tests_passed": 325,
+  "isolated_ui_scenarios": 16,
+  "production_ui_scenarios": 4,
+  "layout_findings": 0,
+  "backup_restore_passed": true,
+  "production_apply_count": 1
+}
