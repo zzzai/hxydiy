@@ -61,7 +61,7 @@ def reconcile_courses(db, manifest_path=DEFAULT_MANIFEST, *, retire=False, apply
                     content=content, content_sha256=change["content_sha256"], status="published",
                     approval_reference=manifest["production_approval_reference"]))
         if changes:
-            db.add(AuditLog(actor_type="system", actor_id="LEARNING-20261102", store_id=1,
+            db.add(AuditLog(actor_type="system", actor_id=manifest.get("audit_actor_id", "LEARNING-20261102"), store_id=1,
                 action="learning_course_package_" + report["action"], entity_type="learning_course_package",
                 entity_id=report["content_sha256"], detail=report))
         db.flush()

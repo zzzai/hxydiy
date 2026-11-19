@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "status": "approved",
+  "content_file": "store-handbook-20261119-v1.1.json",
+  "content_sha256": "89d55fab3633c88175a7dfe91356d70dc2d22da3af6f06e26abb3601117aa844",
+  "courses": 8,
+  "questions": 30,
+  "production_approval_reference": "user-20261119-approved-handbook-v1.1-confirmed-content-store-1",
+  "audit_actor_id": "LEARNING-20261119",
+  "sources": [
+    {
+      "reference_kind": "approved_store_handbook",
+      "document_sha256": "ba79391fe7d1ca75f7c44c0c1c86597093db880cb69f6acc164eb9bae60f2bb9",
+      "question_document_sha256": "7fc80c8823d62fdfcd563a7072621fc8af2c056d5d3cb53cceeb90e0e5f475ec"
+    }
+  ]
+}

@@ -403,3 +403,7 @@ The controlled finance verifier binds newly inserted counts to the current previ
 - `HXY-MemberSync-Controlled` 已启用，每日北京时间10:00及用户登录触发，下一次2026-11-17 10:00。实际运行包源码22142c97bcefc89c35d9cabd85ba367ac1ae8240、包SHA9c976a494d343edac6d2b03ecea8279d368bf216d74ce07554455dd5b1a8ddc2；仅更新运行入口和普通优先级，原触发时间、任务账号权限及其他设置不变。旧AI automation-2保持PAUSED，正常运行0模型调用；异常停写锁定并请求本机通知。需电脑开机联网且当前Windows用户已登录；验证码等异常不自动处理。
 - 前序失败均停在本机采集或登录阶段，未上传消费批次，未发生生产写入；失败证据保留。无窗口登录候选已撤回。分页完成条件、Windows原子落盘已补强；普通优先级完整运行通过，不把此前所有间歇超时归因于单一未经证明的原因。
 - 应用仍为 `server-116b65aa6a5f-1794661064`，无应用重部署、迁移或容器切换；真实微信/通知现场可见性不冒充已验。[脱敏验收记录](release/evidence/member-finance-scheduled-20261116.json)。
+
+### 2026-11-19 技师内训手册 V1.1
+
+紫薇壹号店的手册与带教册以两个成品 PDF 的 SHA 绑定 8 课 30 题。新安排按门店选课程版本，旧任务始终引用原版本。精选草本泡内训为 45 分钟手法加 15 分钟热敷。未定的器具参数、分项计时和套盒条款不出题；学习成绩只表示知识和场景判断。日安排与复练契约见 `docs/contracts/staff-learning-v1.md`。

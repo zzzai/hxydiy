@@ -4,6 +4,13 @@ import json
 from pathlib import Path
 
 
+def applies_to_store(content, store_id):
+    if not isinstance(content, dict) or "storeIds" not in content:
+        return True
+    stores = content["storeIds"]
+    return isinstance(stores, list) and any(type(value) is int and value == store_id for value in stores)
+
+
 def load_package(manifest_path: Path):
     manifest = json.loads(manifest_path.read_text())
     filename = manifest["content_file"]
@@ -26,6 +33,14 @@ def load_package(manifest_path: Path):
             raise ValueError("course_fields_missing")
         if approved and ("pilot" in c["version"] or "preview" in c["version"]):
             raise ValueError("nonproduction_course_version")
+        if "storeIds" in c:
+            stores = c["storeIds"]
+            if not isinstance(stores, list) or not stores or not all(type(v) is int and v > 0 for v in stores):
+                raise ValueError("invalid_course_store_scope")
+        if "replacesVersion" in c:
+            prior = c["replacesVersion"]
+            if not isinstance(prior, str) or not prior.strip() or prior == c["version"]:
+                raise ValueError("invalid_replaced_version")
         evidence = c["sourceEvidence"]
         sources = manifest.get("sources", [manifest | {"reference_kind": "pdf_metadata_date"}])
         if not any(all(evidence.get(k) == source[k] for k in ("reference_kind", "document_sha256")) and

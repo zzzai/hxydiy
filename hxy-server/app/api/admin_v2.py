@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, Strict
 from sqlalchemy import delete, select, func as sa_func, and_, exists, literal, or_, union, union_all
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from app.domain.learning_content import applies_to_store
 from app.models.membership import MembershipCard
 from app.domain.membership_entitlements import card_state, has_membership, legacy_membership_active
 from app.schemas.member_cards import MembershipExplanation, MemberCardFactUpdate
@@ -1801,6 +1802,8 @@ def learning_overview(
             bucket["completed"] += 1
     course_items = []
     for course in courses:
+        if not applies_to_store(course.content, target_store_id):
+            continue
         content = course.content if isinstance(course.content, dict) else {}
         sections = content.get("sections") if isinstance(content.get("sections"), list) else []
         questions = content.get("questions") if isinstance(content.get("questions"), list) else []

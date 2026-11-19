@@ -13,6 +13,7 @@ from app.api.admin import _current_staff, normalize_staff_role
 from app.api.technician import current_technician
 from app.core.config import settings
 from app.db.session import get_db
+from app.domain.learning_content import applies_to_store
 from app.domain.learning_daily import SHANGHAI, daily_projection, normalize_plan
 from app.domain.service_record_status import pending_record_summary
 from app.models import AuditLog, ServiceFeedback, Staff, Store
@@ -61,6 +62,13 @@ def available(course):
     )
 
 
+def assignable_courses(courses, store_id):
+    active = [c for c in courses if available(c) and applies_to_store(c.content, store_id)]
+    replaced = {(c.code, c.content["replacesVersion"]) for c in active if "replacesVersion" in c.content}
+    eligible = [c for c in active if (c.code, c.version) not in replaced]
+    return sorted(eligible, key=lambda c: "storeIds" not in c.content)
+
+
 def checked_content(course):
     if content_hash(course.content) != course.content_sha256:
         raise error(409, "LEARNING_CONTENT_CHANGED", "课程版本内容需要核验，请联系课程负责人")
@@ -92,7 +100,7 @@ def snapshot(db, staff, role):
     assignments = list(db.scalars(query.order_by(StaffLearningAssignment.assigned_at, StaffLearningAssignment.id)))
     course_ids = {item.course_version_id for item in assignments}
     courses = list(db.scalars(select(LearningCourseVersion).order_by(LearningCourseVersion.code, LearningCourseVersion.version)))
-    courses = [c for c in courses if available(c) or (c.id in course_ids and c.status == "retired")]
+    courses = [c for c in courses if applies_to_store(c.content, staff.store_id) and (available(c) or (c.id in course_ids and c.status == "retired"))]
     if any(item.course_version_id not in {c.id for c in courses} for item in assignments):
         raise error(409, "LEARNING_COURSE_UNAVAILABLE", "已安排的课程暂不可用，请联系课程负责人")
     visible_courses = courses if role == "manager" else [c for c in courses if c.id in course_ids]
@@ -136,7 +144,7 @@ def snapshot(db, staff, role):
         "actor": {"id": staff.id, "storeId": staff.store_id, "role": role, "name": staff.name},
         "assignments": result,
         "courses": [public_course(c) for c in visible_courses],
-        "assignableCourses": [{"id": c.code, "version": c.version} for c in courses if available(c)] if role == "manager" else [],
+        "assignableCourses": [{"id": c.code, "version": c.version} for c in assignable_courses(courses, staff.store_id)] if role == "manager" else [],
         "roster": [{"id": s.id, "name": s.name} for s in db.scalars(roster_query(staff.store_id))] if role == "manager" else [],
     }
 
@@ -197,10 +205,11 @@ def assign(body: LearningAssignmentIn, request: Request, authorization: str | No
         except ValueError as exc:
             raise error(422, "LEARNING_DATE_INVALID", str(exc))
     learner = db.scalar(roster_query(staff.store_id).where(Staff.id == body.staff_id).with_for_update(of=Staff))
-    course = db.scalar(select(LearningCourseVersion).where(LearningCourseVersion.code == body.course_id, LearningCourseVersion.version == body.course_version))
+    versions = db.scalars(select(LearningCourseVersion).where(LearningCourseVersion.code == body.course_id))
+    course = next((c for c in assignable_courses(versions, staff.store_id) if c.version == body.course_version), None)
     if not learner:
         raise error(404, "LEARNING_STAFF_UNAVAILABLE", "该技师不在本店可安排学习名单中")
-    if not course or not available(course):
+    if course is None:
         raise error(409, "LEARNING_COURSE_UNAVAILABLE", "该课程尚未开放安排")
     checked_content(course)
     item = db.scalar(select(StaffLearningAssignment).where(
@@ -262,7 +271,7 @@ def action(assignment_id: str, body: LearningActionIn, request: Request, authori
     if item.revision != body.expected_revision:
         raise error(409, "LEARNING_REVISION_CONFLICT", "记录已更新，请刷新进度后重试")
     course = db.get(LearningCourseVersion, item.course_version_id)
-    if not course or not available(course):
+    if not course or not available(course) or not applies_to_store(course.content, staff.store_id):
         raise error(409, "LEARNING_COURSE_UNAVAILABLE", "课程已停止新的学习操作")
     content = checked_content(course)
     payload = {}
@@ -372,7 +381,7 @@ def coach(
     if item is None:
         raise error(404, "LEARNING_TASK_NOT_FOUND", "学习任务不存在或不属于当前身份")
     course = db.get(LearningCourseVersion, item.course_version_id)
-    if not course or not available(course):
+    if not course or not available(course) or not applies_to_store(course.content, staff.store_id):
         raise error(409, "LEARNING_COURSE_UNAVAILABLE", "课程已停止新的学习操作")
     content = checked_content(course)
     section_ids = {section.get("id") for section in content.get("sections") or [] if isinstance(section, dict)}
@@ -412,9 +421,9 @@ def coach(
 def _weekly_plan_payload(db, staff: Staff, lookback_days: int) -> dict:
     now = datetime.now(UTC)
     roster = list(db.scalars(roster_query(staff.store_id)))
-    courses = [course for course in db.scalars(
+    courses = assignable_courses(db.scalars(
         select(LearningCourseVersion).order_by(LearningCourseVersion.code, LearningCourseVersion.version)
-    ) if available(course)]
+    ), staff.store_id)
     if not roster or not courses:
         return {"roster": roster, "courses": courses, "payload": None}
 
