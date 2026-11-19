@@ -1,0 +1,71 @@
+{
+  "status": "verified",
+  "release_id": "server-9c720d35e1a4-1795084300",
+  "source_sha": "9c720d35e1a49bed7c50d389ffdb01b0fae3d2f5",
+  "backup_sha256": "f4e43460f00dbc8c9a248535dec03fc0e42e42c8d616b68cab158dd8452bc945",
+  "restored_and_rehearsed": true,
+  "tables": 75,
+  "old_rows_protected": 12003,
+  "old_courses": 12,
+  "courses_after": 20,
+  "historical_assignments": 0,
+  "historical_events": 0,
+  "new_courses": 8,
+  "new_questions": 30,
+  "new_audit_rows": 1,
+  "apply_count": 1,
+  "repeat_changes": 0,
+  "preview_sha256": "654f58e35cc39c8fa78014fa8de5e8a7c87fe69a617bf986585c0ecf9bd6915a",
+  "public": {
+    "pages": [
+      {
+        "path": "/",
+        "source_matches": true,
+        "assets": 2
+      },
+      {
+        "path": "/admin/",
+        "source_matches": true,
+        "assets": 2
+      },
+      {
+        "path": "/technician/learning",
+        "source_matches": true,
+        "assets": 2
+      }
+    ],
+    "health": {
+      "status": "ok",
+      "service": "hxy-customer-api",
+      "environment": "production"
+    },
+    "anonymous_learning": 401
+  },
+  "live_catalog": {
+    "status": "passed",
+    "database_read_only": true,
+    "active_store_id": 1,
+    "manager_offered": 19,
+    "total_course_versions": 20,
+    "new_units": 8,
+    "new_questions": 30,
+    "tech_has_no_unassigned_courses": true,
+    "new_daily_assignments": 0,
+    "answers_hidden": true,
+    "feature_enabled": true
+  },
+  "postgres_checks": 39,
+  "release_checks": 42,
+  "browser": {
+    "viewports": [
+      320,
+      375
+    ],
+    "attempts": 2,
+    "coaching_events": 1,
+    "read_from": "isolated PostgreSQL",
+    "physical_device": false
+  },
+  "manifest_files": 638,
+  "verified_at": "2026-11-19T18:38:15+08:00"
+}
