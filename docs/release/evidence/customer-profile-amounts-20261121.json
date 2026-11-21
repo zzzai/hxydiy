@@ -1,0 +1,80 @@
+{
+  "customer_tests": {
+    "passed": 410,
+    "skipped": 1
+  },
+  "data_protection": {
+    "after_rows": 12098,
+    "columns_and_indexes_identical": true,
+    "old_rows": 12098,
+    "previous_rows_identical": true,
+    "tables": 75
+  },
+  "deployed_at": "2026-11-21T13:23:57Z",
+  "field_device_verified": false,
+  "production_synthetic_ui": {
+    "business_writes": 0,
+    "checks": [
+      {
+        "passed": true,
+        "scenario": "annual-empty",
+        "width": 320
+      },
+      {
+        "passed": true,
+        "scenario": "annual-empty",
+        "width": 390
+      },
+      {
+        "passed": true,
+        "scenario": "stored-mixed",
+        "width": 320
+      },
+      {
+        "passed": true,
+        "scenario": "stored-unknown",
+        "width": 390
+      },
+      {
+        "passed": true,
+        "scenario": "real-zero",
+        "width": 390
+      },
+      {
+        "passed": true,
+        "scenario": "service-only",
+        "width": 390
+      },
+      {
+        "passed": true,
+        "scenario": "guest-empty",
+        "width": 390
+      }
+    ],
+    "phase": "production",
+    "real_customer_api_requests": 0,
+    "status": "passed",
+    "synthetic_api_requests": 49
+  },
+  "production_verification": {
+    "anonymous": {
+      "membership-consumption": 401,
+      "membership-overview": 401
+    },
+    "backup_sha256": "8bc03720d07ab883d928683e77cf4cc7b136879237849b9ad4152db3bbbe1433",
+    "deployed_at": "2026-11-21T13:23:57Z",
+    "health": "ok",
+    "index_no_store": true,
+    "installed_manifest_sha256": "4c9f08d94a6fc60a90da775eba506c5522bc2f5270f9fa6ed13236bfab47056a",
+    "previous_release": "server-e548aca7d5b4-1795264241",
+    "public_asset_digests_matched": 3,
+    "release_id": "server-28af05109530-1795267279",
+    "source_sha": "28af051095302f5ef17477c995202dc6dc656f1a"
+  },
+  "profile_tests": 30,
+  "release_contract_tests": 42,
+  "release_id": "server-28af05109530-1795267279",
+  "schema": "customer-profile-amounts-release@1",
+  "source_sha": "28af051095302f5ef17477c995202dc6dc656f1a",
+  "status": "passed"
+}
