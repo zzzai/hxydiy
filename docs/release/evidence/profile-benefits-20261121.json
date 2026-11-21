@@ -1,0 +1,67 @@
+{
+  "customer_tests": {
+    "passed": 409,
+    "skipped": 1
+  },
+  "data_protection": {
+    "after_rows": 12094,
+    "columns_and_indexes_identical": true,
+    "old_rows": 12094,
+    "previous_rows_identical": true,
+    "same_tables": true,
+    "tables": 75
+  },
+  "field_device_verified": false,
+  "previous_release": "server-9c720d35e1a4-1795084300",
+  "production_synthetic_ui": {
+    "business_writes": 0,
+    "checks": [
+      {
+        "kind": "annual",
+        "passed": true,
+        "width": 320
+      },
+      {
+        "kind": "annual",
+        "passed": true,
+        "width": 390
+      },
+      {
+        "kind": "stored",
+        "passed": true,
+        "width": 390
+      },
+      {
+        "kind": "guest",
+        "passed": true,
+        "width": 390
+      }
+    ],
+    "phase": "production",
+    "real_customer_api_requests": 0,
+    "status": "passed",
+    "synthetic_api_requests": 28
+  },
+  "production_verification": {
+    "anonymous": {
+      "membership-consumption": 401,
+      "membership-overview": 401
+    },
+    "backup_sha256": "8b4c0a221747b880cbc7b5aee7199a9f234c2e386854e4220eeff09d45f36116",
+    "deployed_at": "2026-11-21T12:37:56Z",
+    "health": "ok",
+    "index_no_store": true,
+    "installed_files": 638,
+    "installed_manifest_sha256": "ef50b1f9362e8da272ff8e068a57592a9f1fcc7bd7fc0f01860b9b2c53cf2608",
+    "prepared_manifest_sha256": "6fa965593500780889c98eccc053a6abfee20d1c47a1ace29ba6ab2e64c83883",
+    "public_js_css_hashes_matched": 3,
+    "release": "server-e548aca7d5b4-1795264241",
+    "updated_plan_bundle_matched": true
+  },
+  "published_at": "2026-11-21T12:37:56Z",
+  "release_contract_tests_passed": 42,
+  "release_id": "server-e548aca7d5b4-1795264241",
+  "schema": "customer-profile-benefits-release@1",
+  "source_sha": "e548aca7d5b4baa7dd0df3300c100fdd7869d766",
+  "status": "passed"
+}
