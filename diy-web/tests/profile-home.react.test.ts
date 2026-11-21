@@ -404,3 +404,55 @@ test('membership and consumption failures offer retry without invented zero amou
     assert.equal(historyRetries, 1);
   } finally { await page.close(); }
 });
+
+function membershipWithoutCards(isMember: boolean, type: string | null, expiry: string | null) {
+  return {
+    ...membershipFor([]),
+    data: { cards: [], identity: { is_member: isMember, member_type: type, member_expire_at: expiry } },
+  };
+}
+
+test('a verified annual identity without individual cards can open its plan benefits without a bill', async () => {
+  const page = await subject({
+    membership: membershipWithoutCards(true, 'annual', '2099-08-19T00:00:00Z'),
+    consumption: memberConsumption([], { complete: false, savingsStatus: 'unverified' }),
+  });
+  try {
+    const disclosure = page.app.root.findByProps({ className: 'profile-overview-disclosure' });
+    assert.equal(disclosure.props.open, false);
+    await act(async () => disclosure.props.onToggle({ currentTarget: { open: true } }));
+    assert.equal(disclosure.props.open, true);
+    const benefits = textOf(disclosure);
+    for (const benefit of Object.values(profile.ANNUAL_MEMBERSHIP_BENEFITS)) assert.ok(benefits.includes(benefit), benefit);
+    assert.match(benefits, /领取情况以门店记录为准/);
+    assert.doesNotMatch(benefits, /养生茶|已领取|已发放/);
+    const savings = textOf(page.app.root.findByProps({ className: 'profile-overview-metric profile-consumption-savings' }));
+    assert.match(savings, /暂无可核实的门店账单/);
+    assert.doesNotMatch(savings, /¥|同步后展示/);
+  } finally { await page.close(); }
+});
+
+test('a verified stored identity without a source balance gets its own plan and an unknown balance', async () => {
+  const page = await subject({ membership: membershipWithoutCards(true, 'stored', null) });
+  try {
+    const overview = page.app.root.findByProps({ 'aria-label': '会员概览' });
+    assert.equal(overview.props['data-kind'], 'stored');
+    assert.match(textOf(overview), /储值余额待核实/);
+    assert.ok(textOf(overview).includes(profile.STORED_MEMBERSHIP_TEA));
+    assert.doesNotMatch(textOf(overview), /年卡会员|¥0\.00|权益有效期至/);
+  } finally { await page.close(); }
+});
+
+test('a stale login badge cannot grant plan benefits over an inactive, unknown or expired identity', async () => {
+  for (const identity of [
+    membershipWithoutCards(false, null, null), membershipWithoutCards(true, 'other', null),
+    membershipWithoutCards(true, 'annual', null), membershipWithoutCards(true, 'annual', '2000-01-01T00:00:00Z'),
+  ]) {
+    const page = await subject({ membership: identity });
+    try {
+      const overview = page.app.root.findByProps({ 'aria-label': '会员概览' });
+      assert.doesNotMatch(textOf(page.app.root.findByProps({ className: 'profile-overview-benefits' })), /买一赠一|开卡赠/);
+      if (!identity.data.identity.is_member) assert.doesNotMatch(textOf(overview), /年卡会员|权益有效期至/);
+    } finally { await page.close(); }
+  }
+});

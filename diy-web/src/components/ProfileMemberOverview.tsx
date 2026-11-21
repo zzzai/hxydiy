@@ -4,7 +4,7 @@ import { useId, useState } from 'react';
 import type { CustomerMembershipOverview } from '../api';
 import type { CustomerUser } from '../customerAuth';
 import { formatMemberCents } from '../domain';
-import { formatDateTime, membershipState } from '../profile';
+import { ANNUAL_MEMBERSHIP_BENEFITS, formatDateTime, membershipState, STORED_MEMBERSHIP_TEA } from '../profile';
 import type { useCustomerMembership } from './useCustomerMembership';
 import type { useCustomerConsumption } from './useCustomerConsumption';
 import './profile-member-overview.css';
@@ -50,18 +50,25 @@ export default function ProfileMemberOverview({ user, membership, consumption, s
   // Prefer a usable stored card, but preserve each card's own balance and status.
   const preferredCard = cards.find(card => card.usable && card.card_type === 'stored') ?? cards.find(card => card.usable) ?? cards[0];
   const card = cards.find(item => item.id === selectedId) ?? preferredCard;
-  const kind = card ? (card.usable ? card.card_type : 'inactive') : user.is_member ? user.member_type : 'guest';
-  const stored = card?.card_type === 'stored' || (!card && user.is_member && user.member_type === 'stored');
-  const memberLabel = card ? (card.card_type === 'stored' ? '储值会员' : '年卡会员') : user.is_member ? (user.member_type === 'stored' ? '储值会员' : user.member_type === 'annual' ? '年卡会员' : '会员') : '荷小悦顾客';
-  const expiry = card?.expires_at ?? (!card ? user.member_expire_at : null);
+  const verifiedIdentity = membership.data?.identity;
+  const identity = verifiedIdentity ?? user;
+  const memberType = card?.card_type ?? (identity.is_member ? identity.member_type : null);
+  const kind = card && !card.usable ? 'inactive' : memberType ?? 'guest';
+  const stored = memberType === 'stored';
+  const memberLabel = stored ? '储值会员' : memberType === 'annual' ? '年卡会员' : identity.is_member ? '会员' : '荷小悦顾客';
+  const expiry = card ? card.expires_at : identity.is_member ? identity.member_expire_at : null;
   const state = membershipState(expiry);
+  const validTerm = state.kind === 'active' || state.kind === 'expiring';
+  const showPlan = verifiedIdentity?.is_member && (
+    (memberType === 'annual' && validTerm) || (stored && (!expiry || validTerm))
+  );
   const comparison = consumption.data?.store_price_comparison;
   const priceComparison = comparison?.basis === 'historical_store_price_minus_settlement';
   const savings = priceComparison ? comparison : consumption.data?.savings;
   const verifiedSavings = savings?.status === 'verified' && savings.amount_cents !== null;
   const hasRecords = (consumption.data?.pagination.total ?? consumption.bills.length) > 0;
-  const savingsValue = consumption.loading ? '加载中…' : consumption.error && !consumption.data ? '暂不可用' : verifiedSavings ? formatMemberCents(savings!.amount_cents!) : hasRecords ? '待核实' : '暂无记录';
-  const savingsNote = verifiedSavings && savings?.bill_count != null ? `已核实${savings.bill_count}笔消费` : consumption.loading ? '正在加载消费记录' : consumption.error && !consumption.data ? '点击重试' : hasRecords ? '核实后再展示' : '同步后展示';
+  const savingsValue = consumption.loading ? '加载中…' : consumption.error && !consumption.data ? '暂不可用' : verifiedSavings ? formatMemberCents(savings!.amount_cents!) : '待核实';
+  const savingsNote = verifiedSavings && savings?.bill_count != null ? `已核实${savings.bill_count}笔消费` : consumption.loading ? '正在加载消费记录' : consumption.error && !consumption.data ? '点击重试' : hasRecords ? '核实后再展示' : '暂无可核实的门店账单';
   const balanceValue = membership.loading ? '加载中…' : membership.error ? '暂不可用' : card && balanceKnown(card) ? formatMemberCents(card.balance.amount_cents!) : '待核实';
   const balanceDate = date(card?.balance.observed_at);
   const savingsTitle = priceComparison || !consumption.data ? '较门店价已省' : '累计消费优惠';
@@ -92,13 +99,22 @@ export default function ProfileMemberOverview({ user, membership, consumption, s
               {card.balance.split === 'verified' && card.balance.principal_cents !== null && card.balance.bonus_cents !== null ? <p>本金 {formatMemberCents(card.balance.principal_cents)} · 赠金 {formatMemberCents(card.balance.bonus_cents)}</p> : <p>余额包含的本金和赠金，请向门店查询。</p>}
               <p>这是本店储值卡余额，与在线钱包分开。</p>
             </div>}
-          </> : <p>{user.is_member ? '会员身份已关联，具体权益请向门店查询。' : '暂未关联会员卡，如已在门店办卡，请联系门店核实。'}</p>}
+          </> : showPlan ? <>
+            <p className="profile-overview-card-state">{stored ? '储值卡标准权益' : '年卡标准权益'}</p>
+            <ul>
+              <li>{ANNUAL_MEMBERSHIP_BENEFITS.standard}</li>
+              <li>{ANNUAL_MEMBERSHIP_BENEFITS.tuesday}</li>
+              <li>{ANNUAL_MEMBERSHIP_BENEFITS.gift}</li>
+              {stored && <li>{STORED_MEMBERSHIP_TEA}</li>}
+            </ul>
+            <p>权益在适用门店使用。周二活动的搭配、补差和叠加由门店确认，开卡赠礼的领取情况以门店记录为准。</p>
+          </> : <p>{identity.is_member ? '具体权益请向门店查询。' : '暂未关联有效会员卡，如已在门店办卡，请联系门店核实。'}</p>}
         </div>
       </details>
-      {showMemberCode && user.is_member && state.kind !== 'expired' && <button type="button" className="profile-member-code-button" onClick={onShowCode}>出示动态会员码</button>}
+      {showMemberCode && identity.is_member && state.kind !== 'expired' && <button type="button" className="profile-member-code-button" onClick={onShowCode}>出示动态会员码</button>}
     </section>
     <details className="profile-consumption profile-overview-disclosure" id={historyId} open={historyOpen} onToggle={event => setHistoryOpen(event.currentTarget.open)}>
-      <summary><span>消费记录</span><DisclosureEnd open={historyOpen} label={consumption.data ? (hasRecords ? `${consumption.data.pagination.total}笔` : '暂无记录') : consumption.loading ? '加载中…' : undefined} /></summary>
+      <summary><span>消费记录</span><DisclosureEnd open={historyOpen} label={consumption.data ? (hasRecords ? `${consumption.data.pagination.total}笔` : '暂无可核实账单') : consumption.loading ? '加载中…' : undefined} /></summary>
       <ConsumptionDetails consumption={consumption} multipleCards={cards.length > 1} />
     </details>
   </>;
