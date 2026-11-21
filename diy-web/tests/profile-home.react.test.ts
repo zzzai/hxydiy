@@ -156,12 +156,12 @@ function makeConsumption(hasMore: boolean) {
   };
 }
 
-test('consumption history shows verified/unknown savings and coverage without misleading zero', async () => {
+test('consumption history shows only evidenced discounts alongside the available bills', async () => {
   const page = await subject({ consumption: makeConsumption(false) });
   try {
     const text = page.text();
     assert.match(text, /累计消费优惠/);
-    assert.match(text, /优惠金额待核实/);
+    assert.doesNotMatch(text, /待核实/);
     assert.match(text, /记录时段/);
     assert.doesNotMatch(text, /加载更多/);
   } finally { await page.close(); }
@@ -223,32 +223,33 @@ test('non-CNY member amounts never use the yuan symbol', async () => {
   } finally { await page.close(); }
 });
 
-test('null savings stays unverified and is never rendered as zero', async () => {
+test('null savings leaves the bill visible without a savings metric or a zero', async () => {
   const b = memberBill(1, { savings: { status: 'unknown', amount_cents: null, reason: 'payment_breakdown_unknown_or_incomplete' } });
   const page = await subject({ consumption: memberConsumption([b], { savingsAmount: null, savingsStatus: 'unverified' }) });
   try {
     const text = page.text();
-    assert.match(text, /优惠金额待核实/);
-    assert.doesNotMatch(text, /¥0\.00/);
+    assert.doesNotMatch(text, /待核实/);
+    assert.doesNotMatch(text, /¥0\.00|累计消费优惠|较门店价已省/);
+    assert.match(text, /SYN-1/);
   } finally { await page.close(); }
 });
 
 test('coverage with declared gaps is visibly incomplete', async () => {
   const page = await subject({ consumption: memberConsumption([memberBill(1)], { complete: false, coverageGaps: true }) });
   try {
-    assert.match(page.text(), /部分消费记录尚未同步/);
+    assert.match(page.text(), /仅显示部分门店消费记录/);
   } finally { await page.close(); }
 });
 
 test('disjoint coverage shows incomplete without fabricating a gap', async () => {
   const page = await subject({ consumption: memberConsumption([memberBill(1)], { complete: false, coverageGaps: false }) });
   try {
-    assert.match(page.text(), /尚未完整同步/);
+    assert.match(page.text(), /仅显示部分门店消费记录/);
     assert.doesNotMatch(page.text(), /存在缺失/);
   } finally { await page.close(); }
 });
 
-test('a zero balance against an active stored card shows a display-only review note', async () => {
+test('an observed zero is visible without declaring the card active or cancelled', async () => {
   const membership = {
     data: {
       identity: { is_member: true, member_type: 'stored', member_expire_at: null, note: 'n' },
@@ -263,28 +264,28 @@ test('a zero balance against an active stored card shows a display-only review n
   };
   const page = await subject({ membership });
   try {
-    assert.match(page.text(), /余额为 0，状态待门店核实/);
-    assert.match(page.text(), /状态待门店核实/);
+    assert.match(page.text(), /¥0\.00/);
+    assert.match(page.text(), /余额为零/);
+    assert.doesNotMatch(page.text(), /待核实|待门店核实|已退卡/);
     assert.doesNotMatch(page.text(), /· 当前可用/);
   } finally { await page.close(); }
 });
 
 
-test('unknown coverage (complete null) is visibly unknown, not complete', async () => {
+test('unknown coverage shows the supplied dates without claiming the full history', async () => {
   const page = await subject({ consumption: memberConsumption([memberBill(1)], { complete: null }) });
   try {
-    assert.match(page.text(), /记录完整性待核实/);
-    assert.doesNotMatch(page.text(), /覆盖完整/);
+    assert.match(page.text(), /2026-11-14/);
+    assert.doesNotMatch(page.text(), /待核实|覆盖完整|全部消费记录/);
   } finally { await page.close(); }
 });
 
-test('missing coverage dates render unknown dates even when bills are empty', async () => {
+test('empty history has one customer-facing empty state without a calculation or technical scope', async () => {
   const page = await subject({ consumption: memberConsumption([], { complete: null, rangeStart: null, rangeEnd: null }) });
   try {
-    assert.match(page.text(), /记录时段：/);
-    assert.match(page.text(), /未记录/);
-    assert.match(page.text(), /记录完整性待核实/);
-    assert.doesNotMatch(page.text(), /覆盖完整/);
+    assert.match(page.text(), /这里暂无门店消费记录/);
+    assert.doesNotMatch(page.text(), /记录时段|金额怎么算|¥0\.00/);
+    assert.doesNotMatch(page.text(), /待核实|覆盖完整|全部消费记录/);
   } finally { await page.close(); }
 });
 
@@ -297,7 +298,8 @@ test('historical store-price comparison explains verified coverage and refund ex
   try {
     const content = textOf(page.app.root.findByProps({ className: 'profile-consumption profile-overview-disclosure' }));
     assert.match(textOf(page.app.root.findByProps({ className: 'profile-overview-metric profile-consumption-savings' })), /较门店价已省¥60\.00已核实1笔消费/);
-    assert.match(content, /1笔金额待核实，暂未计入/);
+    assert.match(textOf(page.app.root.findByProps({ className: 'profile-overview-calculation' })), /另有1笔消费未计入/);
+    assert.doesNotMatch(content, /待核实/);
     assert.match(content, /不含退款调整/);
     assert.match(content, /门店价 ¥300\.00 · 结算 ¥240\.00/);
     assert.doesNotMatch(content, /累计会员节省|实际省了/);
@@ -311,7 +313,9 @@ test('unverified non-null amounts are never presented as savings', async () => {
   const page = await subject({ consumption });
   try {
     const content = textOf(page.app.root.findByProps({ className: 'profile-consumption profile-overview-disclosure' }));
-    assert.match(textOf(page.app.root.findByProps({ className: 'profile-overview-metric profile-consumption-savings' })), /较门店价已省待核实/);
+    assert.equal(page.app.root.findAllByProps({ className: 'profile-overview-metric profile-consumption-savings' }).length, 0);
+    assert.match(content, /SYN-V1/);
+    assert.doesNotMatch(content, /待核实/);
     assert.doesNotMatch(page.text(), /¥123\.45/);
   } finally { await page.close(); }
 });
@@ -337,7 +341,7 @@ test('overview starts compact, explains refunds only inside calculation disclosu
   Object.assign(consumption.data, { store_price_comparison: { ...consumption.data.savings, basis: 'historical_store_price_minus_settlement' } });
   const page = await subject({ membership: membershipFor([sourceCard(1)]), consumption });
   try {
-    const metrics = page.app.root.findByProps({ className: 'profile-overview-metrics has-balance' });
+    const metrics = page.app.root.findByProps({ className: 'profile-overview-metrics' });
     assert.match(textOf(metrics), /已核实1笔消费/);
     assert.doesNotMatch(textOf(metrics), /退款|余额观测|来源快照/);
     const benefits = page.app.root.findByProps({ className: 'profile-overview-disclosure' });
@@ -372,7 +376,7 @@ test('stored card is primary; switching cards never merges balances or assigns t
     await act(async () => select.props.onChange({ target: { value: '1' } }));
     assert.equal(card.props['data-kind'], 'annual');
     assert.doesNotMatch(textOf(card), /储值余额|¥680\.00|¥123\.45/);
-    assert.match(textOf(page.app.root.findByProps({ className: 'profile-overview-calculation' })), /不按所选会员卡分摊/);
+    assert.match(textOf(page.app.root.findByProps({ className: 'profile-overview-calculation' })), /多张会员卡的消费合并计算/);
     await page.changeIdentity('synthetic-b');
     assert.equal(page.app.root.findByProps({ 'aria-label': '切换会员卡' }).props.value, 2);
   } finally { await page.close(); }
@@ -385,7 +389,8 @@ test('conflicted balance is unknown even with a non-null amount and inactive car
     const overview = page.app.root.findByProps({ 'aria-label': '会员概览' });
     assert.equal(overview.props['data-kind'], 'inactive');
     assert.match(textOf(overview), /已停用|这张卡目前无法使用/);
-    assert.match(textOf(overview), /待核实/);
+    assert.match(textOf(overview), /余额请向办卡门店查询/);
+    assert.equal(overview.findAllByProps({ className: 'profile-overview-metric' }).length, 0);
     assert.doesNotMatch(textOf(overview), /¥9,988\.77|¥9988\.77|合成权益|当前可用/);
   } finally { await page.close(); }
 });
@@ -426,18 +431,22 @@ test('a verified annual identity without individual cards can open its plan bene
     for (const benefit of Object.values(profile.ANNUAL_MEMBERSHIP_BENEFITS)) assert.ok(benefits.includes(benefit), benefit);
     assert.match(benefits, /领取情况以门店记录为准/);
     assert.doesNotMatch(benefits, /养生茶|已领取|已发放/);
-    const savings = textOf(page.app.root.findByProps({ className: 'profile-overview-metric profile-consumption-savings' }));
-    assert.match(savings, /暂无可核实的门店账单/);
-    assert.doesNotMatch(savings, /¥|同步后展示/);
+    assert.equal(page.app.root.findAllByProps({ className: 'profile-overview-metrics' }).length, 0);
+    const history = page.app.root.findByProps({ className: 'profile-consumption profile-overview-disclosure' });
+    await act(async () => history.props.onToggle({ currentTarget: { open: true } }));
+    assert.match(textOf(history), /这里暂无门店消费记录/);
+    assert.doesNotMatch(textOf(history), /待核实|同步|¥/);
   } finally { await page.close(); }
 });
 
-test('a verified stored identity without a source balance gets its own plan and an unknown balance', async () => {
+test('a stored identity without a known balance keeps its plan and an enquiry in the details', async () => {
   const page = await subject({ membership: membershipWithoutCards(true, 'stored', null) });
   try {
     const overview = page.app.root.findByProps({ 'aria-label': '会员概览' });
     assert.equal(overview.props['data-kind'], 'stored');
-    assert.match(textOf(overview), /储值余额待核实/);
+    assert.match(textOf(overview), /余额请向办卡门店查询/);
+    assert.equal(overview.findAllByProps({ className: 'profile-overview-metrics' }).length, 0);
+    assert.doesNotMatch(textOf(overview), /待核实/);
     assert.ok(textOf(overview).includes(profile.STORED_MEMBERSHIP_TEA));
     assert.doesNotMatch(textOf(overview), /年卡会员|¥0\.00|权益有效期至/);
   } finally { await page.close(); }
@@ -455,4 +464,20 @@ test('a stale login badge cannot grant plan benefits over an inactive, unknown o
       if (!identity.data.identity.is_member) assert.doesNotMatch(textOf(overview), /年卡会员|权益有效期至/);
     } finally { await page.close(); }
   }
+});
+
+test('a bill with missing prices keeps its service, receipt and known line amounts', async () => {
+  const bill = memberBill(7, {
+    store_price_total_cents: null, settled_total_cents: null,
+    savings: { status: 'unknown', amount_cents: null, reason: 'incomplete' },
+    lines: [{ description: '草本泡', quantity: 1, store_price_cents: null, settled_cents: 1099 }],
+  });
+  const page = await subject({ consumption: memberConsumption([bill], { savingsStatus: 'unverified', conflictGroups: 1 }) });
+  try {
+    const history = textOf(page.app.root.findByProps({ className: 'profile-consumption profile-overview-disclosure' }));
+    assert.match(history, /草本泡/);
+    assert.match(history, /¥10\.99/);
+    assert.match(history, /SYN-7/);
+    assert.doesNotMatch(history, /待核实|¥0\.00|门店价|结算金额|金额怎么算/);
+  } finally { await page.close(); }
 });
