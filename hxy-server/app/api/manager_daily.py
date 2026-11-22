@@ -1,10 +1,11 @@
 """店长每日经营：区域照片、晨会录音、转写、团队考核与总部抽检。"""
 
 from datetime import UTC, date, datetime, timedelta
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func as sa_func, select
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,7 @@ from app.models import (
     Staff,
     StaffLearningAssignment,
     StaffLearningEvent,
+    Store,
     TrainingAssessment,
 )
 from app.services.asr import AsrError, AsrNotConfigured, transcribe_audio
@@ -37,6 +39,7 @@ AREA_LABELS = {
     "rest_area": "休息区",
     "foot_area": "足疗区",
 }
+PHOTO_LIMIT = 3
 RETENTION_DAYS = 90
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
@@ -46,6 +49,19 @@ class AreaPhotoIn(BaseModel):
     media_id: int = Field(gt=0)
     note: str = Field(default="", max_length=300)
     captured_at: datetime | None = None
+    mode: Literal["cover", "append", "replace"] = "cover"
+    photo_id: int | None = Field(default=None, gt=0)
+    expected_media_id: int | None = Field(default=None, gt=0)
+    business_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if self.mode == "replace":
+            if self.photo_id is None or self.expected_media_id is None:
+                raise ValueError("Replacement requires the photo and original media IDs")
+        elif self.photo_id is not None or self.expected_media_id is not None:
+            raise ValueError("Unexpected replacement target")
+        return self
 
 
 class MeetingIn(BaseModel):
@@ -72,6 +88,10 @@ def _today() -> date:
     return datetime.now(SHANGHAI).date()
 
 
+def _utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
 def _parse_day(value: str | None) -> date:
     if not value:
         return _today()
@@ -82,15 +102,33 @@ def _parse_day(value: str | None) -> date:
 
 
 def _checkin(db: Session, store_id: int, manager_id: int, business_date: date, *, create: bool) -> DailyStoreCheckin | None:
-    item = db.scalar(select(DailyStoreCheckin).where(
+    query = select(DailyStoreCheckin).where(
         DailyStoreCheckin.store_id == store_id,
         DailyStoreCheckin.business_date == business_date,
-    ).with_for_update())
+    )
+    item = db.scalar(query.with_for_update() if create else query)
     if item is None and create:
-        item = DailyStoreCheckin(store_id=store_id, business_date=business_date, manager_staff_id=manager_id)
-        db.add(item)
-        db.flush()
+        # Serialize the first check-in too, when there is no child row to lock yet.
+        db.execute(select(Store.id).where(Store.id == store_id).with_for_update())
+        item = db.scalar(query.with_for_update())
+        if item is None:
+            item = DailyStoreCheckin(store_id=store_id, business_date=business_date,
+                                     manager_staff_id=manager_id, checklist_version=2)
+            db.add(item)
+            db.flush()
     return item
+
+
+def _checklist_version(checkin: DailyStoreCheckin | None, business_date: date) -> int:
+    if checkin is not None and checkin.checklist_version is not None:
+        return checkin.checklist_version
+    if business_date != _today() or (checkin is not None and checkin.status == "submitted"):
+        return 1
+    return 2
+
+
+def _area_labels(version: int) -> dict[str, str]:
+    return {**AREA_LABELS, "herbal_prep": "煮药区"} if version == 2 else AREA_LABELS
 
 
 def _media_url(media: MediaAsset) -> str:
@@ -131,46 +169,38 @@ def _meeting_view(db: Session, item: DailyMeetingRecording) -> dict:
 
 
 def _daily_view(db: Session, checkin: DailyStoreCheckin | None, business_date: date) -> dict:
-    if checkin is None:
-        return {
-            "business_date": business_date.isoformat(),
-            "checkin_id": None,
-            "status": "draft",
-            "submitted_at": None,
-            "areas": [{"key": key, "label": label, "done": False, "photo": None} for key, label in AREA_LABELS.items()],
-            "meetings": [],
-            "completion": {"areas_done": 0, "areas_total": 5, "has_meeting": False, "submitted": False},
-        }
-    photos = {item.area: item for item in db.scalars(select(DailyAreaPhoto).where(DailyAreaPhoto.checkin_id == checkin.id))}
-    meetings = list(db.scalars(select(DailyMeetingRecording).where(
-        DailyMeetingRecording.checkin_id == checkin.id,
-    ).order_by(DailyMeetingRecording.created_at.desc())))
-    areas = []
-    for key, label in AREA_LABELS.items():
-        photo = photos.get(key)
-        areas.append({
-            "key": key,
-            "label": label,
-            "done": photo is not None,
-            "photo": {
-                "id": photo.id,
-                "media": _media_view(db.get(MediaAsset, photo.media_id)),
-                "note": photo.note,
-                "captured_at": photo.captured_at.isoformat() if photo.captured_at else None,
-            } if photo else None,
-        })
+    labels = _area_labels(_checklist_version(checkin, business_date))
+    by_area = {key: [] for key in labels}
+    meetings = []
+    if checkin is not None:
+        records = db.execute(
+            select(DailyAreaPhoto, MediaAsset).join(MediaAsset, MediaAsset.id == DailyAreaPhoto.media_id)
+            .where(DailyAreaPhoto.checkin_id == checkin.id, MediaAsset.store_id == checkin.store_id)
+            .order_by(DailyAreaPhoto.slot)
+        )
+        for photo, media in records:
+            if photo.area in by_area:
+                by_area[photo.area].append({
+                    "id": photo.id, "slot": photo.slot, "media_id": photo.media_id,
+                    "media": _media_view(media) if media.media_type == "image" else None,
+                    "note": photo.note, "captured_at": _utc(photo.captured_at).isoformat() if photo.captured_at else None,
+                })
+        meetings = list(db.scalars(select(DailyMeetingRecording).where(
+            DailyMeetingRecording.checkin_id == checkin.id,
+        ).order_by(DailyMeetingRecording.created_at.desc())))
+    areas = [{
+        "key": key, "label": label, "done": any(p["media"] for p in by_area[key]),
+        "photos": by_area[key], "photo": next(iter(by_area[key]), None),
+    } for key, label in labels.items()]
     return {
-        "business_date": business_date.isoformat(),
-        "checkin_id": checkin.id,
-        "status": checkin.status,
-        "submitted_at": checkin.submitted_at.isoformat() if checkin.submitted_at else None,
-        "areas": areas,
+        "business_date": business_date.isoformat(), "checkin_id": checkin.id if checkin else None,
+        "status": checkin.status if checkin else "draft",
+        "submitted_at": _utc(checkin.submitted_at).isoformat() if checkin and checkin.submitted_at else None,
+        "areas": areas, "max_photos_per_area": PHOTO_LIMIT,
         "meetings": [_meeting_view(db, item) for item in meetings],
         "completion": {
-            "areas_done": len(photos),
-            "areas_total": 5,
-            "has_meeting": bool(meetings),
-            "submitted": checkin.status == "submitted",
+            "areas_done": sum(area["done"] for area in areas), "areas_total": len(labels),
+            "has_meeting": bool(meetings), "submitted": bool(checkin and checkin.status == "submitted"),
         },
     }
 
@@ -233,9 +263,11 @@ def get_daily(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     store_id = _resolve_target_store_id(db, staff, None)
-    _purge_expired(db, store_id)
     business_date = _parse_day(on_date)
-    item = _checkin(db, store_id, staff.id, business_date, create=True)
+    is_today = business_date == _today()
+    if is_today:
+        _purge_expired(db, store_id)
+    item = _checkin(db, store_id, staff.id, business_date, create=is_today)
     db.commit()
     return _daily_view(db, item, business_date)
 
@@ -249,35 +281,64 @@ def save_area_photo(
     staff = _current_staff(authorization, db)
     _require_admin(staff)
     store_id = _resolve_target_store_id(db, staff, None)
-    if body.area not in AREA_LABELS:
-        raise HTTPException(status_code=422, detail={"code": "AREA_INVALID", "message": "巡检区域无效"})
-    media = db.get(MediaAsset, body.media_id)
-    if not media or media.deleted_at or media.store_id != store_id or media.media_type != "image":
-        raise HTTPException(status_code=404, detail={"code": "MEDIA_NOT_FOUND", "message": "照片不存在"})
-    checkin = _checkin(db, store_id, staff.id, _today(), create=True)
+    today = _today()
+    if body.business_date is not None and body.business_date != today:
+        raise HTTPException(409, detail={"code": "DAILY_DATE_CHANGED", "message": "营业日期已变，请刷新巡检"})
+    checkin = _checkin(db, store_id, staff.id, today, create=True)
     assert checkin is not None
-    photo = db.scalar(select(DailyAreaPhoto).where(
-        DailyAreaPhoto.checkin_id == checkin.id, DailyAreaPhoto.area == body.area,
-    ))
-    if photo:
-        photo.media_id = media.id
-        photo.note = body.note.strip()
-        photo.captured_at = body.captured_at or datetime.now(UTC)
-        photo.created_by_staff_id = staff.id
+    version = _checklist_version(checkin, today)
+    if body.area not in _area_labels(version):
+        raise HTTPException(422, detail={"code": "AREA_INVALID", "message": "该次巡检没有这个区域"})
+    media = db.get(MediaAsset, body.media_id)
+    if not media or media.deleted_at or media.store_id != store_id or media.media_type != "image" or (
+        body.mode != "cover" and media.purpose != "daily_area"
+    ):
+        raise HTTPException(404, detail={"code": "MEDIA_NOT_FOUND", "message": "巡检照片不存在"})
+
+    records = list(db.scalars(select(DailyAreaPhoto).where(DailyAreaPhoto.checkin_id == checkin.id)))
+    area_photos = [p for p in records if p.area == body.area]
+    same_media = next((p for p in area_photos if p.media_id == media.id), None)
+    if body.mode == "append":
+        if same_media:
+            return _daily_view(db, checkin, today)
+        if len(area_photos) >= PHOTO_LIMIT:
+            raise HTTPException(409, detail={"code": "AREA_PHOTO_LIMIT", "message": "每个区域最多保存 3 张照片"})
+        used_slots = {p.slot for p in area_photos}
+        slot = next(i for i in range(1, PHOTO_LIMIT + 1) if i not in used_slots)
+        target = None
+    elif body.mode == "replace":
+        target = next((p for p in area_photos if p.id == body.photo_id), None)
+        if target is None:
+            raise HTTPException(404, detail={"code": "PHOTO_NOT_FOUND", "message": "该区域没有这张照片"})
+        if target.media_id == media.id:
+            return _daily_view(db, checkin, today)
+        if target.media_id != body.expected_media_id:
+            raise HTTPException(409, detail={"code": "PHOTO_CHANGED", "message": "照片已更新，请刷新后重试"})
+        slot = target.slot
     else:
-        photo = DailyAreaPhoto(
-            checkin_id=checkin.id, area=body.area, media_id=media.id, note=body.note.strip(),
-            captured_at=body.captured_at or datetime.now(UTC), created_by_staff_id=staff.id,
-        )
-        db.add(photo)
+        # Older clients explicitly offered to retake the cover.
+        slot = 1
+        target = next((p for p in area_photos if p.slot == slot), None)
+    if (same_media and same_media != target) or (
+        body.mode != "cover" and any(p.media_id == media.id and p.area != body.area for p in records)
+    ):
+        raise HTTPException(409, detail={"code": "PHOTO_ALREADY_USED", "message": "这张照片已用于本次巡检"})
+    if target is None:
+        target = DailyAreaPhoto(checkin_id=checkin.id, area=body.area, slot=slot)
+        db.add(target)
+    target.media_id = media.id
+    target.note = body.note.strip()
+    target.captured_at = _utc(body.captured_at) if body.captured_at else datetime.now(UTC)
+    target.created_by_staff_id = staff.id
+    checkin.checklist_version = version
     if checkin.status == "submitted":
         checkin.status = "draft"
         checkin.submitted_at = None
     _audit(db, staff, "manager_daily_area_photo", "daily_checkin", str(checkin.id), {
-        "store_id": store_id, "area": body.area, "media_id": media.id,
+        "store_id": store_id, "area": body.area, "slot": slot, "media_id": media.id, "mode": body.mode,
     })
     db.commit()
-    return _daily_view(db, checkin, checkin.business_date)
+    return _daily_view(db, checkin, today)
 
 
 @router.post("/meeting")
@@ -348,17 +409,21 @@ def submit_daily(db: Session = Depends(get_db), authorization: str | None = Head
     store_id = _resolve_target_store_id(db, staff, None)
     checkin = _checkin(db, store_id, staff.id, _today(), create=True)
     assert checkin is not None
-    photos = int(db.scalar(select(sa_func.count()).select_from(DailyAreaPhoto).where(
-        DailyAreaPhoto.checkin_id == checkin.id,
-    )) or 0)
-    meetings = int(db.scalar(select(sa_func.count()).select_from(DailyMeetingRecording).where(
-        DailyMeetingRecording.checkin_id == checkin.id,
-    )) or 0)
-    if photos < 5 or meetings < 1:
-        raise HTTPException(status_code=409, detail={
-            "code": "DAILY_INCOMPLETE", "message": "请先完成 5 个区域照片和晨会录音",
-            "areas_done": photos, "has_meeting": meetings > 0,
+    if checkin.status == "submitted":
+        return _daily_view(db, checkin, checkin.business_date)
+    version = _checklist_version(checkin, checkin.business_date)
+    labels = _area_labels(version)
+    photographed = set(db.scalars(select(DailyAreaPhoto.area).join(MediaAsset, MediaAsset.id == DailyAreaPhoto.media_id)
+        .where(DailyAreaPhoto.checkin_id == checkin.id, MediaAsset.store_id == store_id,
+               MediaAsset.deleted_at.is_(None), MediaAsset.media_type == "image").distinct()))
+    missing = [label for key, label in labels.items() if key not in photographed]
+    meeting = db.scalar(select(DailyMeetingRecording.id).where(DailyMeetingRecording.checkin_id == checkin.id).limit(1))
+    if missing or meeting is None:
+        raise HTTPException(409, detail={
+            "code": "DAILY_INCOMPLETE", "message": "请补齐" + "、".join(missing + ([] if meeting else ["晨会录音"])),
+            "areas_done": len(labels) - len(missing), "areas_total": len(labels), "has_meeting": meeting is not None,
         })
+    checkin.checklist_version = version
     checkin.status = "submitted"
     checkin.submitted_at = datetime.now(UTC)
     _audit(db, staff, "manager_daily_submit", "daily_checkin", str(checkin.id), {"store_id": store_id})

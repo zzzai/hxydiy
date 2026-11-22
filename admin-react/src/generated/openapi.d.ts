@@ -5385,15 +5385,27 @@ export interface components {
         AreaPhotoIn: {
             /** Area */
             area: string;
+            /** Business Date */
+            business_date?: string | null;
             /** Captured At */
             captured_at?: string | null;
+            /** Expected Media Id */
+            expected_media_id?: number | null;
             /** Media Id */
             media_id: number;
+            /**
+             * Mode
+             * @default cover
+             * @enum {string}
+             */
+            mode: "cover" | "append" | "replace";
             /**
              * Note
              * @default
              */
             note: string;
+            /** Photo Id */
+            photo_id?: number | null;
         };
         /** AssessmentIn */
         AssessmentIn: {
@@ -5937,6 +5949,8 @@ export interface components {
             answers?: {
                 [key: string]: number;
             } | null;
+            /** Daily Plan Id */
+            daily_plan_id?: string | null;
             /** Expected Revision */
             expected_revision: number;
             /**
@@ -5957,6 +5971,10 @@ export interface components {
             course_id: string;
             /** Course Version */
             course_version: string;
+            /** Due Time */
+            due_time?: string | null;
+            /** Learning Date */
+            learning_date?: string | null;
             /** Request Id */
             request_id: string;
             /** Staff Id */

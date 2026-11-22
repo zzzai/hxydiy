@@ -673,6 +673,7 @@ class LegacyGateTests(unittest.TestCase):
             encoding='utf-8')
         self.assertIn('approved_migrations=(', text)
         self.assertIn("'20261114_member_consumption.py'", text)
+        self.assertIn("'20261122_daily_photo_slots.py'", text)
         self.assertIn('Unapproved Alembic migration change detected', text)
         self.assertIn('flock -n', text)
         self.assertIn('trap rollback ERR', text)

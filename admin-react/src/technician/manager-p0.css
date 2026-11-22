@@ -61,15 +61,21 @@
 .manager-p0-progress { height: 4px; border-radius: 99px; background: #edf3ef; overflow: hidden; margin: 11px 0 0; }
 .manager-p0-progress i { display: block; height: 100%; background: #1f8f75; border-radius: 99px; }
 .manager-p0-actions-inline { display: flex; gap: 6px; margin-top: 8px; }
-.manager-p0-area-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 10px; }
-.manager-p0-area { position: relative; border: 1px solid #e0e9e3; border-radius: 13px; background: #fbfdfb; padding: 0; overflow: hidden; min-height: 118px; display: flex; flex-direction: column; text-align: left; font: inherit; color: #132a24; cursor: pointer; }
-.manager-p0-area:disabled { opacity: .7; }
-.manager-p0-area img { width: 100%; height: 68px; object-fit: cover; display: block; }
-.manager-p0-area-placeholder { height: 68px; display: grid; place-items: center; background: linear-gradient(135deg, #eef5f0, #dfeae2); color: #4f7563; font-size: 24px; font-weight: 700; }
-.manager-p0-area-name { font-size: 12px; font-weight: 650; padding: 7px 9px 0; }
-.manager-p0-area-state { font-size: 9px; color: #7d9084; padding: 2px 9px 8px; }
-.manager-p0-area.is-done .manager-p0-area-state { color: #1f8f75; }
-.manager-p0-area-check { position: absolute; right: 7px; top: 7px; color: #fff; background: #1f8f75; border-radius: 50%; font-size: 15px; }
+.manager-p0-area-grid { margin-top: 6px; }
+.manager-p0-area { padding: 12px 0; border-bottom: 1px solid #e3ebe6; color: #173a2f; }
+.manager-p0-area:last-child { border: 0; padding-bottom: 0; }
+.inspection-area-header, .inspection-actions, .inspection-photos { display: flex; align-items: center; gap: 10px; }
+.inspection-area-header { justify-content: space-between; }
+.inspection-area-header strong { font-size: 14px; }
+.inspection-area-header small { color: #607369; font-variant-numeric: tabular-nums; }
+.inspection-actions, .inspection-photos { flex-wrap: wrap; margin-top: 8px; }
+.inspection-actions button, .inspection-photos button { cursor: pointer; font: inherit; color: #145545; }
+.inspection-actions button { min-height: 36px; padding: 4px 12px; border-radius: 8px; border: 1px solid #c8d8cf; background: #fff; }
+.inspection-actions button:disabled, .inspection-photos button:disabled { opacity: .55; }
+.inspection-photos > div { width: 64px; text-align: center; }
+.inspection-photos img, .inspection-photo-unavailable { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; }
+.inspection-photo-unavailable { display: grid; place-items: center; background: #f2f5f2; font-size: 11px; }
+.inspection-photos button { display: block; width: 100%; min-height: 32px; padding: 2px; border: 0; background: transparent; font-size: 12px; }
 .manager-p0-recording { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px; border-radius: 12px; background: #fff7f4; border: 1px solid #f0d9d2; }
 .manager-p0-recording-dot { width: 8px; height: 8px; border-radius: 50%; background: #b44230; }
 .manager-p0-recording strong { font-variant-numeric: tabular-nums; color: #8a3d2c; }

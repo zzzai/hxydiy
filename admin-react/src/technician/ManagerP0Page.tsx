@@ -61,17 +61,29 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   const loadingRef = useRef(false);
+  const dailyRead = useRef(0);
+  const refreshInspection = async () => {
+    const version = ++dailyRead.current;
+    try {
+      const response = await getManagerDaily();
+      if (current() && version === dailyRead.current) setDaily(response.data);
+    } catch {
+      if (current()) message.warning('暂时无法刷新巡检照片，请稍后刷新');
+    }
+  };
 
   const load = useCallback(async (silent = false) => {
     if (!current() || !isMobileManager(getStaff()) || loadingRef.current) return;
     loadingRef.current = true;
+    const version = ++dailyRead.current;
     if (!silent) setLoading(true);
     try {
       const [dailyResponse, teamResponse, workbenchResponse] = await Promise.all([
         getManagerDaily(), getManagerTeam(), getManagerWorkbench(),
       ]);
       if (!current()) return;
-      setDaily(dailyResponse.data); setTeam(teamResponse.data); setWorkbench(workbenchResponse.data);
+      if (version === dailyRead.current) setDaily(dailyResponse.data);
+      setTeam(teamResponse.data); setWorkbench(workbenchResponse.data);
     } catch {
       // Keep the last successful snapshot; the page remains usable offline.
     } finally {
@@ -191,7 +203,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     {subview === 'orders' && <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => openTab('floor')} />}
     {subview === 'tasks' && <ManagerTasksView onOpenReviews={() => setSubview('reviews')} onOpenPositions={() => openTab('floor')} onOpenOrders={() => setSubview('orders')} />}
     {subview === 'reviews' && <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true)} onFocusError={() => message.error('评价链接已失效')} />}
-    {subview === 'ops' && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={() => load(true)} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }} onOpenCouponHistory={() => setSubview('coupon-history')} />}
+    {subview === 'ops' && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={refreshInspection} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }} onOpenCouponHistory={() => setSubview('coupon-history')} />}
     {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} onOpenHistory={() => setSubview('coupon-history')} />}
     {subview === 'coupon-history' && <ManagerCouponHistoryView />}
 

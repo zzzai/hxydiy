@@ -1,16 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Input, Spin, Tag, message } from 'antd';
-import { AudioOutlined, CameraOutlined, CheckCircleFilled, ReloadOutlined, ScanOutlined, StarOutlined, StopOutlined, GiftOutlined } from '@ant-design/icons';
-import { getManagerDaily, retryManagerMeetingTranscription, saveManagerAreaPhoto, saveManagerMeeting, submitManagerDaily, uploadMedia } from '../api';
+import { Button, Spin, Tag, message } from 'antd';
+import { AudioOutlined, ReloadOutlined, ScanOutlined, StarOutlined, StopOutlined, GiftOutlined } from '@ant-design/icons';
+import { getManagerDaily, retryManagerMeetingTranscription, saveManagerMeeting, submitManagerDaily, uploadMedia } from '../api';
+import ManagerAreaPhotos from './ManagerAreaPhotos';
 import { WavRecorder } from './wavRecorder';
 
 type Daily = Awaited<ReturnType<typeof getManagerDaily>>['data'];
-type Area = Daily['areas'][number];
-
-const AREA_ICONS: Record<string, string> = {
-  restroom: '卫', water_room: '水', cashier: '收', rest_area: '休', foot_area: '足',
-};
-
 function timeText(value?: string) {
   if (!value) return '';
   return new Date(value).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -94,66 +89,42 @@ function MeetingPanel({ daily, onRefresh }: { daily: Daily; onRefresh: () => Pro
 export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenReviews, onOpenCoupons, onOpenRedeemCoupon, onOpenCouponHistory }: {
   daily: Daily | null; loading: boolean; onRefresh: () => Promise<void>; onOpenReviews: () => void; onOpenCoupons: () => void; onOpenRedeemCoupon: () => void; onOpenCouponHistory: () => void;
 }) {
-  const [uploading, setUploading] = useState('');
-  const inputs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  const uploadPhoto = async (area: Area, file?: File) => {
-    if (!file) return;
-    setUploading(area.key);
-    try {
-      const media = await uploadMedia(file, 'daily_area');
-      await saveManagerAreaPhoto({ area: area.key, media_id: media.data.id });
-      await onRefresh();
-      message.success(`${area.label}照片已上传`);
-    } catch (failure) {
-      const detail = (failure as { response?: { data?: { detail?: string | { message?: string } } } })?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : detail?.message || '照片上传失败');
-    } finally { setUploading(''); }
-  };
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
+    if (submitting || uploading) return;
+    setSubmitting(true);
     try {
       await submitManagerDaily();
       await onRefresh();
       message.success('今日巡检已提交');
     } catch (failure) {
       const detail = (failure as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail;
-      message.error(detail?.message || '请先完成 5 个区域照片和晨会录音');
-    }
+      message.error(detail?.message || '请先完成各区域照片和晨会录音');
+    } finally { setSubmitting(false); }
   };
 
   if (loading && !daily) return <div className="manager-p0-loading"><Spin /> 正在加载今日经营…</div>;
   if (!daily) return <div className="manager-p0-loading">今日经营暂时不可用</div>;
 
   const done = daily.completion.areas_done;
-  const canSubmit = done === 5 && daily.completion.has_meeting && daily.status !== 'submitted';
+  const total = daily.completion.areas_total;
+  const canSubmit = total > 0 && done === total && !uploading && !submitting && daily.completion.has_meeting && daily.status !== 'submitted';
   return <div className="manager-p0-stack">
     <section className="manager-p0-card manager-p0-progress-card">
-      <div className="manager-p0-card-head"><div><small>今日经营</small><h2>{done}/5 区域</h2></div><Tag color={daily.status === 'submitted' ? 'green' : 'gold'}>{daily.status === 'submitted' ? '已提交' : '进行中'}</Tag></div>
-      <div className="manager-p0-progress"><i style={{ width: `${(done / 5) * 100}%` }} /></div>
+      <div className="manager-p0-card-head"><div><small>今日经营</small><h2>{done}/{total} 区域</h2></div><Tag color={daily.status === 'submitted' ? 'green' : 'gold'}>{daily.status === 'submitted' ? '已提交' : '进行中'}</Tag></div>
+      <div className="manager-p0-progress"><i style={{ width: `${total ? done / total * 100 : 0}%` }} /></div>
       <p className="manager-p0-muted">照片、晨会、评价、发券都在这里留痕；照片和录音保留 90 天。</p>
       <div className="manager-p0-actions-inline"><Button size="small" icon={<StarOutlined />} onClick={onOpenReviews}>看评价</Button><Button size="small" icon={<GiftOutlined />} onClick={onOpenCoupons}>发券</Button><Button size="small" icon={<ScanOutlined />} onClick={onOpenRedeemCoupon}>核销券</Button><Button size="small" onClick={onOpenCouponHistory}>券记录</Button></div>
     </section>
 
-    <section className="manager-p0-card">
-      <div className="manager-p0-card-head"><div><small>必做</small><h3>区域照片</h3></div><span className="manager-p0-muted">{done}/5</span></div>
-      <div className="manager-p0-area-grid">
-        {daily.areas.map((area: Area) => <button type="button" key={area.key} className={'manager-p0-area' + (area.done ? ' is-done' : '')} disabled={uploading === area.key} onClick={() => {
-          if (area.done && !window.confirm(daily.status === 'submitted' ? `${area.label}已有照片。重拍会替换原图，并让今日巡检退回“进行中”，需要重新提交。继续？` : `${area.label}已有照片，重拍会替换原图。继续？`)) return;
-          inputs.current[area.key]?.click();
-        }}>
-          {area.photo?.media?.url ? <img src={area.photo.media.url} alt={area.label} /> : <span className="manager-p0-area-placeholder">{AREA_ICONS[area.key] || '区'}</span>}
-          <span className="manager-p0-area-name">{area.label}</span>
-          <span className="manager-p0-area-state">{uploading === area.key ? '上传中…' : area.done ? `${timeText(area.photo?.captured_at)} 已上传` : '点击拍照'}</span>
-          {area.done && <CheckCircleFilled className="manager-p0-area-check" />}
-          <input ref={(node) => { inputs.current[area.key] = node; }} type="file" accept="image/*" capture="environment" hidden onChange={(event) => void uploadPhoto(area, event.target.files?.[0])} />
-        </button>)}
-      </div>
-    </section>
+    <ManagerAreaPhotos areas={daily.areas} limit={daily.max_photos_per_area} businessDate={daily.business_date}
+      submitted={daily.status === 'submitted'} disabled={submitting || uploading} onBusy={setUploading} onRefresh={onRefresh} />
 
     <MeetingPanel daily={daily} onRefresh={onRefresh} />
 
-    <Button type="primary" size="large" block disabled={!canSubmit} onClick={() => void submit()}>{daily.status === 'submitted' ? '今日已提交' : canSubmit ? '提交今日巡检' : '完成 5 区域照片和晨会录音后可提交'}</Button>
+    <Button type="primary" size="large" block disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>{daily.status === 'submitted' ? '今日已提交' : canSubmit ? '提交今日巡检' : '拍齐各区照片并上传晨会录音后可提交'}</Button>
     <button type="button" className="manager-p0-text-link" onClick={() => void onRefresh()}><ReloadOutlined /> 刷新今日记录</button>
   </div>;
 }

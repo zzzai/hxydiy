@@ -24,6 +24,14 @@ if (params.has('reset') || !sessionStorage.getItem('manager-fixture-ready')) {
   history.replaceState(null, '', location.pathname + '?' + params);
 }
 const stats = { reads: 0, writes: 0, technicianCalls: 0, unexpected: 0, oldReadReleased: false, mapReads: 0, mapPending: false, mapReleased: false };
+const imageUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jgggAAAAASUVORK5CYII=';
+let uploadId = 20;
+const inspectionAreas = [
+  ['restroom', '卫生间'], ['water_room', '打水房'], ['cashier', '收银台'],
+  ['rest_area', '休息区'], ['foot_area', '足疗区'], ['herbal_prep', '煮药区'],
+].map(([key, label], i) => ({ key, label, photos: i < 3
+  ? [{ id: i + 1, slot: 1, media_id: i + 1, media: { url: imageUrl } }] : [] }));
+
 const entries = Array.from({ length: 42 }, (_, i) => ({
   id: 'synthetic-selection-' + String(i + 1).padStart(4, '0'), store_id: 1,
   status: i < 27 ? 'submitted' : i < 36 ? 'confirmed' : 'cancelled',
@@ -101,17 +109,27 @@ client.defaults.adapter = async config => {
     attention: scenario === 'empty' ? [] : [{ key: 'addon', label: '顾客加选待处理', count: 1 }],
   });
   if (method === 'get' && path === '/admin/v2/manager/daily') return ok({
-    business_date: '2026-11-09', checkin_id: 1, status: 'draft', submitted_at: null,
-    areas: [
-      { key: 'restroom', label: '卫生间', done: true, photo: null },
-      { key: 'water_room', label: '打水房', done: true, photo: null },
-      { key: 'cashier', label: '收银台', done: true, photo: null },
-      { key: 'rest_area', label: '休息区', done: false, photo: null },
-      { key: 'foot_area', label: '足疗区', done: false, photo: null },
-    ],
-    meetings: [],
-    completion: { areas_done: 3, areas_total: 5, has_meeting: false, submitted: false },
+    business_date: '2026-11-09', checkin_id: 1, status: 'draft', submitted_at: null, max_photos_per_area: 3,
+    areas: inspectionAreas.map(area => ({ ...area, done: !!area.photos.length, photo: area.photos[0] || null })),
+    meetings: [], completion: { areas_done: inspectionAreas.filter(area => area.photos.length).length,
+      areas_total: inspectionAreas.length, has_meeting: false, submitted: false },
   });
+  if (scenario === 'inspection-photos' && method === 'post') {
+    if (path === '/admin/media') return ok({ id: ++uploadId, url: imageUrl });
+    if (path === '/admin/v2/manager/daily/photos') {
+      const body = JSON.parse(config.data);
+      const area = inspectionAreas.find(item => item.key === body.area);
+      if (!area || body.business_date !== '2026-11-09') return fail(422, 'Invalid area or day');
+      if (body.mode === 'append' && area.photos.length < 3) {
+        area.photos.push({ id: body.media_id, media_id: body.media_id, slot: area.photos.length + 1, media: { url: imageUrl } });
+      } else if (body.mode === 'replace') {
+        const target = area.photos.find(p => p.id === body.photo_id && p.media_id === body.expected_media_id);
+        if (!target) return fail(409, 'Stale target');
+        target.media_id = body.media_id;
+      } else return fail(409, 'Invalid operation');
+      return ok({});
+    }
+  }
   if (method === 'get' && path === '/admin/v2/manager/daily/team') return ok({
     summary: { staff_count: 2, on_track: 1, overdue: 1 },
     technicians: [

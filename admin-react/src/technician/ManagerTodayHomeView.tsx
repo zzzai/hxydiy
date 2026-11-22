@@ -24,7 +24,8 @@ export default function ManagerTodayHomeView({ daily, workbench, onOpenOps, onOp
   const attention = workbench?.summary?.attention || 0;
   const tasks: Array<{ key: string; icon: string; title: string; note: string; badge: string; tone: string; onClick: () => void }> = [];
 
-  if (done < 5) tasks.push({ key: 'inspection', icon: '巡', title: '巡检照片', note: `5 个区域，完成 ${done} 个`, badge: `${done}/5`, tone: 'warn', onClick: onOpenOps });
+  const total = daily?.completion.areas_total;
+  if (total && done < total) tasks.push({ key: 'inspection', icon: '巡', title: '巡检照片', note: `${total} 个区域，完成 ${done} 个`, badge: `${done}/${total}`, tone: 'warn', onClick: onOpenOps });
   if (!hasMeeting) tasks.push({ key: 'meeting', icon: '会', title: '晨会录音', note: '今天还没有录音', badge: '未录', tone: 'warn', onClick: onOpenOps });
   if (attention > 0) tasks.push({ key: 'attention', icon: '待', title: '待处理事项', note: '订单和现场提醒', badge: String(attention), tone: 'normal', onClick: onOpenTasks });
 

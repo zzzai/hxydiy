@@ -489,7 +489,13 @@ export const getManagerCouponHistory = (params: { days?: number; kind?: 'all' | 
   );
 
 export const getManagerDaily = (date?: string) => client.get('/admin/v2/manager/daily', { params: date ? { date } : undefined });
-export const saveManagerAreaPhoto = (payload: { area: string; media_id: number; note?: string }) => client.post('/admin/v2/manager/daily/photos', payload);
+export type InspectionPhoto = { id: number; slot: number; media_id: number; media?: { url: string } | null };
+export type InspectionArea = { key: string; label: string; done: boolean; photos?: InspectionPhoto[]; photo?: InspectionPhoto | null };
+type InspectionPhotoInput = { area: string; media_id: number; note?: string; business_date?: string } & (
+  | { mode?: 'cover' | 'append' }
+  | { mode: 'replace'; photo_id: number; expected_media_id: number }
+);
+export const saveManagerAreaPhoto = (payload: InspectionPhotoInput) => client.post('/admin/v2/manager/daily/photos', payload);
 export const saveManagerMeeting = (payload: { media_id: number; duration_seconds: number; title?: string; attendees?: string }) => client.post('/admin/v2/manager/daily/meeting', payload);
 export const submitManagerDaily = () => client.post('/admin/v2/manager/daily/submit');
 export const getManagerDailyHistory = (days = 14) => client.get('/admin/v2/manager/daily/history', { params: { days } });

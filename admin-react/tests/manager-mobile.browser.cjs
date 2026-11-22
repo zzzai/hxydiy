@@ -78,8 +78,38 @@ async function main() {
       assert.match(await page.locator('.manager-p0-page').innerText(), /今日|现场|券|我的/);
       await noOverflow(); await shot('today-' + width);
       await page.getByRole('button', { name: /巡检照片/ }).click(); await page.locator('.manager-p0-area').first().waitFor();
-      assert.equal(await page.locator('.manager-p0-area').count(), 5);
+      assert.equal(await page.locator('.manager-p0-area').count(), 6);
       await noOverflow(); await shot('ops-' + width);
+    });
+
+    await check('inspection-album-camera-and-retake', async () => {
+      await start('inspection-photos'); await loaded();
+      await page.getByRole('button', { name: /巡检照片/ }).click();
+      const area = page.locator('.manager-p0-area[aria-label="煮药区"]');
+      const file = (n) => ({ name: 'fixture-' + n + '.png', mimeType: 'image/png', buffer: Buffer.from([137, 80, 78, 71]) });
+      const choose = async (button, files, multiple) => {
+        const wait = page.waitForEvent('filechooser');
+        await button.click();
+        const picker = await wait;
+        assert.equal(picker.isMultiple(), multiple);
+        await picker.setFiles(files.map(file));
+      };
+      const camera = area.getByRole('button', { name: '拍照' });
+      const album = area.getByRole('button', { name: '从相册选' });
+      await choose(camera, [1], false);
+      await area.getByText('1 张', { exact: true }).waitFor();
+      await choose(album, [2, 3, 4], true);
+      await page.getByText('本次最多可选 2 张').waitFor();
+      await choose(album, [2, 3], true);
+      await area.getByText('3 张', { exact: true }).waitFor();
+      assert.equal(await album.count(), 0);
+      assert.equal(await area.getByRole('img', { name: /煮药区照片/ }).count(), 3);
+      page.once('dialog', dialog => dialog.accept());
+      await choose(area.getByRole('button', { name: '更换煮药区第 2 张' }), [5], false);
+      await area.getByRole('button', { name: '更换煮药区第 2 张' }).waitFor();
+      await page.waitForFunction(() => !document.querySelector('.manager-p0-area[aria-label="煮药区"] button')?.disabled);
+      assert.match(await page.locator('.manager-p0-progress-card h2').innerText(), /4\/6/);
+      await noOverflow();
     });
 
     await check('wecom-swipe-back-stays-in-manager', async () => {

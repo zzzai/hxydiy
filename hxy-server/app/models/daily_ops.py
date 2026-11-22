@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -29,6 +30,7 @@ class DailyStoreCheckin(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True)
     business_date: Mapped[date] = mapped_column(Date, index=True)
+    checklist_version: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     manager_staff_id: Mapped[int] = mapped_column(ForeignKey("staff.id"))
     status: Mapped[str] = mapped_column(String(16), default="draft")
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -41,15 +43,17 @@ class DailyStoreCheckin(Base):
 class DailyAreaPhoto(Base):
     __tablename__ = "daily_area_photos"
     __table_args__ = (
-        UniqueConstraint("checkin_id", "area", name="uq_daily_area_photo_area"),
+        UniqueConstraint("checkin_id", "area", "slot", name="uq_daily_area_photo_slot"),
+        CheckConstraint("slot BETWEEN 1 AND 3", name="ck_daily_area_photo_slot"),
         CheckConstraint(
-            "area IN ('restroom', 'water_room', 'cashier', 'rest_area', 'foot_area')",
+            "area IN ('restroom', 'water_room', 'cashier', 'rest_area', 'foot_area', 'herbal_prep')",
             name="ck_daily_area_photo_area",
         ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     checkin_id: Mapped[int] = mapped_column(ForeignKey("daily_store_checkins.id"), index=True)
+    slot: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="1")
     area: Mapped[str] = mapped_column(String(24))
     media_id: Mapped[int] = mapped_column(ForeignKey("media_assets.id"))
     note: Mapped[str] = mapped_column(String(300), default="")
