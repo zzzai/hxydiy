@@ -6,13 +6,13 @@ from threading import Barrier
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.admin import create_staff_token
-from app.api.manager_daily import _today
+from app.api.manager_daily import _checkin, _today
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import (
@@ -225,6 +225,14 @@ def test_concurrent_photos_use_three_slots_and_guard_retake():
     def override():
         with factory() as db:
             yield db
+
+    # An uncommitted first creator must still allow foreign keys to its store.
+    with factory() as creator, factory() as uploader:
+        _checkin(creator, store.id, manager.id, _today(), create=True)
+        uploader.execute(text("SET LOCAL lock_timeout = '2s'"))
+        _media(uploader, store.id, manager.id)
+        uploader.commit()
+        creator.rollback()
 
     def race(client, bodies):
         ready = Barrier(len(bodies))

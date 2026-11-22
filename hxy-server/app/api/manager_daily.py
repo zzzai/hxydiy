@@ -108,8 +108,9 @@ def _checkin(db: Session, store_id: int, manager_id: int, business_date: date, *
     )
     item = db.scalar(query.with_for_update() if create else query)
     if item is None and create:
-        # Serialize the first check-in too, when there is no child row to lock yet.
-        db.execute(select(Store.id).where(Store.id == store_id).with_for_update())
+        # FOR NO KEY UPDATE serializes first creators without blocking the
+        # store foreign-key checks made by audit inserts on an existing check-in.
+        db.execute(select(Store.id).where(Store.id == store_id).with_for_update(key_share=True))
         item = db.scalar(query.with_for_update())
         if item is None:
             item = DailyStoreCheckin(store_id=store_id, business_date=business_date,
