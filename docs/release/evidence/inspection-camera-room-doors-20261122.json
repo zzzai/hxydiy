@@ -1,0 +1,71 @@
+{
+  "release_id": "server-6f663f8ee367-1795358573",
+  "source_sha": "6f663f8ee367dfdbf91c8943a1c0f897b70fd125",
+  "previous_release": "server-580662d9dab2-1795351712",
+  "production_verified": "ok/production",
+  "published_at": "2026-11-22T14:49:30Z",
+  "backup_sha256": "25ac50d8127f2b2ac9a96586d6b6b36f0e0632a22481637e9feef1681d5ea89f",
+  "manifest_sha256": "d5365660a88059e6f4a55a2c26158d73fd1dc47be8ca25c492616b142619c0a5",
+  "protected_tables": 76,
+  "existing_rows_match": true,
+  "existing_schema_matches": true,
+  "public_entries": {
+    "/": {
+      "status": 200,
+      "cache": "no-store, no-cache, must-revalidate",
+      "entry_asset": "index-ChULFKLk.js"
+    },
+    "/admin/": {
+      "status": 200,
+      "cache": "no-store, no-cache, must-revalidate",
+      "entry_asset": "index-CucExHfm.js"
+    },
+    "/technician/store": {
+      "status": 200,
+      "cache": "no-store, no-cache, must-revalidate",
+      "entry_asset": "index-CucExHfm.js"
+    }
+  },
+  "public_asset_hashes": {
+    "index-ChULFKLk.js": "7f08c82a99088873f89cb7b658fac2dcd365bdb9b54fb15871a9ecf97606589c",
+    "index-CucExHfm.js": "54e31f1f97c93534f3731352450f5d36e3bfbc2e4d8dd07d1f1b2b176f6418de",
+    "RoomDoorPage-jJVNjhZc.js": "19a2d8cd2e81ccef1c11c5ed446de9651058a3ed2acf49c72392ca624777c39e",
+    "api-DIFL-ImJ.js": "2d42a4436a3272a820a64d017f28adcd5e5b5d2a1974e9a99af46451c13d562d"
+  },
+  "running_api_source_hashes": {
+    "app/api/manager_daily.py": "40a66055e4dec69ae7662fe39b05773398e372bdafab53c19c8bd682921ca574",
+    "app/api/occupancies.py": "079087f82dc4c0456e96308491c4ca4a0d3ba200507ca72cd7c972a174f9c6a9"
+  },
+  "checks": {
+    "api_tests": 80,
+    "api_subtests": 15,
+    "release_tests": 96,
+    "manager_mobile_scenarios": 11,
+    "synthetic_room_selections": 7
+  },
+  "inspection": {
+    "new_slot_requires_scoped_receipt": true,
+    "existing_uploads_unchanged": true,
+    "automatic_review_unchanged": true,
+    "physical_device_tested": false
+  },
+  "qr": {
+    "store_id": 2,
+    "physical_labels": 13,
+    "sofas": 9,
+    "rooms": 4,
+    "bed_counts": [
+      1,
+      1,
+      2,
+      3
+    ],
+    "active_service_positions": 16,
+    "printed_pdf_pages": 2,
+    "pdf_decoded": 13,
+    "png_decoded": 13,
+    "verified_online_room_handoffs": 7,
+    "production_order_submissions": 0,
+    "physical_print_tested": false
+  }
+}
