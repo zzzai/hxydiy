@@ -1,0 +1,84 @@
+{
+  "release_id": "server-2f29295ce504-1795350410",
+  "application_sha": "2f29295ce504145df422324fbdef18d5680545c5",
+  "previous_release": "server-5d0f0429b438-1795347537",
+  "accepted_at": "2026-11-22T12:31:05Z",
+  "production_status": "published",
+  "production_health": "ok/production",
+  "review_enabled": true,
+  "model": "deepseek-flash",
+  "auto_from_utc": "2026-11-22T12:30:46+00:00",
+  "historical_policy": "manager explicitly requests each photo",
+  "review_decisions": [
+    "pass",
+    "fix",
+    "retake"
+  ],
+  "prod_database": {
+    "revision": "20261122_inspection_ai",
+    "tables_added": [
+      "daily_area_photo_reviews"
+    ],
+    "historical_backfill": false,
+    "backup_sha256_verified": true,
+    "full_backup_sha256": "7504977b7cda5c5286527d82c12990ebf8c8af8ab3ee9418f8566cdba4167e1c",
+    "restored_and_migrated_on_isolated_postgresql": true,
+    "old_tables_compared": 74,
+    "old_tables_identical": true,
+    "review_rows_at_verification": 0
+  },
+  "huafu": {
+    "business_date": "2026-11-22",
+    "existing_photos": 5,
+    "previous_images_still_current": true,
+    "old_photos_without_reviews": 5,
+    "areas_done": 5,
+    "areas_required": 6,
+    "status": "draft"
+  },
+  "qa": {
+    "backend_passed": 48,
+    "backend_skipped": 1,
+    "skip_detail": "existing staff learning assignment concurrency test requires its separate learning PostgreSQL environment",
+    "inspection_postgresql_concurrency": "passed",
+    "release_tests": 96,
+    "manager_unit": 26,
+    "browser_cases": 11,
+    "synthetic_live_verdicts": {
+      "clean": "pass",
+      "messy": "fix",
+      "dark": "retake"
+    },
+    "synthetic_live_distinct_calls": 3,
+    "deployed_worker_live_synthetic_verdict": "retake",
+    "installed_fixture_production_writes": 0,
+    "observed_limit": "In the synthetic spill image, debris was detected; the model described the foreground surface as floor. Manager confirmation remains separate.",
+    "real_wecom_camera_field_test": "not performed",
+    "actual_old_photos_sent_for_testing": 0
+  },
+  "public": {
+    "/technician/store": {
+      "http": 200,
+      "asset": "/admin/assets/index-uoQnkl2l.js",
+      "asset_matches_release": true,
+      "sha256": "ea66087c9026b5e4cc80a98d37e78b1f6de771ef2aac919160249dc2e2c10bdf",
+      "no_store": true
+    },
+    "/admin/": {
+      "http": 200,
+      "asset": "/admin/assets/index-uoQnkl2l.js",
+      "asset_matches_release": true,
+      "sha256": "ea66087c9026b5e4cc80a98d37e78b1f6de771ef2aac919160249dc2e2c10bdf",
+      "no_store": true
+    },
+    "/": {
+      "http": 200,
+      "asset": "/assets/index-BQF5aIb2.js",
+      "asset_matches_release": true,
+      "sha256": "af3b10a53d99809156f56c6e18fbfadc9a8ffee2b7ae8c3433fa68870e647bc0",
+      "no_store": true
+    },
+    "health": "ok/production",
+    "anonymous_inspection": 401
+  }
+}
