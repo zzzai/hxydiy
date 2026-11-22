@@ -150,9 +150,14 @@ client.defaults.adapter = async config => {
     }
   }
   if ((scenario === 'inspection-photos' || inspectionAI) && method === 'post') {
-    if (path === '/admin/media') return ok({ id: ++uploadId, url: imageUrl });
+    if (path === '/admin/v2/manager/daily/camera-captures') {
+      const frame = config.data.get('file');
+      if (!frame || frame.type !== 'image/jpeg' || frame.size < 50) return fail(415, 'Missing camera frame');
+      return ok({ media_id: ++uploadId, capture_receipt: 'fixture-' + uploadId });
+    }
     if (path === '/admin/v2/manager/daily/photos') {
       const body = JSON.parse(config.data);
+      if (body.capture_receipt !== 'fixture-' + body.media_id) return fail(409, 'Missing capture receipt');
       const area = inspectionAreas.find(item => item.key === body.area);
       if (!area || body.business_date !== '2026-11-09') return fail(422, 'Invalid area or day');
       if (body.mode === 'append' && area.photos.length < 3) {

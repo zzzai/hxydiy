@@ -659,6 +659,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/service-positions/door-print-sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Door Print Sheet */
+        get: operations["door_print_sheet_api_v1_admin_service_positions_door_print_sheet_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/service-positions/{room_id}/configuration": {
         parameters: {
             query?: never;
@@ -1515,6 +1532,23 @@ export interface paths {
         get: operations["get_daily_api_v1_admin_v2_manager_daily_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/camera-captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Camera Frame */
+        post: operations["upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4260,6 +4294,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/room-doors/{door_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Room Door Entry */
+        get: operations["room_door_entry_api_v1_room_doors__door_code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/selection-sessions": {
         parameters: {
             query?: never;
@@ -5421,6 +5472,8 @@ export interface components {
             area: string;
             /** Business Date */
             business_date?: string | null;
+            /** Capture Receipt */
+            capture_receipt?: string | null;
             /** Captured At */
             captured_at?: string | null;
             /** Expected Media Id */
@@ -5568,6 +5621,18 @@ export interface components {
              * @enum {string}
              */
             region: "neck_shoulder" | "waist_back" | "leg" | "knee" | "foot";
+        };
+        /** Body_upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post */
+        Body_upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post: {
+            /** Area */
+            area: string;
+            /**
+             * Business Date
+             * Format: date
+             */
+            business_date: string;
+            /** File */
+            file: string;
         };
         /** Body_upload_media_api_v1_admin_media_post */
         Body_upload_media_api_v1_admin_media_post: {
@@ -9650,6 +9715,39 @@ export interface operations {
             };
         };
     };
+    door_print_sheet_api_v1_admin_service_positions_door_print_sheet_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_service_position_configuration_api_v1_admin_service_positions__room_id__configuration_patch: {
         parameters: {
             query?: never;
@@ -11455,6 +11553,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17613,6 +17746,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    room_door_entry_api_v1_room_doors__door_code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                door_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
             /** @description Validation Error */
             422: {

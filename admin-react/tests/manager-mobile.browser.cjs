@@ -52,7 +52,7 @@ async function fixtureControl(name) {
 async function main() {
   await fs.mkdir(out, { recursive: true });
   try {
-    browserInstance = await chromium.launch({ headless: true, args: ['--disable-background-networking'] });
+    browserInstance = await chromium.launch({ headless: true, channel: 'chromium', args: ['--disable-background-networking', '--use-fake-device-for-media-stream'] });
     context = await browserInstance.newContext({ viewport: { width: 375, height: 812 }, serviceWorkers: 'block', timezoneId: 'Asia/Shanghai' });
     context.setDefaultTimeout(15000);
     await context.route('**/*', async (route) => {
@@ -82,30 +82,34 @@ async function main() {
       await noOverflow(); await shot('ops-' + width);
     });
 
-    await check('inspection-album-camera-and-retake', async () => {
+    await check('inspection-live-camera-only-and-retake', async () => {
       await start('inspection-photos'); await loaded();
       await page.getByRole('button', { name: /巡检照片/ }).click();
       const area = page.locator('.manager-p0-area[aria-label="煮药区"]');
-      const file = (n) => ({ name: 'fixture-' + n + '.png', mimeType: 'image/png', buffer: Buffer.from([137, 80, 78, 71]) });
-      const choose = async (button, files, multiple) => {
-        const wait = page.waitForEvent('filechooser');
-        await button.click();
-        const picker = await wait;
-        assert.equal(picker.isMultiple(), multiple);
-        await picker.setFiles(files.map(file));
+      const camera = area.getByRole('button', { name: '现场拍照' });
+      assert.equal(await page.getByText('从相册选').count(), 0);
+      assert.equal(await page.locator('.manager-p0-area-grid input[type=file]').count(), 0);
+      await context.grantPermissions([], { origin });
+      await camera.click();
+      await page.getByRole('alert').filter({ hasText: /允许访问相机/ }).waitFor();
+      assert.equal(await page.getByRole('button', { name: '拍摄并保存' }).count(), 0);
+      await context.grantPermissions(['camera'], { origin });
+      await page.getByRole('button', { name: '重试相机' }).click();
+      const shoot = async () => {
+        await page.getByRole('button', { name: '拍摄并保存' }).click();
+        await page.getByRole('dialog').waitFor({ state: 'hidden' });
       };
-      const camera = area.getByRole('button', { name: '拍照' });
-      const album = area.getByRole('button', { name: '从相册选' });
-      await choose(camera, [1], false);
+      await shoot();
       await area.getByText('1 张', { exact: true }).waitFor();
-      await choose(album, [2, 3, 4], true);
-      await page.getByText('本次最多可选 2 张').waitFor();
-      await choose(album, [2, 3], true);
-      await area.getByText('3 张', { exact: true }).waitFor();
-      assert.equal(await album.count(), 0);
+      for (let count = 2; count <= 3; count++) {
+        await camera.click(); await shoot();
+        await area.getByText(count + ' 张', { exact: true }).waitFor();
+      }
+      assert.equal(await camera.count(), 0);
       assert.equal(await area.getByRole('img', { name: /煮药区照片/ }).count(), 3);
       page.once('dialog', dialog => dialog.accept());
-      await choose(area.getByRole('button', { name: '更换煮药区第 2 张' }), [5], false);
+      await area.getByRole('button', { name: '更换煮药区第 2 张' }).click();
+      await shoot();
       await area.getByRole('button', { name: '更换煮药区第 2 张' }).waitFor();
       await page.waitForFunction(() => !document.querySelector('.manager-p0-area[aria-label="煮药区"] button')?.disabled);
       assert.match(await page.locator('.manager-p0-progress-card h2').innerText(), /4\/6/);

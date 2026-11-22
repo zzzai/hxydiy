@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.admin import create_staff_token
-from app.api.manager_daily import _checkin, _today
+from app.api.manager_daily import _checkin, _today, _capture_receipt
 from app.db.session import Base, get_db
 from app.main import app
 from app.models import (
@@ -91,6 +91,40 @@ def _media(db, store_id, staff_id, media_type="image"):
     return media.id
 
 
+def _frame(ids, area, media):
+    return {"area": area, "media_id": media,
+            "capture_receipt": _capture_receipt(ids["store"], ids["manager"], area, _today(), media)}
+
+
+def test_capture_endpoint_requires_manager_and_binds_frame(daily):
+    from io import BytesIO
+    from PIL import Image
+    client, factory, ids, headers = daily
+    buf = BytesIO()
+    Image.new("RGB", (48, 36), "green").save(buf, format="JPEG")
+    file = {"file": ("inspection.jpg", buf.getvalue(), "image/jpeg")}
+    data = {"area": "restroom", "business_date": _today().isoformat()}
+    path = BASE + "/camera-captures"
+    assert client.post(path, data=data, files=file).status_code == 401
+    tech = {"Authorization": "Bearer " + create_staff_token(ids["tech_staff"], "technician")}
+    assert client.post(path, data=data, files=file, headers=tech).status_code == 403
+    manager = headers["manager"]
+    assert client.post(path, data={**data, "business_date": "2000-01-01"}, files=file, headers=manager).status_code == 409
+    assert client.post(path, data={**data, "area": "other"}, files=file, headers=manager).status_code == 422
+    receipt = client.post(path, data=data, files=file, headers=manager)
+    assert receipt.status_code == 201, receipt.text
+    def save(area, body):
+        return client.post(BASE + "/photos", headers=manager, json={"area": area, **body})
+    frame = receipt.json()
+    assert save("restroom", {"media_id": frame["media_id"]}).status_code == 409
+    assert save("cashier", frame).status_code == 409
+    other = client.post("/api/v1/admin/media", headers=manager, data={"purpose": "daily_area"}, files=file).json()
+    assert save("restroom", {**frame, "media_id": other["id"]}).status_code == 409
+    assert save("restroom", frame).status_code == 200
+    with factory() as db:
+        assert db.query(DailyAreaPhoto).one().media_id == frame["media_id"]
+
+
 def test_daily_photos_meeting_submit(daily):
     client, factory, ids, headers = daily
     wav = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + (16).to_bytes(4, "little") + b"\x01\x00\x01\x00" + (16000).to_bytes(4, "little") + (32000).to_bytes(4, "little") + b"\x02\x00\x10\x00" + b"data" + (0).to_bytes(4, "little")
@@ -109,7 +143,7 @@ def test_daily_photos_meeting_submit(daily):
         audio_id = _media(db, ids["store"], ids["manager"], "audio")
         db.commit()
     for area, media_id in media_ids.items():
-        response = client.post(BASE + "/photos", headers=headers["manager"], json={"area": area, "media_id": media_id})
+        response = client.post(BASE + "/photos", headers=headers["manager"], json=_frame(ids, area, media_id))
         assert response.status_code == 200, response.text
     response = client.post(BASE + "/meeting", headers=headers["manager"],
                            json={"media_id": audio_id, "duration_seconds": 600, "title": "晨会"})
@@ -143,7 +177,7 @@ def test_photo_slots_and_targeted_replacement(daily):
 
     def save(media_id, area="herbal_prep", **kwargs):
         return client.post(BASE + "/photos", headers=headers["manager"],
-                           json={"area": area, "media_id": media_id, "mode": "append", **kwargs})
+                           json={**_frame(ids, area, media_id), "mode": "append", **kwargs})
 
     assert save(foreign).status_code == save(unrelated).status_code == 404
     assert save(media[0], business_date=str(_today() - timedelta(days=1))).status_code == 409
@@ -170,8 +204,8 @@ def test_photo_slots_and_targeted_replacement(daily):
     assert save(media[4], **edit).json()["detail"]["code"] == "PHOTO_CHANGED"
     legacy = client.post(BASE + "/photos", headers=headers["manager"],
                          json={"area": "herbal_prep", "media_id": media[5]})
-    result = legacy.json()["areas"][-1]["photos"]
-    assert result[0]["media_id"] == media[5] and result[1:] == updated[1:]
+    assert legacy.status_code == 409
+    assert client.get(BASE, headers=headers["manager"]).json()["areas"][-1]["photos"] == updated
 
 
 def test_legacy_day_uses_original_checklist_and_open_draft_requires_herbal(daily):
@@ -219,6 +253,7 @@ def test_concurrent_photos_use_three_slots_and_guard_retake():
         db.add(manager)
         db.flush()
         media = [_media(db, store.id, manager.id) for _ in range(6)]
+        ids = {"manager": manager.id, "store": store.id}
         headers = {"Authorization": "Bearer " + create_staff_token(manager.id, manager.role)}
         db.commit()
 
@@ -238,7 +273,7 @@ def test_concurrent_photos_use_three_slots_and_guard_retake():
         ready = Barrier(len(bodies))
         def post(body):
             ready.wait(timeout=20)
-            return client.post(BASE + "/photos", json={"area": "herbal_prep", **body}, headers=headers)
+            return client.post(BASE + "/photos", json={**_frame(ids, "herbal_prep", body["media_id"]), **body}, headers=headers)
         with ThreadPoolExecutor(max_workers=len(bodies)) as workers:
             return list(workers.map(post, bodies))
 

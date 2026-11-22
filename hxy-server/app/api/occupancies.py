@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -747,6 +748,74 @@ def _managed_qr_view(qr: ServicePositionQr, room: Room) -> dict:
         "last_accessed_at": qr.last_accessed_at.isoformat() if qr.last_accessed_at else None,
         "created_at": qr.created_at.isoformat() if qr.created_at else None,
     }
+
+
+def _room_door_code(room: Room) -> str:
+    identity = f"{room.store_id}.{room.id}"
+    digest = hmac.new(settings.jwt_secret.encode(), f"room-door:v1:{identity}".encode(), hashlib.sha256).digest()
+    return identity + "." + base64.urlsafe_b64encode(digest[:16]).decode().rstrip("=")
+
+
+def _active_short_path(qr: ServicePositionQr | None) -> str | None:
+    if qr is None or qr.status != "active" or qr.replaced_by_id is not None or not qr.short_code_hash:
+        return None
+    code = _managed_position_short_code(qr)
+    return f"/api/v1/q/{code}" if hmac.compare_digest(qr.short_code_hash, _hash_token(code)) else None
+
+
+def store_door_print_sheet(db: Session, store_id: int) -> list[dict]:
+    base = settings.h5_public_base_url.rstrip("/")
+    rows = db.execute(select(Room, ServicePositionQr).outerjoin(ServicePositionQr, (
+        (ServicePositionQr.store_id == Room.store_id) & (ServicePositionQr.room_id == Room.id)
+        & (ServicePositionQr.status == "active") & ServicePositionQr.replaced_by_id.is_(None)
+    )).where(Room.store_id == store_id, Room.operational_status == "active",
+             Room.room_type.in_(("sofa", "room"))).order_by(Room.sort_order, Room.id))
+    items = []
+    for room, qr in rows:
+        if room.room_type == "room" and room.is_space_container and not room.is_service_position:
+            url = f"{base}/?door={_room_door_code(room)}"
+        elif room.room_type == "sofa" and room.is_service_position and not room.is_space_container:
+            path = _active_short_path(qr)
+            url = base + path if path else None
+        else:
+            continue
+        items.append({"code": room.code, "name": room.customer_label or room.name, "type": room.room_type, "url": url})
+    return items
+
+
+@router.get("/admin/service-positions/door-print-sheet")
+def door_print_sheet(db: Session = Depends(get_db), authorization: str | None = Header(default=None)) -> dict:
+    staff = _current_staff(authorization, db)
+    if normalize_staff_role(staff.role, staff.technician_id) != "manager":
+        raise HTTPException(403, detail="仅店长可打印位置码")
+    store_id = _staff_store_id(staff)
+    store = db.get(Store, store_id)
+    return {"store_name": store.name, "items": store_door_print_sheet(db, store_id)}
+
+
+@router.get("/room-doors/{door_code}")
+def room_door_entry(door_code: str, response: Response, db: Session = Depends(get_db)) -> dict:
+    invalid = HTTPException(404, detail="此房门码已不可用，请联系前台")
+    match = re.fullmatch(r"([1-9][0-9]{0,9})\.([1-9][0-9]{0,9})\.[A-Za-z0-9_-]{22}", door_code)
+    if not match:
+        raise invalid
+    store_id, room_id = map(int, match.groups())
+    room = db.scalar(select(Room).where(Room.id == room_id, Room.store_id == store_id,
+        Room.room_type == "room", Room.is_space_container.is_(True), Room.is_service_position.is_(False),
+        Room.operational_status == "active"))
+    if room is None or not hmac.compare_digest(_room_door_code(room), door_code):
+        raise invalid
+    store = require_store_open(db.get(Store, store_id), "扫码点单")
+    rows = db.execute(select(Room, ServicePositionQr).outerjoin(ServicePositionQr, (
+        (ServicePositionQr.room_id == Room.id) & (ServicePositionQr.store_id == Room.store_id)
+        & (ServicePositionQr.status == "active") & ServicePositionQr.replaced_by_id.is_(None)
+    )).where(Room.store_id == store_id, Room.parent_room_id == room_id, Room.room_type == "bed",
+             Room.is_service_position.is_(True), Room.is_space_container.is_(False)).order_by(Room.sort_order, Room.id))
+    response.headers["Cache-Control"] = "no-store"
+    return {"store_name": store.name, "room_name": room.name, "beds": [
+        {"code": bed.code, "name": bed.customer_label or bed.name, "url": _active_short_path(qr) if bed.operational_status == "active" else None}
+        for bed, qr in rows
+    ]}
 
 
 def _audit_qr(db: Session, staff, qr: ServicePositionQr, action: str, detail: dict) -> None:

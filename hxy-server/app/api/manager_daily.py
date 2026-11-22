@@ -4,12 +4,14 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Header, HTTPException, Query, UploadFile
+from jose import JWTError, jwt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func as sa_func, select
 from sqlalchemy.orm import Session
 
 from app.api.admin import _current_staff
+from app.api.media import upload_media
 from app.api.admin_v2 import _audit, _require_admin, _require_headquarters_admin, _resolve_target_store_id
 from app.core.config import settings
 from app.domain.learning_daily import SHANGHAI, daily_projection
@@ -50,6 +52,7 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 class AreaPhotoIn(BaseModel):
     area: str
     media_id: int = Field(gt=0)
+    capture_receipt: str | None = Field(default=None, max_length=1600)
     note: str = Field(default="", max_length=300)
     captured_at: datetime | None = None
     mode: Literal["cover", "append", "replace"] = "cover"
@@ -294,6 +297,54 @@ def get_daily(
     return _daily_view(db, item, business_date)
 
 
+CAPTURE_AUDIENCE = "inspection-camera"
+CAPTURE_TTL = timedelta(minutes=15)
+
+
+def _capture_claims(store_id: int, staff_id: int, area: str, day: date, media_id: int) -> dict:
+    return {"aud": CAPTURE_AUDIENCE, "store": store_id, "staff": staff_id, "area": area,
+            "day": day.isoformat(), "media": media_id}
+
+
+def _capture_receipt(store_id: int, staff_id: int, area: str, day: date, media_id: int) -> str:
+    claims = _capture_claims(store_id, staff_id, area, day, media_id)
+    return jwt.encode({**claims, "exp": datetime.now(UTC) + CAPTURE_TTL}, settings.jwt_secret, algorithm="HS256")
+
+
+def _require_capture(body: AreaPhotoIn, media: MediaAsset, staff: Staff, store_id: int, day: date) -> None:
+    expected = _capture_claims(store_id, staff.id, body.area, day, media.id)
+    try:
+        claims = jwt.decode(body.capture_receipt or "", settings.jwt_secret, algorithms=["HS256"],
+                            audience=CAPTURE_AUDIENCE, options={"require_exp": True})
+        if (all(claims.get(key) == value for key, value in expected.items())
+                and media.created_by_staff_id == staff.id and media.purpose == "daily_area"):
+            return
+    except JWTError:
+        pass
+    raise HTTPException(409, detail={"code": "INSPECTION_CAMERA_REQUIRED",
+                                    "message": "请在该区域打开相机重新拍摄"})
+
+
+@router.post("/camera-captures", status_code=201)
+async def upload_camera_frame(
+    file: UploadFile, area: str = Form(...), business_date: date = Form(...),
+    db: Session = Depends(get_db), authorization: str | None = Header(None),
+):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _resolve_target_store_id(db, staff, None)
+    day = _today()
+    if business_date != day:
+        raise HTTPException(409, detail={"code": "DAILY_DATE_CHANGED", "message": "营业日期已变，请刷新巡检"})
+    checkin = _checkin(db, store_id, staff.id, day, create=False)
+    if area not in _area_labels(_checklist_version(checkin, day)):
+        raise HTTPException(422, detail={"code": "AREA_INVALID", "message": "该次巡检没有这个区域"})
+    if file.content_type != "image/jpeg":
+        raise HTTPException(415, detail="请使用现场相机拍摄")
+    media = await upload_media(file=file, purpose="daily_area", store_id=store_id, db=db, authorization=authorization)
+    return {"media_id": media["id"], "capture_receipt": _capture_receipt(store_id, staff.id, area, day, media["id"])}
+
+
 @router.post("/photos")
 def save_area_photo(
     body: AreaPhotoIn,
@@ -346,12 +397,16 @@ def save_area_photo(
     ):
         raise HTTPException(409, detail={"code": "PHOTO_ALREADY_USED", "message": "这张照片已用于本次巡检"})
     new_image = target is None or target.media_id != media.id
+    if new_image:
+        _require_capture(body, media, staff, store_id, today)
+    elif body.mode == "cover":
+        return _daily_view(db, checkin, today)
     if target is None:
         target = DailyAreaPhoto(checkin_id=checkin.id, area=body.area, slot=slot)
         db.add(target)
     target.media_id = media.id
     target.note = body.note.strip()
-    target.captured_at = _utc(body.captured_at) if body.captured_at else datetime.now(UTC)
+    target.captured_at = media.created_at
     target.created_by_staff_id = staff.id
     if new_image:
         db.flush()

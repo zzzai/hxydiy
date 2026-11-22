@@ -222,6 +222,9 @@ export type PositionQr = {
   last_accessed_at: string | null;
   created_at: string | null;
 };
+export const getDoorPrintSheet = () => client.get<{
+  store_name: string; items: { code: string; name: string; type: 'sofa' | 'room'; url: string | null }[];
+}>('/admin/service-positions/door-print-sheet');
 export const getPositionQrLink = (roomId: number) =>
   client.get<PositionQr>(`/admin/service-positions/${roomId}/qr-link`);
 export const updateServicePositionOperationalStatus = (roomId: number, operationalStatus: 'active' | 'inactive', reason: string) =>
@@ -503,7 +506,14 @@ export const confirmInspectionReview = (photo: InspectionPhoto, verdict: Inspect
   '/admin/v2/manager/daily/photos/' + photo.id + '/manual-review', { media_id: photo.media_id, verdict },
 );
 export type InspectionArea = { key: string; label: string; done: boolean; photos?: InspectionPhoto[]; photo?: InspectionPhoto | null };
-type InspectionPhotoInput = { area: string; media_id: number; note?: string; business_date?: string } & (
+export const uploadInspectionCapture = (frame: Blob, area: string, businessDate: string) => {
+  const form = new FormData();
+  form.append('file', frame, 'inspection.jpg');
+  form.append('area', area);
+  form.append('business_date', businessDate);
+  return client.post<{ media_id: number; capture_receipt: string }>('/admin/v2/manager/daily/camera-captures', form);
+};
+type InspectionPhotoInput = { area: string; media_id: number; capture_receipt: string; note?: string; business_date?: string } & (
   | { mode?: 'cover' | 'append' }
   | { mode: 'replace'; photo_id: number; expected_media_id: number }
 );

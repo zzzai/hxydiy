@@ -789,6 +789,18 @@
             ],
             "title": "Business Date"
           },
+          "capture_receipt": {
+            "anyOf": [
+              {
+                "maxLength": 1600,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capture Receipt"
+          },
           "captured_at": {
             "anyOf": [
               {
@@ -1137,6 +1149,31 @@
           "next_action"
         ],
         "title": "BodyFocus",
+        "type": "object"
+      },
+      "Body_upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post": {
+        "properties": {
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "business_date": {
+            "format": "date",
+            "title": "Business Date",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "area",
+          "business_date"
+        ],
+        "title": "Body_upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post",
         "type": "object"
       },
       "Body_upload_media_api_v1_admin_media_post": {
@@ -11183,6 +11220,57 @@
         ]
       }
     },
+    "/api/v1/admin/service-positions/door-print-sheet": {
+      "get": {
+        "operationId": "door_print_sheet_api_v1_admin_service_positions_door_print_sheet_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Door Print Sheet Api V1 Admin Service Positions Door Print Sheet Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Door Print Sheet",
+        "tags": [
+          "service-position-occupancy"
+        ]
+      }
+    },
     "/api/v1/admin/service-positions/{room_id}/configuration": {
       "patch": {
         "description": "更新本店实际服务位的维修备注和展示顺序，不改变现场状态。",
@@ -15080,6 +15168,63 @@
           }
         },
         "summary": "Get Daily",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/camera-captures": {
+      "post": {
+        "operationId": "upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_camera_frame_api_v1_admin_v2_manager_daily_camera_captures_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Camera Frame",
         "tags": [
           "manager-daily"
         ]
@@ -26082,6 +26227,50 @@
           }
         },
         "summary": "Resolve Short Position Qr",
+        "tags": [
+          "service-position-occupancy"
+        ]
+      }
+    },
+    "/api/v1/room-doors/{door_code}": {
+      "get": {
+        "operationId": "room_door_entry_api_v1_room_doors__door_code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "door_code",
+            "required": true,
+            "schema": {
+              "title": "Door Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Room Door Entry Api V1 Room Doors  Door Code  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Room Door Entry",
         "tags": [
           "service-position-occupancy"
         ]

@@ -235,6 +235,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type RoomDoorEntry = { store_name: string; room_name: string; beds: { code: string; name: string; url: string | null }[] };
+export function getRoomDoorEntry(code: string, signal?: AbortSignal) {
+  return request<RoomDoorEntry>('/room-doors/' + encodeURIComponent(code), { cache: 'no-store', signal });
+}
+
 export async function getProjects(storeId: number): Promise<Project[]> {
   const result = await request<{ items: Project[] }>(`/projects?store_id=${storeId}`);
   return result.items;

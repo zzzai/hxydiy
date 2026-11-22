@@ -21,7 +21,7 @@ from app.models import DailyAreaPhoto, DailyAreaPhotoReview, DailyStoreCheckin, 
 from app.services.inspection_reviews import process_next
 from app.services.inspection_vision import ENDPOINT, InspectionResult, VisionError, inspect_photo, inspection_jpeg
 from app.api.manager_daily import _checkin, _today
-from test_manager_daily import BASE, _media, daily
+from test_manager_daily import BASE, _media, _frame, daily
 
 FIX = {"verdict": "fix", "location": "锅台左侧", "evidence": "散落药渣", "action": "清走药渣并擦净台面"}
 
@@ -56,7 +56,7 @@ def test_historical_review_runs_without_a_request_and_preserves_store_scope(dail
         db.flush()
         other = {"Authorization": "Bearer " + create_staff_token(manager.id, "manager")}
     monkeypatch.setattr(settings, "inspection_ai_enabled", False)
-    body = {"area": "herbal_prep", "mode": "append", "media_id": old}
+    body = {**_frame(ids, "herbal_prep", old), "mode": "append"}
     attached = client.post(BASE + "/photos", headers=headers["manager"], json=body)
     assert attached.status_code == 200, attached.text
     photo = attached.json()["areas"][-1]["photos"][0]
@@ -98,7 +98,7 @@ def test_new_photo_automatic_retry_and_inflight_replacement(daily, monkeypatch):
     manager = headers["manager"]
     def save(media, **extra):
         response = client.post(BASE + "/photos", headers=manager,
-                               json={"area": "herbal_prep", "media_id": media, "mode": "append", **extra})
+                               json={**_frame(ids, "herbal_prep", media), "mode": "append", **extra})
         assert response.status_code == 200, response.text
         return response.json()["areas"][-1]["photos"][0]
     old = save(first)
@@ -165,7 +165,7 @@ def test_failed_review_stops_after_bounded_automatic_retries(daily, monkeypatch)
     enable(monkeypatch)
     with factory.begin() as db:
         media = _media(db, ids["store"], ids["manager"])
-    client.post(BASE + "/photos", headers=headers["manager"], json={"area": "cashier", "media_id": media}).raise_for_status()
+    client.post(BASE + "/photos", headers=headers["manager"], json=_frame(ids, "cashier", media)).raise_for_status()
     def unavailable(*args):
         raise VisionError("provider_unavailable")
     for number in (1, 2, 3):
@@ -209,7 +209,7 @@ def test_stale_lease_and_expired_photo_do_not_resend(daily, monkeypatch):
     with factory.begin() as db:
         media = _media(db, ids["store"], ids["manager"])
     photo = client.post(BASE + "/photos", headers=headers["manager"],
-                       json={"area": "herbal_prep", "mode": "append", "media_id": media}).json()["areas"][-1]["photos"][0]
+                       json={**_frame(ids, "herbal_prep", media), "mode": "append"}).json()["areas"][-1]["photos"][0]
     with factory.begin() as db:
         review = db.query(DailyAreaPhotoReview).one()
         review.state, review.attempt = "running", 1
