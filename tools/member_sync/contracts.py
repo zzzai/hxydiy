@@ -8,6 +8,8 @@ import re
 SCOPE = {"tenant_id": 1581452, "shop_id": 1581453, "store_id": 1,
          "source": "meiguanjia_export", "store_code": "hxy-anyang-ziwei-001"}
 SHOP = "紫薇壹号店"
+TENANT_MARKER = re.compile(r"^\s*荷小悦\s*[（(]\s*1581452\s*[)）]\s*$")
+SHOP_MARKER = re.compile(r"^\s*紫薇壹号店\s*[（(]\s*1581453\s*[)）]\s*$")
 CARD_NAMES = {"荷小悦年度权益会员卡", "荷小悦会员卡"}
 BAD_STATE = re.compile("停用|退卡|挂失|注销|冻结")
 SHA = re.compile(r"[a-f0-9]{64}")

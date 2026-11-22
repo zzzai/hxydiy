@@ -121,6 +121,11 @@ def check_runtime(root, package_sha):
         raise Stop("private_root_permissions")
 
 
+def open_source_browser(pw):
+    # Real source authentication uses the accepted isolated, minimized Chrome session.
+    return pw.chromium.launch(channel="chrome", headless=False, chromium_sandbox=True, args=["--start-minimized"])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
@@ -148,7 +153,7 @@ def main():
         with sync_playwright() as pw:
             browser = None
             try:
-                browser = pw.chromium.launch(channel="chrome", headless=False, chromium_sandbox=True, args=["--start-minimized"])
+                browser = open_source_browser(pw)
                 context = browser.new_context(accept_downloads=False)
                 page = context.new_page()
                 page.goto(START_URL, wait_until="domcontentloaded", timeout=30000)

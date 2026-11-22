@@ -2,8 +2,8 @@
 import re
 from datetime import datetime, timezone
 
-from contracts import require, SHOP
-from financial_collector import activate,wait_finance_page
+from contracts import SHOP_MARKER, require, SHOP
+from financial_collector import advance_finance_page,wait_finance_page
 
 FIELDS = ["单号", "状态", "消费内容", "数量", "消费门店", "顾客门店", "原价", "优惠", "售价",
           "金额总计", "入账", "现金", "银联", "微信", "支付宝", "抖音团购", "美团点评", "商城订单",
@@ -12,7 +12,7 @@ FIELDS = ["单号", "状态", "消费内容", "数量", "消费门店", "顾客�
 
 def collect_ledger(page, target_bills, checkpoint):
     wait_finance_page(page,1)
-    require(page.get_by_text(re.compile(r"紫薇壹号店[（(]1581453[)）]")).count() == 1, "ledger_store_unproven")
+    require(page.get_by_text(SHOP_MARKER).filter(visible=True).count() == 1, "ledger_store_unproven")
     require(page.get_by_placeholder("单号/手机号/卡号", exact=True).input_value() == "", "ledger_filter_present")
     require(page.locator('input[type=radio]:checked').evaluate_all("es=>es.map(e=>e.value)") == ["ALL"], "ledger_all_states_required")
     require(page.locator(".ant-pagination .ant-select-selection-item").inner_text() == "10 条/页", "ledger_page_size_changed")
@@ -76,9 +76,7 @@ def collect_ledger(page, target_bills, checkpoint):
         result["pages"].append({"number":number,"source_rows":len(seen),"rows":list(matches.values()),"last":last})
         checkpoint(result)
         if not last:
-            previous_keys = page.locator("table.vxe-table--body tbody tr").evaluate_all("es=>es.map(e=>e.getAttribute('rowid')).join('|')")
-            activate(page.locator(".ant-pagination-next button"))
-            wait_finance_page(page,number+1,previous_keys)
+            advance_finance_page(page,number+1,"td."+columns["单号"])
             page.wait_for_timeout(150)
     result.update(status="collected_unverified",observed_at=datetime.now(timezone.utc).isoformat())
     checkpoint(result)

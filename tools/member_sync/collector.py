@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import re
 import time
 from urllib.parse import urlsplit
-from contracts import SCOPE, SHOP, Stop, BAD_STATE, CARD_NAMES, require, source_key
+from contracts import SCOPE, SHOP, TENANT_MARKER, Stop, BAD_STATE, CARD_NAMES, require, source_key
 
 HOST = "gray.aizhb.net"
 SEARCH = "请输入顾客姓名或手机号或卡号进行搜索"
@@ -22,7 +22,7 @@ class Collector:
     def frame(self):
         require(time.monotonic() < self.deadline, "collection_deadline")
         require(urlsplit(self.page.url).hostname == HOST, "source_login_required")
-        require(self.page.get_by_text(re.compile(r"荷小悦\s*[（(]1581452[)）]")).count() == 1,
+        require(self.page.get_by_text(TENANT_MARKER).filter(visible=True).count() == 1,
                 "tenant_not_verified")
         frames = [f for f in self.page.frames if urlsplit(f.url).hostname == HOST
                   and urlsplit(f.url).path.endswith("/customerRelation/index.html")

@@ -86,3 +86,14 @@ When the source session expires, `source_login.py` may submit the normal account
 The source page must have the observed normal login form. An unexpected origin, changed form, CAPTCHA/security challenge, wrong tenant or unsuccessful login stops the task. A durable login-attempt latch prevents repeated submissions after unknown outcomes. Updating credentials through the local form resets only this login latch; it never clears a business import failure. Playwright traces/video and debug call logging must remain disabled for this context. Login result reports contain status only.
 
 Configured auto-login does not enable an unaccepted finance schedule. Fresh source collection and the controlled import/real task acceptance remain mandatory. Ordinary runtime still makes zero model calls; occasional interactive verification can be required by the source service.
+
+For source acceptance and recovery on the workstation, launch the dedicated browser through
+`session.open_source_browser`. The same minimized Chrome configuration is used by the scheduled
+owner. A pending tenant picker can finish without a second password submission. An authenticated
+main route and a unique visible tenant name and ID must be present before accepting the session.
+
+For the business ledger, first verify the store, the query controls and the bill-record route,
+then submit the selected dates. Confirm a new result and the first page before reading. On later
+pages verify the expected page number, the end of loading and changed source business identifiers.
+Virtual row slots may repeat between pages. The existing total, page-size, row-count and final-page
+checks still apply. A missing paginator cannot certify an empty result.

@@ -1,14 +1,14 @@
 """Read only financial receipt fields and preserve unresolved refunds separately."""
 import re
 from datetime import datetime, timezone
-from contracts import require
-from financial_collector import activate,wait_finance_page
+from contracts import SHOP_MARKER, require
+from financial_collector import advance_finance_page,wait_finance_page
 
 HEADERS = ["收款交易号", "支付金额", "支付方式", "支付状态", "支付时间", "收款渠道", "收款账户", "交易模式", "关联流水", "支付备注", "退款人", "退款时间", "退款原因", "操作"]
 
 def collect_payments(page, targets, checkpoint):
     wait_finance_page(page,1)
-    require(page.get_by_text(re.compile(r"紫薇壹号店[（(]1581453[)）]")).count()==1,"payment_scope_unproven")
+    require(page.get_by_text(SHOP_MARKER).filter(visible=True).count()==1,"payment_scope_unproven")
     require(page.locator('.ant-select-selection-item').all_text_contents()[:2]==["全部支付方式","全部支付状态"],"payment_filter_present")
     require(page.locator('table.vxe-table--header th').all_text_contents()==HEADERS,"payment_schema_changed")
     total_text=page.locator('.ant-pagination-total-text').inner_text()
@@ -35,9 +35,7 @@ def collect_payments(page, targets, checkpoint):
         require(last==(number==max(1,(total+14)//15)),"payment_last_page_unproven")
         result['pages'].append({'number':number,'source_rows':expected,'rows':facts,'last':last});checkpoint(result)
         if not last:
-            previous=rows.evaluate_all("es=>es.map(e=>e.getAttribute('rowid')).join('|')")
-            activate(page.locator('.ant-pagination-next button'))
-            wait_finance_page(page,number+1,previous)
+            advance_finance_page(page,number+1,"td:first-child")
             page.wait_for_timeout(200)
     result.update(status='collected_unverified',observed_at=datetime.now(timezone.utc).isoformat());checkpoint(result)
     return result

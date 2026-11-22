@@ -34,13 +34,37 @@ def wait_finance_page(page,number,previous=None,timeout=20000):
     return wait_source_change(page,r"""args=>{
       const active=document.querySelectorAll('.ant-pagination-item-active');
       if(active.length!==1 || active[0].textContent.trim()!==String(args.number))return false;
-      if(document.querySelectorAll('.ant-pagination-next').length!==1)return false;
+      const next=document.querySelectorAll('.ant-pagination-next');
+      const totals=document.querySelectorAll('.ant-pagination-total-text');
+      if(next.length!==1 || totals.length!==1)return false;
+      const total=/^共计\s*(\d+)\s*条$/.exec(totals[0].textContent.trim());
+      if(!total)return false;
       if([...document.querySelectorAll('.ant-spin-spinning')].some(e=>e.getClientRects().length && getComputedStyle(e).visibility!=='hidden'))return false;
       const rows=[...document.querySelectorAll('table.vxe-table--body tbody tr')];
       const keys=rows.map(e=>e.getAttribute('rowid')).join('|');
-      const empty=[...document.querySelectorAll('.ant-pagination-total-text')].some(e=>/^共计\s*0\s*条$/.test(e.textContent.trim()));
-      return (rows.length>0 || empty) && (args.previous===null || keys!==args.previous);
+      if(Number(total[1])===0)
+        return args.number===1 && rows.length===0 && next[0].classList.contains('ant-pagination-disabled');
+      if(!rows.length || rows.some(e=>!e.hasAttribute('rowid')))return false;
+      if(args.previous==null)return true;
+      if(typeof args.previous==='string')return keys!==args.previous;
+      return args.previous.hasNewBusinessId();
     }""",previous={'number':number,'previous':previous},timeout=timeout)
+
+
+def advance_finance_page(page,number,identity_cell):
+    # Virtual tables may reuse rowid values on successive pages. Keep IDs inside this page only.
+    proof=page.evaluate_handle("""selector=>{
+      const read=()=>new Set(Array.from(document.querySelectorAll('table.vxe-table--body tbody tr[rowid]'))
+        .map(row=>row.querySelector(selector)?.textContent.trim()).filter(Boolean));
+      const before=read();
+      return {hasRows:before.size>0,hasNewBusinessId:()=>[...read()].some(value=>!before.has(value))};
+    }""",identity_cell)
+    try:
+        require(proof.evaluate('state=>state.hasRows'),'finance_page_business_id_missing')
+        activate(page.locator('.ant-pagination-next button'))
+        wait_finance_page(page,number,proof)
+    finally:
+        proof.dispose()
 
 
 class FinancialCollector(Collector):
