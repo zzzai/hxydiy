@@ -132,9 +132,9 @@ async function main() {
       await area.getByText('店长更正 · 通过').waitFor();
       await area.getByText('AI 审核 · 需整改').waitFor();
       page.once('dialog', dialog => dialog.accept());
-      const opened = page.waitForEvent('filechooser');
+      await context.grantPermissions(['camera'], { origin });
       await area.getByRole('button', { name: '更换卫生间第 1 张' }).click();
-      await (await opened).setFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: Buffer.from([137, 80, 78, 71]) });
+      await page.getByRole('button', { name: '拍摄并保存' }).click();
       await area.getByText('等待自动审核').waitFor();
       assert.equal(await area.getByText('店长更正 · 通过').count(), 0);
       assert.equal(await area.getByText('AI 审核 · 需整改').count(), 0);
