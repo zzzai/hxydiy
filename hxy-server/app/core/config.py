@@ -12,6 +12,14 @@ class Settings(BaseSettings):
     # 暂停新增发券；已领券的查询、有效期和使用规则保持不变。
     coupon_issuance_enabled: bool = False
     staff_learning_enabled: bool = False
+    inspection_ai_enabled: bool = False
+    inspection_ai_api_key: str = ""
+    inspection_ai_auto_from_epoch: int = 0
+
+    @property
+    def inspection_ai_ready(self) -> bool:
+        return self.inspection_ai_enabled and self.inspection_ai_auto_from_epoch > 0 and bool(self.inspection_ai_api_key.strip())
+
     # AI learning coach / weekly plan. Disabled until an operator supplies a key.
     learning_ai_enabled: bool = False
     learning_ai_base_url: str = "https://api.deepseek.com"

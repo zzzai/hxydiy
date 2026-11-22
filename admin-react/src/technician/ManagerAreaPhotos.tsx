@@ -4,6 +4,7 @@ import { CameraOutlined, PictureOutlined } from '@ant-design/icons';
 import { client, saveManagerAreaPhoto, uploadMedia, type InspectionArea, type InspectionPhoto } from '../api';
 import { mediaPreviewSource } from '../mediaPreview';
 import { requestErrorMessage } from '../requestError';
+import InspectionPhotoReview from './InspectionPhotoReview';
 
 function PhotoPreview({ photo, label }: { photo: InspectionPhoto; label: string }) {
   const url = photo.media?.url;
@@ -24,16 +25,16 @@ function PhotoPreview({ photo, label }: { photo: InspectionPhoto; label: string 
 }
 
 type Props = {
-  areas: InspectionArea[]; limit?: number; businessDate: string; submitted: boolean; disabled: boolean;
-  onBusy: (value: boolean) => void; onRefresh: () => Promise<void>;
+  areas: InspectionArea[]; reviewEnabled: boolean; limit?: number; businessDate: string; submitted: boolean; disabled: boolean;
+  historical?: boolean; onBusy?: (value: boolean) => void; onRefresh: () => Promise<void>;
 };
 
-export default function ManagerAreaPhotos({ areas, limit, businessDate, submitted, disabled, onBusy, onRefresh }: Props) {
+export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, businessDate, submitted, disabled, historical = false, onBusy, onRefresh }: Props) {
   const picker = useRef<HTMLInputElement>(null);
   const target = useRef<{ area: InspectionArea; photo?: InspectionPhoto }>();
   const saving = useRef(false);
   const [busyArea, setBusyArea] = useState('');
-  const writable = limit === 3;
+  const writable = !historical && limit === 3;
   const pick = (area: InspectionArea, camera: boolean, photo?: InspectionPhoto) => {
     const input = picker.current;
     if (!input || !writable || disabled || saving.current) return;
@@ -56,7 +57,7 @@ export default function ManagerAreaPhotos({ areas, limit, businessDate, submitte
     const remaining = photo ? 1 : limit - (area.photos?.length || 0);
     if (files.length > remaining) { message.warning('本次最多可选 ' + remaining + ' 张照片'); return; }
     saving.current = true;
-    onBusy(true); setBusyArea(area.key);
+    onBusy?.(true); setBusyArea(area.key);
     let saved = 0;
     try {
       for (const file of files) {
@@ -72,23 +73,25 @@ export default function ManagerAreaPhotos({ areas, limit, businessDate, submitte
       message.error((saved ? '已保存 ' + saved + ' 张。' : '') + requestErrorMessage(error));
     } finally {
       try { await onRefresh(); }
-      finally { saving.current = false; onBusy(false); setBusyArea(''); }
+      finally { saving.current = false; onBusy?.(false); setBusyArea(''); }
     }
   };
 
   return <section className="manager-p0-card">
-    <div className="manager-p0-card-head"><h3>区域照片</h3><small>{writable ? '每区 1～3 张' : '请刷新后上传'}</small></div>
+    <div className="manager-p0-card-head"><h3>{historical ? businessDate + ' 巡检照片' : '区域照片'}</h3>{!historical && <small>{writable ? '每区 1～3 张' : '请刷新后上传'}</small>}</div>
+    {reviewEnabled && !historical && <p className="inspection-camera-note">新照片由 DeepSeek 自动初审。拍摄时请避开人脸、付款码和单据。</p>}
     <input ref={picker} type="file" accept="image/*" hidden onChange={(event) => void save(Array.from(event.target.files || []))} />
     <div className="manager-p0-area-grid">{areas.map((area) => {
       const photos = area.photos ?? (area.photo ? [area.photo] : []);
-      const locked = !writable || disabled || !!busyArea;
+      const locked = disabled || !!busyArea || (!writable && !historical);
       return <div key={area.key} className="manager-p0-area" aria-label={area.label}>
         <div className="inspection-area-header"><strong>{area.label}</strong><small aria-live="polite">
           {busyArea === area.key ? '保存中…' : photos.length + ' 张'}
         </small></div>
-        {!!photos.length && <div className="inspection-photos">{photos.map((p, i) => <div key={p.id}>
-          <PhotoPreview key={p.media_id} photo={p} label={area.label + '照片 ' + (p.slot || i + 1)} />
-          {writable && <button type="button" disabled={locked} aria-label={'更换' + area.label + '第 ' + p.slot + ' 张'} onClick={() => pick(area, false, p)}>更换</button>}
+        {!!photos.length && <div className="inspection-photos">{photos.map((p, i) => <div className="inspection-photo-row" key={p.id}>
+          <div className="inspection-thumb"><PhotoPreview key={p.media_id} photo={p} label={area.label + '照片 ' + (p.slot || i + 1)} />
+          {writable && <button type="button" disabled={locked} aria-label={'更换' + area.label + '第 ' + p.slot + ' 张'} onClick={() => pick(area, false, p)}>更换</button>}</div>
+          <InspectionPhotoReview key={p.media_id} photo={p} enabled={reviewEnabled} disabled={locked} onRefresh={onRefresh} />
         </div>)}</div>}
         {writable && photos.length < limit && <div className="inspection-actions">
           <button type="button" disabled={locked} onClick={() => pick(area, true)}><CameraOutlined /> 拍照</button>

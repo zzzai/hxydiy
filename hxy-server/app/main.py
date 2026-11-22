@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
@@ -11,6 +12,7 @@ from app.openapi import install_admin_catalog_openapi
 from app.release_static import mount_release_static_files
 from app.services.occupancy_scheduler import start_occupancy_scheduler, stop_occupancy_scheduler
 from app.services.service_anomaly_scheduler import start_service_anomaly_scheduler, stop_service_anomaly_scheduler
+from app.services.inspection_reviews import run_worker as inspect_photos
 from app.services.daily_ops_retention import start_daily_ops_retention, stop_daily_ops_retention
 
 
@@ -18,9 +20,14 @@ from app.services.daily_ops_retention import start_daily_ops_retention, stop_dai
 async def lifespan(_: FastAPI):
     start_occupancy_scheduler()
     start_service_anomaly_scheduler()
+    inspection_worker = asyncio.create_task(inspect_photos()) if settings.inspection_ai_ready else None
     try:
         yield
     finally:
+        if inspection_worker is not None:
+            inspection_worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await inspection_worker
         stop_service_anomaly_scheduler()
         stop_occupancy_scheduler()
 

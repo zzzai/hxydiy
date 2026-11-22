@@ -1589,6 +1589,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/daily/photos/{photo_id}/manual-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manual Photo Review */
+        post: operations["manual_photo_review_api_v1_admin_v2_manager_daily_photos__photo_id__manual_review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/v2/manager/daily/photos/{photo_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Photo Review */
+        post: operations["request_photo_review_api_v1_admin_v2_manager_daily_photos__photo_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/daily/submit": {
         parameters: {
             query?: never;
@@ -6025,6 +6059,16 @@ export interface components {
             token: string;
             user: components["schemas"]["UserOut"];
         };
+        /** ManualReviewIn */
+        ManualReviewIn: {
+            /** Media Id */
+            media_id: number;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "pass" | "fix" | "retake";
+        };
         /** MassageRecord */
         MassageRecord: {
             /** Action */
@@ -7118,6 +7162,13 @@ export interface components {
             reason: string;
             /** Version */
             version: number;
+        };
+        /** ReviewRequestIn */
+        ReviewRequestIn: {
+            /** Expected Attempt */
+            expected_attempt: number;
+            /** Media Id */
+            media_id: number;
         };
         /** RoomIn */
         RoomIn: {
@@ -11535,6 +11586,80 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AreaPhotoIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manual_photo_review_api_v1_admin_v2_manager_daily_photos__photo_id__manual_review_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                photo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_photo_review_api_v1_admin_v2_manager_daily_photos__photo_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                photo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewRequestIn"];
             };
         };
         responses: {

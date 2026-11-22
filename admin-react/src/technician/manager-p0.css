@@ -72,10 +72,27 @@
 .inspection-actions button, .inspection-photos button { cursor: pointer; font: inherit; color: #145545; }
 .inspection-actions button { min-height: 36px; padding: 4px 12px; border-radius: 8px; border: 1px solid #c8d8cf; background: #fff; }
 .inspection-actions button:disabled, .inspection-photos button:disabled { opacity: .55; }
-.inspection-photos > div { width: 64px; text-align: center; }
+.inspection-photos { display: grid; gap: 10px; }
+.inspection-photo-row { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.inspection-thumb { flex: none; width: 64px; text-align: center; }
+.inspection-camera-note { margin: 6px 0 0; font-size: 12px; color: #52685c; }
+.inspection-history { margin-top: 8px; }
+.inspection-history label { display: inline-flex; align-items: center; gap: 6px; margin-right: 12px; }
+.inspection-history input { max-width: 100%; min-height: 36px; font: inherit; }
+.inspection-review { flex: 1; min-width: 0; font-size: 13px; color: #254638; overflow-wrap: anywhere; }
+.inspection-review p { margin: 3px 0; line-height: 1.5; }
+.inspection-review-status { color: #607369; }
+.inspection-verdict, .inspection-manual { display: block; font-size: 13px; }
+.inspection-verdict.fix { color: #964419; }
+.inspection-verdict.retake { color: #845d18; }
+.inspection-manual { margin-top: 4px; }
+.inspection-review-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.inspection-review-actions button, .inspection-review-actions select { min-height: 32px; border: 1px solid #cad9d1; border-radius: 6px; padding: 3px 8px; background: #fff; font-size: 12px; }
+.inspection-review-actions button:disabled { opacity: .55; }
+
 .inspection-photos img, .inspection-photo-unavailable { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; }
 .inspection-photo-unavailable { display: grid; place-items: center; background: #f2f5f2; font-size: 11px; }
-.inspection-photos button { display: block; width: 100%; min-height: 32px; padding: 2px; border: 0; background: transparent; font-size: 12px; }
+.inspection-thumb button { display: block; width: 100%; min-height: 32px; padding: 2px; border: 0; background: transparent; font-size: 12px; }
 .manager-p0-recording { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px; border-radius: 12px; background: #fff7f4; border: 1px solid #f0d9d2; }
 .manager-p0-recording-dot { width: 8px; height: 8px; border-radius: 50%; background: #b44230; }
 .manager-p0-recording strong { font-variant-numeric: tabular-nums; color: #8a3d2c; }

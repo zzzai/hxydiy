@@ -2522,6 +2522,31 @@
         "title": "LoginResponse",
         "type": "object"
       },
+      "ManualReviewIn": {
+        "additionalProperties": false,
+        "properties": {
+          "media_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Media Id",
+            "type": "integer"
+          },
+          "verdict": {
+            "enum": [
+              "pass",
+              "fix",
+              "retake"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "media_id",
+          "verdict"
+        ],
+        "title": "ManualReviewIn",
+        "type": "object"
+      },
       "MassageRecord": {
         "additionalProperties": false,
         "properties": {
@@ -5512,6 +5537,27 @@
           "reason"
         ],
         "title": "RetainOccupancyIn",
+        "type": "object"
+      },
+      "ReviewRequestIn": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_attempt": {
+            "minimum": 0.0,
+            "title": "Expected Attempt",
+            "type": "integer"
+          },
+          "media_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Media Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "media_id",
+          "expected_attempt"
+        ],
+        "title": "ReviewRequestIn",
         "type": "object"
       },
       "RoomIn": {
@@ -15263,6 +15309,138 @@
           }
         },
         "summary": "Save Area Photo",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/photos/{photo_id}/manual-review": {
+      "post": {
+        "operationId": "manual_photo_review_api_v1_admin_v2_manager_daily_photos__photo_id__manual_review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Manual Photo Review",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/photos/{photo_id}/review": {
+      "post": {
+        "operationId": "request_photo_review_api_v1_admin_v2_manager_daily_photos__photo_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "photo_id",
+            "required": true,
+            "schema": {
+              "title": "Photo Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Photo Review",
         "tags": [
           "manager-daily"
         ]

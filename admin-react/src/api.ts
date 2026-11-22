@@ -489,7 +489,23 @@ export const getManagerCouponHistory = (params: { days?: number; kind?: 'all' | 
   );
 
 export const getManagerDaily = (date?: string) => client.get('/admin/v2/manager/daily', { params: date ? { date } : undefined });
-export type InspectionPhoto = { id: number; slot: number; media_id: number; media?: { url: string } | null };
+export type InspectionVerdict = 'pass' | 'fix' | 'retake';
+export type InspectionReview = {
+  state: 'pending' | 'running' | 'done' | 'failed' | 'superseded'; attempt: number;
+  result: { verdict: InspectionVerdict; location: string; evidence: string; action: string } | null;
+  manual_verdict: InspectionVerdict | null;
+};
+export type InspectionPhoto = {
+  id: number; slot: number; media_id: number; media?: { url: string } | null;
+  reviewable?: boolean; review?: InspectionReview | null;
+};
+export const requestInspectionReview = (photo: InspectionPhoto) => client.post(
+  '/admin/v2/manager/daily/photos/' + photo.id + '/review',
+  { media_id: photo.media_id, expected_attempt: photo.review?.attempt ?? 0 },
+);
+export const confirmInspectionReview = (photo: InspectionPhoto, verdict: InspectionVerdict) => client.post(
+  '/admin/v2/manager/daily/photos/' + photo.id + '/manual-review', { media_id: photo.media_id, verdict },
+);
 export type InspectionArea = { key: string; label: string; done: boolean; photos?: InspectionPhoto[]; photo?: InspectionPhoto | null };
 type InspectionPhotoInput = { area: string; media_id: number; note?: string; business_date?: string } & (
   | { mode?: 'cover' | 'append' }

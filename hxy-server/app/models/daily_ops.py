@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     SmallInteger,
     String,
     Text,
@@ -63,6 +64,32 @@ class DailyAreaPhoto(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class DailyAreaPhotoReview(Base):
+    __tablename__ = "daily_area_photo_reviews"
+    __table_args__ = (
+        UniqueConstraint("photo_id", "media_id", name="uq_inspection_review_photo_media"),
+        CheckConstraint("state IN ('pending','running','done','failed','superseded')", name="ck_inspection_review_state"),
+        CheckConstraint("manual_verdict IN ('pass','fix','retake')", name="ck_inspection_review_manual"),
+        Index("ix_inspection_review_queue", "state", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    photo_id: Mapped[int] = mapped_column(ForeignKey("daily_area_photos.id", ondelete="CASCADE"))
+    media_id: Mapped[int] = mapped_column(ForeignKey("media_assets.id", ondelete="CASCADE"))
+    state: Mapped[str] = mapped_column(String(16), default="pending")
+    attempt: Mapped[int] = mapped_column(Integer, default=0)
+    model: Mapped[str] = mapped_column(String(64))
+    rubric: Mapped[str] = mapped_column(String(40))
+    result: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(32))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    manual_verdict: Mapped[str | None] = mapped_column(String(12))
+    manual_staff_id: Mapped[int | None] = mapped_column(ForeignKey("staff.id", ondelete="SET NULL"))
+    manual_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class DailyMeetingRecording(Base):

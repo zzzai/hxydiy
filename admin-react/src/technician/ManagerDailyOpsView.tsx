@@ -3,6 +3,7 @@ import { Button, Spin, Tag, message } from 'antd';
 import { AudioOutlined, ReloadOutlined, ScanOutlined, StarOutlined, StopOutlined, GiftOutlined } from '@ant-design/icons';
 import { getManagerDaily, retryManagerMeetingTranscription, saveManagerMeeting, submitManagerDaily, uploadMedia } from '../api';
 import ManagerAreaPhotos from './ManagerAreaPhotos';
+import InspectionHistory from './InspectionHistory';
 import { WavRecorder } from './wavRecorder';
 
 type Daily = Awaited<ReturnType<typeof getManagerDaily>>['data'];
@@ -119,9 +120,10 @@ export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenR
       <div className="manager-p0-actions-inline"><Button size="small" icon={<StarOutlined />} onClick={onOpenReviews}>看评价</Button><Button size="small" icon={<GiftOutlined />} onClick={onOpenCoupons}>发券</Button><Button size="small" icon={<ScanOutlined />} onClick={onOpenRedeemCoupon}>核销券</Button><Button size="small" onClick={onOpenCouponHistory}>券记录</Button></div>
     </section>
 
-    <ManagerAreaPhotos areas={daily.areas} limit={daily.max_photos_per_area} businessDate={daily.business_date}
+    <ManagerAreaPhotos areas={daily.areas} reviewEnabled={daily.inspection_ai_enabled === true} limit={daily.max_photos_per_area} businessDate={daily.business_date}
       submitted={daily.status === 'submitted'} disabled={submitting || uploading} onBusy={setUploading} onRefresh={onRefresh} />
 
+    <InspectionHistory key={daily.business_date} today={daily.business_date} />
     <MeetingPanel daily={daily} onRefresh={onRefresh} />
 
     <Button type="primary" size="large" block disabled={!canSubmit} loading={submitting} onClick={() => void submit()}>{daily.status === 'submitted' ? '今日已提交' : canSubmit ? '提交今日巡检' : '拍齐各区照片并上传晨会录音后可提交'}</Button>

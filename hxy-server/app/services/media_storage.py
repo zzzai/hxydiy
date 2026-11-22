@@ -19,13 +19,13 @@ class MediaStorage(Protocol):
 
     def delete(self, object_key: str) -> None: ...
 
+    def read(self, object_key: str, max_size_bytes: int) -> bytes: ...
+
     def url(self, object_key: str) -> str | None: ...
 
 
 class DirectUploadStorage(MediaStorage, Protocol):
     def create_direct_upload_token(self, object_key: str, max_size_bytes: int, allowed_types: set[str]) -> str: ...
-
-    def read(self, object_key: str, max_size_bytes: int) -> bytes: ...
 
     def move(self, source_key: str, destination_key: str) -> None: ...
 
@@ -57,6 +57,13 @@ class LocalMediaStorage:
     def url(self, object_key: str) -> str | None:
         del object_key
         return None
+
+    def read(self, object_key: str, max_size_bytes: int) -> bytes:
+        with self._path(object_key).open("rb") as source:
+            content = source.read(max_size_bytes + 1)
+        if len(content) > max_size_bytes:
+            raise MediaStorageError("图片超过允许大小")
+        return content
 
     def path(self, object_key: str) -> Path:
         return self._path(object_key)
