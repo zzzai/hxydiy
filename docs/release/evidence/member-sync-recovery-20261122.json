@@ -1,0 +1,115 @@
+{
+  "collector_source_revision": "cbe145cbb105e6a9c925238584606c13b69f06d7",
+  "customer_history": {
+    "actual_inserted_balances": 53,
+    "actual_inserted_bills": 8,
+    "actual_inserted_lines": 9,
+    "backup_restore_verified": true,
+    "ledger": {
+      "total_pages": 123,
+      "total_rows": 1221
+    },
+    "manifest_sha256": "c65d98b02ecc0a3c76de873e4c2eb609a35e0043114bcc7acf1cd2701bb1066d",
+    "old_data_unchanged": true,
+    "owner_projection_checked": true,
+    "payments": {
+      "total_pages": 21,
+      "total_rows": 309
+    },
+    "query_dates": [
+      "2026-09-19 00:00",
+      "2026-11-22 12:21"
+    ],
+    "receipt_inventory_sha256": "11230c874dd2687e088b549d8bb3f926fd917278e591ec44e98e1099ea2959ec",
+    "receipts_verified": 36,
+    "replay_business_writes": 0,
+    "source_input_sha256": "0d366b68cf2a2487a365d29981d9eeadcd1663a0b44d7b904e55fc8a4cf327c7",
+    "status": "applied_verified"
+  },
+  "financial_selection": {
+    "balance_snapshots": 53,
+    "non_service_bills": 0,
+    "revision_conflicts": 3,
+    "shared_or_unresolved_bills": 279,
+    "source_bills": 395,
+    "source_cards": 136,
+    "source_customers": 133,
+    "visible_bills": 113
+  },
+  "membership": {
+    "actual_backup_restore": true,
+    "cards_after": 137,
+    "existing_member_cards_added": 1,
+    "formal_apply_count": 1,
+    "input_sha256": "82907fe540128ce30165a13de36773cabd057157f4b58da65326d3880904f2a4",
+    "local_receipt_files_verified": 213,
+    "manifest_sha256": "470ed004e221bab3203a36775bd18cd1889fca411c8edcf3adc2fab61b97d9e5",
+    "new_cards": 7,
+    "new_users": 6,
+    "old_users_cards_wallets_unchanged": true,
+    "protected_cards": 130,
+    "protected_users": 497,
+    "repeat_preview_new_cards": 0,
+    "repeat_preview_new_users": 0,
+    "six_financial_tables_unchanged": true,
+    "users_after": 503
+  },
+  "membership_types": {
+    "annual": 3,
+    "stored": 4
+  },
+  "nov17_source_card_count_after_recovery": 1,
+  "one_batch_login_baseline": {
+    "fields": [
+      "customer_login_version",
+      "last_login_at"
+    ],
+    "specific_accounts": 1,
+    "standing_card_status_confirmation": "2026-10-25",
+    "unrelated_registrations_excluded_from_candidates": 24,
+    "user_approval_date": "2026-11-22"
+  },
+  "package_manifest_sha256": "b3ed4e5bf7add293119f021008df272dbac2d33d774bb8364e774c3a52d1f7b0",
+  "scope": {
+    "shop_id": 1581453,
+    "source": "meiguanjia_export",
+    "store_code": "hxy-anyang-ziwei-001",
+    "store_id": 1,
+    "tenant_id": 1581452
+  },
+  "source_readonly": {
+    "business_writes": 0,
+    "ledger": {
+      "last": true,
+      "pages": 123,
+      "rows": 1221
+    },
+    "pages_per_member_pass": [
+      10,
+      10
+    ],
+    "payments": {
+      "last": true,
+      "pages": 21,
+      "rows": 309
+    },
+    "range": [
+      "2026-09-19 00:00",
+      "2026-11-22 11:56"
+    ],
+    "source_cards": 136
+  },
+  "status": "production_sync_and_scheduled_acceptance_passed",
+  "task": {
+    "model_calls": 0,
+    "name": "HXY-MemberSync-Controlled",
+    "next_local": "2026-11-23T10:00:00.0000000+08:00",
+    "principal_and_triggers_preserved": true,
+    "scheduled_card_recheck_new": 0,
+    "triggers": [
+      "daily 10:00 Asia/Shanghai",
+      "current Windows user logon"
+    ]
+  },
+  "verified_at": "2026-11-22T12:33:26.190186+08:00"
+}
