@@ -120,25 +120,40 @@ def submit_date_query(page,timeout=20000):
 
 def set_dates(page,dates):
     require(len(dates)==2,'finance_date_range_invalid')
-    page.get_by_placeholder('开始时间',exact=True).click()
+    start=page.get_by_placeholder('开始时间',exact=True).filter(visible=True)
+    require(start.count()==1,'finance_start_date_ambiguous')
+    start.click()
+    calendar=page.locator('.calendar:visible')
+    header=calendar.locator('.calendar_header__center:visible')
+
+    def displayed_month():
+        if calendar.count()!=1 or header.count()!=1:
+            return None
+        match=re.fullmatch(r'\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*',header.inner_text())
+        if not match or not 1<=int(match[2])<=12:
+            return None
+        return int(match[1])*12+int(match[2])-1
+
     for value in dates:
         target=datetime.fromisoformat(value)
-        header=page.locator('.calendar_header__center')
-        require(header.count()==1,'finance_calendar_ambiguous')
-        match=re.fullmatch(r'\s*(\d{4})\s*年\s*(\d{1,2})\s*月\s*',header.inner_text())
-        require(match is not None,'finance_calendar_schema_changed')
-        months=(target.year-int(match[1]))*12+target.month-int(match[2])
-        require(abs(months)<=120,'finance_calendar_range_exceeded')
-        for _ in range(abs(months)):
-            activate(page.locator('.next_icon' if months>0 else '.prev_icon'))
-        days=page.locator('.calendar_date:not(.calendar_date--grey)').filter(has_text=re.compile(r'^\s*'+str(target.day)+r'\s*$'))
+        # The popover mounts asynchronously and can retain a hidden calendar from the previous route.
+        wait(page,lambda:displayed_month() is not None,'finance_calendar_ambiguous',8)
+        month=displayed_month()
+        desired=target.year*12+target.month-1
+        require(month is not None and abs(desired-month)<=120,'finance_calendar_range_exceeded')
+        step=1 if desired>month else -1
+        for expected in range(month+step,desired+step,step):
+            activate(calendar.locator('.next_icon:visible' if step>0 else '.prev_icon:visible'))
+            wait(page,lambda:displayed_month()==expected,'finance_calendar_month_not_changed',8)
+        days=calendar.locator('.calendar_date:visible:not(.calendar_date--grey)').filter(has_text=re.compile(r'^\s*'+str(target.day)+r'\s*$'))
         activate(days)
-    times=page.locator('.time-input');require(times.count()==2,'finance_calendar_time_ambiguous')
+    times=page.locator('.time-input:visible');require(times.count()==2,'finance_calendar_time_ambiguous')
     for position,value in enumerate(dates):
         times.nth(position).fill(value[11:16]);times.nth(position).press('Tab')
-    buttons=page.locator('.picker-footer button');require(buttons.count()==2,'finance_calendar_footer_changed')
+    buttons=page.locator('.picker-footer:visible button:visible');require(buttons.count()==2,'finance_calendar_footer_changed')
     activate(buttons.nth(1))
-    require(page.locator('.range-input').evaluate_all('es=>es.map(e=>e.value)')==dates,'finance_date_selection_mismatch')
+    inputs=page.locator('.range-input:visible')
+    wait(page,lambda:inputs.evaluate_all('es=>es.map(e=>e.value)')==dates,'finance_date_selection_mismatch',8)
     submit_date_query(page)
 
 

@@ -132,3 +132,27 @@ def test_ledger_scans_each_bill_page_when_table_reuses_row_slots(login_page):
     assert [p['source_rows'] for p in result['pages']]==[10,10,3]
     assert [p['last'] for p in result['pages']]==[False,False,True]
     assert [r['单号'] for p in result['pages'] for r in p['rows']]==['SYN-0','SYN-15','SYN-22']
+
+
+def test_date_range_waits_for_visible_calendar_and_each_month(login_page,monkeypatch):
+    import financial_ui
+    page=login_page
+    page.evaluate("""()=>{location.hash='/main/bill-record';
+      document.body.innerHTML='<input class="range-input" placeholder="开始时间"><input class="range-input"><div style="display:none" class="calendar"><div class="calendar_header__center">2025 年 9 月</div></div>';
+      document.querySelector('input').onclick=()=>setTimeout(()=>{
+        const widget=document.createElement('div');
+        widget.innerHTML='<div class="calendar"><div class="calendar_header__center"></div><button class="prev_icon">prev</button><button class="next_icon">next</button><button class="calendar_date">19</button><button class="calendar_date">22</button></div><input class="time-input"><input class="time-input"><div class="picker-footer"><button>cancel</button><button>ok</button></div>';
+        document.body.append(widget);
+        let month=11;const dates=[];const render=()=>{widget.querySelector('.calendar_header__center').textContent='2026 年 '+month+' 月'};
+        render();
+        for(const [cls,direction] of [['.prev_icon',-1],['.next_icon',1]])widget.querySelector(cls).onclick=()=>setTimeout(()=>{month+=direction;render()},80);
+        for(const day of widget.querySelectorAll('.calendar_date'))day.onclick=()=>dates.push('2026-'+String(month).padStart(2,'0')+'-'+day.textContent);
+        widget.querySelector('.picker-footer button:last-child').onclick=()=>document.querySelectorAll('.range-input').forEach((input,i)=>input.value=dates[i]+' '+widget.querySelectorAll('.time-input')[i].value);
+      },190);
+    }""")
+    calls=[]
+    monkeypatch.setattr(financial_ui,'submit_date_query',lambda p:calls.append(p))
+    dates=['2026-09-19 00:00','2026-11-22 11:50']
+    financial_ui.set_dates(page,dates)
+    assert calls==[page]
+    assert page.locator('.range-input').evaluate_all('inputs=>inputs.map(i=>i.value)')==dates
