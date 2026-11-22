@@ -35,6 +35,20 @@ function PastPhotos({ today }: { today: string }) {
   }, [refresh]);
   const shown = day?.business_date === date ? day : null;
   const areas = shown?.areas.filter(area => area.photos?.length || area.photo);
+  const waiting = shown?.inspection_ai_enabled && areas?.some(area =>
+    (area.photos ?? (area.photo ? [area.photo] : [])).some(p => p.reviewable &&
+      (!p.review || ['pending', 'running', 'superseded'].includes(p.review.state) || p.review.retry_scheduled)));
+  useEffect(() => {
+    if (!waiting) return;
+    let active = true;
+    let timer: number;
+    const poll = async () => {
+      if (document.visibilityState === 'visible') await refresh();
+      if (active) timer = window.setTimeout(poll, 6000);
+    };
+    timer = window.setTimeout(poll, 6000);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [waiting, refresh]);
   return <div className="inspection-history">
     <label>巡检日期 <input type="date" value={date} min={first} max={last} onChange={event => setDate(event.target.value)} /></label>
     <button type="button" className="manager-p0-text-link" onClick={() => void refresh()}>刷新记录</button>

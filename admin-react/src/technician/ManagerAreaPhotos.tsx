@@ -79,7 +79,7 @@ export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, busines
 
   return <section className="manager-p0-card">
     <div className="manager-p0-card-head"><h3>{historical ? businessDate + ' 巡检照片' : '区域照片'}</h3>{!historical && <small>{writable ? '每区 1～3 张' : '请刷新后上传'}</small>}</div>
-    {reviewEnabled && !historical && <p className="inspection-camera-note">新照片由 DeepSeek 自动初审。拍摄时请避开人脸、付款码和单据。</p>}
+    {reviewEnabled && !historical && <p className="inspection-camera-note">照片会自动审核。拍摄时请避开人脸、付款码和单据。</p>}
     <input ref={picker} type="file" accept="image/*" hidden onChange={(event) => void save(Array.from(event.target.files || []))} />
     <div className="manager-p0-area-grid">{areas.map((area) => {
       const photos = area.photos ?? (area.photo ? [area.photo] : []);

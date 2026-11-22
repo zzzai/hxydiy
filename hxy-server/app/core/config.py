@@ -14,11 +14,10 @@ class Settings(BaseSettings):
     staff_learning_enabled: bool = False
     inspection_ai_enabled: bool = False
     inspection_ai_api_key: str = ""
-    inspection_ai_auto_from_epoch: int = 0
 
     @property
     def inspection_ai_ready(self) -> bool:
-        return self.inspection_ai_enabled and self.inspection_ai_auto_from_epoch > 0 and bool(self.inspection_ai_api_key.strip())
+        return self.inspection_ai_enabled and bool(self.inspection_ai_api_key.strip())
 
     # AI learning coach / weekly plan. Disabled until an operator supplies a key.
     learning_ai_enabled: bool = False

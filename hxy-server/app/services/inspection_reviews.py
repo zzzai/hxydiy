@@ -3,7 +3,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 import logging
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -14,6 +14,8 @@ from app.services.media_storage import MediaStorageError, get_media_storage
 
 log = logging.getLogger("app.inspection_reviews")
 LEASE = timedelta(minutes=3)
+RETRY_DELAYS = (timedelta(minutes=2), timedelta(minutes=10))
+RETRYABLE = ("quota", "configuration", "rate_limited", "provider_unavailable", "image_unavailable", "interrupted", "invalid_result")
 
 
 def find_review(db: Session, photo_id: int, media_id: int) -> DailyAreaPhotoReview | None:
@@ -41,18 +43,43 @@ def image_changed(db: Session, photo: DailyAreaPhoto, media: MediaAsset) -> None
     ).values(state="superseded", finished_at=datetime.now(UTC)))
     if not settings.inspection_ai_ready or media.purpose != "daily_area" or photo.area not in AREA_RUBRICS:
         return
-    uploaded = media.created_at
-    if uploaded is not None:
-        uploaded = uploaded if uploaded.tzinfo else uploaded.replace(tzinfo=UTC)
-        if uploaded.timestamp() > settings.inspection_ai_auto_from_epoch:
-            queue_photo(db, photo)
+    queue_photo(db, photo)
 
 
 def review_view(item: DailyAreaPhotoReview | None) -> dict | None:
     if item is None:
         return None
     return {"state": item.state, "attempt": item.attempt, "result": item.result if item.state == "done" else None,
-            "manual_verdict": item.manual_verdict}
+            "manual_verdict": item.manual_verdict,
+            "retry_scheduled": item.state == "failed" and not item.manual_verdict
+                               and item.error_code in RETRYABLE and 1 <= item.attempt <= len(RETRY_DELAYS)}
+
+
+def _eligible_photos(now):
+    return select(DailyAreaPhoto).select_from(DailyAreaPhoto).join(
+        DailyStoreCheckin, DailyStoreCheckin.id == DailyAreaPhoto.checkin_id
+    ).join(MediaAsset, MediaAsset.id == DailyAreaPhoto.media_id).where(
+        DailyAreaPhoto.area.in_(AREA_RUBRICS), MediaAsset.store_id == DailyStoreCheckin.store_id,
+        MediaAsset.media_type == "image", MediaAsset.purpose == "daily_area", MediaAsset.deleted_at.is_(None),
+        DailyStoreCheckin.created_at >= now - timedelta(days=90),
+    )
+
+
+def _queue_unreviewed(db, now):
+    reviewed = select(DailyAreaPhotoReview.id).where(
+        DailyAreaPhotoReview.photo_id == DailyAreaPhoto.id, DailyAreaPhotoReview.media_id == DailyAreaPhoto.media_id,
+        DailyAreaPhotoReview.state != "superseded",
+    ).exists()
+    missing = _eligible_photos(now).where(~reviewed)
+    # Use the same parent lock as image replacement and requests from older clients.
+    parent = db.scalar(missing.with_only_columns(DailyStoreCheckin.id).order_by(DailyAreaPhoto.id)
+                       .limit(1).with_for_update(of=DailyStoreCheckin, skip_locked=True))
+    if parent is None:
+        return None
+    photos = db.scalars(missing.where(DailyAreaPhoto.checkin_id == parent).order_by(DailyAreaPhoto.id)).all()
+    jobs = [queue_photo(db, photo) for photo in photos]
+    db.flush()
+    return jobs[0] if jobs else None
 
 
 def _claim(factory):
@@ -68,11 +95,18 @@ def _claim(factory):
         ).limit(1))
         if recently_blocked is not None:
             return None
-        job = db.scalar(select(DailyAreaPhotoReview).where(DailyAreaPhotoReview.state == "pending")
-                        .order_by(DailyAreaPhotoReview.id).limit(1).with_for_update(skip_locked=True))
+        review = DailyAreaPhotoReview
+        retry = and_(review.state == "failed", review.manual_verdict.is_(None), review.error_code.in_(RETRYABLE),
+                     or_(*(and_(review.attempt == attempt, review.finished_at <= now - delay)
+                           for attempt, delay in enumerate(RETRY_DELAYS, 1))))
+        job = db.scalar(select(review).where(or_(review.state == "pending", retry))
+                        .order_by(review.id).limit(1).with_for_update(skip_locked=True))
         if job is None:
-            return None
+            job = _queue_unreviewed(db, now)
+            if job is None:
+                return None
         job.state = "running"
+        job.finished_at = job.error_code = None
         job.attempt += 1
         job.started_at = now
         return job.id, job.attempt, job.photo_id, job.media_id
@@ -80,14 +114,8 @@ def _claim(factory):
 
 def _source(factory, photo_id, media_id):
     with factory() as db:
-        return db.execute(select(DailyAreaPhoto.area, MediaAsset.object_key).join(
-            DailyStoreCheckin, DailyStoreCheckin.id == DailyAreaPhoto.checkin_id
-        ).join(MediaAsset, MediaAsset.id == DailyAreaPhoto.media_id).where(
-            DailyAreaPhoto.id == photo_id, DailyAreaPhoto.media_id == media_id,
-            MediaAsset.store_id == DailyStoreCheckin.store_id, MediaAsset.media_type == "image",
-            MediaAsset.purpose == "daily_area", MediaAsset.deleted_at.is_(None),
-            DailyStoreCheckin.created_at >= datetime.now(UTC) - timedelta(days=90),
-        )).one_or_none()
+        source = _eligible_photos(datetime.now(UTC)).with_only_columns(DailyAreaPhoto.area, MediaAsset.object_key)
+        return db.execute(source.where(DailyAreaPhoto.id == photo_id, DailyAreaPhoto.media_id == media_id)).one_or_none()
 
 
 def process_next(factory=SessionLocal, *, provider=inspect_photo, storage=None) -> bool:

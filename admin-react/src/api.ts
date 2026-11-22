@@ -493,16 +493,12 @@ export type InspectionVerdict = 'pass' | 'fix' | 'retake';
 export type InspectionReview = {
   state: 'pending' | 'running' | 'done' | 'failed' | 'superseded'; attempt: number;
   result: { verdict: InspectionVerdict; location: string; evidence: string; action: string } | null;
-  manual_verdict: InspectionVerdict | null;
+  manual_verdict: InspectionVerdict | null; retry_scheduled?: boolean;
 };
 export type InspectionPhoto = {
   id: number; slot: number; media_id: number; media?: { url: string } | null;
   reviewable?: boolean; review?: InspectionReview | null;
 };
-export const requestInspectionReview = (photo: InspectionPhoto) => client.post(
-  '/admin/v2/manager/daily/photos/' + photo.id + '/review',
-  { media_id: photo.media_id, expected_attempt: photo.review?.attempt ?? 0 },
-);
 export const confirmInspectionReview = (photo: InspectionPhoto, verdict: InspectionVerdict) => client.post(
   '/admin/v2/manager/daily/photos/' + photo.id + '/manual-review', { media_id: photo.media_id, verdict },
 );

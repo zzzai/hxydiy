@@ -33,6 +33,21 @@ const inspectionAreas: { key: string; label: string; photos: InspectionPhoto[] }
 ].map(([key, label], i) => ({ key, label, photos: i < 3
   ? [{ id: i + 1, slot: 1, media_id: i + 1, reviewable: inspectionAI, media: { url: imageUrl } }] : [] }));
 
+const pastArea = { key: 'water_room', label: '打水房', photos: [
+  { id: 81, media_id: 81, slot: 1, reviewable: true, media: { url: imageUrl } } as InspectionPhoto,
+] };
+const reviewDue = new Map<number, number>();
+function inspectionSnapshot(photo: InspectionPhoto) {
+  if (!inspectionAI || photo.review?.state === 'done') return photo;
+  const due = reviewDue.get(photo.media_id);
+  if (due === undefined) reviewDue.set(photo.media_id, Date.now() + 1800);
+  else if (Date.now() >= due) photo.review = { state: 'done', attempt: 1, manual_verdict: null,
+    result: photo.id === 81
+      ? { verdict: 'pass', location: '接水台', evidence: '水桶摆放整齐', action: '' }
+      : { verdict: 'fix', location: '洗手台左侧', evidence: '台面散落纸巾', action: '清走纸巾后擦净台面' } };
+  return { ...photo };
+}
+
 const entries = Array.from({ length: 42 }, (_, i) => ({
   id: 'synthetic-selection-' + String(i + 1).padStart(4, '0'), store_id: 1,
   status: i < 27 ? 'submitted' : i < 36 ? 'confirmed' : 'cancelled',
@@ -111,24 +126,25 @@ client.defaults.adapter = async config => {
   });
   if (inspectionAI && method === 'get' && path === '/admin/v2/manager/daily' && config.params?.date) {
     return ok({ business_date: config.params.date, inspection_ai_enabled: true,
-      areas: [inspectionAreas[1]], meetings: [], completion: { submitted: true } });
+      areas: [{ ...pastArea, photos: pastArea.photos.map(inspectionSnapshot) }], meetings: [], completion: { submitted: true } });
   }
   if (method === 'get' && path === '/admin/v2/manager/daily') return ok({
     inspection_ai_enabled: inspectionAI, business_date: '2026-11-09', checkin_id: 1, status: 'draft', submitted_at: null, max_photos_per_area: 3,
-    areas: inspectionAreas.map(area => ({ ...area, done: !!area.photos.length, photo: area.photos[0] || null })),
+    areas: inspectionAreas.map(area => ({ ...area, done: !!area.photos.length, photos: area.photos.map(inspectionSnapshot), photo: area.photos[0] || null })),
     meetings: [], completion: { areas_done: inspectionAreas.filter(area => area.photos.length).length,
       areas_total: inspectionAreas.length, has_meeting: false, submitted: false },
   });
   if (inspectionAI && method === 'post') {
     const match = path.match(/^\/admin\/v2\/manager\/daily\/photos\/(\d+)\/(review|manual-review)$/);
     if (match) {
-      const target = inspectionAreas.flatMap(area => area.photos).find(photo => photo.id === Number(match[1]));
+      if (match[2] === 'review') {
+        ++stats.unexpected;
+        return fail(409, 'Manager UI must not submit photos for review');
+      }
+      const target = [...inspectionAreas.flatMap(area => area.photos), ...pastArea.photos].find(photo => photo.id === Number(match[1]));
       const body = JSON.parse(config.data);
       if (!target || target.media_id !== body.media_id) return fail(409, 'Photo changed');
-      if (match[2] === 'review') {
-        if (target.review || body.expected_attempt !== 0) return fail(409, 'Already requested');
-        target.review = { state: 'pending', attempt: 0, result: null, manual_verdict: null };
-      } else if (target.review?.state === 'done') target.review.manual_verdict = body.verdict;
+      if (target.review?.state === 'done') target.review.manual_verdict = body.verdict;
       else return fail(409, 'Pending');
       return ok({ review: target.review });
     }
@@ -246,12 +262,6 @@ function Fixture() {
           <button onClick={() => { mapFailure = false; }}>恢复座位读取（合成）</button>
           <a href="/fixture-left">离开座位（合成）</a>
         </>}
-        {inspectionAI && <button onClick={() => {
-          const photo = inspectionAreas[0].photos[0];
-          if (photo.review?.state === 'pending') photo.review = { state: 'done', attempt: 1, manual_verdict: null,
-            result: { verdict: 'fix', location: '洗手台左侧', evidence: '台面散落纸巾', action: '清走纸巾后擦净台面' } };
-          window.dispatchEvent(new Event('focus'));
-        }}>完成合成初审</button>}
         {scenario === 'race' && <button onClick={() => { holdNextRead = true; }}>挂起下次列表读取（合成）</button>}
         {scenario === 'callback-wait' && <><button onClick={() => completeCallback?.()}>完成回调（合成）</button><a href="/fixture-left">离开回调（合成）</a></>}
         <button onClick={() => commitStaffSession({ token: 'synthetic-manager-2', staff: { ...manager, id: 4, store_id: 2, name: '另一位合成店长', store_name: '合成二店' }, auth_method: 'wecom' }, getSessionEpoch())}>换店长（合成）</button>

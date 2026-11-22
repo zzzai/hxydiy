@@ -112,37 +112,35 @@ async function main() {
       await noOverflow();
     });
 
-    await check('inspection-ai-evidence-manager-and-replacement', async () => {
+    await check('inspection-ai-automatic-current-and-past-photos', async () => {
       await start('inspection-ai'); await loaded();
       await page.getByRole('button', { name: /巡检照片/ }).click();
       const area = page.locator('.manager-p0-area[aria-label="卫生间"]');
-      await area.getByText('尚未送审').waitFor();
-      await area.getByRole('button', { name: '审核这张照片' }).click();
-      await area.getByText('等待 AI 初审').waitFor();
-      await page.getByRole('button', { name: '完成合成初审' }).click();
-      await area.getByText('AI 初审 · 需整改').waitFor();
+      await area.getByText('等待自动审核').waitFor();
+      assert.equal(await page.getByRole('button', { name: /审核这张照片|重试初审|送审/ }).count(), 0);
+      await area.getByText('AI 审核 · 需整改').waitFor({ timeout: 26000 });
       await area.getByText('洗手台左侧 · 台面散落纸巾').waitFor();
       await area.getByText('清走纸巾后擦净台面').waitFor();
-      await area.getByRole('button', { name: '店长复核' }).click();
-      await area.getByRole('combobox', { name: '店长复核结论' }).selectOption('pass');
-      await area.getByRole('button', { name: '确认复核' }).click();
-      await area.getByText('店长复核 · 通过').waitFor();
-      await area.getByText('AI 初审 · 需整改').waitFor();
-      await noOverflow(); await shot('inspection-ai-manager-review');
+      await noOverflow(); await shot('inspection-automatic-result');
+      await area.getByRole('button', { name: '结果有误' }).click();
+      await area.getByRole('combobox', { name: '更正结论' }).selectOption('pass');
+      await area.getByRole('button', { name: '保存更正' }).click();
+      await area.getByText('店长更正 · 通过').waitFor();
+      await area.getByText('AI 审核 · 需整改').waitFor();
       page.once('dialog', dialog => dialog.accept());
       const opened = page.waitForEvent('filechooser');
       await area.getByRole('button', { name: '更换卫生间第 1 张' }).click();
       await (await opened).setFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: Buffer.from([137, 80, 78, 71]) });
-      await area.getByText('等待 AI 初审').waitFor();
-      assert.equal(await area.getByText('店长复核 · 通过').count(), 0);
-      assert.equal(await area.getByText('AI 初审 · 需整改').count(), 0);
-      assert.equal(await page.locator('.manager-p0-area[aria-label="打水房"]').getByText('尚未送审').count(), 1);
+      await area.getByText('等待自动审核').waitFor();
+      assert.equal(await area.getByText('店长更正 · 通过').count(), 0);
+      assert.equal(await area.getByText('AI 审核 · 需整改').count(), 0);
       await page.getByRole('button', { name: '查看过往巡检照片' }).click();
       const history = page.locator('.inspection-history');
-      await history.getByText('尚未送审').waitFor();
-      assert.equal(await history.getByRole('button', { name: /拍照|更换/ }).count(), 0);
-      await history.getByRole('button', { name: '审核这张照片' }).click();
-      await history.getByText('等待 AI 初审').waitFor();
+      await history.getByText('等待自动审核').waitFor();
+      assert.equal(await history.getByRole('button', { name: /拍照|更换|送审|审核这张照片/ }).count(), 0);
+      await history.getByText('AI 审核 · 通过').waitFor({ timeout: 20000 });
+      await history.getByText('接水台 · 水桶摆放整齐').waitFor();
+      assert.match(await page.locator('aside').innerText(), /非白名单 0/);
     });
 
     await check('wecom-swipe-back-stays-in-manager', async () => {

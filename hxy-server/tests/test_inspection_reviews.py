@@ -1,16 +1,16 @@
 import base64
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 import json
 import os
-from threading import Event
+from threading import Barrier, Event
 from uuid import uuid4
 
 import httpx
 from PIL import Image
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
@@ -18,7 +18,7 @@ from app.api.admin import create_staff_token
 from app.core.config import settings
 from app.db.session import Base
 from app.models import DailyAreaPhoto, DailyAreaPhotoReview, DailyStoreCheckin, MediaAsset, Staff, Store
-from app.services.inspection_reviews import process_next, queue_photo
+from app.services.inspection_reviews import process_next
 from app.services.inspection_vision import ENDPOINT, InspectionResult, VisionError, inspect_photo, inspection_jpeg
 from app.api.manager_daily import _checkin, _today
 from test_manager_daily import BASE, _media, daily
@@ -41,10 +41,9 @@ class SyntheticStorage:
 def enable(monkeypatch):
     monkeypatch.setattr(settings, "inspection_ai_enabled", True)
     monkeypatch.setattr(settings, "inspection_ai_api_key", "synthetic")
-    monkeypatch.setattr(settings, "inspection_ai_auto_from_epoch", int(datetime.now(UTC).timestamp()) - 60)
 
 
-def test_historical_manual_review_is_explicit_scoped_and_idempotent(daily, monkeypatch):
+def test_historical_review_runs_without_a_request_and_preserves_store_scope(daily, monkeypatch):
     client, factory, ids, headers = daily
     with factory.begin() as db:
         old = _media(db, ids["store"], ids["manager"])
@@ -56,12 +55,14 @@ def test_historical_manual_review_is_explicit_scoped_and_idempotent(daily, monke
         db.add(manager)
         db.flush()
         other = {"Authorization": "Bearer " + create_staff_token(manager.id, "manager")}
-    enable(monkeypatch)
+    monkeypatch.setattr(settings, "inspection_ai_enabled", False)
     body = {"area": "herbal_prep", "mode": "append", "media_id": old}
     attached = client.post(BASE + "/photos", headers=headers["manager"], json=body)
     assert attached.status_code == 200, attached.text
     photo = attached.json()["areas"][-1]["photos"][0]
     assert photo["review"] is None and photo["reviewable"]
+    assert not process_next(factory, provider=lambda *args: pytest.fail("disabled worker"))
+    enable(monkeypatch)
     assert client.get(BASE, headers=headers["manager"]).json()["inspection_ai_enabled"]
     with factory() as db:
         assert db.query(DailyAreaPhotoReview).count() == 0
@@ -71,13 +72,13 @@ def test_historical_manual_review_is_explicit_scoped_and_idempotent(daily, monke
     for principal, code in [(other, 404), (headers["admin"], 403), (tech, 403), ({}, 401)]:
         assert client.post(url, headers=principal, json=req).status_code == code
     assert client.post(url, headers=headers["manager"], json={**req, "media_id": old + 1}).status_code == 409
-    for _ in range(2):
-        assert client.post(url, headers=headers["manager"], json=req).json()["review"]["state"] == "pending"
     manual = url.replace("/review", "/manual-review")
     decision = {"media_id": old, "verdict": "pass"}
     assert client.post(manual, headers=headers["manager"], json=decision).status_code == 409
     assert process_next(factory, storage=SyntheticStorage(), provider=lambda *args: FIX)
     assert not process_next(factory, storage=SyntheticStorage(), provider=lambda *args: pytest.fail("duplicate send"))
+    for _ in range(2):
+        assert client.post(url, headers=headers["manager"], json=req).json()["review"]["state"] == "done"
     for principal, code in [(other, 404), (tech, 403)]:
         assert client.post(manual, headers=principal, json=decision).status_code == code
     for _ in range(2):
@@ -107,9 +108,11 @@ def test_new_photo_automatic_retry_and_inflight_replacement(daily, monkeypatch):
         raise VisionError("quota")
     assert process_next(factory, storage=SyntheticStorage(), provider=quota)
     failed = client.get(BASE, headers=manager).json()["areas"][-1]["photos"][0]["review"]
-    assert failed == {"state": "failed", "result": None, "attempt": 1, "manual_verdict": None}
+    assert failed == {"state": "failed", "result": None, "attempt": 1, "manual_verdict": None, "retry_scheduled": True}
     assert client.post(url, headers=manager, json={"media_id": first, "expected_attempt": 0}).status_code == 409
-    assert client.post(url, headers=manager, json={"media_id": first, "expected_attempt": 1}).status_code == 200
+    assert not process_next(factory, provider=lambda *args: pytest.fail("backoff ignored"))
+    with factory.begin() as db:
+        db.query(DailyAreaPhotoReview).one().finished_at = datetime.now(UTC) - timedelta(minutes=3)
     def replace_while_running(area, image, key):
         assert area == "herbal_prep" and key == "synthetic" and image[:2] == bytes([255, 216])
         new = save(second, mode="replace", photo_id=old["id"], expected_media_id=first)
@@ -124,6 +127,57 @@ def test_new_photo_automatic_retry_and_inflight_replacement(daily, monkeypatch):
     current = client.get(BASE, headers=manager).json()
     assert current["completion"]["areas_done"] == 1 and current["status"] == "draft"
     assert current["areas"][-1]["photos"][0]["review"]["result"] == FIX
+
+
+def test_background_scan_only_uses_current_valid_store_photos(daily, monkeypatch):
+    _, factory, ids, _ = daily
+    enable(monkeypatch)
+    with factory.begin() as db:
+        other = Store(store_code="scope-filter", name="Other", address="Synthetic")
+        db.add(other)
+        db.flush()
+        now = datetime.now(UTC)
+        for i, problem in enumerate(("valid", "expired", "deleted", "foreign", "purpose", "audio")):
+            check = _checkin(db, ids["store"], ids["manager"], _today() - timedelta(days=i), create=True)
+            if problem == "expired":
+                check.created_at = now - timedelta(days=91)
+            media = _media(db, other.id if problem == "foreign" else ids["store"], ids["manager"])
+            asset = db.get(MediaAsset, media)
+            if problem == "deleted":
+                asset.deleted_at = now
+            if problem == "purpose":
+                asset.purpose = "general"
+            if problem == "audio":
+                asset.media_type = "audio"
+            photo = DailyAreaPhoto(checkin_id=check.id, area="herbal_prep", slot=1, media_id=media,
+                                   created_by_staff_id=ids["manager"])
+            db.add(photo)
+            if problem == "valid":
+                expected_media = media
+    assert process_next(factory, storage=SyntheticStorage(), provider=lambda *args: FIX)
+    assert not process_next(factory, provider=lambda *args: pytest.fail("non-inspection media sent"))
+    with factory() as db:
+        assert db.query(DailyAreaPhotoReview).one().media_id == expected_media
+
+
+def test_failed_review_stops_after_bounded_automatic_retries(daily, monkeypatch):
+    client, factory, ids, headers = daily
+    enable(monkeypatch)
+    with factory.begin() as db:
+        media = _media(db, ids["store"], ids["manager"])
+    client.post(BASE + "/photos", headers=headers["manager"], json={"area": "cashier", "media_id": media}).raise_for_status()
+    def unavailable(*args):
+        raise VisionError("provider_unavailable")
+    for number in (1, 2, 3):
+        assert process_next(factory, storage=SyntheticStorage(), provider=unavailable)
+        with factory.begin() as db:
+            row = db.query(DailyAreaPhotoReview).one()
+            assert row.attempt == number
+            row.finished_at = datetime.now(UTC) - timedelta(hours=1)
+    assert not process_next(factory, storage=SyntheticStorage(), provider=lambda *args: pytest.fail("retry limit"))
+    cashier = next(a for a in client.get(BASE, headers=headers["manager"]).json()["areas"] if a["key"] == "cashier")
+    result = cashier["photos"][0]["review"]
+    assert result["state"] == "failed" and result["result"] is None and not result["retry_scheduled"]
 
 
 def test_image_and_provider_contract():
@@ -170,10 +224,14 @@ def test_stale_lease_and_expired_photo_do_not_resend(daily, monkeypatch):
 
 
 @pytest.mark.skipif(not os.environ.get("INSPECTION_TEST_POSTGRES_URL"), reason="needs isolated PostgreSQL")
-def test_concurrent_workers_call_provider_once(monkeypatch):
+def test_concurrent_workers_discover_and_call_provider_once(monkeypatch):
     url = make_url(os.environ["INSPECTION_TEST_POSTGRES_URL"])
     assert url.database == "inspection_test" and url.host in {"localhost", "127.0.0.1"}
-    engine = create_engine(url)
+    control = create_engine(url)
+    schema = "inspection_review_" + uuid4().hex
+    with control.begin() as conn:
+        conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+    engine = create_engine(url, connect_args={"options": f"-csearch_path={schema}"})
     Base.metadata.create_all(engine)
     factory = sessionmaker(engine, expire_on_commit=False)
     enable(monkeypatch)
@@ -191,28 +249,32 @@ def test_concurrent_workers_call_provider_once(monkeypatch):
                               created_by_staff_id=manager.id)
         db.add(photo)
         db.flush()
-        queue_photo(db, photo)
-    started, release = Event(), Event()
+    ready, release = Barrier(2), Event()
     calls = []
     def slow(*args):
         calls.append(1)
-        started.set()
-        assert release.wait(10)
+        assert release.wait(15)
         return FIX
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
-            first = pool.submit(process_next, factory, provider=slow, storage=SyntheticStorage())
+            def start():
+                ready.wait(timeout=10)
+                return process_next(factory, provider=slow, storage=SyntheticStorage())
+            futures = [pool.submit(start) for _ in range(2)]
             try:
-                assert started.wait(10)
-                assert not pool.submit(process_next, factory, provider=slow, storage=SyntheticStorage()).result(timeout=5)
+                completed, _ = wait(futures, timeout=8, return_when=FIRST_COMPLETED)
+                assert completed and not next(iter(completed)).result()
             finally:
                 release.set()
-            assert first.result(timeout=10)
+            assert sorted(f.result(timeout=10) for f in futures) == [False, True]
         with factory() as db:
             row = db.query(DailyAreaPhotoReview).filter_by(media_id=media).one()
             assert len(calls) == row.attempt == 1 and row.result == FIX
     finally:
         engine.dispose()
+        with control.begin() as conn:
+            conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        control.dispose()
 
 
 @pytest.mark.parametrize("status,body,code", [(402, {}, "quota"), (429, {}, "rate_limited"),
