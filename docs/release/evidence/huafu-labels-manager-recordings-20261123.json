@@ -1,0 +1,115 @@
+{
+  "release_id": "server-d2d60953ad0b-1795407241",
+  "source_sha": "d2d60953ad0bd3f934aa1274966e4a4596f0b422",
+  "previous_release": "server-6f663f8ee367-1795358573",
+  "application_published_at": "2026-11-23T04:16:11Z",
+  "layout_applied_at": "2026-11-23T04:17:12.872993+00:00",
+  "health": "ok/production",
+  "manifest_sha256": "dbdab6c98a82c12ff705cc9f84181cd7cc8df29ad0db734a8f9f192a2f5f89ed",
+  "production_backup_sha256": "900c4c0daaa7f84ae3f54fbfe800c059e2eb3ef6328d8ecb3846aa2ccf6e22d1",
+  "manager_ui": {
+    "route": "/technician/store/recordings",
+    "passed_browser_cases": 12,
+    "tested_with": "isolated Chromium and synthetic microphone",
+    "production_unauthenticated_route_protected": true,
+    "production_test_recordings": 0
+  },
+  "store_id": 2,
+  "store_name": "华富世家店",
+  "physical_sofas": [
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "room_beds": [
+    {
+      "room": "1号房 · 半夏",
+      "beds": 1
+    },
+    {
+      "room": "2号房 · 忍冬",
+      "beds": 1
+    },
+    {
+      "room": "3号房 · 杜若",
+      "beds": 2
+    },
+    {
+      "room": "5号房 · 青黛",
+      "beds": 3
+    }
+  ],
+  "data_verification": {
+    "store_id": 2,
+    "configuration_rows": 17,
+    "audit_rows": 1,
+    "tables_verified": 76,
+    "changed_tables": [
+      "audit_logs",
+      "rooms"
+    ],
+    "other_business_rows_unchanged": true,
+    "ordering_and_qr_bindings_preserved": true,
+    "completed_at": "2026-11-23T04:17:12.872993+00:00"
+  },
+  "order_flow": {
+    "passed_customer_submissions": 16,
+    "passed_manager_acceptances": 16,
+    "environment": "isolated PostgreSQL restored from a production backup",
+    "production_order_writes": 0
+  },
+  "public_room_flow": {
+    "store": 2,
+    "production_room_apis": 4,
+    "real_bed_handoffs": 7,
+    "single_room_auto_handoffs": 2,
+    "multi_room_explicit_choices": 5,
+    "production_order_writes": 0,
+    "public_manager_route_protected": true,
+    "external_business_requests": 0,
+    "headless_mobile_browser": "Chrome"
+  },
+  "print_verification": {
+    "store": 2,
+    "pdf_pages": 2,
+    "png_decoded": 13,
+    "pdf_decoded": 13,
+    "unique_printed_anchors": 13,
+    "source_positions": 16,
+    "room_beds": [
+      {
+        "room": "1号房 · 半夏",
+        "beds": 1
+      },
+      {
+        "room": "2号房 · 忍冬",
+        "beds": 1
+      },
+      {
+        "room": "3号房 · 杜若",
+        "beds": 2
+      },
+      {
+        "room": "5号房 · 青黛",
+        "beds": 3
+      }
+    ],
+    "files_sha256": {
+      "华富世家店-沙发与房门点单码-打印版.pdf": "f5b5361fab111659315b4a5375c1ff88b669b73c592dd55b1067f36772acf1af",
+      "华富世家店-13张独立点单码.zip": "f49fffb931c92584ffe0bc680c1e051b844eaf43f1c23f29207ed22430e79c1f"
+    }
+  },
+  "tests": {
+    "api_passed": 34,
+    "api_skipped": 1,
+    "api_subtests_passed": 3,
+    "release_contracts_passed": 96
+  },
+  "physical_store_acceptance": "pending"
+}
