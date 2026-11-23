@@ -1,0 +1,126 @@
+{
+  "schema": "per-service-ordering-release@1",
+  "release": "server-0aee2e4684c8-1795424538",
+  "source_sha": "0aee2e4684c814ca2c89e122e6e6f6a34626e3ca",
+  "previous_release": "server-3d83bdd72acf-1795409364",
+  "finished_at": "2026-11-23T09:07:40.184859+00:00",
+  "health": "ok/production",
+  "private_release_receipt": "release-records/attempt-server-0aee2e4684c8-1795424538.json",
+  "customer_and_staff_assets_via_public_origin": {
+    "/?store=1&view=menu": {
+      "status": 200,
+      "no_store": true,
+      "asset": "index-DC2qWIRt.js"
+    },
+    "/?store=2&view=menu": {
+      "status": 200,
+      "no_store": true,
+      "asset": "index-DC2qWIRt.js"
+    },
+    "/technician/store": {
+      "status": 200,
+      "no_store": true,
+      "asset": "index-BLtC_JUA.js"
+    },
+    "/technician/positions": {
+      "status": 200,
+      "no_store": true,
+      "asset": "index-BLtC_JUA.js"
+    }
+  },
+  "public_projects_and_eligible_staff": [
+    {
+      "store": 1,
+      "visible_projects_verified": 14,
+      "projects_with_candidates": 0,
+      "distinct_candidates": 0
+    },
+    {
+      "store": 2,
+      "visible_projects_verified": 14,
+      "projects_with_candidates": 0,
+      "distinct_candidates": 0
+    }
+  ],
+  "production_data_before_and_after": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "production_order_writes_in_acceptance": 0,
+  "isolated_mobile": {
+    "mobile_browser": "Chromium",
+    "source": "isolated-HTTP-and-PostgreSQL",
+    "pairs": [
+      {
+        "store": 1,
+        "mobile_submit_confirm_and_finish": true,
+        "shared_room": true,
+        "simultaneous_edits": true,
+        "distinct_portions": 2,
+        "standalone_and_attached_care": true,
+        "paid_minutes": 30
+      },
+      {
+        "store": 2,
+        "mobile_submit_confirm_and_finish": true,
+        "shared_room": true,
+        "simultaneous_edits": true,
+        "distinct_portions": 2,
+        "standalone_and_attached_care": true,
+        "paid_minutes": 30
+      }
+    ]
+  },
+  "isolated_http": {
+    "stores": [
+      {
+        "store": 1,
+        "two_independent_choices": true,
+        "eligible_candidates": 1,
+        "manager_and_staff_flow": true
+      },
+      {
+        "store": 2,
+        "two_independent_choices": true,
+        "eligible_candidates": 0,
+        "manager_and_staff_flow": true
+      }
+    ],
+    "http_assertions": 50,
+    "backend": "isolated-postgresql",
+    "historical_rows_imported": 0
+  },
+  "isolated_settlement": [
+    {
+      "store": 1,
+      "flow": "two sequential portions and settlement",
+      "frozen_cents": 11800
+    },
+    {
+      "store": 1,
+      "flow": "formal dispatch",
+      "frozen_cents": 5900
+    },
+    {
+      "store": 2,
+      "flow": "two sequential portions and settlement",
+      "frozen_cents": 11800
+    },
+    {
+      "store": 2,
+      "flow": "formal dispatch",
+      "frozen_cents": 5900
+    }
+  ],
+  "tests": {
+    "customer_passed": 410,
+    "customer_skipped": 1,
+    "staff_passed": 326,
+    "backend_passed": 205,
+    "backend_skipped": 3,
+    "backend_subtests": 34,
+    "release_contracts_passed": 96
+  },
+  "live_device_verification": "headless mobile Chromium used; physical WeChat not exercised"
+}
