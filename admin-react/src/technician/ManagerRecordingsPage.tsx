@@ -171,7 +171,7 @@ export default function ManagerRecordingsPage() {
     else navigate('/store', { replace: true });
   };
   return <section className="manager-p0-page manager-recordings">
-    <header className="manager-p0-head"><div><button type="button" className="manager-p0-back" onClick={goBack}><ArrowLeftOutlined /> 返回</button><h1>晨会录音</h1></div></header>
+    <header className="manager-p0-head"><div><button type="button" className="manager-p0-back" aria-label="返回" onClick={goBack}><ArrowLeftOutlined /> 返回</button><h1>晨会录音</h1></div></header>
     <div className="manager-p0-stack">
       {!date && day && <section className="manager-p0-card" aria-label="录制晨会">
         {phase === 'recording' ? <div className="manager-p0-recording"><span className="manager-p0-recording-dot" /><strong>{duration(seconds)}</strong><Button danger icon={<StopOutlined />} onClick={() => void stop()}>结束并保存</Button></div>
