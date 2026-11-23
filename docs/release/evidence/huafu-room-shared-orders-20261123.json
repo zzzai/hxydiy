@@ -1,0 +1,134 @@
+{
+  "date": "2026-11-23",
+  "store_id": 2,
+  "release_id": "server-3d83bdd72acf-1795409364",
+  "source_sha": "3d83bdd72acf0957636cff98c08bd3f671cd7560",
+  "previous": "server-d2d60953ad0b-1795407241",
+  "accepted_base": "b1c398993f50692bf82346b6d25d34994d36ff11",
+  "public_pages": {
+    "/": {
+      "status": 200,
+      "cache": "no-store, no-cache, must-revalidate",
+      "entry_asset": "index-BWDUxdaT.js"
+    },
+    "/admin/": {
+      "status": 200,
+      "cache": "no-store, no-cache, must-revalidate",
+      "entry_asset": "index-DrKJgVSa.js"
+    },
+    "/technician/store/recordings": {
+      "status": 200,
+      "cache": "no-store, no-cache, must-revalidate",
+      "entry_asset": "index-DrKJgVSa.js"
+    }
+  },
+  "health": "ok/production",
+  "manifest_sha256": "a2d885239f25e311dbeb95497900c344ad0ec80187fa6b2f7590f658e5f9fc5c",
+  "deploy_backup_sha256": "41e39925dc362d806b0097bf3c635bd87a6a0b1b87774c2267cca1cd04895d59",
+  "prechange_backup_sha256": "cf0c33685cf9b8503919c5a4a053849cc89301c91e31212c3e10e72cbc2c3a25",
+  "operational_change_sha256": "4dfb5f82f831026545d7d88040a663e9be0b103d6c5afa8e9e1f9eefe27f40c6",
+  "protected_layout": {
+    "store": 2,
+    "rooms": 4,
+    "former_independent_beds": 7,
+    "new_room_codes": 4,
+    "audit_records": 1,
+    "tables_checked": 76,
+    "protected_fingerprints_equal": true,
+    "post_read": "already_applied",
+    "completed_at": "2026-11-23T04:55:39.147126+00:00"
+  },
+  "room_names": [
+    "半夏",
+    "忍冬",
+    "杜若",
+    "青黛"
+  ],
+  "sofa_numbers": [
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "physical_entry_urls_retained": 13,
+  "concurrent_order_flow": {
+    "positions": 13,
+    "sofas": 9,
+    "shared_rooms": 4,
+    "guests": 17,
+    "concurrent_guest_pairs": 4,
+    "shared_submissions": 4,
+    "manager_confirmed_selections": 13,
+    "queued_work_items": 13,
+    "duplicate_selections": 0,
+    "production_writes": 0
+  },
+  "anonymous_position_feedback": {
+    "store": 2,
+    "position_feedback_paths": 13,
+    "idempotent_resubmissions": 13,
+    "new_selections": 0,
+    "new_service_orders": 0,
+    "environment": "disposable PostgreSQL",
+    "production_writes": 0
+  },
+  "customer_release_bundle_checks": {
+    "head": "3d83bdd72acf0957636cff98c08bd3f671cd7560",
+    "passed": true,
+    "shared_room_redirects": 4,
+    "disabled_refusal": 1,
+    "legacy_multi_bed": 1,
+    "unexpected_errors": 0,
+    "production_writes": 0
+  },
+  "mobile_readonly": {
+    "store": 2,
+    "production_room_apis": 4,
+    "independent_mobile_visits": 8,
+    "auto_handoffs": 8,
+    "bed_choices": 0,
+    "physical_urls_retained": 13,
+    "production_order_writes": 0,
+    "manager_recordings_login_guard": true
+  },
+  "print_proof": {
+    "store": 2,
+    "pdf_pages": 2,
+    "png_decoded": 13,
+    "pdf_decoded": 13,
+    "unique_printed_anchors": 13,
+    "source_positions": 13,
+    "shared_rooms": [
+      "半夏",
+      "忍冬",
+      "杜若",
+      "青黛"
+    ],
+    "physical_sample_verified": false,
+    "printed_actions": [
+      "评价",
+      "选项目"
+    ],
+    "files_sha256": {
+      "华富世家店-评价与选项目-13个位置样稿.pdf": "09b6ce6ece5a7d842c7b6a6209497b0cbd90327ea723d60bfeb264fb3731dee4",
+      "华富世家店-评价与选项目-13张独立码牌.zip": "89af1dd03756e65e2bd3a3c6f82fcfce7b0ddf0db2f6fa40ea23e2c87960e8ca"
+    }
+  },
+  "tests": {
+    "api_passed": 24,
+    "api_skipped": 3,
+    "api_subtests": 7,
+    "admin_targeted": 43,
+    "customer_targeted": 43,
+    "release_contracts": 96
+  },
+  "field_acceptance": {
+    "first_store_print_artwork_confirmed": false,
+    "physical_sign_wechat_scan_verified": false
+  }
+}
