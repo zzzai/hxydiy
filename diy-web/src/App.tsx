@@ -60,6 +60,8 @@ import ProfilePage from './components/ProfilePage';
 import { MEMBERSHIP_PLANS } from './profile';
 import RecordLoginDialog from './components/RecordLoginDialog';
 import SavingHintDialog from './components/SavingHintDialog';
+import './servicePortions.css';
+import { draftItems, portionItems, portionPricing, portionsSummary, mergePortionEdits } from './servicePortions';
 import SelectionSummarySheet from './components/SelectionSummarySheet';
 import { authFailureAction, clearCustomerAuth, CUSTOMER_SESSION_REFRESH_INTERVAL_MS, readCustomerAuth, shouldOfferRecordBinding, writeCustomerAuth, type CustomerAuth } from './customerAuth';
 import { anonymousBrowserEntryHint, selectionPriceDisplay, serviceFeedbackAction, shouldShowMembershipPromos } from './customerCopy';
@@ -68,6 +70,7 @@ import { startSharedDraftPolling } from './sharedDraftPolling';
 import { readPrivateSelection, writePrivateSelection, clearPrivateSelection, privateSubmitIntent, restorePrivateSelectionDraft, type PrivateSelectionRecord } from './privateSelection';
 import { shareProjectLink } from './projectShare';
 import { configureWeChatProjectShare, isWeChatBrowser } from './wechatShare';
+import PortionTechnicianPicker from './components/PortionTechnicianPicker';
 import ProjectDetailPage from './components/ProjectDetailPage';
 import HalfPriceProjectPrice from './components/HalfPriceProjectPrice';
 import { halfPriceForProject } from './halfPriceCoupon';
@@ -95,7 +98,6 @@ import { createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldRenewVisitFe
 import { createDiyPageTracking } from './pageTracking';
 import {
   activePromotion,
-  buildSelectionSummary,
   changeSelectionQuantity,
   emptySelectionDraft,
   removeSelectionEntry,
@@ -103,6 +105,7 @@ import {
   saveProjectSelection,
   hydrateSelectionDraft,
   selectionProjectIds,
+  type ServicePortion,
   type SelectionDraft,
   type SelectionTarget,
 } from './selectionSummary';
@@ -120,7 +123,6 @@ import {
   CATALOG_SECTIONS,
   KIOSK_UNBOUND_COPY,
   buildSelectionItems,
-  calculatePreviewPricing,
   displayPayableTotal,
   resolveMemberTotalCents,
   resolveStoreTotalCents,
@@ -363,6 +365,10 @@ export default function App() {
   const [projectAddonIds, setProjectAddonIds] = useState<Record<number, number[]>>({});
   const [projectCatalogSelections, setProjectCatalogSelections] = useState<SelectionDraft['projectCatalogSelections']>({});
   const [localParts, setLocalParts] = useState<string[]>([]);
+  const [portions, setPortions] = useState<ServicePortion[]>([]);
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [requestedTechnician, setRequestedTechnician] = useState<ServicePortion['requested']>();
+  const emptyPortion = useMemo(emptySelectionDraft, []);
   const [activeSection, setActiveSection] = useState('bath');
   const catalogMainRef = useRef<HTMLElement | null>(null);
   const sectionScrollTargetRef = useRef<string | null>(null);
@@ -437,7 +443,7 @@ export default function App() {
     detailProjectId: detailProject?.id ?? null,
   });
 
-  const selectionItems = useMemo(() => buildSelectionItems({
+  const selectionItems = useMemo(() => [...buildSelectionItems({
     projects,
     selectedProjectIds,
     projectAddonIds,
@@ -448,12 +454,19 @@ export default function App() {
     projectCatalogSelections,
     localParts,
     tea: null,
-  }), [projects, selectedProjectIds, projectAddonIds, independentProjectIds, projectLinkedIds, addons, projectPreferences, projectCatalogSelections, localParts]);
+  }), ...portions.flatMap(portion => portionItems(portion, { projects, addons }))], [portions, projects, selectedProjectIds, projectAddonIds, independentProjectIds, projectLinkedIds, addons, projectPreferences, projectCatalogSelections, localParts]);
   // submitted 会话返回菜单后只保存新增草稿；再次提交时再与服务器原快照合并。
   const submissionItems = useMemo(() => (
     session ? revisionItems(session.status, session.items || [], selectionItems) : selectionItems
   ), [session?.status, session?.items, selectionItems]);
   const selectionSignature = useMemo(() => JSON.stringify(selectionItems), [selectionItems]);
+  const baselineSignature = useMemo(() => JSON.stringify(draftItems(hydrateSelectionDraft(session?.items || []), { projects, addons })), [session?.items, projects, addons]);
+  const acknowledged = useRef({ id: '', version: -1, signature: '' });
+  const localCart = useRef({ portions, dirty: false });
+  const alreadySaved = acknowledged.current.id === session?.id && acknowledged.current.version === cartVersion && acknowledged.current.signature === selectionSignature;
+  localCart.current = { portions, dirty: !alreadySaved && baselineSignature !== selectionSignature };
+  const [saveSequence, setSaveSequence] = useState(0);
+  const savingDraft = useRef(false);
   const previousSelectionSignature = useRef(selectionSignature);
 
   useEffect(() => {
@@ -471,14 +484,14 @@ export default function App() {
   const currentStore = stores.find((store) => store.id === query.storeId);
   const storeDisplayName = currentStore ? currentStore.name.replace(/^荷小悦[-·]?/, '') : '荷小悦草本泡脚';
   const switchStore = (storeId: number) => {
-    if ((occupancy || session || selectedProjectIds.length > 0) && !window.confirm('切换门店会离开当前服务位，未提交的选单不会保留。确定切换？')) return;
+    if ((occupancy || session || selectedProjectIds.length > 0 || portions.length > 0) && !window.confirm('切换门店会离开当前服务位，未提交的选单不会保留。确定切换？')) return;
     setStorePickerOpen(false);
     window.location.assign(serviceAccountEntry(window.location.origin, storeId));
   };
-  const preview = useMemo(() => calculatePreviewPricing({ projects, selectedProjectIds, projectAddonIds, addons, localParts }), [projects, selectedProjectIds, projectAddonIds, addons, localParts]);
   const appliedPriceType = customerAuth?.user.is_member ? 'member' : 'store';
   const isMember = appliedPriceType === 'member';
   const selectionDraft = useMemo<SelectionDraft>(() => ({
+    portions,
     selectedProjectIds,
     independentProjectIds,
     projectLinkedIds,
@@ -487,14 +500,11 @@ export default function App() {
     projectCatalogSelections,
     localParts,
     tea: null,
-  }), [selectedProjectIds, independentProjectIds, projectLinkedIds, projectPreferences, projectAddonIds, projectCatalogSelections, localParts]);
+  }), [portions, selectedProjectIds, independentProjectIds, projectLinkedIds, projectPreferences, projectAddonIds, projectCatalogSelections, localParts]);
+  const editorDraft = editKey === 'legacy' ? selectionDraft : portions.find(item => item.key === editKey)?.draft || emptyPortion;
+  const preview = useMemo(() => portionPricing(selectionDraft, portions, { projects, addons }), [selectionDraft, portions, projects, addons]);
   const privateDraftSignature = useMemo(() => JSON.stringify(selectionDraft), [selectionDraft]);
-  const selectionSummary = useMemo(() => buildSelectionSummary({
-    projects,
-    addons,
-    draft: selectionDraft,
-    isMember,
-  }), [projects, addons, selectionDraft, isMember]);
+  const selectionSummary = useMemo(() => portionsSummary(selectionDraft, portions, { projects, addons }, isMember), [projects, addons, portions, selectionDraft, isMember]);
   const selectionPromotion = useMemo(() => activePromotion(preview, isMember), [preview, isMember]);
   const publicBrowsing = query.serviceHub && query.publicPage === 'projects';
   const readOnly = collaborationMode === 'browse_only' || !canEditSelection(session?.status, occupancy?.status);
@@ -538,7 +548,7 @@ export default function App() {
   };
   const totalServiceMinutes = session?.items.filter((item) => item.item_type === 'service').reduce((total, item) => total + serviceDurationMinutes(item), 0) || 0;
   const localProject = projects.find((project) => project.category === 'local-strength');
-  const hasChargeableService = selectedProjectIds.length > 0 || localParts.length > 0;
+  const hasChargeableService = selectionItems.some(item => item.chargeable);
   const selectedCount = selectionSummary.totalCount;
   const featuredCoupon = couponTemplates.find((coupon) => coupon.claimable) || couponTemplates[0] || null;
   const featured = featuredProjects(projects);
@@ -581,7 +591,9 @@ export default function App() {
     applyOverlayHistoryState([]);
   };
 
-  const openProjectDetail = (project: Project) => {
+  const openProjectDetail = (project: Project, key: string | null = null) => {
+    setEditKey(key);
+    setRequestedTechnician(portions.find(item => item.key === key)?.requested);
     pageTracking.projectView({
       project_id: project.id,
       project_code: project.code,
@@ -608,7 +620,9 @@ export default function App() {
     if (outcome === 'unavailable') flash('暂时无法分享，请复制浏览器地址发送给好友');
   };
 
-  const openLocalDetail = () => {
+  const openLocalDetail = (key: string | null = null) => {
+    setEditKey(key);
+    setRequestedTechnician(portions.find(item => item.key === key)?.requested);
     setLocalDetailOpen(true);
     openOverlay('local-detail');
   };
@@ -623,12 +637,13 @@ export default function App() {
     if (target.kind === 'project' || target.kind === 'addon') {
       const projectId = target.projectId;
       const project = projects.find((item) => item.id === projectId);
-      if (project) openProjectDetail(project);
+      if (project?.category === 'local-strength') openLocalDetail(target.serviceKey || 'legacy');
+      else if (project) openProjectDetail(project, target.serviceKey || 'legacy');
       else flash('这个项目暂时无法修改，请刷新后重试');
       return;
     }
     if (target.kind === 'local') {
-      openLocalDetail();
+      openLocalDetail(target.serviceKey || 'legacy');
       return;
     }
     flash('该选项已停止提供');
@@ -636,6 +651,10 @@ export default function App() {
 
   const handleSummaryRemove = (target: SelectionTarget) => {
     if (readOnly) return;
+    if (target.serviceKey) {
+      setPortions(current => current.filter(item => item.key !== target.serviceKey));
+      return;
+    }
     const next = removeSelectionEntry(selectionDraft, target, projects);
     setSelectedProjectIds(next.selectedProjectIds);
     setIndependentProjectIds(next.independentProjectIds ?? next.selectedProjectIds);
@@ -663,6 +682,15 @@ export default function App() {
     delta: 1 | -1,
   ) => {
     if (readOnly) return;
+    if (target.serviceKey) {
+      const current = portions.find(item => item.key === target.serviceKey);
+      if (!current) return;
+      if (delta === -1) { handleSummaryRemove(target); return; }
+      const project = projects.find(item => item.id === current.projectId);
+      if (project?.category === 'local-strength') openLocalDetail();
+      else if (project) openProjectDetail(project);
+      return;
+    }
     const next = changeSelectionQuantity(selectionDraft, target, delta, projects);
     setSelectedProjectIds(next.selectedProjectIds);
     setIndependentProjectIds(next.independentProjectIds ?? next.selectedProjectIds);
@@ -675,6 +703,8 @@ export default function App() {
 
   const startFreshSelectionDraft = () => {
     const empty = emptySelectionDraft();
+    setPortions([]);
+    setEditKey(null);
     setSelectedProjectIds(empty.selectedProjectIds);
     setIndependentProjectIds([]);
     setProjectLinkedIds({});
@@ -762,6 +792,7 @@ export default function App() {
   };
 
   const hydrateSelection = (nextSession: SelectionSession, draft = hydrateSelectionDraft(nextSession.items || [])) => {
+    setPortions(draft.portions || []);
     setSelectedProjectIds(draft.selectedProjectIds);
     setIndependentProjectIds(draft.independentProjectIds || []);
     setProjectLinkedIds(draft.projectLinkedIds || {});
@@ -1431,10 +1462,12 @@ export default function App() {
   }, [privateDraftSignature, boot, session?.id, session?.status, accessToken]);
 
   useEffect(() => {
-    if (!['ready', 'public-menu'].includes(boot) || !session || session.status !== 'draft' || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || !hydrated.current) return undefined;
+    if (!['ready', 'public-menu'].includes(boot) || !session || session.status !== 'draft' || !(accessToken || collaborationToken) || collaborationMode === 'browse_only' || !hydrated.current || !localCart.current.dirty || savingDraft.current) return undefined;
     const generation = privateGeneration.current;
     const timer = window.setTimeout(async () => {
-      if (publicBrowsing && (generation !== privateGeneration.current || menuSyncStateRef.current.submitting)) return;
+      if (savingDraft.current || menuSyncStateRef.current.submitting || !localCart.current.dirty || (publicBrowsing && generation !== privateGeneration.current)) return;
+      savingDraft.current = true;
+      let reconcile = false;
       let pendingSave: ReturnType<typeof saveSelectionSession> | null = null;
       menuSyncStateRef.current.saving = true;
       setSaving(true);
@@ -1450,6 +1483,9 @@ export default function App() {
         if (publicBrowsing) privateSave.current = pendingSave;
         const saved = await pendingSave;
         if (publicBrowsing && generation !== privateGeneration.current) return;
+        reconcile = true;
+        cartVersionRef.current = saved.cart_version ?? cartVersion;
+        acknowledged.current = { id: session.id, version: cartVersionRef.current, signature: selectionSignature };
         setSession(saved);
         setCartVersion(saved.cart_version ?? cartVersion);
         if (position?.type === 'sofa') {
@@ -1469,26 +1505,31 @@ export default function App() {
         if (error instanceof ApiError && error.code === 'CART_VERSION_CONFLICT') {
           const latest = error.detail.session as SelectionSession | undefined;
           if (latest) {
+            reconcile = true;
             setSession(latest);
             setCartVersion(Number(error.detail.cart_version || latest.cart_version || cartVersion));
-            hydrateSelection(latest);
+            const incoming = hydrateSelectionDraft(latest.items || []);
+            const combined = mergePortionEdits(hydrateSelectionDraft(session.items || []).portions || [], localCart.current.portions, incoming.portions || [], { projects, addons });
+            hydrateSelection(latest, { ...incoming, portions: combined.portions });
+            flash(combined.conflict ? '同一份服务已被修改，请核对后再选' : '已合并同行人更新的选单');
           }
-          flash('选单刚被同行人更新，已显示最新内容');
         } else if (error instanceof ApiError && shouldRecoverPublicDraft(error, publicBrowsing)) {
           await recoverPublicSelection();
         } else if (error instanceof ApiError && error.status === 409) {
-          setBoot('expired');
+          flash(error.message);
         } else {
           flash('选单暂未同步，网络恢复后请再试');
         }
       } finally {
+        savingDraft.current = false;
+        if (reconcile) setSaveSequence(value => value + 1);
         if (privateSave.current === pendingSave) privateSave.current = null;
         menuSyncStateRef.current.saving = false;
         setSaving(false);
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [selectionSignature]);
+  }, [selectionSignature, saveSequence, session?.id, boot, cartVersion]);
 
   useEffect(() => {
     if (boot !== 'ready' || !session || !collaborationToken) return undefined;
@@ -1498,14 +1539,14 @@ export default function App() {
       isTerminal: (error) => error instanceof ApiError && [401, 403, 410].includes(error.status),
       onTerminal: () => { if (active) setBoot('expired'); },
       poll: async (signal) => {
-        if (menuSyncStateRef.current.saving || menuSyncStateRef.current.submitting) return;
+        if (localCart.current.dirty || savingDraft.current || menuSyncStateRef.current.saving || menuSyncStateRef.current.submitting) return;
         const requestController = new AbortController();
         const abort = () => requestController.abort();
         signal.addEventListener('abort', abort, { once: true });
         const timeout = window.setTimeout(abort, 10000);
         try {
           const latest = await getSelectionSession(session.id, accessToken, collaborationToken, requestController.signal);
-          if (!active || signal.aborted || requestController.signal.aborted || menuSyncStateRef.current.saving || menuSyncStateRef.current.submitting) return;
+          if (!active || signal.aborted || requestController.signal.aborted || localCart.current.dirty || savingDraft.current || menuSyncStateRef.current.saving || menuSyncStateRef.current.submitting) return;
           if (latest.status !== 'draft') {
             setSession(latest);
             if (!accessToken) {
@@ -1771,8 +1812,22 @@ export default function App() {
     await enterPosition(next.code);
   };
 
+  const savePortion = (projectId: number, draft: SelectionDraft) => {
+    const key = editKey || crypto.randomUUID();
+    const value = { key, projectId, draft, requested: requestedTechnician };
+    setPortions(current => editKey ? current.map(item => item.key === key ? value : item) : [...current, value]);
+  };
+
+  const technicianPicker = (project?: Project | null) => project && !readOnly && editKey !== 'legacy'
+    ? <PortionTechnicianPicker key={`${project.id}-${editKey || 'new'}`} storeId={query.storeId} projectId={project.id} value={requestedTechnician} onChange={setRequestedTechnician} /> : null;
+
   const saveLocalParts = (parts: string[]) => {
     if (readOnly) return;
+    if (editKey !== 'legacy' && localProject) {
+      savePortion(localProject.id, { ...emptySelectionDraft(), localParts: parts });
+      dismissTopOverlay();
+      return;
+    }
     setLocalParts((current) => [...new Set(parts)].flatMap((part) => {
       const quantity = Math.max(1, current.filter((item) => item === part).length);
       return Array.from({ length: quantity }, () => part);
@@ -1781,7 +1836,7 @@ export default function App() {
     flash(`已选择 ${parts.length} 个局部调理部位`);
   };
 
-  const saveProject = ({ project, preferences, addonIds, localParts: nextLocalParts, catalogVersionId, optionChoiceIds, linkedProjectIds }: {
+  const saveProject = ({ project, preferences, addonIds, localParts: nextLocalParts, catalogVersionId, optionChoiceIds, linkedProjectIds, childCatalogSelections }: {
     project: Project;
     preferences: string[];
     addonIds: number[];
@@ -1789,6 +1844,7 @@ export default function App() {
     catalogVersionId?: number;
     optionChoiceIds?: number[];
     linkedProjectIds?: number[];
+    childCatalogSelections?: SelectionDraft['projectCatalogSelections'];
   }) => {
     if (readOnly) return;
     if (isDetailOnlyProject(project)) {
@@ -1800,7 +1856,13 @@ export default function App() {
       preference_count: preferences.length,
       addon_count: addonIds.length,
     });
-    const next = saveProjectSelection(selectionDraft, { projectId: project.id, preferences, addonIds, localParts: nextLocalParts, catalogVersionId, optionChoiceIds, linkedProjectIds });
+    const next = saveProjectSelection(editorDraft, { projectId: project.id, preferences, addonIds, localParts: nextLocalParts, catalogVersionId, optionChoiceIds, linkedProjectIds, childCatalogSelections });
+    if (editKey !== 'legacy') {
+      savePortion(project.id, next);
+      dismissTopOverlay();
+      flash(editKey ? '这份服务已更新' : '已加入一份服务');
+      return;
+    }
     setSelectedProjectIds(next.selectedProjectIds);
     setIndependentProjectIds(next.independentProjectIds || []);
     setProjectLinkedIds(next.projectLinkedIds || {});
@@ -2126,6 +2188,10 @@ export default function App() {
           <span className="success-symbol"><CheckCircle2 size={36} /></span>
           <span className="eyebrow">{serviceProgress.eyebrow}</span>
           <h1>{serviceProgress.title}</h1>
+          {serviceStatus?.portions?.map((portion, index) => <div className="portion-receipt" key={portion.key}>
+            <strong>第 {index + 1} 份 · {portion.name}</strong>
+            <span>{portion.status === 'requested' ? `点名 ${portion.requested_label} · 等店长确认` : portion.label ? `${portion.label} · ${({ assigned: '已确认', in_service: '服务中', completed: '已完成' } as Record<string, string>)[portion.status] || '门店已安排'}` : '门店安排'}</span>
+          </div>)}
           <p>{publicBrowsing && !serviceStatus?.occupancy_status && !occupancy ? '已提交，等待门店安排座位' : `${position?.customer_label || '服务位置'} · ${serviceProgress.message}`}</p>
           {publicBrowsing && <small>选单号：{session.id.slice(0, 8)}</small>}
         </div>
@@ -2267,11 +2333,13 @@ export default function App() {
                 <div className="section-heading"><div><span className="eyebrow">{section.mark}</span><h2>{section.label}</h2></div><span>{sectionProjects.length} 项</span></div>
                 <div className="project-grid">
                   {sectionProjects.map((project) => {
-                    const selected = selectedProjectIds.includes(project.id);
+                    const legacy = selectedProjectIds.includes(project.id);
+                    const selected = legacy || portions.some(item => item.projectId === project.id);
+                    const openMenuProject = () => openProjectDetail(project, legacy ? 'legacy' : null);
                     const displayName = displayProjectName(project);
                     const { highlights, summary: summaryTags, purchase: purchaseTags } = customerProjectDisplayTagGroups(project);
                     return (
-                      <motion.article whileTap={{ scale: 0.985 }} className={`project-card mini-project-row ${selected ? 'selected' : ''}`} key={project.id} onClick={() => openProjectDetail(project)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectDetail(project); } }} role="button" tabIndex={0}>
+                      <motion.article whileTap={{ scale: 0.985 }} className={`project-card mini-project-row ${selected ? 'selected' : ''}`} key={project.id} onClick={openMenuProject} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openMenuProject(); } }} role="button" tabIndex={0}>
                         <div className="project-photo"><img src={projectImage(project)} alt="" loading="lazy" decoding="async" />{canonicalProjectCode(project.code) === 'hxy-xiaoqi-90' && <span className="signature-badge">招牌</span>}</div>
                         <div className="project-copy">
                           <div className="project-title-row"><h3>{displayName}</h3>{project.price_label?.includes('套') ? <span>{project.price_label}</span> : project.duration_min ? <span>{project.duration_min}分钟</span> : null}</div>
@@ -2285,14 +2353,14 @@ export default function App() {
                           {hasHalfPriceCoupon && halfPriceForProject(project, true) === null && <small className="half-price-excluded">不参与半价券</small>}
                           {projectPreferences[project.id]?.length > 0 && <div className="preference-line">{projectPreferences[project.id].join(' · ')}</div>}
                         </div>
-                        <button className={`detail-arrow luckin-add ${selected ? 'selected' : ''}`} type="button" aria-label={selected ? `调整${displayName}` : `选择${displayName}`} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); openProjectDetail(project); }}>
+                        <button className={`detail-arrow luckin-add ${selected ? 'selected' : ''}`} type="button" aria-label={legacy ? `调整${displayName}` : selected ? `再加一份${displayName}` : `选择${displayName}`} onClick={(event) => { event.stopPropagation(); openMenuProject(); }}>
                           <Plus size={18} />
                         </button>
                       </motion.article>
                     );
                   })}
                 </div>
-                {section.id === 'small' && localProject && <article className={`project-card mini-project-row preference-project-row ${localParts.length ? 'selected' : ''}`} onClick={openLocalDetail} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openLocalDetail(); } }} role="button" tabIndex={0}>
+                {section.id === 'small' && localProject && <article className={`project-card mini-project-row preference-project-row ${localParts.length ? 'selected' : ''}`} onClick={() => openLocalDetail()} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openLocalDetail(); } }} role="button" tabIndex={0}>
                   <div className="project-photo"><img src={projectImage(localProject)} alt="" loading="lazy" decoding="async" /></div>
                   <div className="project-copy">
                     <div className="project-title-row"><h3>{displayProjectName(localProject)}</h3><span>{localProject.duration_min ? `${localProject.duration_min}分钟/项` : localProject.price_label || '次'}</span></div>
@@ -2317,7 +2385,7 @@ export default function App() {
         <button className="selection-summary" type="button" aria-haspopup="dialog" aria-expanded={selectionSummaryOpen} onClick={openSelectionSummary}>
           <span className="selection-bag"><ShoppingBag size={27} /><span className="selection-count">{selectedCount}</span></span>
           <span className="selection-price-copy">
-            <span className="selection-summary-total"><small>{saving ? '正在更新' : hasHalfPriceCoupon ? '选单参考价' : '预计合计'}</small><strong>{formatMoney(payableTotal)}</strong></span>
+            <span className="selection-summary-total"><small>{saving ? '正在更新' : hasHalfPriceCoupon ? '选单参考价' : '预计合计'}</small><strong key={payableTotal} className="portion-updated">{formatMoney(payableTotal)}</strong></span>
             <span className="selection-summary-meta">{hasHalfPriceCoupon ? <span>持券优惠到店核销确认</span> : isMember ? <>{priceDisplay.originalHint && <del>{priceDisplay.originalHint}</del>}{priceDisplay.realizedSavingCents > 0 && <b>已优惠 {formatMoney(priceDisplay.realizedSavingCents)}</b>}{!priceDisplay.realizedSavingCents && <span>已按会员价计算</span>}</> : priceDisplay.memberHint ? <><span className="selection-summary-member-price">{priceDisplay.memberHint}</span>{priceDisplay.savingCents > 0 && <b>可省 {formatMoney(priceDisplay.savingCents)}</b>}</> : <span>{priceDisplay.primaryLabel} · 查看清单</span>}</span>
           </span>
         </button>
@@ -2351,17 +2419,19 @@ export default function App() {
 
       <SeatMapDialog open={seatMapOpen} current={position} positions={positions} moving={moving} source={session?.source || occupancy?.source || query.source} onClose={dismissTopOverlay} onSelect={handleMove} onBlocked={flash} />
       <AnimatePresence initial={false} mode="wait">
-      {localDetailOpen && <LocalDetailPage open project={localProject || null} selectedParts={localParts} positionLabel={position?.customer_label || (publicBrowsing ? '由门店安排' : '服务位待核对')} isMember={isMember} readOnly={readOnly} unseated={publicBrowsing && !position} onClose={dismissTopOverlay} onConfirm={saveLocalParts} />}
+      {localDetailOpen && <LocalDetailPage open technicianPicker={technicianPicker(localProject)} project={localProject || null} selectedParts={editorDraft.localParts} positionLabel={position?.customer_label || (publicBrowsing ? '由门店安排' : '服务位待核对')} isMember={isMember} readOnly={readOnly} unseated={publicBrowsing && !position} onClose={dismissTopOverlay} onConfirm={saveLocalParts} />}
       {detailProject && <ProjectDetailPage
+        technicianPicker={technicianPicker(detailProject)}
         project={detailProject}
         projects={projects}
         addons={addons}
-        selectedProjectIds={selectedProjectIds}
-        linkedProjectIds={detailProject ? projectLinkedIds[detailProject.id] || [] : []}
-        selectedAddonIds={detailProject ? projectAddonIds[detailProject.id] || [] : []}
-        preferences={detailProject ? projectPreferences[detailProject.id] || [] : []}
-        localParts={localParts}
-        catalogSelection={detailProject ? projectCatalogSelections?.[detailProject.id] : undefined}
+        selectedProjectIds={editorDraft.selectedProjectIds}
+        childCatalogSelections={editorDraft.projectCatalogSelections}
+        linkedProjectIds={detailProject ? editorDraft.projectLinkedIds?.[detailProject.id] || [] : []}
+        selectedAddonIds={detailProject ? editorDraft.projectAddonIds[detailProject.id] || [] : []}
+        preferences={detailProject ? editorDraft.projectPreferences[detailProject.id] || [] : []}
+        localParts={editorDraft.localParts}
+        catalogSelection={detailProject ? editorDraft.projectCatalogSelections?.[detailProject.id] : undefined}
         coupon={featuredCoupon}
         hasHalfPriceCoupon={hasHalfPriceCoupon}
         positionLabel={position?.customer_label || (publicBrowsing ? '由门店安排' : '服务位待核对')}

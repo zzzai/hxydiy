@@ -1,0 +1,6 @@
+.staff-service-portions { list-style: none; margin: 0; padding: 0; }
+.staff-service-portions > li { display: grid; gap: 5px; padding: 12px 0; border-top: 1px solid #e2ebe4; }
+.staff-service-portions > li > strong { color: #234935; }
+.staff-service-portions [aria-live] { color: #486450; }
+.staff-service-portions button { min-height: 40px; margin: 4px 8px 0 0; }
+.staff-service-portions button:focus-visible { outline: 2px solid #286746; outline-offset: 2px; }

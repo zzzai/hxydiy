@@ -4,6 +4,9 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class SelectionItemIn(BaseModel):
+    service_key: str | None = Field(default=None, min_length=36, max_length=36, pattern=r"^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+    service_main: bool = False
+    requested_technician_id: int | None = Field(default=None, gt=0)
     project_id: int | str | None = None
     catalog_version_id: int | None = Field(default=None, ge=1)
     option_choice_ids: list[int] = Field(default_factory=list, max_length=40)

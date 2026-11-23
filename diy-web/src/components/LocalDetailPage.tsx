@@ -1,7 +1,7 @@
-import { ArrowLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, customerProjectSummaryText, displayProjectName, effectivePrice, formatMoney, priceOf, projectImage, type Project } from '../domain';
+import { LOCAL_DETAIL_PROFILES, LOCAL_PARTS, displayProjectName, effectivePrice, formatMoney, priceOf, projectImage, type Project } from '../domain';
 import { motion } from 'framer-motion';
 import { detailMotion } from '../motionPresets';
 import DetailIntroduction from './DetailIntroduction';
@@ -11,6 +11,7 @@ type Props = {
   open: boolean;
   project: Project | null;
   selectedParts: string[];
+  technicianPicker?: import('react').ReactNode;
   positionLabel: string;
   isMember: boolean;
   readOnly?: boolean;
@@ -19,7 +20,7 @@ type Props = {
   onConfirm: (parts: string[]) => void;
 };
 
-export default function LocalDetailPage({ open, project, selectedParts, positionLabel, isMember, readOnly = false, unseated = false, onClose, onConfirm }: Props) {
+export default function LocalDetailPage({ open, project, selectedParts, technicianPicker, positionLabel, isMember, readOnly = false, unseated = false, onClose, onConfirm }: Props) {
   const [draft, setDraft] = useState<string[]>(selectedParts);
   const [focusedPart, setFocusedPart] = useState<string>(selectedParts[0] || LOCAL_PARTS[0]);
 
@@ -51,7 +52,7 @@ export default function LocalDetailPage({ open, project, selectedParts, position
         <img className="mini-detail-hero" src={projectImage(project)} alt="局部推拿服务" />
         <section className="mini-detail-card mini-detail-summary-card">
           <div className="mini-detail-title-row"><h1 id="local-detail-title">{focusedPart}调理</h1></div>
-          <DetailIntroduction name={`${focusedPart}调理`} summary={customerProjectSummaryText(project)} highlights={[activeProfile.focus]} facts={project.duration_min ? [`${project.duration_min}分钟/项`] : [project.price_label || '按次服务']} />
+          <DetailIntroduction name={`${focusedPart}调理`} summary="选择本次要做的部位，可多选，按部位计费。" highlights={[activeProfile.focus]} facts={project.duration_min ? [`${project.duration_min}分钟/项`] : [project.price_label || '按次服务']} />
           <DetailPrice current={effectivePrice(project, isMember)} comparison={priceOf(project, isMember ? 'store' : 'member')} isMember={isMember} unit="每个部位" />
         </section>
 
@@ -62,8 +63,9 @@ export default function LocalDetailPage({ open, project, selectedParts, position
           <div className="local-part-choice-grid horizontal-switcher">
             {LOCAL_PARTS.map((part) => <button key={part} type="button" disabled={readOnly} className={`${draft.includes(part) ? 'active' : ''} ${focusedPart === part ? 'focused' : ''}`} onClick={() => toggle(part)}><strong>{part}</strong><small>{LOCAL_DETAIL_PROFILES[part].focus}</small></button>)}
           </div>
-          <div className={`mini-promotion ${draft.length >= 2 ? 'qualified' : ''}`}><Sparkles size={18} /><div><strong>{draft.length >= 2 ? '已选2个不同部位' : draft.length === 1 ? '再选1个不同部位' : '选2个不同部位'}</strong><small>{draft.length >= 2 ? '搭配草本泡脚时，可免基础泡脚费' : '搭配草本泡脚，可免基础泡脚费'}</small></div><span>{Math.min(new Set(draft).size, 2)}/2</span></div>
+          {draft.length > 0 && project.duration_min && <p className="mini-seat-reminder">已选 {draft.length} 个部位，共 {draft.length * project.duration_min} 分钟</p>}
         </section>
+        {technicianPicker}
       </main>
 
       <footer className="mini-detail-footer">

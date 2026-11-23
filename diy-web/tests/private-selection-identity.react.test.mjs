@@ -340,7 +340,7 @@ for (const mode of ['fresh', 'legacy-wire', 'same-wire-repair']) test('configure
   assert.equal(total(), '¥111');
   const before = JSON.parse(values.get(privateKey));
   assert.deepEqual(before.items[0].option_choice_ids, [3, 5]);
-  assert.deepEqual(before.draft.projectLinkedIds, { 1: [2] }, 'unchanged wire items must still persist repaired local references');
+  assert.deepEqual((mode === 'fresh' ? before.draft.portions[0].draft : before.draft).projectLinkedIds, { 1: [2] }, 'unchanged wire items must still persist repaired local references');
   assert.equal(before.items[0].catalog_selection, undefined, 'wire items intentionally omit server linked snapshots');
   await unmount(app);
   env.cleanup();
@@ -350,7 +350,12 @@ for (const mode of ['fresh', 'legacy-wire', 'same-wire-repair']) test('configure
   assert.equal(loginProps(app).selectionSessionId, before.sessionId);
   assert.equal(loginProps(app).selectionToken, before.accessToken);
   assert.equal(api.created(), 0, 'restoring configuration must not replace the original session');
-  await act(async () => app.root.findByProps({ 'aria-label': '调整Synthetic project' }).props.onClick({ stopPropagation() {} }));
+  if (mode === 'fresh') {
+    await act(async () => app.root.findByProps({ className: 'selection-summary' }).props.onClick());
+    await act(async () => app.root.findByProps({ 'aria-label': '修改第 1 份 · Synthetic project' }).props.onClick());
+  } else {
+    await act(async () => app.root.findByProps({ 'aria-label': '调整Synthetic project' }).props.onClick({ stopPropagation() {} }));
+  }
   const restoredDetail = app.root.find(node => typeof node.type === 'function' && node.type.name === 'ProjectDetailPage');
   assert.deepEqual(restoredDetail.props.linkedProjectIds, [2]);
   assert.deepEqual(restoredDetail.props.catalogSelection.optionChoiceIds, [3, 5]);

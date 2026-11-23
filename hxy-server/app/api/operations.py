@@ -660,6 +660,11 @@ def counter_checkout_selection(
         raise HTTPException(status_code=409, detail={
             "code": "OPERATION_STATE_CONFLICT", "message": "该选单已转为服务单",
         })
+    from app.domain.service_portions import portions_view
+    portions = portions_view(db, session)
+    nominees = {p["technician_id"] or p["requested_technician_id"] for p in portions if p["status"] in {"requested", "assigned"}}
+    if len(nominees) > 1 or any(p["status"] in {"in_service", "completed"} for p in portions):
+        raise HTTPException(409, "请逐份完成这张多人服务单，再使用服务后结账")
     if not session.customer_id:
         anonymous = User(openid=f"counter_selection_{session.id}")
         db.add(anonymous)
@@ -1060,6 +1065,15 @@ def assign(
         store_id,
         "技师不存在",
     )
+    from app.domain.service_portions import ensure_free, portions_view
+    if visit.selection_session_id:
+        selection = db.get(SelectionSession, visit.selection_session_id)
+        portions = portions_view(db, selection) if selection else []
+        if any(p["status"] == "requested" for p in portions):
+            raise HTTPException(409, "请先在服务单确认顾客点名或改为门店安排")
+        if any(p["status"] == "assigned" and p["technician_id"] != technician.id for p in portions):
+            raise HTTPException(409, "请派给已获店长确认的技师")
+    ensure_free(db, technician, session_id=visit.selection_session_id)
     room = _owned(
         db.scalar(select(Room).where(Room.id == body.room_id).with_for_update()),
         store_id,

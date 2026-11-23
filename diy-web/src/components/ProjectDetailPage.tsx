@@ -11,7 +11,7 @@ import type { CouponTemplate } from '../api';
 import { customerPreferenceLabel, customerPreferenceNote, preferenceSummary, projectDetailActionLabel, shouldShowCouponPrompt } from '../customerCopy';
 import { fallbackAttachableAddons, fallbackOptionGroups, withFallbackOptionGroups, type FallbackOptionGroup } from '../projectOptionFallbacks';
 import { linkedProjectIdsForChoices, catalogChoicesByType } from '../selectionSummary';
-import { catalogDraftResetKey, validateCatalogSelection, withRequiredCatalogDefaults } from '../catalogOptions';
+import { catalogDraftResetKey, validateCatalogSelection, withRequiredCatalogDefaults, type ProjectCatalogSelection } from '../catalogOptions';
 import RelaxProjectGroup from './project-options/RelaxProjectGroup';
 import LocalStrengthGroup from './project-options/LocalStrengthGroup';
 import HerbalFormulaGroup from './project-options/HerbalFormulaGroup';
@@ -62,6 +62,7 @@ type ConfirmPayload = {
   catalogVersionId?: number;
   optionChoiceIds?: number[];
   linkedProjectIds?: number[];
+  childCatalogSelections?: Record<number, ProjectCatalogSelection>;
 };
 
 type Props = {
@@ -71,11 +72,13 @@ type Props = {
   selectedProjectIds: number[];
   linkedProjectIds?: number[];
   selectedAddonIds: number[];
+  childCatalogSelections?: Record<number, ProjectCatalogSelection>;
   preferences: string[];
   localParts: string[];
   catalogSelection?: { catalogVersionId: number; optionChoiceIds: number[] };
   coupon: CouponTemplate | null;
   hasHalfPriceCoupon?: boolean;
+  technicianPicker?: import('react').ReactNode;
   positionLabel: string;
   isMember: boolean;
   readOnly?: boolean;
@@ -100,12 +103,14 @@ export default function ProjectDetailPage({
   addons,
   selectedProjectIds,
   selectedAddonIds,
+  childCatalogSelections,
   preferences,
   localParts,
   catalogSelection,
   coupon,
   hasHalfPriceCoupon = false,
   positionLabel,
+  technicianPicker,
   isMember,
   readOnly = false,
   unseated = false,
@@ -147,10 +152,10 @@ export default function ProjectDetailPage({
   const localProject = useMemo(() => projects.find((item) => item.category === 'local-strength') || null, [projects]);
   const isFootBath = Boolean(project && isPrimaryFootBathDiy(project));
   const scalpProjects = isFootBath ? relaxProjects.filter((item) => canonicalProjectCode(item.code) === 'hxy-head-30') : [];
-  const lowerRelaxProjects = isFootBath ? relaxProjects.filter((item) => item.code !== 'hxy-head-30') : relaxProjects;
+  const lowerRelaxProjects = isFootBath ? relaxProjects.filter((item) => canonicalProjectCode(item.code) !== 'hxy-head-30') : relaxProjects;
   const isCatalogOptions = Boolean(project && isCatalogOptionsProject(project));
   const isFootbathOptions = Boolean(project && isFootbathOptionsProject(project));
-  const usesFrontendHerbalFormula = FRONTEND_HERBAL_FORMULA_CODES.has(project?.code || '') && !catalogPublished;
+  const usesFrontendHerbalFormula = FRONTEND_HERBAL_FORMULA_CODES.has(canonicalProjectCode(project?.code)) && !catalogPublished;
   const showBundleProgress = Boolean(project && supportsFootBathBundle(project));
   const detailOnly = Boolean(project && isDetailOnlyProject(project));
   const [choices, setChoices] = useState<string[]>(preferences);
@@ -158,6 +163,15 @@ export default function ProjectDetailPage({
   const [draftLocalParts, setDraftLocalParts] = useState<string[]>(localParts);
   const [draftChoiceIds, setDraftChoiceIds] = useState<number[]>(withRequiredCatalogDefaults(catalogGroups, catalogSelection?.optionChoiceIds || []));
   const [draftRelaxProjectIds, setDraftRelaxProjectIds] = useState<number[]>([]);
+  const [childChoices, setChildChoices] = useState<Record<number, ProjectCatalogSelection>>({});
+  const initialChildChoices = JSON.stringify(childCatalogSelections || {});
+  useEffect(() => setChildChoices(JSON.parse(initialChildChoices)), [project?.id, initialChildChoices]);
+  const careAdditions = relaxProjects.filter((item) => previewCareSelected(item));
+  function previewCareSelected(item: Project) {
+    return item.id !== project?.id && item.option_groups?.some((group) => group.code === 'care_method')
+      && (draftRelaxProjectIds.includes(item.id) || catalogRelaxChoices.some((choice) =>
+        choice.linked_project_id === item.id && draftChoiceIds.includes(choice.id)));
+  }
   const draftResetKey = catalogDraftResetKey({
     projectId: project?.id,
     preferences,
@@ -260,14 +274,21 @@ export default function ProjectDetailPage({
     setDraftRelaxProjectIds((current) => current.includes(projectId) ? current.filter((id) => id !== projectId) : [...current, projectId]);
   };
   const catalogErrors = catalogPublished ? validateCatalogSelection(catalogGroups, draftChoiceIds) : [];
+  const incompleteCare = careAdditions.some(item => validateCatalogSelection(item.option_groups || [], childChoices[item.id]?.optionChoiceIds || []).length > 0);
+  const choicesMissing = catalogErrors.length > 0 || incompleteCare;
   const basePrices = detailBasePriceComparison(project, isMember);
   const memberOnly = !project.prices.some((item) => item.price_type === 'store') && project.prices.some((item) => item.price_type === 'member');
   const packageUnit = project.price_label?.includes('套') ? project.price_label : undefined;
   const configuredPrices = detailPriceComparison(preview, isMember);
+  const addedServices = previewSelectedIds.filter(id => id !== project.id).map(id => projects.find(item => item.id === id));
+  const extraMinutes = addedServices.reduce((sum, item) => sum + (item?.duration_min || 0), 0)
+    + draftLocalParts.length * (localProject?.duration_min || 0)
+    + addons.filter(item => draftAddOnIds.includes(item.id)).reduce((sum, item) => sum + (item.duration_min || 0), 0);
+  const perVisit = addedServices.some(item => !item?.duration_min);
   const detailVisualSections = projectDetailVisuals(project.code);
   const { highlights: projectHighlights, summary: projectSummaryTags, purchase: projectPurchaseTags } = customerProjectTagGroups(project);
   const hasAdditions = !detailOnly && (catalogPublished
-    ? isCatalogOptions && (relaxProjects.length > 0 || catalogLocalChoices.length > 0)
+    ? isCatalogOptions && project.category !== 'small' && (relaxProjects.length > 0 || catalogLocalChoices.length > 0)
     : (isCatalogOptions && attachableAddons.length > 0) || (isFootbathOptions && Boolean(localProject)));
 
   return (
@@ -320,13 +341,13 @@ export default function ProjectDetailPage({
         {hasAdditions && !catalogPublished && <div className="mini-detail-section-label detail-additions-heading"><strong>可自由搭配</strong><span>按需加购 · 费用计入合计</span></div>}
         {isFootbathOptions && !catalogPublished && localProject && (
           <section className="mini-config-card">
-            <div className="mini-config-title"><strong>重点多按一会</strong><span>按部位加购 · 可多选</span></div>
+            <div className="mini-config-title"><strong>另加局部服务</strong><span>按部位加时、计费</span></div>
             <div className="mini-local-grid">
               {LOCAL_PARTS.map((part) => {
                 const active = draftLocalParts.includes(part);
                 return (
                   <div className={active ? 'active' : ''} key={part}>
-                    <button type="button" aria-pressed={active} disabled={readOnly} onClick={() => toggleLocalPart(part)}><span><strong>{part}调理</strong><small>{localProject.duration_min ? `约 ${localProject.duration_min} 分钟` : '按次服务'}</small></span><em>+{formatMoney(effectivePrice(localProject, isMember))}</em></button>
+                    <button type="button" aria-pressed={active} disabled={readOnly} onClick={() => toggleLocalPart(part)}><span><strong>{part}调理</strong><small>{localProject.duration_min ? `加 ${localProject.duration_min} 分钟` : '按次服务'}</small></span><em>+{formatMoney(effectivePrice(localProject, isMember))}</em></button>
                   </div>
                 );
               })}
@@ -371,10 +392,22 @@ export default function ProjectDetailPage({
             {scalpProjects.length > 0 && <RelaxProjectGroup projects={scalpProjects} catalogChoices={catalogRelaxChoices} selectedChoiceIds={draftChoiceIds} selectedProjectIds={draftRelaxProjectIds} onToggleChoice={toggleChoice} onToggleProject={toggleRelaxProject} isMember={isMember} readOnly={readOnly} embedded />}
           </LocalStrengthGroup>
         )}
-        {isCatalogOptions && catalogPublished && lowerRelaxProjects.length > 0 && (
+        {isCatalogOptions && project.category !== 'small' && catalogPublished && lowerRelaxProjects.length > 0 && (
           <RelaxProjectGroup projects={lowerRelaxProjects} catalogChoices={catalogRelaxChoices} selectedChoiceIds={draftChoiceIds} selectedProjectIds={draftRelaxProjectIds} onToggleChoice={toggleChoice} onToggleProject={toggleRelaxProject} isMember={isMember} readOnly={readOnly} />
         )}
 
+        {careAdditions.map(item => {
+          const group = item.option_groups!.find(group => group.code === 'care_method')!;
+          return <section className="mini-config-card mini-required-options" key={item.id} aria-label="加购护理方式">
+            <div className="mini-config-title"><strong>加购护理方式</strong><span>本次任选一种</span></div>
+            <div className="mini-option-grid two-col">{group.choices.filter(choice => choice.status === 'active').map(choice =>
+              <button type="button" key={choice.id} disabled={readOnly} aria-pressed={childChoices[item.id]?.optionChoiceIds.includes(choice.id) || false}
+                className={childChoices[item.id]?.optionChoiceIds.includes(choice.id) ? 'active' : ''}
+                onClick={() => setChildChoices(current => ({ ...current, [item.id]: { projectId: item.id, catalogVersionId: item.catalog_version_id!, optionChoiceIds: [choice.id] } }))}>
+                {choice.name}
+              </button>)}</div>
+          </section>;
+        })}
         {showBundleProgress && catalogPublished && <FootBathBundleProgress preview={preview} selectedParts={draftLocalParts} isMember={isMember} />}
 
         <ProjectDetailVisualSections
@@ -397,12 +430,14 @@ export default function ProjectDetailPage({
           </section>
         )}
 
+        {!detailOnly && technicianPicker}
       </main>
 
       {(!detailOnly || (project && isFixedProject(project) && project.category === 'small')) && <footer className="mini-detail-footer">
         <div className="mini-detail-total"><span>{hasHalfPriceCoupon ? '选单参考价·未核销' : memberOnly ? '会员价' : configuredPrices.currentLabel}{packageUnit && ` · ${packageUnit}`}{!memberOnly && (isMember ? <del>{configuredPrices.comparisonLabel} {formatMoney(configuredPrices.comparisonCents)}</del> : <em>会员价 {formatMoney(configuredPrices.comparisonCents)}</em>)}</span><strong>{formatMoney(configuredPrices.currentCents)}</strong></div>
         <div className="mini-detail-actions">
-          <button className="primary" type="button" disabled={readOnly || catalogErrors.length > 0} onClick={() => onConfirm({ project, preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, ...(project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds, linkedProjectIds: [...new Set([...catalogChoices.filter((choice) => draftChoiceIds.includes(choice.id) && choice.linked_project_id !== null).map((choice) => choice.linked_project_id as number), ...draftRelaxProjectIds])] } : {}) })}>{unseated && !selected && !readOnly && catalogErrors.length === 0 ? '加入选单' : projectDetailActionLabel(selected, readOnly, catalogErrors.length > 0)}<ChevronRight size={17} /></button>
+          <span className="portion-duration" role="status">{extraMinutes > 0 && `加 ${extraMinutes} 分钟`}{extraMinutes > 0 && perVisit && ' · '}{perVisit && '另含按次服务'}</span>
+          <button className="primary" type="button" disabled={readOnly || choicesMissing} onClick={() => onConfirm({ project, childCatalogSelections: Object.fromEntries(careAdditions.map(item => [item.id, childChoices[item.id]])), preferences: choices, addonIds: draftAddOnIds, localParts: draftLocalParts, linkedProjectIds: [...new Set([...linkedProjectIdsForChoices(catalogGroups, draftChoiceIds), ...draftRelaxProjectIds])], ...(project.catalog_version_id ? { catalogVersionId: project.catalog_version_id, optionChoiceIds: draftChoiceIds } : {}) })}>{unseated && !selected && !readOnly && !choicesMissing ? '加入选单' : projectDetailActionLabel(selected, readOnly, choicesMissing)}<ChevronRight size={17} /></button>
         </div>
       </footer>}
     </motion.div>

@@ -86,7 +86,7 @@ async function mount({ code = 'hxy-qiqing-30', catalog = true, linkedHead = true
     app,
     async click(name: string) { await act(async () => buttons(app.root, name)[0].props.onClick()); },
     total() { return text(app.root.findByProps({ className: 'mini-detail-total' }).findByType('strong')); },
-    progress() { return text(app.root.findByProps({ role: 'status' })); },
+    progress() { return text(app.root.find(node => node.props.role === 'status' && String(node.props.className || '').includes('mini-promotion'))); },
     async confirm() {
       await act(async () => app.root.findByProps({ className: 'mini-detail-actions' }).findByType('button').props.onClick());
       return payload;
@@ -100,13 +100,13 @@ for (const linkedHead of [true, false]) {
     test(`head care moves once and retains ${linkedHead ? 'choice' : 'direct project'} selection and ${member ? 'member' : 'store'} pricing`, async () => {
       const subject = await mount({ linkedHead, member });
       try {
-        const upper = section(subject.app, '重点多按一会');
+        const upper = section(subject.app, '另加局部服务');
         const lower = section(subject.app, '再放松一会');
         assert.equal(upper.length, 1);
         assert.equal(buttons(upper[0], '头疗').length, 1);
         assert.equal(buttons(lower[0], '头疗').length, 0);
         assert.equal(buttons(subject.app.root, '头疗').length, 1);
-        assert.match(text(buttons(upper[0], '头疗')[0]), /约30分钟/);
+        assert.match(text(buttons(upper[0], '头疗')[0]), /加 30 分钟/);
         assert.equal(subject.total(), '¥19.9');
         await subject.click('头疗');
         assert.equal(buttons(upper[0], '头疗')[0].props['aria-pressed'], true);
@@ -139,8 +139,8 @@ for (const linkedHead of [true, false]) {
 test('head-only catalog renders the upper group without an empty lower group', async () => {
   const subject = await mount({ local: false, other: false });
   try {
-    assert.equal(section(subject.app, '重点多按一会').length, 1);
-    assert.equal(buttons(section(subject.app, '重点多按一会')[0], '头疗').length, 1);
+    assert.equal(section(subject.app, '另加局部服务').length, 1);
+    assert.equal(buttons(section(subject.app, '另加局部服务')[0], '头疗').length, 1);
     assert.equal(section(subject.app, '再放松一会').length, 0);
     await subject.click('头疗');
     assert.deepEqual((await subject.confirm()).localParts, []);
@@ -153,7 +153,7 @@ for (const code of ['hxy-xiangxiang-60', 'hxy-xiaoqi-90', 'hxy-tuina-70', 'hxy-s
     const subject = await mount({ code });
     try {
       assert.equal(buttons(section(subject.app, '再放松一会')[0], '头疗').length, 1);
-      for (const upper of section(subject.app, '重点多按一会')) assert.equal(buttons(upper, '头疗').length, 0);
+      for (const upper of section(subject.app, '另加局部服务')) assert.equal(buttons(upper, '头疗').length, 0);
       await subject.click('头疗');
       const payload = await subject.confirm();
       assert.deepEqual(payload.optionChoiceIds, [101, 301]);
@@ -184,7 +184,7 @@ for (const linkedHead of [true, false]) {
   test(`restored ${linkedHead ? 'choice' : 'direct project'} head selection stays selected and read-only`, async () => {
     const subject = await mount({ linkedHead, selectedHead: true, readOnly: true });
     try {
-      const headButtons = buttons(section(subject.app, '重点多按一会')[0], '头疗');
+      const headButtons = buttons(section(subject.app, '另加局部服务')[0], '头疗');
       assert.equal(headButtons.length, 1);
       const button = headButtons[0];
       assert.equal(button.props['aria-pressed'], true);

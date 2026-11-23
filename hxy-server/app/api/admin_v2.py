@@ -32,6 +32,7 @@ from app.api.admin import _current_staff, _require_marketing_read, _summary_utc,
 from app.db.session import get_db
 from app.domain.coupon_issuance import coupon_budget_exhausted, lock_coupon_template, try_issue_coupon
 from app.domain.coupon_redeem import create_poster_token
+from app.domain.service_portions import PortionAction, change_portion, portions_view
 from app.domain.service_record_status import pending_record_summary
 from app.models import (
     CouponTemplate, UserCoupon, CouponPosterLink, MemberPlan, Recharge,
@@ -2692,6 +2693,16 @@ def manager_unassigned_services(
     return {"items": items, "total": len(items)}
 
 
+@router.post("/manager/service-orders/{session_id}/portions/{key}/{action}")
+def manager_portion(session_id: str, key: str, action: str, body: PortionAction,
+                    authorization: str | None = Header(None), db: Session = Depends(get_db)):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    if action not in {"confirm", "release"}:
+        raise HTTPException(404)
+    return change_portion(db, _staff_store_id(staff), session_id, key, action, body.version, staff)
+
+
 @router.get("/manager/service-orders")
 def manager_service_orders(
     status: Literal["waiting_service", "in_service", "completed"] = Query("waiting_service"),
@@ -2736,12 +2747,25 @@ def manager_service_orders(
             {"name": str(item.get("name") or item.get("project_name") or "服务项目"), "quantity": int(item.get("quantity") or 1)}
             for item in (selection.items or []) if isinstance(item, dict)
         ],
+        "portions": portions_view(db, selection),
         "record_completed": selection.id in recorded,
         "actual_start_at": occupancy.actual_start_at.isoformat() if occupancy.actual_start_at else None,
         "actual_end_at": occupancy.actual_service_end_at.isoformat() if occupancy.actual_service_end_at else None,
         "expected_end_at": occupancy.expected_end_at.isoformat() if occupancy.expected_end_at else None,
         "created_at": occupancy.created_at.isoformat() if occupancy.created_at else None,
     } for occupancy, room, selection, technician in rows]
+    if status == "waiting_service":
+        unseated = db.scalars(select(SelectionSession).where(
+            SelectionSession.store_id == store_id, SelectionSession.status.in_(("submitted", "confirmed")),
+            ~exists().where(PositionOccupancy.selection_session_id == SelectionSession.id),
+            SelectionSession.submitted_at >= local_now.astimezone(UTC) - timedelta(hours=2),
+        ).order_by(SelectionSession.submitted_at.desc()).limit(200))
+        for session in unseated:
+            portions = portions_view(db, session)
+            if any(row["status"] in {"requested", "assigned"} for row in portions):
+                items.append({"occupancy_id": None, "room_name": "未排座", "occupancy_status": "unassigned",
+                              "selection_session_id": session.id, "portions": portions, "items": [],
+                              "created_at": session.submitted_at.isoformat()})
     return {"status": status, "items": items, "total": len(items)}
 
 

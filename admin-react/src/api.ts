@@ -145,6 +145,11 @@ export const getSelectionSessions = (status?: string, needsPositionAssignment?: 
 export const getSelectionSession = (sessionId: string) => client.get(`/admin/v2/selection-sessions/${sessionId}`);
 export const getManagerWorkbench = () => client.get('/admin/v2/manager/workbench');
 export const getManagerUnassignedServices = () => client.get('/admin/v2/manager/unassigned-services');
+export const managePortion = (session: string, key: string, action: 'confirm' | 'release', version: number) =>
+  client.post(`/admin/v2/manager/service-orders/${encodeURIComponent(session)}/portions/${encodeURIComponent(key)}/${action}`, { version });
+export const servePortion = (session: string, key: string, action: 'start' | 'finish', version: number) =>
+  client.post(`/technician/selections/${encodeURIComponent(session)}/portions/${encodeURIComponent(key)}/${action}`, { version });
+
 export const getManagerServiceOrders = (status: 'waiting_service' | 'in_service' | 'completed') => client.get('/admin/v2/manager/service-orders', { params: { status } });
 export const assignSelectionPosition = (sessionId: string, roomId: number) =>
   client.post<PositionOccupancy>(`/admin/v2/selection-sessions/${sessionId}/assign-position`, { room_id: roomId });

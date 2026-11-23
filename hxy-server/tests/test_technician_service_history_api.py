@@ -467,7 +467,7 @@ def test_legacy_backfill_only_assigns_a_unique_audited_technician():
         )
         assert stamped.returncode == 0, stamped.stderr
         upgraded = subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            [sys.executable, "-m", "alembic", "upgrade", "20260905_tech_history_v3"],
             cwd=project_root,
             env=env,
             capture_output=True,

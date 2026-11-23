@@ -1,6 +1,7 @@
 """顾客到店服务选单 API，不创建订单，不涉及支付。"""
 
 import hashlib
+import json
 import secrets
 import uuid
 from collections import Counter
@@ -18,6 +19,7 @@ from app.domain.occupancy import refresh_hold
 from app.domain.membership_pricing import membership_price_context
 from app.domain.membership_entitlements import has_membership
 from app.domain.selection_pricing import calculate_selection_pricing
+from app.domain.service_portions import candidate, portions_view, public_label
 from app.domain.selection_options import (
     CatalogSelectionError,
     merge_linked_service_units,
@@ -183,6 +185,7 @@ def service_status(session_id: str, x_selection_token: str | None = Header(defau
         "selection_session_id": session.id,
         "occupancy_status": occupancy.status if occupancy else None,
         "service_ended_at": occupancy.actual_service_end_at if occupancy else None,
+        "portions": portions_view(db, session),
         "can_evaluate": bool(occupancy and occupancy.actual_service_end_at),
         "evaluated": bool(db.scalar(select(ServiceFeedback).where(ServiceFeedback.selection_session_id == session.id))),
     }
@@ -245,7 +248,58 @@ def _catalog_has_active_options(db: Session, catalog_version_id: int) -> bool:
     ) is not None
 
 
-def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) -> list[dict]:
+def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn], frozen: list[dict] | None = None) -> list[dict]:
+    existing: dict[str, list[dict]] = {}
+    for row in frozen or []:
+        if row.get("service_key"):
+            existing.setdefault(row["service_key"], []).append(row)
+    groups: dict[str | None, list[SelectionItemIn]] = {}
+    for item in items:
+        groups.setdefault(item.service_key, []).append(item)
+    if not existing.keys() <= groups.keys():
+        raise HTTPException(409, "请保留已提交的服务，新加服务可另选一份")
+    result = []
+    for key, members in groups.items():
+        if key in existing:
+            stored = [SelectionItemIn.model_validate(row) for row in existing[key]]
+            def configuration(rows):
+                return Counter(json.dumps(row.model_dump(mode="json"), sort_keys=True) for row in rows)
+            if configuration(stored) != configuration(members):
+                raise HTTPException(409, "已提交的服务不能覆盖，请另加一份")
+            result.extend(existing[key])
+            continue
+        roots = [item for item in members if item.service_main]
+        if key and (len(roots) != 1 or roots[0].item_type != "service" or type(roots[0].project_id) is not int
+                    or any(item.quantity != 1 for item in members)):
+            raise HTTPException(422, "每份服务需要一个主项目，各项目数量为一")
+        nominations = [item for item in members if item.requested_technician_id is not None]
+        if nominations and (not key or len(nominations) != 1 or not nominations[0].service_main):
+            raise HTTPException(422, "点名须关联到本份主项目")
+        if not key and roots:
+            raise HTTPException(422, "缺少本份服务编号")
+        lines = _validate_service_items(db, store_id, members)
+        if key:
+            for line in lines:
+                if str(line.get("code") or "").removeprefix("s2-") == "hxy-cupping-scraping-1":
+                    choices = (line.get("catalog_selection") or {}).get("preference_snapshots", [])
+                    if sum(choice.get("group_code") == "care_method" for choice in choices) != 1:
+                        raise HTTPException(422, "请为本份服务选择拔罐或刮痧")
+
+            requested = None
+            if nominations:
+                requested = candidate(db, store_id, roots[0].project_id, nominations[0].requested_technician_id)
+            for line in lines:
+                line["service_key"] = key
+                if line.get("service_main") and requested:
+                    line["requested_technician_id"] = requested.id
+                    line["requested_label"] = public_label(requested)
+            if sum(bool(line.get("service_main")) for line in lines) != 1:
+                raise HTTPException(422, "本份服务缺少可安排的主项目")
+        result.extend(lines)
+    return result
+
+
+def _validate_service_items(db: Session, store_id: int, items: list[SelectionItemIn]) -> list[dict]:
     normalized = []
     linked_items = []
     dedicated_items = []
@@ -314,6 +368,7 @@ def _validate_items(db: Session, store_id: int, items: list[SelectionItemIn]) ->
         normalized_item = {
             "project_id": item.project_id,
             "item_kind": "project",
+            **({"service_main": True} if item.service_main else {}),
             "name": snapshot["name"],
             "category": snapshot["category"],
             "code": snapshot.get("code", str(item.project_id)),
@@ -432,6 +487,7 @@ def _revision_view(revision: SelectionRevision) -> dict:
 def _item_identity(item: dict) -> tuple:
     # Linked and independent origins are provenance, not service configuration.
     return (
+        item.get("service_key"),
         str(item.get("project_id")),
         str(item.get("addon_id")),
         tuple(sorted(str(value) for value in item.get("addon_ids", []))),
@@ -477,7 +533,8 @@ def quote_selection_session(
         raise HTTPException(status_code=403, detail={
             "code": "COLLABORATION_READ_ONLY", "message": "该清单已提交，不能继续报价",
         })
-    normalized = _validate_items(db, session.store_id, body.items)
+    normalized = _validate_items(db, session.store_id, body.items,
+                                 session.items if session.status in {"submitted", "confirmed"} else None)
     request_user_id = current_customer_id(authorization, db, optional=True) if context else None
     customer = db.get(User, request_user_id or session.customer_id) if (request_user_id or session.customer_id) else None
     pricing = calculate_selection_pricing(
@@ -576,7 +633,8 @@ def submit_selection_revision(
         raise _cart_version_conflict(session, occupancy or context.occupancy)
     if session.status in {"cancelled", "expired"}:
         raise HTTPException(status_code=409, detail="当前服务状态不能继续加选")
-    normalized = _validate_items(db, session.store_id, body.items)
+    normalized = _validate_items(db, session.store_id, body.items,
+                                 session.items if session.status in {"submitted", "confirmed"} else None)
     if not normalized:
         raise HTTPException(status_code=400, detail="请至少选择一个项目")
     if context:
@@ -776,7 +834,8 @@ def save_selection_session(
         db.commit()
     if session.status != "draft":
         raise HTTPException(status_code=409, detail="当前选单已不能修改")
-    normalized = _validate_items(db, session.store_id, body.items)
+    normalized = _validate_items(db, session.store_id, body.items,
+                                 session.items if session.status in {"submitted", "confirmed"} else None)
     changed = session.items != normalized or session.diy_preferences != body.diy_preferences
     session.items = normalized
     session.diy_preferences = body.diy_preferences

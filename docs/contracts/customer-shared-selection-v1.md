@@ -2,6 +2,14 @@
 
 更新日期：2026-09-23
 
+## 2026-11-23 按份选择与点名
+
+同房共用一张选单。新版每份服务使用独立 UUID `service_key`，一行标记 `service_main=true`。同项目的两份可以分别选择力度、小项、护理方式和技师，整份修改或删除。并发保存沿用 `expected_version`，不同份合并，同一份相撞以最新版本提示重新核对。未带标识的既有选单仍沿用原契约。组合优惠按同一份服务匹配。
+
+`GET /api/v1/stores/{store_id}/projects/{project_id}/selectable-technicians` 返回本店启用、绑定在岗档案且 `skills` 含该项目 ID 的技师公开称呼。默认门店安排。只有主行可以提交 `requested_technician_id`。服务端在保存、提交及店长确认时校验资格。店长可确认点名或改为门店安排。点名确认、实际开始和结束服务分别记录。技师只能接门店安排或本人已确认的服务。最后一份服务结束后，房间转到服务已结束状态。不同技师分别服务的选单使用已有的服务后结账入口。前台提前转整单派钟时，同一张服务单只能派给一位技师，派钟须匹配店长确认的点名。
+
+`/admin/v2/manager/service-orders/{session_id}/portions/{key}/{confirm|release}` 与 `/technician/selections/{session_id}/portions/{key}/{start|finish}` 都接收当前服务份的 `version`，以门店、会话、服务份、操作者和动作核验及去重。顾客用原有选单权限查询服务进度，技师档案和技能登记继续由门店维护。
+
 ## 2026-10-14 P1 已发布修正
 
 `CUSTOMER-EXPERIENCE-P1-20261014`：以下代码、合同测试及共享记忆已在#266同批合并，发布SHA`d9b4e520675c75910704ba93b3632e65b7dbbab2`；不改变入口API结构、价格规则或已有协作者权限。真实隔离PG四个双线程场景已验，具体安装证据及未验范围见`../operations/customer-experience-p1-release-20261014.md`，不代表所有竞争组合或门店现场通过。

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Empty, Spin, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import { getManagerServiceOrders } from '../api';
+import ServicePortionRows, { type ServicePortionRow } from './ServicePortionRows';
+import { getManagerServiceOrders, managePortion } from '../api';
 
 type ServiceOrderStatus = 'waiting_service' | 'in_service' | 'completed';
 type ServiceOrder = {
-  occupancy_id: number;
+  occupancy_id: number | null;
+  selection_session_id: string;
+  portions?: ServicePortionRow[];
   room_name: string;
   occupancy_status: string;
   technician_name: string | null;
@@ -32,12 +35,14 @@ export default function ManagerServiceOrdersView({ onOpenPositions, refreshKey =
   const [items, setItems] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pending, setPending] = useState('');
+  const [actionError, setActionError] = useState('');
   const active = useRef(true);
   const request = useRef(0);
   const loadingRef = useRef(false);
 
-  const load = useCallback(async () => {
-    if (!active.current || loadingRef.current) return;
+  const load = useCallback(async (force = false) => {
+    if (!active.current || (loadingRef.current && !force)) return;
     loadingRef.current = true;
     const version = ++request.current;
     setLoading(true);
@@ -52,14 +57,19 @@ export default function ManagerServiceOrdersView({ onOpenPositions, refreshKey =
         setError('服务单加载失败，请重试');
       }
     } finally {
-      loadingRef.current = false;
-      if (active.current && version === request.current) setLoading(false);
+      if (active.current && version === request.current) {
+        loadingRef.current = false;
+        setLoading(false);
+      }
     }
   }, [status]);
 
+  const refreshCurrent = useRef(load);
+  refreshCurrent.current = load;
+
   useEffect(() => {
     active.current = true;
-    void load();
+    void load(true);
     const refresh = () => { if (document.visibilityState === 'visible') void load(); };
     const timer = window.setInterval(refresh, 10000);
     window.addEventListener('focus', refresh);
@@ -73,31 +83,55 @@ export default function ManagerServiceOrdersView({ onOpenPositions, refreshKey =
     };
   }, [load, refreshKey]);
 
+  const handleNomination = async (order: ServiceOrder, portion: ServicePortionRow, action: 'confirm' | 'release') => {
+    if (pending) return;
+    setPending(portion.key);
+    setActionError('');
+    try {
+      const result = await managePortion(order.selection_session_id, portion.key, action, portion.version);
+      setItems(current => current.map(row => row.selection_session_id !== order.selection_session_id ? row : {
+        ...row, portions: row.portions?.map(p => p.key === portion.key ? { ...p, ...result.data } : p),
+      }));
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      setActionError(typeof detail === 'string' ? detail : '处理失败，请刷新服务单后再试');
+    } finally { setPending(''); void refreshCurrent.current(true); }
+  };
+
   const option = STATUS_OPTIONS.find(item => item.value === status)!;
   return <section className="manager-tasks-view manager-service-orders" aria-label="门店服务单">
     <div className="manager-tasks-heading">
-      <div><h2>服务单</h2><p>按服务状态查看门店现场，只读；服务状态以技师确认/结束为准。</p></div>
+      <div><h2>服务单</h2></div>
       <Button icon={<ReloadOutlined />} aria-label="刷新服务单" onClick={() => void load()} loading={loading} />
     </div>
     <div className="manager-order-period" role="group" aria-label="服务单状态">
-      {STATUS_OPTIONS.map(item => <button key={item.value} type="button" aria-pressed={status === item.value} onClick={() => setStatus(item.value)}>{item.label}</button>)}
+      {STATUS_OPTIONS.map(item => <button key={item.value} type="button" aria-pressed={status === item.value} onClick={() => {
+        if (item.value === status) return;
+        setItems([]); setLoading(true); setError(''); setActionError(''); setStatus(item.value);
+      }}>{item.label}</button>)}
     </div>
+    {actionError && <Alert type="error" showIcon message={actionError} />}
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     {loading && !items.length ? <div className="manager-empty"><Spin size="small" /><span>正在加载服务单</span></div>
       : !items.length ? <div className="manager-empty"><strong>{option.empty}</strong><span>刷新或切换状态查看其他服务单</span></div>
         : <div className="manager-selection-list">
-          {items.map(item => <article className="manager-selection-card" key={item.occupancy_id}>
+          {items.map(item => <article className="manager-selection-card" key={item.selection_session_id || item.occupancy_id}>
             <div className="manager-card-top">
               <span>{item.room_name}</span>
               <Tag color={status === 'completed' ? 'blue' : status === 'in_service' ? 'green' : item.technician_name ? 'gold' : 'orange'}>
-                {status === 'completed' ? '已完成' : status === 'in_service' ? '服务中' : item.technician_name ? '待服务' : '未分配技师'}
+                {status === 'completed' ? '已完成' : status === 'in_service' ? '服务中' : item.portions?.some(portion => portion.status === 'requested') ? '有点名待确认' : item.technician_name || item.portions?.length ? '待服务' : '未分配技师'}
               </Tag>
             </div>
-            <ul className="manager-item-list">
+            {item.portions?.length ? <ServicePortionRows portions={item.portions} actions={portion =>
+              !portion.dispatched && (portion.status === 'requested' || portion.status === 'assigned') ? <div>
+                {portion.status === 'requested' && <Button type="primary" disabled={!!pending} onClick={() => void handleNomination(item, portion, 'confirm')}>确认点名</Button>}
+                <Button disabled={!!pending} onClick={() => void handleNomination(item, portion, 'release')}>改为门店安排</Button>
+              </div> : null
+            } /> : <ul className="manager-item-list">
               {item.items.length ? item.items.map((line, index) => <li key={index}>{line.name}{line.quantity > 1 ? ` ×${line.quantity}` : ''}</li>) : <li>未填写项目</li>}
-            </ul>
+            </ul>}
             <div className="manager-card-meta">
-              <span>{item.technician_name || '待安排技师'}</span>
+              {!item.portions?.length && <span>{item.technician_name || '待安排技师'}</span>}
               <span>{status === 'completed' ? `结束 ${timeText(item.actual_end_at)}` : `进入 ${timeText(item.created_at)}`}</span>
               {status === 'completed' && <Tag color={item.record_completed ? 'green' : 'orange'}>{item.record_completed ? '记录已填' : '记录待补'}</Tag>}
             </div>

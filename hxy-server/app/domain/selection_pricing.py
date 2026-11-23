@@ -66,8 +66,8 @@ def calculate_selection_pricing(
     group_subtotal = 0
     member_subtotal = 0
     confirmation_payable_subtotal = 0
-    foot_bath_units: list[tuple[int, int, int, int | None]] = []
-    local_bundle_units: list[tuple[str, str | None]] = []
+    foot_bath_units: dict[str, list[tuple[int, int, int, int | None]]] = {}
+    local_bundle_units: dict[str, list[tuple[str, str | None]]] = {}
     seen_bundle_service_lines: set[tuple[str, str | int]] = set()
     local_parts: set[str] = set()
 
@@ -250,6 +250,7 @@ def calculate_selection_pricing(
             if standalone_addon is not None
             else _first_value(item, "code") or code
         )
+        portion = _first_value(item, "service_key") or ""
         unit_key = _bundle_unit_key(item, index)
         if (
             item_code == PROMO_FOOT_BATH_CODE
@@ -270,7 +271,7 @@ def calculate_selection_pricing(
                 if price_context is not None
                 else None
             )
-            foot_bath_units.append((
+            foot_bath_units.setdefault(portion, []).append((
                 legacy_confirmed_base if legacy_confirmed_base is not None else base_store,
                 legacy_confirmed_base if legacy_confirmed_base is not None else base_group,
                 legacy_confirmed_base if legacy_confirmed_base is not None else base_member,
@@ -283,7 +284,7 @@ def calculate_selection_pricing(
         ):
             part = _normalized_bundle_part(preferences)
             project_key = str(project.id) if project is not None else str(item_code)
-            local_bundle_units.append((project_key, part))
+            local_bundle_units.setdefault(portion, []).append((project_key, part))
             seen_bundle_service_lines.add(unit_key)
             if part:
                 local_parts.add(part)
@@ -364,15 +365,17 @@ def calculate_selection_pricing(
             pricing_line["service_line_id"] = str(service_line_id).strip()
         lines.append(pricing_line)
 
-    qualified_local_units = _qualified_local_bundle_unit_count(local_bundle_units)
-    matched_foot_baths = min(len(foot_bath_units), qualified_local_units // 2)
+    eligible = {key: _qualified_local_bundle_unit_count(rows) for key, rows in local_bundle_units.items()}
+    qualified_local_units = sum(eligible.values())
+    discounted = [unit for key, rows in foot_bath_units.items() for unit in rows[:eligible.get(key, 0) // 2]]
+    matched_foot_baths = len(discounted)
     qualified = matched_foot_baths > 0
     # 两项合格局部调理匹配一个泡脚单位；只免泡脚项目本身的基础价，不免 addon/升级。
-    adjustment_store = -sum(unit[0] for unit in foot_bath_units[:matched_foot_baths])
-    adjustment_group = -sum(unit[1] for unit in foot_bath_units[:matched_foot_baths])
-    adjustment_member = -sum(unit[2] for unit in foot_bath_units[:matched_foot_baths])
+    adjustment_store = -sum(unit[0] for unit in discounted)
+    adjustment_group = -sum(unit[1] for unit in discounted)
+    adjustment_member = -sum(unit[2] for unit in discounted)
     payable_adjustment = (
-        -sum(unit[3] for unit in foot_bath_units[:matched_foot_baths] if unit[3] is not None)
+        -sum(unit[3] for unit in discounted if unit[3] is not None)
         if price_context is not None
         else {"store": adjustment_store, "group": adjustment_group, "member": adjustment_member}[price_type]
     )

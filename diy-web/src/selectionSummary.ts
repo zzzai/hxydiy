@@ -9,7 +9,15 @@ import {
 } from './domain.ts';
 import type { CatalogOptionChoice, CatalogOptionGroup, ProjectCatalogSelection } from './catalogOptions.ts';
 
+export type ServicePortion = {
+  key: string;
+  projectId: number;
+  requested?: { id: number; label: string };
+  draft: SelectionDraft;
+};
+
 export type SelectionDraft = {
+  portions?: ServicePortion[];
   selectedProjectIds: number[];
   projectPreferences: Record<number, string[]>;
   projectAddonIds: Record<number, number[]>;
@@ -31,6 +39,30 @@ export function hydrateSelectionDraft(items: Array<SelectionItem & {
   category?: string; item_kind?: string;
   catalog_selection?: { linked_snapshots?: Array<{ linked_project_id?: number | null }> };
 }>): SelectionDraft {
+  const scoped = new Map<string, typeof items>();
+  for (const item of items) {
+    if (item.service_key) {
+      const group = scoped.get(item.service_key) || [];
+      group.push(item);
+      scoped.set(item.service_key, group);
+    }
+  }
+  if (scoped.size) {
+    const base = hydrateSelectionDraft(items.filter(item => !item.service_key));
+    base.portions = [];
+    for (const [key, group] of scoped) {
+      const main = group.find(item => item.service_main);
+      if (!main || typeof main.project_id !== 'number') continue;
+      const part = hydrateSelectionDraft(group.map(item => ({ ...item, service_key: undefined })));
+      const links = part.selectedProjectIds.filter(id => id !== main.project_id);
+      part.independentProjectIds = part.selectedProjectIds.includes(main.project_id) ? [main.project_id] : [];
+      part.projectLinkedIds = { [main.project_id]: [...new Set(links)] };
+      base.portions.push({ key, projectId: main.project_id, draft: part,
+        ...(main.requested_technician_id ? { requested: { id: main.requested_technician_id, label: main.requested_label || '' } } : {}),
+      });
+    }
+    return base;
+  }
   const draft = emptySelectionDraft();
   const independent: number[] = [];
   const links: Record<number, number[]> = {};
@@ -53,6 +85,7 @@ export function hydrateSelectionDraft(items: Array<SelectionItem & {
 
 export function saveProjectSelection(draft: SelectionDraft, input: {
   projectId: number; preferences: string[]; addonIds: number[]; localParts: string[];
+  childCatalogSelections?: Record<number, ProjectCatalogSelection>;
   linkedProjectIds?: number[]; catalogVersionId?: number; optionChoiceIds?: number[];
 }): SelectionDraft {
   const independent = [...(draft.independentProjectIds ?? draft.selectedProjectIds)];
@@ -66,6 +99,7 @@ export function saveProjectSelection(draft: SelectionDraft, input: {
     localParts: input.localParts,
     projectCatalogSelections: {
       ...draft.projectCatalogSelections,
+      ...input.childCatalogSelections,
       ...(input.catalogVersionId !== undefined && input.optionChoiceIds !== undefined ? { [input.projectId]: {
         projectId: input.projectId, catalogVersionId: input.catalogVersionId, optionChoiceIds: [...new Set(input.optionChoiceIds)],
       } } : {}),
@@ -84,11 +118,12 @@ export function emptySelectionDraft(): SelectionDraft {
   };
 }
 
-export type SelectionTarget =
+export type SelectionTarget = ({ serviceKey?: string } & (
   | { kind: 'project'; projectId: number }
   | { kind: 'addon'; projectId: number; addonId: number }
   | { kind: 'local'; part: string }
-  | { kind: 'tea' };
+  | { kind: 'tea' }
+));
 
 export function catalogChoicesByType(
   groups: CatalogOptionGroup[],

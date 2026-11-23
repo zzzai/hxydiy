@@ -1728,6 +1728,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/service-orders/{session_id}/portions/{key}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Manager Portion */
+        post: operations["manager_portion_api_v1_admin_v2_manager_service_orders__session_id__portions__key___action__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/unassigned-services": {
         parameters: {
             query?: never;
@@ -4644,6 +4661,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stores/{store_id}/projects/{project_id}/selectable-technicians": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Selectable Technicians */
+        get: operations["selectable_technicians_api_v1_stores__store_id__projects__project_id__selectable_technicians_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stores/{store_id}/service-position-map": {
         parameters: {
             query?: never;
@@ -4965,6 +4999,23 @@ export interface paths {
         get: operations["get_service_reference_api_v1_technician_occupancies__occupancy_id__service_reference_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/technician/selections/{session_id}/portions/{key}/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Technician Portion */
+        post: operations["technician_portion_api_v1_technician_selections__session_id__portions__key___action__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6736,6 +6787,11 @@ export interface components {
             /** Score */
             score?: number | null;
         };
+        /** PortionAction */
+        PortionAction: {
+            /** Version */
+            version: number;
+        };
         /** PosterLinkIn */
         PosterLinkIn: {
             /**
@@ -7375,6 +7431,15 @@ export interface components {
              * @default 1
              */
             quantity: number;
+            /** Requested Technician Id */
+            requested_technician_id?: number | null;
+            /** Service Key */
+            service_key?: string | null;
+            /**
+             * Service Main
+             * @default false
+             */
+            service_main: boolean;
         };
         /** SelectionSaveIn */
         SelectionSaveIn: {
@@ -11927,6 +11992,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manager_portion_api_v1_admin_v2_manager_service_orders__session_id__portions__key___action__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+                key: string;
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortionAction"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -18481,6 +18585,40 @@ export interface operations {
             };
         };
     };
+    selectable_technicians_api_v1_stores__store_id__projects__project_id__selectable_technicians_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: number;
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     customer_position_map_api_v1_stores__store_id__service_position_map_get: {
         parameters: {
             query?: {
@@ -19183,6 +19321,45 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    technician_portion_api_v1_technician_selections__session_id__portions__key___action__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+                key: string;
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortionAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

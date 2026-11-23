@@ -1344,6 +1344,8 @@ def _admin_action(
     before = occupancy.status
     now = utcnow()
     session = db.get(SelectionSession, occupancy.selection_session_id)
+    if session and not session.fulfillment_order_id and action in {"start_service", "finish_service"} and any(item.get("service_key") for item in session.items or []):
+        raise HTTPException(409, "请从服务单按份处理")
     fulfillment_service_order_status = None
     if session and session.fulfillment_order_id:
         fulfillment_service_order_status = db.scalar(

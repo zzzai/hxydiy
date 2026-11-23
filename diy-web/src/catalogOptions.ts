@@ -148,7 +148,7 @@ export function validateCatalogSelection(groups: CatalogOptionGroup[], choiceIds
 export function withRequiredCatalogDefaults(groups: CatalogOptionGroup[], choiceIds: number[]): number[] {
   const next = [...new Set(choiceIds)];
   for (const group of [...groups].sort((a, b) => a.display_order - b.display_order || a.id - b.id)) {
-    if (!group.required) continue;
+    if (!group.required || group.code === 'care_method') continue;
     const activeChoices = group.choices
       .filter((choice) => choice.status === 'active')
       .sort((a, b) => a.display_order - b.display_order || a.id - b.id);

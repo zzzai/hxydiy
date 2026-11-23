@@ -116,6 +116,7 @@ export type PageContent = {
 };
 
 export type ServiceStatus = {
+  portions?: Array<{ key: string; name: string; status: string; requested_label: string | null; label: string | null }>;
   selection_session_id: string;
   occupancy_status: Occupancy['status'] | null;
   service_ended_at: string | null;
@@ -242,6 +243,15 @@ export function getRoomDoorEntry(code: string, signal?: AbortSignal) {
 
 export async function getProjects(storeId: number): Promise<Project[]> {
   const result = await request<{ items: Project[] }>(`/projects?store_id=${storeId}`);
+  return result.items;
+}
+
+export type SelectableTechnician = { id: number; label: string };
+
+export async function selectableTechnicians(storeId: number, projectId: number, signal: AbortSignal) {
+  const result = await request<{ items: SelectableTechnician[] }>(
+    `/stores/${storeId}/projects/${projectId}/selectable-technicians`, { signal, cache: 'no-store' },
+  );
   return result.items;
 }
 

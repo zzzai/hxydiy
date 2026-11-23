@@ -4285,6 +4285,20 @@
         "title": "PhysiqueScore",
         "type": "object"
       },
+      "PortionAction": {
+        "properties": {
+          "version": {
+            "minimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "PortionAction",
+        "type": "object"
+      },
       "PosterLinkIn": {
         "properties": {
           "request_id": {
@@ -5865,6 +5879,37 @@
             "minimum": 1.0,
             "title": "Quantity",
             "type": "integer"
+          },
+          "requested_technician_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Technician Id"
+          },
+          "service_key": {
+            "anyOf": [
+              {
+                "maxLength": 36,
+                "minLength": 36,
+                "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Key"
+          },
+          "service_main": {
+            "default": false,
+            "title": "Service Main",
+            "type": "boolean"
           }
         },
         "title": "SelectionItemIn",
@@ -15809,6 +15854,90 @@
           }
         },
         "summary": "Manager Service Orders",
+        "tags": [
+          "admin-v2"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/service-orders/{session_id}/portions/{key}/{action}": {
+      "post": {
+        "operationId": "manager_portion_api_v1_admin_v2_manager_service_orders__session_id__portions__key___action__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "title": "Action",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortionAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Manager Portion",
         "tags": [
           "admin-v2"
         ]
@@ -27564,6 +27693,59 @@
         ]
       }
     },
+    "/api/v1/stores/{store_id}/projects/{project_id}/selectable-technicians": {
+      "get": {
+        "operationId": "selectable_technicians_api_v1_stores__store_id__projects__project_id__selectable_technicians_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Selectable Technicians Api V1 Stores  Store Id  Projects  Project Id  Selectable Technicians Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Selectable Technicians",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/stores/{store_id}/service-position-map": {
       "get": {
         "operationId": "customer_position_map_api_v1_stores__store_id__service_position_map_get",
@@ -28873,6 +29055,90 @@
           }
         },
         "summary": "Get Service Reference",
+        "tags": [
+          "technician"
+        ]
+      }
+    },
+    "/api/v1/technician/selections/{session_id}/portions/{key}/{action}": {
+      "post": {
+        "operationId": "technician_portion_api_v1_technician_selections__session_id__portions__key___action__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "title": "Action",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortionAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Technician Portion",
         "tags": [
           "technician"
         ]

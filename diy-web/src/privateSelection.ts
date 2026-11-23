@@ -21,7 +21,7 @@ export function restorePrivateSelectionDraft(record: PrivateSelectionRecord, ser
   const choiceKey = (item: SelectionItem) => [...(item.option_choice_ids || [])].sort((a, b) => a - b).join(',');
   return hydrateSelectionDraft(record.items.map((item) => {
     const project = projects.find((candidate) => candidate.id === item.project_id);
-    const snapshot = serverItems.find((candidate) => candidate.project_id === item.project_id
+    const snapshot = serverItems.find((candidate) => candidate.service_key === item.service_key && candidate.project_id === item.project_id
       && candidate.catalog_version_id === item.catalog_version_id && choiceKey(candidate) === choiceKey(item));
     const merged = { ...item, category: snapshot?.category ?? project?.category, catalog_selection: snapshot?.catalog_selection };
     if (!merged.catalog_selection && item.catalog_version_id && project?.catalog_version_id === item.catalog_version_id) {

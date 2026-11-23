@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, aliased
 from app.api.admin import _current_staff, create_staff_token, hash_password, normalize_staff_role
 from app.db.session import get_db
 from app.domain.membership_entitlements import has_membership
+from app.domain.service_portions import PortionAction, change_portion, ensure_free, portions_view
 from app.domain.technician_pricing import selection_pricing
 from app.domain.service_record_status import _supported_reference_version, _not_superseded_reference, own_record_exists, recordable_service
 from app.models import AuditLog, CustomerProfileRecord, CustomerTrustedDevice, MembershipCode, PositionOccupancy, SelectionSession, Staff, User
@@ -316,6 +317,8 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             "room_type": room.room_type,
             "room_status": room.status,
             "items": session.items or [] if session else [],
+            "portions": portions_view(db, session) if session else [],
+            "formal_dispatch": bool(session and session.fulfillment_order_id and any(item.get("service_key") for item in session.items or [])),
             "pricing": selection_pricing(session),
             "conflict": False,
             "conflict_count": 0,
@@ -352,6 +355,8 @@ def tasks(authorization: str | None = Header(None), db: Session = Depends(get_db
             "room_type": "unassigned",
             "room_status": None,
             "items": session.items or [],
+            "portions": portions_view(db, session) if session else [],
+            "formal_dispatch": bool(session and session.fulfillment_order_id and any(item.get("service_key") for item in session.items or [])),
             "pricing": selection_pricing(session),
             "conflict": False,
             "conflict_count": 0,
@@ -621,6 +626,7 @@ def _resolve_legacy_service_owner(db: Session, occupancy: PositionOccupancy) -> 
 
 def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str | None, db: Session) -> dict:
     staff, technician = current_technician(authorization, db)
+    technician = db.scalar(select(Technician).where(Technician.id == technician.id).with_for_update())
     occupancy = _technician_occupancy(db, occupancy_id, technician)
     request_hash = hashlib.sha256(json.dumps(body.model_dump(), sort_keys=True).encode()).hexdigest()
     replay = db.scalar(select(StateTransition).where(StateTransition.store_id == technician.store_id, StateTransition.idempotency_key == body.idempotency_key).with_for_update())
@@ -644,6 +650,13 @@ def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str |
             )
         return replay.result_snapshot
     _reject_conflicted_room_action(db, occupancy)
+    session = db.get(SelectionSession, occupancy.selection_session_id)
+    if session and any(item.get("service_key") for item in session.items or []):
+        if session.fulfillment_order_id:
+            raise HTTPException(409, "服务单已转前台派钟，请从派钟流程操作")
+        raise HTTPException(409, "请按每份服务分别接单或结束")
+    if action == "confirm":
+        ensure_free(db, technician)
     if occupancy.serviced_by_technician_id is None and occupancy.status == "in_service":
         owner = _resolve_legacy_service_owner(db, occupancy)
         if owner is None:
@@ -702,6 +715,15 @@ def _action(occupancy_id: int, action: str, body: ActionIn, authorization: str |
             return replay.result_snapshot
         raise HTTPException(status_code=409, detail={"code": "IDEMPOTENCY_KEY_REUSED", "message": "该幂等键已用于其他服务操作，请生成新的幂等键"})
     return result
+
+
+@router.post("/selections/{session_id}/portions/{key}/{action}")
+def technician_portion(session_id: str, key: str, action: str, body: PortionAction,
+                       authorization: str | None = Header(None), db: Session = Depends(get_db)):
+    if action not in {"start", "finish"}:
+        raise HTTPException(404)
+    staff, technician = current_technician(authorization, db)
+    return change_portion(db, technician.store_id, session_id, key, action, body.version, staff, technician)
 
 
 @router.post("/occupancies/{occupancy_id}/confirm")

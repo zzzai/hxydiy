@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Button, Drawer, Empty, List, Spin, Tag, Typography } from 'antd';
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
-import { confirmTechnicianService, finishTechnicianService, getTechnicianMe, getTechnicianTasks } from '../api';
+import ServicePortionRows, { type ServicePortionRow } from './ServicePortionRows';
+import { servePortion, confirmTechnicianService, finishTechnicianService, getTechnicianMe, getTechnicianTasks } from '../api';
 import { makeIdempotencyKey } from '../operations';
 import {
   technicianBoardGroups,
@@ -177,6 +178,19 @@ export default function TechnicianTodayPage() {
     } finally { setActionLoading(false); }
   };
 
+  const runPortion = async (portion: ServicePortionRow, action: 'start' | 'finish') => {
+    if (actionLoading || !selectedOrder?.selection_session_id) return;
+    setActionLoading(true); setActionError('');
+    try {
+      await servePortion(selectedOrder.selection_session_id, portion.key, action, portion.version);
+      setSelectedOrder(undefined);
+      await load();
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      setActionError(typeof detail === 'string' ? detail : '未能更新，请重新打开服务单');
+    } finally { setActionLoading(false); }
+  };
+
   const groups = technicianBoardGroups(tasks);
   const boardCounts = tasks.reduce((counts, task) => {
     if (task.conflict) {
@@ -236,7 +250,7 @@ export default function TechnicianTodayPage() {
             const order = taskToOrder(task);
             const status = task.occupancy_status || 'available';
             const hasConflict = Boolean(task.conflict);
-            const hasOrder = Boolean(task.occupancy_id && task.user_id) && !hasConflict;
+            const hasOrder = Boolean(task.occupancy_id && (task.selection_session_id || task.user_id)) && !hasConflict;
             const tileStatus = hasConflict ? 'conflict' : status;
             return <button type="button" className={`technician-position-tile tone-${technicianPositionTone(tileStatus)}`} key={task.room_id} onClick={() => setSelectedOrder(order)} aria-label={`查看${task.room_name || '服务位'}${hasConflict ? '待核对状态' : hasOrder ? '订单' : '状态'}`}>
               <div className="technician-position-tile-top"><strong>{task.room_name || '服务位'}</strong><Tag color={positionTagColor(status)}>{technicianStatusLabel(status)}</Tag></div>
@@ -262,11 +276,20 @@ export default function TechnicianTodayPage() {
         <Typography.Paragraph type="secondary">{selectedOrder.customer?.nickname || '顾客'} {selectedOrder.customer?.phone_masked || ''}</Typography.Paragraph>
         <OrderItems order={selectedOrder} />
         <OrderPricingBlock pricing={selectedOrder.pricing} />
+        {!!selectedOrder.portions?.length && <ServicePortionRows portions={selectedOrder.portions} actions={p => {
+          if (selectedOrder.formal_dispatch) return null;
+          const mine = me?.technician?.id === p.technician_id;
+          if (p.status === 'unassigned' || (p.status === 'assigned' && mine))
+            return <Button disabled={actionLoading} onClick={() => void runPortion(p, 'start')}>开始这份服务</Button>;
+          if (p.status === 'in_service' && mine)
+            return <Button disabled={actionLoading} onClick={() => void runPortion(p, 'finish')}>结束这份服务</Button>;
+          return null;
+        }} />}
         {actionError && <Alert type="error" showIcon message={actionError} />}
         <div className="technician-task-card-foot">
-          <Typography.Text type="secondary">操作会同步到店长工作台；重复提交由幂等键保护。</Typography.Text>
-          {selectedOrder.occupancy_status === 'waiting_service' && <Button block size="large" type="primary" loading={actionLoading} onClick={() => void runServiceAction('confirm')}>确认接单并开始服务</Button>}
-          {selectedOrder.occupancy_status === 'in_service' && <Button block size="large" type="primary" loading={actionLoading} onClick={() => void runServiceAction('finish')}>结束服务</Button>}
+          {selectedOrder.formal_dispatch && <Typography.Text type="secondary">这张服务单已转前台派钟</Typography.Text>}
+          {!selectedOrder.portions?.length && selectedOrder.occupancy_status === 'waiting_service' && <Button block size="large" type="primary" loading={actionLoading} onClick={() => void runServiceAction('confirm')}>确认接单并开始服务</Button>}
+          {!selectedOrder.portions?.length && selectedOrder.occupancy_status === 'in_service' && <Button block size="large" type="primary" loading={actionLoading} onClick={() => void runServiceAction('finish')}>结束服务</Button>}
           {selectedOrder.completed_by_me && selectedOrder.customer?.id && selectedOrder.selection_session_id && <Button block size="large" onClick={() => { setProfileOrder(selectedOrder); setSelectedOrder(undefined); }}>填写服务记录</Button>}
         </div>
         </>}

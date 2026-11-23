@@ -95,6 +95,47 @@ class SharedSelectionCollaborationTests(unittest.TestCase):
             "entry_token": self.entry_token,
         })
 
+    def test_keyed_portions_keep_independent_preferences_and_validate_the_nominee(self):
+        from app.models import Staff, Technician
+        with self.SessionLocal.begin() as db:
+            technician = Technician(store_id=self.store_id, code=str(uuid.uuid4())[:12], name="Registered",
+                                    status="available", skills=[])
+            db.add(technician)
+            db.flush()
+            db.add(Staff(username=str(uuid.uuid4())[:20], name="Registered", password_hash="disabled",
+                         role="technician", status="active", store_id=self.store_id, technician_id=technician.id))
+            tech_id = technician.id
+
+        entry = self.entry(self.first).json()
+        other = self.entry(self.second).json()
+        endpoint = "/api/v1/selection-sessions/" + entry["session"]["id"]
+        first_header = {"X-Collaboration-Token": entry["collaboration_token"]}
+        second_header = {"X-Collaboration-Token": other["collaboration_token"]}
+        version = entry["session"]["cart_version"]
+        def item(preference):
+            return {"service_key": str(uuid.uuid4()), "service_main": True,
+                    "project_id": self.project_id, "diy_preferences": [preference]}
+        def save(client, headers, items, expected):
+            return client.patch(endpoint, headers=headers, json={"items": items, "expected_version": expected})
+        first, second = item("gentle"), item("firm")
+        first["requested_technician_id"] = tech_id
+        self.assertEqual(save(self.first, first_header, [first], version).status_code, 409)
+        for malformed in ([True], str(self.project_id), {str(self.project_id): True}):
+            with self.SessionLocal.begin() as db:
+                db.get(Technician, tech_id).skills = malformed
+            self.assertEqual(save(self.first, first_header, [first], version).status_code, 409)
+        with self.SessionLocal.begin() as db:
+            db.get(Technician, tech_id).skills = [self.project_id]
+        stored = save(self.first, first_header, [first], version)
+        self.assertEqual(stored.status_code, 200, stored.text)
+        self.assertEqual(save(self.second, second_header, [second], version).status_code, 409)
+        merged = save(self.second, second_header, [first, second], stored.json()["cart_version"])
+        self.assertEqual(merged.status_code, 200, merged.text)
+        lines = merged.json()["items"]
+        self.assertEqual([line["diy_preferences"] for line in lines], [["gentle"], ["firm"]])
+        self.assertEqual([line.get("requested_technician_id") for line in lines], [tech_id, None])
+        self.assertEqual([line["service_key"] for line in lines], [first["service_key"], second["service_key"]])
+
     def test_two_browsers_join_one_draft_with_independent_tokens(self):
         first = self.entry(self.first)
         second = self.entry(self.second)

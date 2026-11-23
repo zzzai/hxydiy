@@ -43,6 +43,10 @@ export type Addon = {
 };
 
 export type SelectionItem = {
+  service_key?: string;
+  service_main?: boolean;
+  requested_technician_id?: number;
+  requested_label?: string;
   project_id: number | string;
   catalog_version_id?: number;
   option_choice_ids?: number[];
@@ -400,6 +404,7 @@ const CATALOG_OPTION_CODES = new Set([
   'hxy-tuina-70',
   'hxy-spa-60',
   'hxy-spa-90',
+  'hxy-cupping-scraping-1',
 ]);
 
 export function isCatalogOptionsProject(project: Pick<Project, 'code'>): boolean {
@@ -686,7 +691,7 @@ const RELAX_ADD_ON_CODES = [
 ] as const;
 
 export function relaxAddOnProjects(projects: Project[]): Project[] {
-  const byCode = new Map(projects.map((project) => [project.code, project]));
+  const byCode = new Map(projects.map((project) => [canonicalProjectCode(project.code), project]));
   return RELAX_ADD_ON_CODES
     .map((code) => byCode.get(code))
     .filter((project): project is Project => Boolean(project));
@@ -703,7 +708,7 @@ export function buildSelectionItems(input: BuildSelectionInput): SelectionItem[]
   const items: SelectionItem[] = [...projectCounts]
     .map(([id, quantity]) => ({ project: projectById.get(id), quantity }))
     .filter((entry): entry is { project: Project; quantity: number } => Boolean(entry.project) && entry.project?.category !== 'local-strength')
-    .filter(({ project }) => !input.independentProjectIds || input.independentProjectIds.includes(project.id) || !Object.entries(input.projectCatalogSelections || {}).some(([parentId, selection]) => (
+    .filter(({ project }) => !input.independentProjectIds || input.independentProjectIds.includes(project.id) || Boolean(input.projectCatalogSelections?.[project.id]?.optionChoiceIds.length) || !Object.entries(input.projectCatalogSelections || {}).some(([parentId, selection]) => (
       (projectById.get(Number(parentId))?.option_groups || []).some(group => group.choices.some(choice => selection.optionChoiceIds.includes(choice.id) && choice.linked_project_id === project.id))
     )))
     .map(({ project, quantity }) => {
@@ -745,7 +750,7 @@ function normalizedValues(values: unknown[] | undefined): string[] {
 }
 
 function sameSelectionLine(left: SelectionItem, right: SelectionItem): boolean {
-  return left.project_id === right.project_id
+  return left.service_key === right.service_key && left.project_id === right.project_id
     && left.item_type === right.item_type
     && left.chargeable === right.chargeable
     && (left.catalog_version_id ?? null) === (right.catalog_version_id ?? null)

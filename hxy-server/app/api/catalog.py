@@ -7,6 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.domain.service_portions import registered_staff, can_request, public_label
 from app.domain.half_price_coupon import half_price_project_cents
 from app.domain.catalog_options import CatalogDomainError, verify_published_catalog_hash
 from app.services.store_lifecycle import OPEN_STORE_STATUSES
@@ -331,6 +332,21 @@ def get_project(project_id: int, db: Session = Depends(get_db)) -> ProjectOut:
     if not project or project.publication_status != "published":
         raise HTTPException(status_code=404, detail="项目不存在或未发布")
     return _project_to_out(db, project)
+
+
+@router.get("/stores/{store_id}/projects/{project_id}/selectable-technicians")
+def selectable_technicians(store_id: int, project_id: int, db: Session = Depends(get_db)) -> dict:
+    project = db.scalar(select(Project).join(Store, Store.id == Project.store_id).where(
+        Project.id == project_id, Project.store_id == store_id, Store.status.in_(OPEN_STORE_STATUSES),
+        Project.publication_status == "published", Project.independently_visible.is_(True),
+    ))
+    if not project:
+        raise HTTPException(404, "项目不存在或未发布")
+    return {"items": [
+        {"id": technician.id, "label": public_label(technician)}
+        for technician in db.scalars(registered_staff(store_id)).unique()
+        if can_request(technician, project_id)
+    ]}
 
 
 @router.get("/addons", response_model=list[AddonOut])

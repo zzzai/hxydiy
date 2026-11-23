@@ -61,8 +61,11 @@ function ItemActions({ target, title, quantity, adjustable, readOnly, onModify, 
   if (readOnly) return null;
   return (
     <div className="selection-sheet-item-actions">
-      <button type="button" aria-label={`修改${title}`} onClick={() => onModify(target)}><PencilLine size={14} />修改</button>
-      {adjustable && (target.kind === 'project' || target.kind === 'local') ? (
+      <button type="button" aria-label={`修改${title}`} onClick={() => onModify(target)}><PencilLine size={14} />{target.serviceKey ? '改这份' : '修改'}</button>
+      {target.serviceKey && target.kind === 'project' ? <>
+        <button type="button" aria-label={`给同行人再加一份${title}`} onClick={() => onQuantityChange(target, 1)}><Plus size={14} />再加一份</button>
+        <button className="remove" type="button" aria-label={`删除${title}`} onClick={() => onRemove(target)}><Trash2 size={14} />删除</button>
+      </> : adjustable && (target.kind === 'project' || target.kind === 'local') ? (
         <div className="selection-sheet-stepper" role="group" aria-label={`${title}数量`}>
           <button type="button" aria-label={`减少${title}`} onClick={() => onQuantityChange(target, -1)}><Minus size={14} /></button>
           <span aria-live="polite">{quantity}</span>

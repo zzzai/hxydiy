@@ -98,7 +98,7 @@ test('再放松一会仅展示五个小项且不堆叠项目长简介', async ()
     for (const name of names.filter((name) => name !== '局部推拿')) assert.match(markup, new RegExp(name.replace('/', '\\/')));
     assert.doesNotMatch(markup, /局部推拿/);
     assert.doesNotMatch(markup, /项目长简介/);
-    assert.equal((markup.match(/约30分钟/g) || []).length, 5);
+    assert.equal((markup.match(/加 30 分钟/g) || []).length, 5);
     assert.equal((markup.match(/拔罐\/刮痧/g) || []).length, 1);
     assert.doesNotMatch(markup, />拔罐<|>刮痧</);
   } finally { await server.close(); }
