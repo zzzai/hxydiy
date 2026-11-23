@@ -15,6 +15,7 @@ export type PrintablePositionQr = {
   code: string;
   name: string;
   image: string;
+  instruction?: string;
 };
 
 export function printablePositionQrs<T extends { id: number; type: string; operational_status: string }>(positions: T[]): T[] {
@@ -30,7 +31,7 @@ function escapeHtml(value: string): string {
 }
 
 export function buildPositionQrPrintDocument(items: PrintablePositionQr[]): string {
-  const cards = items.map((item) => `<article><img src="${item.image}" alt="${escapeHtml(item.name)}顾客二维码" /><h1>${escapeHtml(item.name)}</h1><p>${escapeHtml(item.code)}</p></article>`).join('');
+  const cards = items.map((item) => `<article><img src="${item.image}" alt="${escapeHtml(item.name)}顾客二维码" /><h1>${escapeHtml(item.name)}</h1><p>${escapeHtml(item.code)}</p>${item.instruction ? `<p>${escapeHtml(item.instruction)}</p>` : ''}</article>`).join('');
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>荷小悦服务位二维码</title><style>
     @page { size: A4; margin: 12mm; }
     body { font-family: system-ui, sans-serif; color: #173f34; }

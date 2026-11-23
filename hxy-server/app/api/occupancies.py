@@ -712,7 +712,7 @@ def update_service_position_configuration(
     return {"id": room.id, **after}
 
 
-def _create_managed_qr(db: Session, room: Room, staff_id: int) -> ServicePositionQr:
+def _create_managed_qr(db: Session, room: Room, staff_id: int | None) -> ServicePositionQr:
     source = "room_qr" if room.room_type in {"room", "bed"} else "personal_qr"
     qr = ServicePositionQr(
         public_id=str(uuid.uuid4()),
@@ -774,12 +774,15 @@ def store_door_print_sheet(db: Session, store_id: int) -> list[dict]:
     for room, qr in rows:
         if room.room_type == "room" and room.is_space_container and not room.is_service_position:
             url = f"{base}/?door={_room_door_code(room)}"
+        elif room.room_type == "room" and room.is_service_position and not room.is_space_container:
+            url = f"{base}/?door={_room_door_code(room)}" if _active_short_path(qr) else None
         elif room.room_type == "sofa" and room.is_service_position and not room.is_space_container:
             path = _active_short_path(qr)
             url = base + path if path else None
         else:
             continue
-        items.append({"code": room.code, "name": room.customer_label or room.name, "type": room.room_type, "url": url})
+        items.append({"code": room.code, "name": room.customer_label or room.name, "type": room.room_type, "url": url,
+                      "shared_room": room.room_type == "room" and room.is_service_position})
     return items
 
 
@@ -801,17 +804,24 @@ def room_door_entry(door_code: str, response: Response, db: Session = Depends(ge
         raise invalid
     store_id, room_id = map(int, match.groups())
     room = db.scalar(select(Room).where(Room.id == room_id, Room.store_id == store_id,
-        Room.room_type == "room", Room.is_space_container.is_(True), Room.is_service_position.is_(False),
-        Room.operational_status == "active"))
+        Room.room_type == "room", Room.operational_status == "active",
+        Room.is_space_container != Room.is_service_position))
     if room is None or not hmac.compare_digest(_room_door_code(room), door_code):
         raise invalid
     store = require_store_open(db.get(Store, store_id), "扫码点单")
+    response.headers["Cache-Control"] = "no-store"
+    if room.is_service_position:
+        qr = db.scalar(select(ServicePositionQr).where(
+            ServicePositionQr.store_id == store_id, ServicePositionQr.room_id == room.id,
+            ServicePositionQr.status == "active", ServicePositionQr.replaced_by_id.is_(None),
+        ))
+        return {"store_name": store.name, "room_name": room.customer_label or room.name,
+                "order_url": _active_short_path(qr), "beds": []}
     rows = db.execute(select(Room, ServicePositionQr).outerjoin(ServicePositionQr, (
         (ServicePositionQr.room_id == Room.id) & (ServicePositionQr.store_id == Room.store_id)
         & (ServicePositionQr.status == "active") & ServicePositionQr.replaced_by_id.is_(None)
     )).where(Room.store_id == store_id, Room.parent_room_id == room_id, Room.room_type == "bed",
              Room.is_service_position.is_(True), Room.is_space_container.is_(False)).order_by(Room.sort_order, Room.id))
-    response.headers["Cache-Control"] = "no-store"
     return {"store_name": store.name, "room_name": room.name, "beds": [
         {"code": bed.code, "name": bed.customer_label or bed.name, "url": _active_short_path(qr) if bed.operational_status == "active" else None}
         for bed, qr in rows

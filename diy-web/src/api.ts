@@ -235,7 +235,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export type RoomDoorEntry = { store_name: string; room_name: string; beds: { code: string; name: string; url: string | null }[] };
+export type RoomDoorEntry = { store_name: string; room_name: string; order_url?: string | null; beds: { code: string; name: string; url: string | null }[] };
 export function getRoomDoorEntry(code: string, signal?: AbortSignal) {
   return request<RoomDoorEntry>('/room-doors/' + encodeURIComponent(code), { cache: 'no-store', signal });
 }

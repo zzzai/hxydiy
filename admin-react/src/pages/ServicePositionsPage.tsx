@@ -170,7 +170,7 @@ export default function ServicePositionsPage() {
     try {
       const response = await getLiveServicePositionMap();
       setServerPositions(response.data.positions);
-      setPositions(normalizeServicePositions(response.data.positions));
+      setPositions(normalizeServicePositions(response.data.positions, response.data.store_id === 1));
       setUpdatedAt(response.data.updated_at);
       setSelected((current) => current
         ? response.data.positions.find((position) => position.id === current.id) || null
@@ -385,7 +385,7 @@ export default function ServicePositionsPage() {
     if (!selected || !positionQrImage) return;
     const link = document.createElement('a');
     link.href = positionQrImage;
-    link.download = `荷小悦-${selected.code}-顾客二维码.png`;
+    link.download = `荷小悦-${selected.customer_label || selected.name}-顾客二维码.png`;
     link.click();
   };
 
@@ -398,13 +398,14 @@ export default function ServicePositionsPage() {
     printWindow.document.write('<p>正在生成服务位二维码，请勿关闭此窗口。</p>');
     setBatchPrintBusy(true);
     try {
-      let items: { code: string; name: string; url: string }[];
+      let items: { code: string; name: string; url: string; instruction?: string }[];
       let skipped = 0;
-      if (doors) {
+      if (doors || serverPositions.some(position => position.type === 'room')) {
         const { data } = await getDoorPrintSheet();
         items = data.items.map(position => {
           if (!position.url) throw new Error(position.name + '尚无可打印的位置码');
-          return { code: data.store_name, name: position.name, url: position.url };
+          return { code: data.store_name, name: position.name, url: position.url,
+            instruction: position.shared_room ? '同房顾客共用一张选单' : undefined };
         });
       } else {
         const positions = printablePositionQrs(serverPositions);
@@ -418,11 +419,12 @@ export default function ServicePositionsPage() {
       }
       if (!items.length) { printWindow.close(); message.warning('没有可打印的位置码'); return; }
       const images = await Promise.all(items.map(async item => ({
-        code: item.code, name: item.name, image: await QRCode.toDataURL(item.url, servicePositionQrRenderOptions),
+        code: item.code, name: item.name, instruction: item.instruction, image: await QRCode.toDataURL(item.url, servicePositionQrRenderOptions),
       })));
       printWindow.document.open();
       printWindow.document.write(buildPositionQrPrintDocument(images));
       printWindow.document.close();
+      await Promise.all(Array.from(printWindow.document.images, image => image.decode()));
       printWindow.focus();
       printWindow.print();
       message.success(`已生成 ${items.length} 个服务位二维码${skipped ? `，跳过 ${skipped} 个已停用二维码` : ''}`);
@@ -496,7 +498,7 @@ export default function ServicePositionsPage() {
               </div>
             </section>
             <section className="position-group" aria-labelledby="room-group-title">
-              <header><strong id="room-group-title">房间床位</strong><span>{positionGroups.rooms.length} 个</span></header>
+              <header><strong id="room-group-title">{positionGroups.rooms.some(position => position.type === 'bed') ? '房间床位' : '房间'}</strong><span>{positionGroups.rooms.length} 个</span></header>
               <div className="position-grid room-position-grid">
                 {positionGroups.rooms.map((position) => (
                   <PositionTile key={position.id} position={position} now={now} onClick={() => { setSelected(position); setActionMode(null); setKioskLink(''); setPositionQr(null); setPositionQrLink(''); setPositionQrImage(''); }} />

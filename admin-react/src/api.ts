@@ -223,7 +223,7 @@ export type PositionQr = {
   created_at: string | null;
 };
 export const getDoorPrintSheet = () => client.get<{
-  store_name: string; items: { code: string; name: string; type: 'sofa' | 'room'; url: string | null }[];
+  store_name: string; items: { code: string; name: string; type: 'sofa' | 'room'; shared_room?: boolean; url: string | null }[];
 }>('/admin/service-positions/door-print-sheet');
 export const getPositionQrLink = (roomId: number) =>
   client.get<PositionQr>(`/admin/service-positions/${roomId}/qr-link`);

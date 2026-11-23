@@ -240,3 +240,11 @@ test('real bed codes stay selectable for per-bed QR management instead of being 
   ]);
   assert.equal(normalized.filter((position) => position.type === 'bed').length, 9);
 });
+
+test('a configured store shows only its actual sofas and shared rooms', () => {
+  const numbers = [1, 2, 3, 5, 6, 7, 8, 9, 10];
+  const names = [...numbers.map(number => `${number}号沙发`), '半夏', '忍冬', '杜若', '青黛'];
+  const rows = names.map((name, i) => ({ id: i + 1, code: `s2-${i}`, type: i < 9 ? 'sofa' : 'room', name, sort_order: i })) as any;
+  assert.deepEqual(normalizeServicePositions([], false), []);
+  assert.deepEqual(normalizeServicePositions([...rows].reverse(), false).map(p => p.name), names);
+});

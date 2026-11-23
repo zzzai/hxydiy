@@ -65,3 +65,45 @@ def test_door_sheet_and_scoped_bed_selection(daily):
     with factory.begin() as db:
         db.get(Room, multi_id).operational_status = "inactive"
     assert public(code("multiple")).status_code == 404
+
+def test_whole_room_door_shares_one_cart_and_honors_disabled_qr(daily):
+    client, factory, ids, headers = daily
+    with factory.begin() as db:
+        store = db.get(Store, ids["store"])
+        store.status = "open"
+        room = Room(store_id=store.id, code="shared-room", name="杜若", customer_label="杜若",
+                    room_type="room", is_service_position=True, is_space_container=False, capacity=2)
+        db.add(room)
+        db.flush()
+        qr = ServicePositionQr(public_id=str(uuid4()), store_id=store.id, room_id=room.id, source="room_qr", status="active")
+        _ensure_position_short_code_hash(qr)
+        db.add(qr)
+        db.flush()
+        qr_id, room_id = qr.id, room.id
+    sheet = "/api/v1/admin/service-positions/door-print-sheet"
+    item, = [v for v in client.get(sheet, headers=headers["manager"]).json()["items"] if v["code"] == "shared-room"]
+    assert item["name"] == "杜若" and item["shared_room"]
+    token, = parse_qs(urlsplit(item["url"]).query)["door"]
+    door_path = "/api/v1/room-doors/" + token
+    response = client.get(door_path)
+    assert response.headers["cache-control"] == "no-store"
+    door = response.json()
+    assert door["room_name"] == "杜若" and door["beds"] == []
+    redirect = client.get(door["order_url"], follow_redirects=False)
+    assert redirect.status_code == 307
+    query = parse_qs(urlsplit(redirect.headers["location"]).query)
+    request = {"store_id": ids["store"], "position_code": "shared-room", "source": "room_qr", "entry_token": query["qr"][0]}
+    first = client.post("/api/v1/entry-sessions", json=request)
+    client.cookies.clear()
+    second = client.post("/api/v1/entry-sessions", json=request)
+    assert first.status_code == second.status_code == 200
+    a, b = first.json(), second.json()
+    assert a["position"]["id"] == b["position"]["id"] == room_id
+    assert a["position"]["customer_label"] == "杜若"
+    assert a["session"]["id"] == b["session"]["id"] and a["occupancy"]["id"] == b["occupancy"]["id"]
+    assert a["collaboration_mode"] == b["collaboration_mode"] == "shared_draft"
+    assert a["collaboration_token"] != b["collaboration_token"]
+    with factory.begin() as db:
+        db.get(ServicePositionQr, qr_id).status = "disabled"
+    assert client.get(door_path).json()["order_url"] is None
+    assert [v["url"] for v in client.get(sheet, headers=headers["manager"]).json()["items"] if v["code"] == "shared-room"] == [None]

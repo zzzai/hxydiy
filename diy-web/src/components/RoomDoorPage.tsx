@@ -12,7 +12,8 @@ export default function RoomDoorPage({ code }: { code: string }) {
     getRoomDoorEntry(code, controller.signal).then(result => {
       if (controller.signal.aborted) return;
       setEntry(result);
-      if (result.beds.length === 1 && result.beds[0].url) window.location.replace(result.beds[0].url);
+      const target = result.order_url || (result.beds.length === 1 ? result.beds[0].url : null);
+      if (target) window.location.replace(target);
     }).catch((cause: unknown) => {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : '房间暂时无法打开');
     });
@@ -24,6 +25,7 @@ export default function RoomDoorPage({ code }: { code: string }) {
     <h1>{entry?.room_name || '房间点单'}</h1>
     {error ? <><p role="alert">{error}</p><button onClick={() => setAttempt(n => n + 1)}>重新加载</button></>
       : !entry ? <p role="status">正在读取房间信息…</p>
+      : entry.order_url ? <p role="status">正在进入{entry.room_name}的点单菜单…</p>
       : <>{entry.beds.length > 1 && <h2>请选择你所在的床位</h2>}
         {entry.beds.length === 1 && entry.beds[0].url && <p role="status">正在进入该床位的菜单…</p>}
         {!entry.beds.some(bed => bed.url) && <p>本房间暂时无法扫码点单，请联系前台。</p>}

@@ -83,7 +83,16 @@ export const DEFAULT_SERVICE_POSITION_LAYOUT = [
   ...Array.from({ length: 9 }, (_, index) => ({ type: 'bed' as const, code: `bed-${String(index + 1).padStart(2, '0')}`, name: `${index + 1}号房间床位` })),
 ] as const;
 
-export function normalizeServicePositions(positions: ServicePosition[]): ServicePosition[] {
+export function normalizeServicePositions(positions: ServicePosition[], useLegacyLayout = true): ServicePosition[] {
+  if (!useLegacyLayout || positions.some(position => position.id > 0 && position.type === 'room')) {
+    const actual = new Map<string, ServicePosition>();
+    for (const position of positions) {
+      if (position.id > 0 && ['sofa', 'room', 'bed'].includes(position.type) && !actual.has(position.code)) {
+        actual.set(position.code, position);
+      }
+    }
+    return [...actual.values()].sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
+  }
   const canonical = new Map(DEFAULT_SERVICE_POSITION_LAYOUT.map((item) => [item.code, item]));
   const valid = new Map<string, ServicePosition>();
   positions.forEach((position) => {
