@@ -65,6 +65,13 @@ const changes = [28, 29].map(n => ({ id: 'synthetic-change-' + n, state: 'awaiti
   revision: { id: 'synthetic-revision-' + n, revision_no: 2, added_items: [{ name: '头疗', quantity: 1 }], pricing: {} },
 }));
 
+type RecordedMeeting = { id: number; title: string; duration_seconds: number; created_at: string;
+  media: { id: number; url: string }; transcript_status: string; transcript_text: string; error_message: string };
+const recordingFixture = scenario.startsWith('recording');
+const meetings: RecordedMeeting[] = [];
+let uploadedAudio: Blob | null = null;
+let simulatedLostReceipt = false;
+
 let mapRevision = 0, holdNextMap = false, mapFailure = scenario === 'positions-error';
 let releaseMap: (() => void) | undefined;
 function positionFixture(storeId: number) {
@@ -124,6 +131,32 @@ client.defaults.adapter = async config => {
     summary: { today_orders: scenario === 'empty' ? 0 : 3, in_service: scenario === 'empty' ? 0 : 1, pending_checkout: scenario === 'empty' ? 0 : 1, attention: scenario === 'empty' ? 0 : 1 },
     attention: scenario === 'empty' ? [] : [{ key: 'addon', label: '顾客加选待处理', count: 1 }],
   });
+  if (recordingFixture) {
+    if (method === 'post' && path === '/admin/media') {
+      const file = config.data.get('file');
+      if (!(file instanceof Blob) || file.size <= 44 || config.data.get('purpose') !== 'meeting_audio') return fail(400, 'Expected recorded WAV');
+      uploadedAudio = file;
+      return ok({ id: 9021 });
+    }
+    if (method === 'get' && path === '/admin/media/9021/content' && uploadedAudio) {
+      return { data: uploadedAudio, status: 200, statusText: 'OK', headers: {}, config };
+    }
+    if (method === 'post' && path === '/admin/v2/manager/daily/meeting') {
+      const body = JSON.parse(config.data);
+      if (body.media_id !== 9021 || !uploadedAudio || body.duration_seconds < 1) return fail(400, 'Invalid WAV reference');
+      meetings.push({ id: 600 + meetings.length, title: body.title, media: { id: body.media_id, url: '/api/v1/admin/media/9021/content' },
+        duration_seconds: body.duration_seconds, created_at: '2026-11-09T01:00:00Z', transcript_status: 'failed', transcript_text: '', error_message: 'Synthetic ASR failure' });
+      if (!simulatedLostReceipt) { simulatedLostReceipt = true; return fail(503, 'Synthetic lost save receipt'); }
+      return ok({ meetings });
+    }
+    if (method === 'post' && path === '/admin/v2/manager/daily/meetings/600/retry-transcribe') {
+      meetings[0].transcript_status = 'transcribed'; meetings[0].transcript_text = '晨会测试文字稿';
+      return ok({ ok: true });
+    }
+    if (method === 'get' && path === '/admin/v2/manager/daily' && config.params?.date) {
+      return ok({ business_date: config.params.date, meetings: config.params.date === '2026-11-09' ? meetings : [], areas: [], completion: {} });
+    }
+  }
   if (inspectionAI && method === 'get' && path === '/admin/v2/manager/daily' && config.params?.date) {
     return ok({ business_date: config.params.date, inspection_ai_enabled: true,
       areas: [{ ...pastArea, photos: pastArea.photos.map(inspectionSnapshot) }], meetings: [], completion: { submitted: true } });
@@ -131,8 +164,8 @@ client.defaults.adapter = async config => {
   if (method === 'get' && path === '/admin/v2/manager/daily') return ok({
     inspection_ai_enabled: inspectionAI, business_date: '2026-11-09', checkin_id: 1, status: 'draft', submitted_at: null, max_photos_per_area: 3,
     areas: inspectionAreas.map(area => ({ ...area, done: !!area.photos.length, photos: area.photos.map(inspectionSnapshot), photo: area.photos[0] || null })),
-    meetings: [], completion: { areas_done: inspectionAreas.filter(area => area.photos.length).length,
-      areas_total: inspectionAreas.length, has_meeting: false, submitted: false },
+    meetings, completion: { areas_done: inspectionAreas.filter(area => area.photos.length).length,
+      areas_total: inspectionAreas.length, has_meeting: meetings.length > 0, submitted: false },
   });
   if (inspectionAI && method === 'post') {
     const match = path.match(/^\/admin\/v2\/manager\/daily\/photos\/(\d+)\/(review|manual-review)$/);

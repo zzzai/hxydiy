@@ -1,5 +1,9 @@
 # hxy-diy 共享记忆
 
+## 2026-11-23 门店位置牌与晨会录音
+
+华富世家店打印和接单使用现场确认的沙发、房间与床位名称。配置校正保留服务位 ID、code、层级和原二维码绑定。详见[服务位短码契约](contracts/service-position-short-qr-v1.md)。店长晨会录音使用独立页面，巡检完成条件见[每日巡检契约](contracts/manager-daily-inspection.md)。
+
 ## 2026-11-22 巡检拍摄与房门点单
 
 - 巡检新增和更换均从实时相机取帧，服务端要求当前门店、人员、区域、营业日和媒体的拍摄回执。历史巡检按原资料读取。详见 [巡检合同](contracts/manager-daily-inspection.md)。

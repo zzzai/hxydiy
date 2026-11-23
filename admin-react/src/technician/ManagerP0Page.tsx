@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Input, Modal, message } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined, HomeOutlined, ReloadOutlined, ShopOutlined, GiftOutlined, UserOutlined } from '@ant-design/icons';
 import { createHalfPriceCouponLink, getManagerDaily, getManagerTeam, getManagerWorkbench, getStaff } from '../api';
@@ -23,10 +24,13 @@ type Tab = 'today' | 'floor' | 'coupons' | 'me';
 type Subview = 'orders' | 'tasks' | 'reviews' | 'coupons' | 'coupon-history' | 'ops' | null;
 
 export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode } = {}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const openRecordings = () => navigate('/store/recordings', { state: { fromWorkbench: true } });
   const current = useTechnicianSession();
   const storeId = Number(getStaff()?.store_id || 0);
   const [tab, setTab] = useState<Tab>('today');
-  const [subview, setSubview] = useState<Subview>(null);
+  const [subview, setSubview] = useState<Subview>(location.state?.resumeInspection ? 'ops' : null);
   const [daily, setDaily] = useState<Awaited<ReturnType<typeof getManagerDaily>>['data'] | null>(null);
   const [team, setTeam] = useState<Awaited<ReturnType<typeof getManagerTeam>>['data'] | null>(null);
   const [workbench, setWorkbench] = useState<Awaited<ReturnType<typeof getManagerWorkbench>>['data'] | null>(null);
@@ -163,20 +167,20 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   };
 
   const openTab = (next: Tab) => { setSubview(null); setTab(next); };
-  const title = subview === 'orders' ? '订单' : subview === 'tasks' ? '待处理' : subview === 'reviews' ? '评价' : subview === 'coupons' ? '核销券' : subview === 'coupon-history' ? '券记录' : subview === 'ops' ? '巡检与晨会' : '';
+  const title = subview === 'orders' ? '订单' : subview === 'tasks' ? '待处理' : subview === 'reviews' ? '评价' : subview === 'coupons' ? '核销券' : subview === 'coupon-history' ? '券记录' : subview === 'ops' ? '区域巡检' : '';
 
   return <section className="manager-p0-page">
     {subview ? <header className="manager-p0-head">
       <div>
         <button type="button" className="manager-p0-back" onClick={() => setSubview(null)}><ArrowLeftOutlined /> 返回</button>
         <h1>{title}</h1>
-        <p>{subview === 'coupon-history' ? '发券、领取与核销记录' : subview === 'ops' ? '照片、晨会和今日留痕' : '店长工作台'}</p>
+        <p>{subview === 'coupon-history' ? '发券、领取与核销记录' : subview === 'ops' ? '今日巡检' : '店长工作台'}</p>
       </div>
       {subview !== 'coupon-history' && <Button aria-label="刷新" icon={<ReloadOutlined />} loading={loading} onClick={() => void load(true)} />}
     </header> : null}
 
     {tab === 'today' && !subview && <ManagerTodayHomeView daily={daily} workbench={workbench}
-      onOpenOps={() => setSubview('ops')} onOpenTasks={() => setSubview('tasks')}
+      onOpenOps={() => setSubview('ops')} onOpenRecordings={openRecordings} onOpenReviews={() => setSubview('reviews')} onOpenTasks={() => setSubview('tasks')}
       onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }}
       onOpenCouponHistory={() => setSubview('coupon-history')} />}
 
@@ -203,7 +207,10 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     {subview === 'orders' && <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => openTab('floor')} />}
     {subview === 'tasks' && <ManagerTasksView onOpenReviews={() => setSubview('reviews')} onOpenPositions={() => openTab('floor')} onOpenOrders={() => setSubview('orders')} />}
     {subview === 'reviews' && <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true)} onFocusError={() => message.error('评价链接已失效')} />}
-    {subview === 'ops' && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={refreshInspection} onOpenReviews={() => setSubview('reviews')} onOpenCoupons={() => void generateCoupon()} onOpenRedeemCoupon={() => { setCouponToken(''); setSubview('coupons'); }} onOpenCouponHistory={() => setSubview('coupon-history')} />}
+    {subview === 'ops' && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={refreshInspection} onOpenRecordings={() => {
+      navigate('/store', { replace: true, state: { resumeInspection: true } });
+      openRecordings();
+    }} />}
     {subview === 'coupons' && <ManagerCouponRedeemView initialToken={couponToken} onBack={() => setSubview(null)} onOpenHistory={() => setSubview('coupon-history')} />}
     {subview === 'coupon-history' && <ManagerCouponHistoryView />}
 

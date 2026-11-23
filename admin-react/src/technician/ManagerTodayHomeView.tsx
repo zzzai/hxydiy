@@ -10,10 +10,12 @@ function dateLabel() {
   return `${now.getMonth() + 1}月${now.getDate()}日 · ${weekdays[now.getDay()]}`;
 }
 
-export default function ManagerTodayHomeView({ daily, workbench, onOpenOps, onOpenTasks, onOpenCoupons, onOpenRedeemCoupon, onOpenCouponHistory }: {
+export default function ManagerTodayHomeView({ daily, workbench, onOpenOps, onOpenRecordings, onOpenReviews, onOpenTasks, onOpenCoupons, onOpenRedeemCoupon, onOpenCouponHistory }: {
   daily: Daily | null;
   workbench: Workbench | null;
   onOpenOps: () => void;
+  onOpenRecordings: () => void;
+  onOpenReviews: () => void;
   onOpenTasks: () => void;
   onOpenCoupons: () => void;
   onOpenRedeemCoupon: () => void;
@@ -26,7 +28,7 @@ export default function ManagerTodayHomeView({ daily, workbench, onOpenOps, onOp
 
   const total = daily?.completion.areas_total;
   if (total && done < total) tasks.push({ key: 'inspection', icon: '巡', title: '巡检照片', note: `${total} 个区域，完成 ${done} 个`, badge: `${done}/${total}`, tone: 'warn', onClick: onOpenOps });
-  if (!hasMeeting) tasks.push({ key: 'meeting', icon: '会', title: '晨会录音', note: '今天还没有录音', badge: '未录', tone: 'warn', onClick: onOpenOps });
+  if (!hasMeeting) tasks.push({ key: 'meeting', icon: '会', title: '晨会录音', note: '今天还没有录音', badge: '未录', tone: 'warn', onClick: onOpenRecordings });
   if (attention > 0) tasks.push({ key: 'attention', icon: '待', title: '待处理事项', note: '订单和现场提醒', badge: String(attention), tone: 'normal', onClick: onOpenTasks });
 
   return <div className="manager-home">
@@ -56,6 +58,9 @@ export default function ManagerTodayHomeView({ daily, workbench, onOpenOps, onOp
     <section className="manager-home-section">
       <div className="manager-home-label"><span>常用</span><small>本店</small></div>
       <div className="manager-home-quick">
+        <button type="button" onClick={onOpenRecordings}><b>录</b><span>录音记录</span></button>
+        <button type="button" onClick={onOpenOps}><b>巡</b><span>区域巡检</span></button>
+        <button type="button" onClick={onOpenReviews}><b>评</b><span>顾客评价</span></button>
         <button type="button" onClick={onOpenCoupons}><b>券</b><span>发券</span></button>
         <button type="button" onClick={onOpenRedeemCoupon}><b>核</b><span>核销券</span></button>
         <button type="button" onClick={onOpenCouponHistory}><b>记</b><span>券记录</span></button>

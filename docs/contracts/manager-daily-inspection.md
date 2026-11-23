@@ -23,3 +23,7 @@
 - 旧版客户端兼容调用 POST `/photos/{photo_id}/review`，携带 `media_id` 和 `expected_attempt`。首次请求历史图，或重试一次已失败的审核。进行中、已完成请求幂等。POST `/photos/{photo_id}/manual-review` 携带 `media_id` 和 `verdict`。媒体变化返回 409，跨店不可见。
 - `pending/running/done/failed/superseded` 分别表示排队、审核中、有结论、未能完成、原图已更换。中断及服务商错误保留照片，遇到临时错误时，后台在第 2 分钟和第 10 分钟后分别重试，最多调用三次。`review.retry_scheduled` 表示仍有自动重试安排。不可读取的图片或重试耗尽时显示「AI 未能给出结论」。原图和审核关联沿用 90 天保留期。
 - 生产通过 `INSPECTION_AI_ENABLED` 和已配置的 DeepSeek 账户开启。新旧照片统一按有效巡检范围处理。独立开关可暂停外部调用。
+
+## 店长晨会录音入口
+
+「今日」的晨会待办和常用「录音记录」均打开 `/technician/store/recordings`。店长可录制、保存、按营业日期回听音频、查看文字稿和重试失败的转写。区域巡检保留晨会完成状态和录音入口，提交巡检仍检查当日照片和晨会记录。历史音频和文字稿沿用原有访问范围与保留期限。

@@ -82,6 +82,45 @@ async function main() {
       await noOverflow(); await shot('ops-' + width);
     });
 
+    await check('independent-recording-page-save-replay-history', async () => {
+      await start('recording'); await loaded();
+      await page.getByRole('button', { name: /晨会录音/ }).click();
+      await page.waitForURL('**/store/recordings');
+      await page.getByRole('heading', { name: '晨会录音' }).waitFor();
+      assert.equal(await page.locator('.manager-p0-area, .manager-p0-nav, .manager-home-orders').count(), 0);
+      assert.equal(await page.getByRole('button', { name: /发券|核销|提交今日巡检/ }).count(), 0);
+      await noOverflow(); await shot('recording-page');
+      await context.grantPermissions([], { origin });
+      await page.getByRole('button', { name: '开始录音' }).click();
+      await page.getByText('无法使用麦克风，请允许麦克风权限后重试。').waitFor();
+      await context.grantPermissions(['microphone'], { origin });
+      await page.getByRole('button', { name: '开始录音' }).click();
+      await page.getByRole('button', { name: '结束并保存' }).waitFor();
+      await page.waitForFunction(() => document.querySelector('.manager-p0-recording strong')?.textContent === '00:01');
+      await page.getByRole('button', { name: '结束并保存' }).click();
+      await page.getByRole('button', { name: '重试保存' }).click();
+      await page.getByText('录音已保存', { exact: true }).waitFor();
+      assert.equal(await page.locator('.manager-recording-item').count(), 1, 'A lost save receipt must not duplicate the recording');
+      await page.getByRole('button', { name: '载入录音' }).click();
+      await page.waitForFunction(() => document.querySelector('audio')?.src.startsWith('blob:'));
+      await page.locator('audio').evaluate(a => a.play());
+      await page.getByRole('button', { name: '重新转写' }).click();
+      await page.getByText('查看文字稿').click();
+      await page.getByText('晨会测试文字稿').waitFor();
+      await page.getByLabel('录音日期').fill('2026-11-08');
+      await page.getByText('当天没有录音').waitFor();
+      assert.equal(await page.getByRole('button', { name: '开始录音' }).count(), 0);
+      await page.getByRole('button', { name: '回到今天' }).click();
+      await page.getByText('查看文字稿').waitFor();
+      await page.getByRole('button', { name: '返回', exact: true }).click();
+      await loaded();
+      await page.getByRole('button', { name: /录音记录/ }).click();
+      await page.getByRole('heading', { name: '晨会录音' }).waitFor();
+      await page.reload();
+      await page.getByRole('heading', { name: '晨会录音' }).waitFor();
+      await context.clearPermissions();
+    });
+
     await check('inspection-live-camera-only-and-retake', async () => {
       await start('inspection-photos'); await loaded();
       await page.getByRole('button', { name: /巡检照片/ }).click();

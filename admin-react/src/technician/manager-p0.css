@@ -143,3 +143,10 @@
 .manager-coupon-poster-image{display:block;width:min(100%,300px);height:auto;max-height:52vh;object-fit:contain;border-radius:14px;box-shadow:0 10px 26px rgba(20,45,35,.14)}.manager-coupon-poster-loading,.manager-coupon-poster-error{display:grid;min-height:260px;place-items:center;width:min(100%,320px);padding:18px;border:1px dashed #dce7e1;border-radius:14px;background:#f8fbf9;color:#647a71;font-size:12px;text-align:center}.manager-coupon-poster-error{color:#b44230;background:#fff8f5;border-color:#f0d9d2}
 
 .manager-coupon-poster-actions { flex-wrap: wrap; justify-content: center; max-width: 100%; }
+
+.manager-recordings .manager-p0-card-head { flex-wrap: wrap; gap: 8px; }
+.manager-recordings input[type="date"] { max-width: 100%; min-height: 40px; padding: 4px 8px; color: inherit; border: 1px solid #d8e3db; border-radius: 8px; background: white; font: inherit; }
+.manager-recording-item { border-top: 1px solid #e2e9e4; padding-block: 14px; }
+.manager-recording-item h3 { margin: 0; }
+.manager-recording-item small { display: block; color: #52625a; margin: 4px 0 8px; }
+.manager-recording-item summary { cursor: pointer; }
