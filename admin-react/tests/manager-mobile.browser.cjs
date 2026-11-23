@@ -117,6 +117,9 @@ async function main() {
       await page.getByRole('button', { name: /录音记录/ }).click();
       await page.getByRole('heading', { name: '晨会录音' }).waitFor();
       await page.reload();
+      await page.waitForURL('**/store/login');
+      assert.equal(await page.getByRole('heading', { name: '晨会录音' }).count(), 0);
+      await start('recording', 375, '/technician/store/recordings');
       await page.getByRole('heading', { name: '晨会录音' }).waitFor();
       await context.clearPermissions();
     });
