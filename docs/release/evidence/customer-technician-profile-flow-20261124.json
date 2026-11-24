@@ -1,0 +1,260 @@
+{
+  "release_id": "server-ef7381214ba4-1795531245",
+  "source_sha": "ef7381214ba403df86b360c208780c1719187a44",
+  "previous_release": "server-be9e854021fc-1795529111",
+  "baseline": "dbbba004d4283975efeadf995c83942646701fa2",
+  "server_time_utc": "2026-11-24T14:48:18.797405+00:00",
+  "prepared_manifest_sha256": "0aa4087fd2e01ea66e3280f084a0dca6136f698e3584d26bb01bae6373353074",
+  "installed_manifest_sha256": "2c68b765dba970289ab1ca8d2e4fc18f90a9fa3082e7f583ab8975c810c21074",
+  "matching_manifest_entries": 655,
+  "backup_checksum_verified": true,
+  "isolated_restore_verified_by_release_gate": true,
+  "database_migrations_in_change": false,
+  "schema_verification": {
+    "backup_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "before_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "current_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "equal": true
+  },
+  "protected_business_tables": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "health": {
+    "status": "ok",
+    "environment": "production"
+  },
+  "public_asset_sha256": {
+    "/assets/technician-illustration-2-v1.webp": "6ad927d2860174196f363cda70abc37f939c83d7a4f95910c5ffc6fb5aa7ee31",
+    "/assets/App-CsxzdSmS.css": "0dca20a568c22ce140e4b69fab94025f2fcc132dc16f1b7eba8e4da602fd5022",
+    "/assets/technician-illustration-6-v1.webp": "2b4101b9e55df37e01eb0bf3c7c09d93e48c19ed5f308d70a02223c9e751d102",
+    "/assets/index-Cn2850Vd.js": "9151f1a76e781926de29cdfeb24152551f3d5ac4674b0fc36038bf231d83f3b7",
+    "/assets/App-CV3EXDF_.js": "3b1bbeee9d821d2856434edd120c2dc1b07b9bebe1730ac39a099f1e24d10f34",
+    "/assets/technician-illustration-4-v1.webp": "08506ecd335c3a554e86b8612196e22659ac11b1b45332ff36a8e2974f163657",
+    "/assets/technician-illustration-5-v1.webp": "90dcb4eb8354db0d4ac1377af20021b4f26ea9a4bf3a93f6a863772f9fe931a1",
+    "/assets/technician-illustration-3-v1.webp": "803f8e5d202ed50c8fba43cda8cb382569b611963df1f1eb190e11d35e86eed0",
+    "/assets/technician-illustration-1-v1.webp": "8cab213dd8039b96046db2615b4ff4fc598286e8df93c90b6adfbea29a38b86c"
+  },
+  "public_browser": [
+    {
+      "store_id": 1,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 0,
+      "two_columns": true,
+      "illustration_paths": [
+        "/assets/technician-illustration-1-v1.webp",
+        "/assets/technician-illustration-2-v1.webp",
+        "/assets/technician-illustration-3-v1.webp",
+        "/assets/technician-illustration-4-v1.webp",
+        "/assets/technician-illustration-5-v1.webp",
+        "/assets/technician-illustration-6-v1.webp"
+      ],
+      "six_distinct_illustrations": true,
+      "labeled_as_ai": true,
+      "details_and_return": true,
+      "profile_occupies_viewport": true,
+      "return_restores_focus_and_scroll": true,
+      "both_back_actions": true,
+      "no_unrelated_profile_actions": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-CV3EXDF_.js",
+        "/assets/App-CsxzdSmS.css"
+      ]
+    },
+    {
+      "store_id": 2,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 6,
+      "two_columns": true,
+      "illustration_paths": [
+        "/assets/technician-illustration-1-v1.webp",
+        "/assets/technician-illustration-2-v1.webp",
+        "/assets/technician-illustration-3-v1.webp",
+        "/assets/technician-illustration-4-v1.webp",
+        "/assets/technician-illustration-5-v1.webp",
+        "/assets/technician-illustration-6-v1.webp"
+      ],
+      "six_distinct_illustrations": true,
+      "labeled_as_ai": true,
+      "details_and_return": true,
+      "profile_occupies_viewport": true,
+      "return_restores_focus_and_scroll": true,
+      "both_back_actions": true,
+      "no_unrelated_profile_actions": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-CV3EXDF_.js",
+        "/assets/App-CsxzdSmS.css"
+      ]
+    }
+  ],
+  "isolated_customer_suite": {
+    "passed": 412,
+    "skipped": 1,
+    "failed": 0
+  },
+  "isolated_store_flows": [
+    {
+      "store": 2,
+      "directory": true,
+      "tabCycle": true,
+      "back": true,
+      "orderDraftPreserved": true,
+      "verifiedRequest": false,
+      "browsingOrderWrites": 0,
+      "independentProfile": true,
+      "directNamedProject": false,
+      "returnedToScrolledList": true
+    },
+    {
+      "store": 1,
+      "directory": true,
+      "tabCycle": true,
+      "back": true,
+      "orderDraftPreserved": true,
+      "verifiedRequest": true,
+      "browsingOrderWrites": 0,
+      "independentProfile": true,
+      "directNamedProject": true,
+      "returnedToScrolledList": false
+    }
+  ],
+  "chrome": [
+    {
+      "case": "public",
+      "store": 1,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 1,
+      "width": 614,
+      "height": 884,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "portrait",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "mixed",
+      "store": 2,
+      "width": 320,
+      "height": 600,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "error",
+      "store": 1,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "empty",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 0,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "asset-error",
+      "store": 1,
+      "width": 390,
+      "height": 740,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    }
+  ],
+  "webkit": [
+    {
+      "case": "public",
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "portrait",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "mixed",
+      "store": 2,
+      "width": 320,
+      "height": 600,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    }
+  ],
+  "physical_wechat_acceptance": false,
+  "original_issue": {
+    "store": 2,
+    "viewport_height": 800,
+    "dialog_top": 404.984375,
+    "dialog_height": 395.015625,
+    "next_person_button": true,
+    "generic_menu_button": true,
+    "real_order_writes": 0
+  },
+  "media_changes": 0
+}
