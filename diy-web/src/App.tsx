@@ -2347,8 +2347,8 @@ export default function App() {
       </section>
 
       {technicianView && <TechnicianShowcase key={technicianView.storeId} view={technicianView} storeName={storeDisplayName} projects={projects}
-        canEdit={!readOnly && editKey !== 'legacy' && technicianView.projectId !== undefined &&
-          technicianView.projectId === (detailProject?.id ?? (localDetailOpen ? localProject?.id : undefined))}
+        canEdit={!readOnly && (technicianView.projectId === undefined || (editKey !== 'legacy' &&
+          technicianView.projectId === (detailProject?.id ?? (localDetailOpen ? localProject?.id : undefined))))}
         directoryFooter={currentTab === 'technicians' && <>
           {selectedCount > 0 && <button type="button" className="technician-directory-summary" onClick={() => {
             openSelectionSummary();
@@ -2358,10 +2358,11 @@ export default function App() {
         </>}
         navigate={openTechnicians} back={dismissTopOverlay} finish={finishTechnicians}
         onRequest={technician => { setRequestedTechnician(technician); finishTechnicians(); }}
-        onProject={project => {
+        onProject={(project, requested) => {
           setTechnicianView(null);
           if (project.category === 'local-strength') openLocalDetail();
           else openProjectDetail(project);
+          if (requested && !readOnly) setRequestedTechnician(requested);
           window.history.replaceState({ ...window.history.state, hxyShowcaseProject: project.id }, '', window.location.href);
         }} />}
       <ReturnEntryBanner storeId={query.storeId} />

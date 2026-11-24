@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Expand, Images, MapPin, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Expand, Images, MapPin, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { getStoreTechnicians, selectableTechnicians, type PublicTechnician, type SelectableTechnician } from '../api';
 import { assetPath, displayProjectName, formatMoney, type Project } from '../domain';
@@ -14,7 +14,7 @@ type Props = {
   navigate: (view: TechnicianView, replace?: boolean) => void;
   back: () => void;
   finish: () => void;
-  onProject: (project: Project) => void;
+  onProject: (project: Project, requested?: SelectableTechnician) => void;
   onRequest: (technician: SelectableTechnician) => void;
 };
 
@@ -71,6 +71,7 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
   const detailScroll = useRef<HTMLDivElement>(null);
   const listScroll = useRef<HTMLDivElement>(null);
   const lastProfile = useRef<string>();
+  const profileHeading = useRef<HTMLHeadingElement>(null);
   const swipeX = useRef<number>();
   const check = useRef<AbortController>();
   const [profiles, setProfiles] = useState<PublicTechnician[]>([]);
@@ -85,7 +86,6 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
   const available = (p: PublicTechnician) => Boolean(project && p.technician_id && p.requestable_project_ids.includes(project.id));
   const peers = project ? [...profiles].sort((a, b) => Number(available(b)) - Number(available(a))) : profiles;
   const requestCount = profiles.filter(p => inProject ? available(p) : p.requestable_project_ids.length > 0).length;
-  const next = person && peers.length > 1 ? peers[(peers.findIndex(p => p.key === person.key) + 1) % peers.length] : null;
   const services = person ? projects.filter(p => person.project_ids.includes(p.id)) : [];
   const hasPortrait = (p: PublicTechnician) => Boolean(p.portrait_url && !failedImages.includes(p.portrait_url));
   const portraitVisible = Boolean(person && hasPortrait(person));
@@ -118,22 +118,29 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
     }
     lastProfile.current = view.profile;
     return () => check.current?.abort();
-  }, [view.profile, view.projectId]);
+  }, [view.profile, view.projectId, view.photo, canEdit]);
+  useEffect(() => {
+    if (person && view.photo === undefined) profileHeading.current?.focus({ preventScroll: true });
+  }, [person?.key, view.photo]);
 
-  const requestPerson = async () => {
-    if (!person?.technician_id || !project || !canEdit || checking) return;
+  const requestPerson = async (service: Project) => {
+    if (!person?.technician_id || !canEdit || checking || !person.requestable_project_ids.includes(service.id)) return;
     const controller = new AbortController();
     check.current?.abort();
     check.current = controller;
     setChecking(true);
     setNotice('');
     try {
-      const items = await selectableTechnicians(view.storeId, project.id, controller.signal);
+      const items = await selectableTechnicians(view.storeId, service.id, controller.signal);
       if (controller.signal.aborted) return;
       const match = items.find(item => item.id === person.technician_id);
-      if (match) { onRequest(match); return; }
+      if (match) {
+        if (inProject) onRequest(match);
+        else onProject(service, match);
+        return;
+      }
       setProfiles(rows => rows.map(row => row.key === person.key
-        ? { ...row, requestable_project_ids: row.requestable_project_ids.filter(id => id !== project.id) } : row));
+        ? { ...row, requestable_project_ids: row.requestable_project_ids.filter(id => id !== service.id) } : row));
       setNotice('这位技师现在无法点名。');
     } catch {
       if (!controller.signal.aborted) setNotice('暂时无法确认能否点名，请再试一次。');
@@ -155,11 +162,10 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
     if (Math.abs(distance) > 45) stepPhoto(distance < 0 ? 1 : -1);
   };
 
-  const seeService = (p: Project) => inProject ? finish() : onProject(p);
+  const offersNamedService = person && services.some(service => person.requestable_project_ids.includes(service.id));
   const statusText = person && (inProject
-    ? (available(person) ? '点名由店长确认'
-      : profiles.some(available) ? '这位技师目前不能点名此项目。' : '这个项目今天由门店安排技师。')
-    : person.requestable_project_ids.length ? '点名由店长确认' : '今天由门店安排技师。');
+    ? (available(person) ? (canEdit ? '点名由店长确认' : '这份服务暂不能更改技师') : profiles.some(available) ? '这位技师目前不能点名此项目。' : '这个项目由门店安排技师。')
+    : offersNamedService ? '点名由店长确认' : '到店由门店安排，暂不支持线上点名。');
 
   const directoryGroups = inProject && requestCount > 0 && requestCount < peers.length
     ? [{ title: '本项目可点名', rows: peers.filter(available) }, { title: '其他技师', rows: peers.filter(p => !available(p)) }]
@@ -186,8 +192,7 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
       onPhotoError={markFailed} />;
   };
   const venue = storeName.replace(/^(?:荷小悦\s*[-·]?\s*)?草本泡脚[（(]([^（）()]+)[）)]$/, '$1');
-  const compact = person && !portraitVisible && !person.tags.length && !person.introduction && !person.photos.some(item => !failedImages.includes(item.url)) && !services.length;
-  return <dialog className={compact ? 'technician-showcase compact' : 'technician-showcase'} ref={dialog} aria-labelledby="technician-title"
+  return <dialog className={'technician-showcase' + (view.profile ? ' technician-profile-page' : '')} ref={dialog} aria-labelledby="technician-title"
     onCancel={event => { event.preventDefault(); back(); }}
     onKeyDown={event => {
       if (event.key !== 'Escape') return;
@@ -197,7 +202,9 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
       back();
     }}>
     {view.profile ? <header className="mini-detail-nav technician-nav">
-      <button type="button" onClick={back} aria-label={photo ? '返回技师主页' : '返回本店技师'}>{photo ? <X /> : <ArrowLeft />}</button>
+      <button type="button" className="technician-back-link" onClick={back} aria-label={photo ? '返回技师主页' : '返回本店技师'}>
+        {photo ? <X size={21} /> : <><ChevronLeft size={19} />技师列表</>}
+      </button>
       <strong id="technician-title">{photo ? '工作相册' : '技师主页'}</strong>
       <span title={storeName}>{venue}</span>
     </header> : <header className={'technician-directory-head' + (useCover ? ' has-cover' : '')}>
@@ -236,7 +243,7 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
         {view.profile && !person && <div className="technician-message"><p>这位技师的资料已下架</p><button type="button" onClick={back}>返回技师列表</button></div>}
         {person && !photo && <>
           <div ref={detailScroll} className="technician-scroll technician-detail">
-            <section className={'technician-identity' + (detailPhoto && detailPhoto.kind !== 'work' ? ' has-portrait' : '')}>
+            <section className="technician-identity">
               {portraitVisible && <button type="button" className="technician-portrait" onClick={() => openPhoto(0)} aria-label={'放大' + person.label + '的肖像'}>
                 <img src={person.portrait_url} alt={person.label + '的工作肖像'} onError={() => markFailed(person.portrait_url)} /><Expand size={16} />
               </button>}
@@ -244,29 +251,36 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
                 <img src={detailPhoto.url} alt="" onError={() => markFailed(detailPhoto.url)} />
                 <span className="technician-photo-caption">{illustrationCaption}</span>
               </div>}
-              <div className="technician-person"><h1><TechnicianName label={person.label} /></h1>{person.experience && <p className="technician-experience"><Tenure value={person.experience} /></p>}
+              <div className="technician-person"><h1 ref={profileHeading} tabIndex={-1}><TechnicianName label={person.label} /></h1>{person.experience && <p className="technician-experience"><Tenure value={person.experience} /></p>}
+                {!inProject && <p className="technician-assignment">{statusText}</p>}
                 {person.tags.length > 0 && <ul className="technician-tags" aria-label="服务风格">{person.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>}
               </div>
             </section>
             {person.introduction && <p className="technician-intro">{person.introduction}</p>}
             {services.length > 0 && <section className="technician-section"><h2>可做项目</h2><ul className="technician-services">{services.map(p => {
               const price = p.prices.find(v => v.price_type === 'store')?.amount_cents;
+              const named = canEdit && Boolean(person.technician_id) && person.requestable_project_ids.includes(p.id);
               const line = <><span><b>{displayProjectName(p)}</b>{p.duration_min != null && <small>{p.duration_min} 分钟</small>}</span>
-                {price != null && <strong>{formatMoney(price)}</strong>}</>;
-              return <li key={p.id}>{inProject ? <div>{line}</div> : <button type="button" onClick={() => seeService(p)}>{line}<ChevronRight size={18} /></button>}</li>;
+                <span className="technician-service-choice">{price != null && <strong>{formatMoney(price)}</strong>}
+                  {!inProject && <small>{named ? '选项目并点名' : '查看项目'}<ChevronRight size={14} aria-hidden="true" /></small>}
+                </span></>;
+              return <li key={p.id}>{inProject ? <div>{line}</div> : <button type="button" disabled={checking}
+                onClick={() => named ? void requestPerson(p) : onProject(p)}>{line}</button>}</li>;
             })}</ul></section>}
             {person.photos.some(item => !failedImages.includes(item.url)) && <section className="technician-section"><h2><Images size={19} />服务现场</h2>
               <div className="technician-photos">{person.photos.map((picture, i) => !failedImages.includes(picture.url) &&
                 <button type="button" key={picture.url} onClick={() => openPhoto(i + Number(Boolean(person.portrait_url)))}><img src={picture.url} alt="" loading="lazy" onError={() => markFailed(picture.url)} /><span>{picture.caption}</span></button>)}</div>
             </section>}
           </div>
-          <footer className="technician-dock"><p role="status">{notice || statusText}</p>
-            <nav aria-label="技师主页操作">{next && <button type="button" className="technician-secondary" onClick={() => navigate({...view, profile: next.key, photo: undefined}, true)}>
-              看{next.label}</button>}
-              {canEdit && available(person) ? <button type="button" className="technician-primary" onClick={requestPerson} disabled={checking}><Check size={17} />{checking ? '确认中…' : '本份服务点名'}</button>
-                : <button type="button" className="technician-primary" onClick={() => inProject ? finish() : services[0] ? seeService(services[0]) : finish()}>
-                  {inProject ? '返回当前项目' : services.length ? '看项目详情' : '看本店项目'}<ChevronRight size={17} /></button>}
-            </nav></footer>
+          {!inProject && (notice || checking) && <p className="technician-request-notice" role="status">
+            {checking ? '正在确认能否点名…' : notice}
+          </p>}
+          {inProject && <footer className="technician-dock">
+            <p role="status">{project && <strong>{displayProjectName(project)} · </strong>}{notice || statusText}</p>
+            {canEdit && project && available(person)
+              ? <button type="button" className="technician-primary" onClick={() => void requestPerson(project)} disabled={checking}><Check size={17} />{checking ? '确认中…' : '本份服务点名'}</button>
+              : <button type="button" className="technician-secondary" onClick={finish}>返回当前项目</button>}
+          </footer>}
         </>}
         {person && photo && <div className="technician-viewer" onTouchStart={e => {e.stopPropagation(); swipeX.current=e.touches[0]?.clientX;}}
           onTouchEnd={endSwipe}
