@@ -121,10 +121,10 @@
 .technician-directory-summary span:last-child { display: flex; align-items: center; gap: 3px; }
 .technician-showcase:has(> .technician-directory-foot) > .technician-directory-foot,
 .profile-page:has(> .customer-bottom-nav) > .customer-bottom-nav { position: absolute; inset: auto 0 0; }
-.technician-showcase:has(> .technician-directory-foot) .technician-list {
+.technician-showcase:has(> .technician-directory-foot) .technician-directory {
   padding-bottom: calc(var(--customer-dock-height) + 8px);
 }
-.technician-showcase:has(.technician-directory-summary) .technician-list {
+.technician-showcase:has(.technician-directory-summary) .technician-directory {
   padding-bottom: calc(var(--customer-dock-height) + 54px);
 }
 .profile-page:has(> .customer-bottom-nav) > :is(.profile-anonymous-body, .profile-body) {
