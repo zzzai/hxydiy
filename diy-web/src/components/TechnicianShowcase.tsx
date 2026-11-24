@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Expand, Images, UserRound, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getStoreTechnicians, selectableTechnicians, type PublicTechnician, type SelectableTechnician } from '../api';
 import { displayProjectName, formatMoney, type Project } from '../domain';
 import type { TechnicianView } from '../technicianNavigation';
@@ -10,6 +10,7 @@ type Props = {
   storeName: string;
   projects: Project[];
   canEdit: boolean;
+  directoryFooter?: ReactNode;
   navigate: (view: TechnicianView, replace?: boolean) => void;
   back: () => void;
   finish: () => void;
@@ -30,7 +31,7 @@ function experience(person: PublicTechnician) {
   return person.experience && (/^\d/.test(person.experience) ? '从业 ' + person.experience : person.experience);
 }
 
-export default function TechnicianShowcase({ view, storeName, projects, canEdit, navigate, back, finish, onProject, onRequest }: Props) {
+export default function TechnicianShowcase({ view, storeName, projects, canEdit, navigate, back, finish, onProject, onRequest, directoryFooter }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const detailScroll = useRef<HTMLDivElement>(null);
   const listScroll = useRef<HTMLDivElement>(null);
@@ -186,5 +187,6 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
             <button type="button" aria-label="下一张" disabled={view.photo === photos.length - 1} onClick={() => stepPhoto(1)}><ChevronRight /></button></div>
         </div>}
       </>}
+    {directoryFooter && <div className="technician-directory-foot">{directoryFooter}</div>}
   </dialog>;
 }

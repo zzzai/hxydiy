@@ -1,5 +1,5 @@
 import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Store, UserRound, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
@@ -25,7 +25,7 @@ const SHOW_DYNAMIC_MEMBER_CODE = false;
 const OPEN_COUPON_ON_MOUNT = typeof window !== 'undefined'
   && new URLSearchParams(window.location.search).get('coupon') === '1';
 
-export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, onReportsBack, onOpenReports, storeId = 1, refreshKey = 0 }: {
+export default function ProfilePage({ open, auth, onClose, onAuthChange, initialReportsOpen = false, onReportsBack, onOpenReports, storeId = 1, refreshKey = 0, navigation }: {
   open: boolean;
   auth: CustomerAuth | null;
   onClose: () => void;
@@ -35,6 +35,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   onOpenReports?: () => void;
   storeId?: number;
   refreshKey?: number;
+  navigation?: ReactNode;
 }) {
   const [tab, setTab] = useState<TabKey>(OPEN_COUPON_ON_MOUNT ? 'coupons' : 'records');
   const [reportsOpen, setReportsOpen] = useState(initialReportsOpen);
@@ -218,6 +219,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
             {SHOW_DYNAMIC_MEMBER_CODE && memberCodeOpen && <MemberCodeDialog token={auth.token} phone={auth.user.phone} onTokenReplaced={(token) => { const next = { ...auth, token }; writeCustomerAuth(next); onAuthChange(next); }} onClose={() => setMemberCodeOpen(false)} />}
           </main>
         )}
+      {!reportsOpen && !selectedRecord && !feedbackRecord && !returnPanel && !memberCodeOpen && navigation}
     </div>
   );
 }

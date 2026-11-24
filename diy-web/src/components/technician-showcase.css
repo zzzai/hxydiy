@@ -1,6 +1,3 @@
-.technician-menu-actions { display: flex; align-items: center; flex: none; gap: 6px; }
-.technician-menu-actions .miniapp-profile-entry { min-height: 40px; white-space: nowrap; }
-.miniapp-context-bar:has(.technician-menu-actions) .miniapp-store { flex: 1; width: auto; min-width: 0; }
 .technician-browse { display: inline-flex; align-items: center; min-height: 44px; gap: 4px; padding: 0; border: 0; color: var(--pine, #176856); background: transparent; font: inherit; font-weight: 600; }
 .technician-showcase { position: fixed; inset: 0; width: min(100%, 620px); max-width: 100%; height: 100%; height: 100dvh; max-height: 100%; padding: 0; margin: auto; border: 0; color: var(--ink, #17211e); background: #fff; font-family: inherit; }
 .technician-showcase[open] { display: flex; flex-direction: column; }
@@ -64,10 +61,6 @@
 .technician-viewer p { margin: 0; text-align: center; }
 .technician-viewer small { display: block; margin-top: 3px; font-size: 12px; }
 @media (max-width: 374px) {
-  .miniapp-context-bar:has(.technician-menu-actions) { gap: 4px; padding-inline: 8px; }
-  .technician-menu-actions { gap: 3px; }
-  .technician-menu-actions .miniapp-profile-entry { padding-inline: 6px; }
-  .miniapp-context-bar:has(.technician-menu-actions) .miniapp-store small { padding-inline: 5px; }
   .technician-dock button { font-size: 14px; }
 }
 

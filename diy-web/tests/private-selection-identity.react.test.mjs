@@ -454,7 +454,7 @@ test('my page opens service history on demand after login on the seat-free menu'
   const app = await mount();
   await act(async () => profile(app).props.onAuthChange(auth(42)));
   await settle();
-  await act(async () => app.root.findByProps({ className: 'miniapp-profile-entry' }).props.onClick());
+  await act(async () => app.root.findByProps({ 'aria-label': '顾客导航' }).findByProps({ 'aria-label': '我的' }).props.onClick());
   await settle();
   assert.equal(app.root.findAllByProps({ id: 'profile-records' }).length, 0, 'history must stay collapsed initially');
   const historyButton = app.root.find(node => node.type === 'button' && node.props['aria-controls'] === 'profile-records' && !node.props['aria-label']);

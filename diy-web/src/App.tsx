@@ -4,7 +4,6 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
-  CircleUserRound,
   Clock3,
   FileText,
   LocateFixed,
@@ -73,6 +72,7 @@ import { shareProjectLink } from './projectShare';
 import { configureWeChatProjectShare, isWeChatBrowser } from './wechatShare';
 import PortionTechnicianPicker from './components/PortionTechnicianPicker';
 import TechnicianShowcase from './components/TechnicianShowcase';
+import CustomerBottomNav, { type CustomerTab } from './components/CustomerBottomNav';
 import { readTechnicianView, technicianBackSteps, technicianViewState, type TechnicianView } from './technicianNavigation';
 import ProjectDetailPage from './components/ProjectDetailPage';
 import HalfPriceProjectPrice from './components/HalfPriceProjectPrice';
@@ -2282,8 +2282,31 @@ export default function App() {
     );
   }
 
+  const stack = readOverlayHistoryStack(window.history.state);
+  let currentTab: CustomerTab | null = null;
+  if (!storePickerOpen) {
+    if (!activeOverlay) currentTab = 'projects';
+    else if (stack.length === 1 && stack[0] === activeOverlay) {
+      if (activeOverlay === 'profile') currentTab = 'profile';
+      if (activeOverlay === 'technicians' && technicianView && !technicianView.profile && technicianView.projectId === undefined) currentTab = 'technicians';
+    }
+  }
+  const switchTab = (tab: CustomerTab) => {
+    if (!currentTab || currentTab === tab) return;
+    if (tab === 'projects') { dismissTopOverlay(); return; }
+    const switching = currentTab !== 'projects';
+    const state = switching
+      ? replaceOverlayHistoryState(window.history.state, tab)
+      : createOverlayHistoryState(window.history.state, tab);
+    if (tab === 'technicians') state.hxyTechnicianView = { storeId: query.storeId };
+    if (switching) window.history.replaceState(state, '', window.location.href);
+    else window.history.pushState(state, '', window.location.href);
+    applyOverlayHistoryState(readOverlayHistoryStack(state), state);
+  };
+  const bottomNav = currentTab && <CustomerBottomNav active={currentTab} onSelect={switchTab} />;
+
   return (
-    <div className="customer-app" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
+    <div className="customer-app with-bottom-nav" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
       {!online && <div className="offline-banner"><WifiOff size={15} />网络已断开，恢复后将继续同步</div>}
       <header className={`miniapp-context-bar${publicBrowsing && isWeChatBrowser() ? ' wechat-public-menu-header' : ''}`}>
         {publicBrowsing ? <button type="button" className="miniapp-store" onClick={() => setStorePickerOpen(true)} aria-label="切换门店"><MapPinned size={16} /><span>{storeDisplayName}</span><small>切换门店</small></button> : <button type="button" className="miniapp-store" onClick={() => setStorePickerOpen(true)} aria-label="切换门店">
@@ -2292,14 +2315,6 @@ export default function App() {
           <em>{position?.customer_label || '服务位待核对'}</em>
           <small>切换门店</small>
         </button>}
-        <nav className="technician-menu-actions" aria-label="门店服务">
-          <button className="miniapp-profile-entry technician-directory-entry" type="button" onClick={() => openTechnicians({ storeId: query.storeId })}>
-            <UsersRound size={17} /><span>本店技师</span>
-          </button>
-          <button className="miniapp-profile-entry" type="button" onClick={openProfile}>
-            <CircleUserRound size={18} /><span>{publicBrowsing || customerAuth ? '我的' : '登录'}</span>
-          </button>
-        </nav>
       </header>
 
       {['ready', 'public-menu'].includes(boot) && hasSubmittedCustomerSession && collaborationMode !== 'browse_only' && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
@@ -2333,6 +2348,13 @@ export default function App() {
       {technicianView && <TechnicianShowcase key={technicianView.storeId} view={technicianView} storeName={storeDisplayName} projects={projects}
         canEdit={!readOnly && editKey !== 'legacy' && technicianView.projectId !== undefined &&
           technicianView.projectId === (detailProject?.id ?? (localDetailOpen ? localProject?.id : undefined))}
+        directoryFooter={currentTab === 'technicians' && <>
+          {selectedCount > 0 && <button type="button" className="technician-directory-summary" onClick={() => {
+            openSelectionSummary();
+            setTechnicianView(null);
+          }}><span>已选 {selectedCount} 份 · {formatMoney(payableTotal)}</span><span>查看选单<ChevronRight size={16} /></span></button>}
+          {bottomNav}
+        </>}
         navigate={openTechnicians} back={dismissTopOverlay} finish={finishTechnicians}
         onRequest={technician => { setRequestedTechnician(technician); finishTechnicians(); }}
         onProject={project => {
@@ -2547,6 +2569,7 @@ export default function App() {
         onContinueShopping={dismissTopOverlay}
       />
       <ProfilePage onOpenReports={openReports}
+        navigation={currentTab === 'profile' ? bottomNav : undefined}
         open={profileOpen}
         storeId={query.storeId}
         auth={customerAuth}
@@ -2560,6 +2583,7 @@ export default function App() {
           }
         }}
       />
+      {currentTab === 'projects' && bottomNav}
       <MembershipDetailPage kind={membershipKind} open={Boolean(membershipKind)} onClose={dismissTopOverlay} />
       <AnimatePresence>
         {toast && (
