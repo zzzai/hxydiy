@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 // Run against the guest menu with an isolated store roster and no customer order writes.
-export async function verifyTechnicianProfileReturn(page, card, { browserBack = false } = {}) {
+export async function verifyTechnicianProfileReturn(page, card, { browserBack = false, storeVisit } = {}) {
   const list = page.getByRole('dialog', { name: '本店技师', exact: true });
   const scroller = list.locator('.technician-directory');
   await card.scrollIntoViewIfNeeded();
@@ -16,6 +16,25 @@ export async function verifyTechnicianProfileReturn(page, card, { browserBack = 
   assert.equal(await profile.getByRole('button', { name: '看本店项目', exact: true }).count(), 0);
   assert.equal(await profile.getByRole('button', { name: /^看.+号技师$/ }).count(), 0);
   assert.equal(await profile.getByRole('button', { name: '本份服务点名', exact: true }).count(), 0);
+  if (storeVisit) {
+    const visit = profile.getByRole('region', { name: '到店信息' });
+    await visit.getByText(storeVisit.hours, { exact: true }).waitFor();
+    await visit.getByText(storeVisit.address, { exact: true }).waitFor();
+    const button = visit.getByRole('button', { name: '复制门店地址' });
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+        writeText: async value => { document.documentElement.dataset.copiedAddress = value; }
+      } });
+    });
+    await button.click();
+    await visit.getByText('地址已复制', { exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.copiedAddress), storeVisit.address);
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    });
+    await button.click();
+    await visit.getByText('请选中上方地址复制', { exact: true }).waitFor();
+  }
   if (browserBack) await page.goBack();
   else await profile.getByRole('button', { name: '返回本店技师', exact: true }).click();
   await list.waitFor();

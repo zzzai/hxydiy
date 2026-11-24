@@ -2346,7 +2346,7 @@ export default function App() {
         ))}
       </section>
 
-      {technicianView && <TechnicianShowcase key={technicianView.storeId} view={technicianView} storeName={storeDisplayName} projects={projects}
+      {technicianView && <TechnicianShowcase key={technicianView.storeId} view={technicianView} store={currentStore?.id === technicianView.storeId ? currentStore : undefined} projects={projects}
         canEdit={!readOnly && (technicianView.projectId === undefined || (editKey !== 'legacy' &&
           technicianView.projectId === (detailProject?.id ?? (localDetailOpen ? localProject?.id : undefined))))}
         directoryFooter={currentTab === 'technicians' && <>
