@@ -1,0 +1,115 @@
+{
+  "release": "server-3b75c699e445-1795510713",
+  "source_sha": "3b75c699e445c915f92fa1f15b1dc24410c9f471",
+  "previous_release": "server-7ee63ed66081-1795509142",
+  "verified_at": "2026-11-24T09:07:44.609497+00:00",
+  "health": "ok/production",
+  "menu_entrypoints_verified": [
+    1,
+    2
+  ],
+  "live_assets_sha256": {
+    "/assets/index-Do7kA3_0.js": "1f776f2e47883b3454b1284729af9242e455f76ef34a96c94e944e226791c7a2",
+    "/assets/App-DGiqKec8.js": "d1b3107677fe3c2315b2c85d8d3f59dded5fdc0d980ff16284898aa6c1091ee9",
+    "/assets/App-CiaNM-gu.css": "ed7e49cdb9cc5d3c28065c66896d91cf2e0225c1405851487c9e1b3fc5f032d5"
+  },
+  "running_api_and_public_roster_match": true,
+  "store_results": [
+    {
+      "store_id": 1,
+      "visible_profiles": 6,
+      "with_photos": 0,
+      "profiles_requestable_for_any_project": 0
+    },
+    {
+      "store_id": 2,
+      "visible_profiles": 6,
+      "with_photos": 0,
+      "profiles_requestable_for_any_project": 0
+    }
+  ],
+  "data_protection": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "backup_sha256": "dd9ff8a14720e0999374a44fa707a7ee6d1972f9bf64a9e75a579f559f417fd6",
+  "installed_manifest_sha256": "d2c3765ead14e32c1f9cc5ad53a93276a89139f5563bc68cdf8b389959bebe8d",
+  "production_order_writes_in_acceptance": 0,
+  "customer_test_passed": 412,
+  "customer_test_skipped": 1,
+  "frontend_only": true,
+  "two_store_navigation_verified": true,
+  "mobile_widths_checked": [
+    320,
+    390,
+    430,
+    768
+  ],
+  "physical_wechat_acceptance": false,
+  "visual_verification": {
+    "menu_technician_tab": {
+      "fill": "#c9e4d8",
+      "ink": "#1d5a49",
+      "contrast": 5.96
+    },
+    "selected_technician_tab": {
+      "fill": "#b2d7c6",
+      "ink": "#123d33",
+      "contrast": 7.71
+    },
+    "chromium_backdrop_pixel_change_ratio": 0.1904,
+    "reduced_transparency_and_high_contrast": true,
+    "safe_area_bottom_test_px": 34,
+    "windows_webkit_viewports": [
+      320,
+      390
+    ],
+    "windows_webkit_raster_control": 0.0,
+    "webkitgtk_material": 0.2028
+  },
+  "public_browser_readonly": {
+    "guest_selection_session": "isolated HTTP fixture",
+    "real_public_assets_menus_and_rosters": true,
+    "results": [
+      {
+        "store": 1,
+        "featured_default": {
+          "fill": "#c9e4d8",
+          "ink": "#1d5a49",
+          "contrast": 5.96
+        },
+        "featured_selected": {
+          "fill": "#b2d7c6",
+          "ink": "#123d33",
+          "contrast": 7.71
+        },
+        "visible_public_profiles": 6,
+        "pixel_change_ratio": null,
+        "public_website_readonly": true,
+        "isolated_guest_sessions": 1,
+        "outbound_business_writes": 0,
+        "blocked_nonread_requests": 1
+      },
+      {
+        "store": 2,
+        "featured_default": {
+          "fill": "#c9e4d8",
+          "ink": "#1d5a49",
+          "contrast": 5.96
+        },
+        "featured_selected": {
+          "fill": "#b2d7c6",
+          "ink": "#123d33",
+          "contrast": 7.71
+        },
+        "visible_public_profiles": 6,
+        "pixel_change_ratio": 0.1904,
+        "public_website_readonly": true,
+        "isolated_guest_sessions": 1,
+        "outbound_business_writes": 0,
+        "blocked_nonread_requests": 1
+      }
+    ]
+  }
+}
