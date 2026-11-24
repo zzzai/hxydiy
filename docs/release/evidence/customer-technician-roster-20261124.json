@@ -1,0 +1,209 @@
+{
+  "release_id": "server-bfd722a27665-1795527502",
+  "source_sha": "bfd722a27665a75ee2e507f5aab5319f0c89cba5",
+  "previous_release": "server-e543eadfa1cd-1795524815",
+  "baseline": "68177d8ecd5657139416d83c6101ce77368e0313",
+  "server_time_utc": "2026-11-24T13:51:32.730764+00:00",
+  "prepared_manifest_sha256": "2bfd8c4a4da14c750d796c9b343caa88a538c83d7ad9959243b09a7e69c47f52",
+  "installed_manifest_sha256": "3be1a0e4fe1824ac1a8c42398083b4bc9b3423788b414bdcc7757d315dfcfefe",
+  "matching_manifest_entries": 649,
+  "backup_checksum_verified": true,
+  "isolated_restore_verified_by_release_gate": true,
+  "database_migrations_in_change": false,
+  "schema_verification": {
+    "backup_schema_sha256": "5aa75528fb1d46539006a936614d1221c7759725f4518a77998d7f94f17d2ac9",
+    "current_schema_sha256": "5aa75528fb1d46539006a936614d1221c7759725f4518a77998d7f94f17d2ac9",
+    "equal": true
+  },
+  "protected_business_tables": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "health": {
+    "status": "ok",
+    "environment": "production"
+  },
+  "public_asset_sha256": {
+    "/assets/App-G-Ulrtd-.js": "3f8af7a51b5e479c0cc4a4c3b96b3f60c8ab3fbac5aefc83470b021bd9341f8e",
+    "/assets/index-CPTgh0ns.js": "66145ec9f0cf96ed76d0a5fe7e60fdd1bbb08d567a753996124815379d965672",
+    "/assets/technician-team-craft-v1.webp": "9de42f2957589226eaf0510d6753d62fa3d2358bcf388b6dd1289aa4b494415a",
+    "/assets/App-CXHC_UJt.css": "c89495b9c4eddbe6c8e8ae8f9edf9acd9ef10b434c6580e01237d9125d93a30a"
+  },
+  "public_browser": [
+    {
+      "store_id": 1,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 0,
+      "two_columns": true,
+      "cover_loaded": true,
+      "details_and_return": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-CXHC_UJt.css",
+        "/assets/App-G-Ulrtd-.js"
+      ]
+    },
+    {
+      "store_id": 2,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 6,
+      "two_columns": true,
+      "cover_loaded": true,
+      "details_and_return": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-CXHC_UJt.css",
+        "/assets/App-G-Ulrtd-.js"
+      ]
+    }
+  ],
+  "isolated_customer_suite": {
+    "passed": 412,
+    "skipped": 1,
+    "failed": 0
+  },
+  "isolated_store_flows": [
+    {
+      "store": 2,
+      "directory": true,
+      "tabCycle": true,
+      "back": true,
+      "orderDraftPreserved": true,
+      "verifiedRequest": false,
+      "browsingOrderWrites": 0
+    },
+    {
+      "store": 1,
+      "directory": true,
+      "tabCycle": true,
+      "back": true,
+      "orderDraftPreserved": true,
+      "verifiedRequest": true,
+      "browsingOrderWrites": 0
+    }
+  ],
+  "chrome": [
+    {
+      "case": "public",
+      "store": 1,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 1,
+      "width": 614,
+      "height": 884,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "portrait",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "mixed",
+      "store": 2,
+      "width": 320,
+      "height": 600,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "error",
+      "store": 1,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "empty",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 0,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    }
+  ],
+  "webkit": [
+    {
+      "case": "public",
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "portrait",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "mixed",
+      "store": 2,
+      "width": 320,
+      "height": 600,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    }
+  ],
+  "physical_wechat_acceptance": false,
+  "artwork": {
+    "source": "ImageGen",
+    "subject": "anonymous hands preparing a herbal sachet",
+    "use": "store directory masthead only",
+    "published_individual_portraits_added": 0
+  }
+}
