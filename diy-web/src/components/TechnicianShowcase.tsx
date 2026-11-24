@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Expand, Images, MapPin, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { getStoreTechnicians, selectableTechnicians, type PublicTechnician, type SelectableTechnician } from '../api';
 import { assetPath, displayProjectName, formatMoney, type Project } from '../domain';
 import type { TechnicianView } from '../technicianNavigation';
@@ -30,7 +30,9 @@ function TechnicianName({ label }: { label: string }) {
   return <><span className="technician-code">{number[1]}</span>{' '}<span className="technician-code-suffix">号技师</span></>;
 }
 
-type CardPhoto = { url: string; atWork: boolean };
+type CardPhoto = { url: string; kind: 'portrait' | 'work' | 'illustration' };
+const illustrationUrls = Array.from({ length: 6 }, (_, i) => assetPath(`technician-illustration-${i + 1}-v1.webp`));
+const illustrationCaption = 'AI 示意 · 非本人';
 
 function DirectoryCard({ person, photo, projectName, requestLabel, canRequest, onOpen, onPhotoError }: {
   person: PublicTechnician;
@@ -41,13 +43,16 @@ function DirectoryCard({ person, photo, projectName, requestLabel, canRequest, o
   onOpen: () => void;
   onPhotoError: (url: string) => void;
 }) {
+  const bodyId = useId();
+  const caption = photo?.kind === 'illustration' ? illustrationCaption : photo?.kind === 'work' ? '服务现场' : '';
   return <li>
-    <button type="button" className="technician-card" data-profile={person.key} onClick={onOpen}>
+    <button type="button" className="technician-card" data-profile={person.key} onClick={onOpen}
+      aria-labelledby={caption ? `${bodyId} ${bodyId}-photo` : bodyId}>
       {photo && <span className="technician-card-media">
         <img className="technician-card-photo" src={photo.url} alt="" loading="lazy" onError={() => onPhotoError(photo.url)} />
-        {photo.atWork && <span className="technician-photo-caption">服务现场</span>}
+        {caption && <span id={bodyId + '-photo'} className="technician-photo-caption">{caption}</span>}
       </span>}
-      <span className="technician-card-body">
+      <span id={bodyId} className="technician-card-body">
         <strong className="technician-card-name"><TechnicianName label={person.label} /></strong>
         <ChevronRight className="technician-card-arrow" size={15} aria-hidden="true" />
         {(person.experience || person.tags.length > 0) && <span className="technician-card-meta">
@@ -159,11 +164,16 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
   const directoryGroups = inProject && requestCount > 0 && requestCount < peers.length
     ? [{ title: '本项目可点名', rows: peers.filter(available) }, { title: '其他技师', rows: peers.filter(p => !available(p)) }]
     : [{ title: '', rows: peers }];
+  // Use the original roster order even when project eligibility moves cards between groups.
+  const illustrations = new Map(profiles.map((p, index) => [p.key, illustrationUrls[index % illustrationUrls.length]]));
   const cardPhoto = (p: PublicTechnician): CardPhoto | undefined => {
-    if (hasPortrait(p)) return { url: p.portrait_url, atWork: false };
+    if (hasPortrait(p)) return { url: p.portrait_url, kind: 'portrait' };
     const scene = p.photos.find(item => !failedImages.includes(item.url));
-    if (scene) return { url: scene.url, atWork: true };
+    if (scene) return { url: scene.url, kind: 'work' };
+    const illustration = illustrations.get(p.key);
+    if (illustration && !failedImages.includes(illustration)) return { url: illustration, kind: 'illustration' };
   };
+  const detailPhoto = person && cardPhoto(person);
   const useCover = status === 'ready' && peers.length > 0 && !peers.some(cardPhoto);
   const renderCard = (p: PublicTechnician) => {
     const canRequest = inProject ? available(p) : p.requestable_project_ids.length > 0;
@@ -203,7 +213,7 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
           {peers.length ? <>
             <div className="technician-directory-context">
               <p>{project && <strong>{displayProjectName(project)}</strong>}<span>共 {peers.length} 位技师</span></p>
-              {requestCount > 0 && <span>{inProject ? `${requestCount} 位可点名` : '点名由店长确认'}</span>}
+              <span>{requestCount === 0 ? '由门店安排' : inProject ? `${requestCount} 位可点名` : '点名由店长确认'}</span>
             </div>
             <div className="technician-list">{directoryGroups.map(group => {
               const photographed = group.rows.filter(cardPhoto);
@@ -226,10 +236,14 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
         {view.profile && !person && <div className="technician-message"><p>这位技师的资料已下架</p><button type="button" onClick={back}>返回技师列表</button></div>}
         {person && !photo && <>
           <div ref={detailScroll} className="technician-scroll technician-detail">
-            <section className={'technician-identity' + (portraitVisible ? ' has-portrait' : '')}>
+            <section className={'technician-identity' + (detailPhoto && detailPhoto.kind !== 'work' ? ' has-portrait' : '')}>
               {portraitVisible && <button type="button" className="technician-portrait" onClick={() => openPhoto(0)} aria-label={'放大' + person.label + '的肖像'}>
                 <img src={person.portrait_url} alt={person.label + '的工作肖像'} onError={() => markFailed(person.portrait_url)} /><Expand size={16} />
               </button>}
+              {detailPhoto?.kind === 'illustration' && <div className="technician-portrait">
+                <img src={detailPhoto.url} alt="" onError={() => markFailed(detailPhoto.url)} />
+                <span className="technician-photo-caption">{illustrationCaption}</span>
+              </div>}
               <div className="technician-person"><h1><TechnicianName label={person.label} /></h1>{person.experience && <p className="technician-experience"><Tenure value={person.experience} /></p>}
                 {person.tags.length > 0 && <ul className="technician-tags" aria-label="服务风格">{person.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>}
               </div>

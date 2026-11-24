@@ -20,7 +20,7 @@
   color: #193e30;
   background: #fff;
 }
-.technician-directory-head h1 { grid-row: 1; grid-column: 2; margin: 0; font-size: 22px; line-height: 1.2; font-weight: 660; }
+.technician-directory-head h1 { grid-row: 1; grid-column: 2; margin: 0; font-size: 23px; line-height: 1.2; font-weight: 650; letter-spacing: .025em; }
 .technician-directory-back {
   grid-row: 1; grid-column: 1; display: grid; place-items: center;
   width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; background: transparent; color: inherit;
@@ -56,7 +56,7 @@
 .technician-directory { padding: 0 20px 18px; }
 .technician-directory-context {
   display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px;
-  padding: 20px 0 13px; color: #576c60; font-size: 13px; line-height: 1.5;
+  padding: 9px 0 14px; color: #576c60; font-size: 13px; line-height: 1.5;
 }
 .technician-directory-context p { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0; }
 .technician-directory-context strong { color: #244c38; font-size: 15px; }
@@ -65,7 +65,7 @@
 .technician-group :is(h2,h3) { margin-bottom: 10px; color: #213d2f; font-size: 16px; font-weight: 650; }
 .technician-group h2 { margin-top: 0; }
 .technician-gallery, .technician-roster { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-.technician-gallery { align-items: start; row-gap: 22px; }
+.technician-gallery { align-items: start; column-gap: clamp(10px, 3.1vw, 18px); row-gap: 21px; }
 .technician-gallery > li, .technician-roster > li { min-width: 0; }
 .technician-card {
   display: block; width: 100%; min-height: 48px; padding: 0;
@@ -73,7 +73,7 @@
 }
 .technician-card-media { display: block; position: relative; }
 .technician-card-photo { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; object-position: center 33%; border-radius: 12px; background: #eff4ef; }
-.technician-photo-caption { position: absolute; left: 8px; bottom: 8px; padding: 3px 7px; border-radius: 5px; color: #fff; background: rgba(19,45,31,.82); font-size: 12px; }
+.technician-photo-caption { position: absolute; left: 8px; bottom: 8px; padding: 3px 7px; border-radius: 5px; color: #fff; background: rgba(22,35,28,.78); font: 500 12px/1.35 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; white-space: nowrap; }
 .technician-card-body { display: grid; grid-template-columns: minmax(0,1fr) 16px; align-items: center; gap: 4px; padding: 10px 1px 0; }
 .technician-card-name { grid-column: 1; overflow-wrap: anywhere; font-size: 20px; font-weight: 650; line-height: 1.35; }
 .technician-card-arrow { grid-column: 2; grid-row: 1; align-self: center; color: #647a6d; }
@@ -160,6 +160,7 @@
 /* A number and tenure fit in the same kind of bottom sheet as the menu summary. */
 .technician-showcase.compact { inset: auto 0 0; width: min(100%, 540px); height: auto; max-height: 90dvh; border-radius: 18px 18px 0 0; }
 .technician-showcase.compact .technician-detail { padding: 22px 22px 24px; }
+.technician-showcase.compact .technician-identity.has-portrait { grid-template-columns: minmax(0, .82fr) minmax(0, 1fr); }
 .technician-showcase.compact .technician-person h1 { font-size: 31px; }
 .technician-showcase.compact .technician-experience { margin-top: 12px; font-size: 19px; }
 @media (min-width: 700px) {
