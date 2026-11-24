@@ -1,0 +1,243 @@
+{
+  "release_id": "server-be9e854021fc-1795529111",
+  "source_sha": "be9e854021fc7ed117651d20d70942ca472ff206",
+  "previous_release": "server-bfd722a27665-1795527502",
+  "baseline": "9f631a0721a3973ac40db5288c48f3938730e947",
+  "server_time_utc": "2026-11-24T14:13:22.163581+00:00",
+  "prepared_manifest_sha256": "a4fcf6e9e0eff0308188c9628e6e997c51895fcf80201916c2c3cd1271ee701c",
+  "installed_manifest_sha256": "e0576ad32a69df06aee4d3f7d0c473c960ad672b7ac1564c75181565923bd645",
+  "matching_manifest_entries": 655,
+  "backup_checksum_verified": true,
+  "isolated_restore_verified_by_release_gate": true,
+  "database_migrations_in_change": false,
+  "schema_verification": {
+    "backup_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "before_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "current_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "equal": true
+  },
+  "protected_business_tables": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "health": {
+    "status": "ok",
+    "environment": "production"
+  },
+  "public_asset_sha256": {
+    "/assets/technician-illustration-5-v1.webp": "90dcb4eb8354db0d4ac1377af20021b4f26ea9a4bf3a93f6a863772f9fe931a1",
+    "/assets/technician-illustration-6-v1.webp": "2b4101b9e55df37e01eb0bf3c7c09d93e48c19ed5f308d70a02223c9e751d102",
+    "/assets/App-Brzx-Zqf.js": "0757ae26b991505a6f5bb942cd3a3dcb1c52db05fe441b816bf588e191248a92",
+    "/assets/App-CmedFIwz.css": "054cffceebdad8746587e2cd0c1f1091c2ee237acb9e4097ee39a5aa6c7ae2b0",
+    "/assets/index-iN13kArB.js": "a3da38dbb5b4cd8bfe6f5e9403b0007b99cfa03b880c4ca796b2004c856043b1",
+    "/assets/technician-illustration-2-v1.webp": "6ad927d2860174196f363cda70abc37f939c83d7a4f95910c5ffc6fb5aa7ee31",
+    "/assets/technician-illustration-3-v1.webp": "803f8e5d202ed50c8fba43cda8cb382569b611963df1f1eb190e11d35e86eed0",
+    "/assets/technician-illustration-1-v1.webp": "8cab213dd8039b96046db2615b4ff4fc598286e8df93c90b6adfbea29a38b86c",
+    "/assets/technician-illustration-4-v1.webp": "08506ecd335c3a554e86b8612196e22659ac11b1b45332ff36a8e2974f163657"
+  },
+  "public_browser": [
+    {
+      "store_id": 1,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 0,
+      "two_columns": true,
+      "illustration_paths": [
+        "/assets/technician-illustration-1-v1.webp",
+        "/assets/technician-illustration-2-v1.webp",
+        "/assets/technician-illustration-3-v1.webp",
+        "/assets/technician-illustration-4-v1.webp",
+        "/assets/technician-illustration-5-v1.webp",
+        "/assets/technician-illustration-6-v1.webp"
+      ],
+      "six_distinct_illustrations": true,
+      "labeled_as_ai": true,
+      "details_and_return": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-Brzx-Zqf.js",
+        "/assets/App-CmedFIwz.css"
+      ]
+    },
+    {
+      "store_id": 2,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 6,
+      "two_columns": true,
+      "illustration_paths": [
+        "/assets/technician-illustration-1-v1.webp",
+        "/assets/technician-illustration-2-v1.webp",
+        "/assets/technician-illustration-3-v1.webp",
+        "/assets/technician-illustration-4-v1.webp",
+        "/assets/technician-illustration-5-v1.webp",
+        "/assets/technician-illustration-6-v1.webp"
+      ],
+      "six_distinct_illustrations": true,
+      "labeled_as_ai": true,
+      "details_and_return": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-Brzx-Zqf.js",
+        "/assets/App-CmedFIwz.css"
+      ]
+    }
+  ],
+  "isolated_customer_suite": {
+    "passed": 412,
+    "skipped": 1,
+    "failed": 0
+  },
+  "isolated_store_flows": [
+    {
+      "store": 2,
+      "directory": true,
+      "tabCycle": true,
+      "back": true,
+      "orderDraftPreserved": true,
+      "verifiedRequest": false,
+      "browsingOrderWrites": 0
+    },
+    {
+      "store": 1,
+      "directory": true,
+      "tabCycle": true,
+      "back": true,
+      "orderDraftPreserved": true,
+      "verifiedRequest": true,
+      "browsingOrderWrites": 0
+    }
+  ],
+  "chrome": [
+    {
+      "case": "public",
+      "store": 1,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 1,
+      "width": 614,
+      "height": 884,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "portrait",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "mixed",
+      "store": 2,
+      "width": 320,
+      "height": 600,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "error",
+      "store": 1,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "empty",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 0,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "asset-error",
+      "store": 1,
+      "width": 390,
+      "height": 740,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    }
+  ],
+  "webkit": [
+    {
+      "case": "public",
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "portrait",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "mixed",
+      "store": 2,
+      "width": 320,
+      "height": 600,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    }
+  ],
+  "physical_wechat_acceptance": false,
+  "artwork": {
+    "source": "ImageGen",
+    "subject": "six fictional adult service-staff portraits",
+    "use": "marked illustration on directory and profile only",
+    "assets": 6,
+    "published_individual_portraits_added": 0
+  }
+}

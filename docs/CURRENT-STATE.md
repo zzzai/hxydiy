@@ -1,5 +1,9 @@
 # hxy-diy 当前状态
 
+## 2026-11-24 22:13 顾客端技师竖幅人像
+
+紫薇壹号店和华富世家店的顾客端「看技师」已上线两列竖幅人像。六款虚拟人物照带有「AI 示意 · 非本人」标识。生产版本为 `server-be9e854021fc-1795529111`。 [发布核验](release/evidence/customer-technician-illustrations-20261124.json)
+
 ## 2026-11-24 21:51 顾客端本店技师名册与工作照
 
 紫薇壹号店、华富世家店的「看技师」已上线双列名册。两店各六位，紫薇公开姓名，华富公开工号和从业信息。生产版本为 `server-bfd722a27665-1795527502`。 [发布核验](release/evidence/customer-technician-roster-20261124.json)
