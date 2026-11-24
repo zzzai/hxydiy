@@ -1,0 +1,162 @@
+{
+  "release_id": "server-e543eadfa1cd-1795524815",
+  "previous_release": "server-3b75c699e445-1795510713",
+  "source_sha": "e543eadfa1cd6926ee85d21faed89b828932c7e6",
+  "baseline": "a8765bbf4f1a832b2933d253a7922eebc1687ac7",
+  "server_time_utc": "2026-11-24T13:10:25.729598+00:00",
+  "prepared_manifest_sha256": "14db9d18f9c9b9116e3de25000302caf10249534cfec98f4d498c46ae057b31c",
+  "installed_manifest_sha256": "d245052e4f6d21c029bb366517a5bf896dce2beae8d6dc08cb38b97c6ca240f6",
+  "matching_manifest_entries": 648,
+  "build_report_sha256": "fef12f3c1e46e7bff6399df79265d3332c692f87b21f3cb902deda9aca714617",
+  "health": {
+    "status": "ok",
+    "environment": "production"
+  },
+  "backup_checksum_verified": true,
+  "isolated_restore_verified_by_release_gate": true,
+  "database_migrations_in_change": false,
+  "schema_verification": {
+    "backup_schema_sha256": "5aa75528fb1d46539006a936614d1221c7759725f4518a77998d7f94f17d2ac9",
+    "current_schema_sha256": "5aa75528fb1d46539006a936614d1221c7759725f4518a77998d7f94f17d2ac9",
+    "equal": true
+  },
+  "protected_business_tables": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "verified_public_assets": {
+    "/assets/index-EnezDuo4.js": "89c6fbd418ef923bcd3ed26f72b82b8fc9a2ddceb9c7775967b18303a9e71652",
+    "/assets/App-DIrntPfr.js": "d56ab95ffb776d9fb603b96994e6c619d611c6c52dfc2200813785dd897d6bc0",
+    "/assets/App-DR1EBhQZ.css": "2daef15a719372ad38cf206900204a160dd389ddadb78874d0bf07986077d69f"
+  },
+  "production_browser": [
+    {
+      "store_id": 1,
+      "three_tabs": true,
+      "single_lens": true,
+      "guest_form": true,
+      "service_links": true,
+      "real_sms": false,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-DIrntPfr.js",
+        "/assets/App-DR1EBhQZ.css"
+      ]
+    },
+    {
+      "store_id": 2,
+      "three_tabs": true,
+      "single_lens": true,
+      "guest_form": true,
+      "service_links": true,
+      "real_sms": false,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-DIrntPfr.js",
+        "/assets/App-DR1EBhQZ.css"
+      ]
+    }
+  ],
+  "customer_regression": {
+    "passed": 412,
+    "skipped": 1,
+    "failed": 0
+  },
+  "isolated_sign_in": [
+    {
+      "store": 1,
+      "viewport": [
+        320,
+        568
+      ],
+      "engine": "chrome",
+      "links": true,
+      "keyboard": true,
+      "resend": true,
+      "login": true,
+      "logout": true,
+      "outside_requests": 0
+    },
+    {
+      "store": 2,
+      "viewport": [
+        390,
+        800
+      ],
+      "engine": "chrome",
+      "links": true,
+      "keyboard": true,
+      "resend": true,
+      "login": true,
+      "logout": true,
+      "outside_requests": 0
+    },
+    {
+      "store": 2,
+      "viewport": [
+        430,
+        850
+      ],
+      "engine": "chrome",
+      "links": true,
+      "keyboard": true,
+      "resend": true,
+      "login": true,
+      "logout": true,
+      "outside_requests": 0
+    },
+    {
+      "store": 1,
+      "viewport": [
+        320,
+        568
+      ],
+      "engine": "webkit",
+      "links": true,
+      "keyboard": true,
+      "resend": true,
+      "login": true,
+      "logout": true,
+      "outside_requests": 0
+    },
+    {
+      "store": 2,
+      "viewport": [
+        390,
+        800
+      ],
+      "engine": "webkit",
+      "links": true,
+      "keyboard": true,
+      "resend": true,
+      "login": true,
+      "logout": true,
+      "outside_requests": 0
+    }
+  ],
+  "tab_motion": {
+    "transitions_per_mode": 6,
+    "chromium_has_intermediate_positions": true,
+    "webkit_has_intermediate_positions": true,
+    "reduced_motion_snaps": true
+  },
+  "material": {
+    "blur_changed_pixel_ratio": 0.4678,
+    "one_active_lens": true,
+    "rapid_taps": {
+      "interrupted": 102.4691390991211,
+      "resumed": 102.46914672851562,
+      "delta": 7.62939453125e-06,
+      "end": 268.3125
+    },
+    "browser_back": true,
+    "reduced_transparency_and_forced_colors": true,
+    "safe_area_34": true
+  },
+  "real_device_wechat_tested": false,
+  "production_sms_sent_during_verification": false,
+  "technician_portrait_prototype_published": false
+}
