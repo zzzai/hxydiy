@@ -18,6 +18,9 @@ export async function verifyTechnicianProfileReturn(page, card, { browserBack = 
   assert.equal(await profile.getByRole('button', { name: '本份服务点名', exact: true }).count(), 0);
   if (storeVisit) {
     const visit = profile.getByRole('region', { name: '到店信息' });
+    const disclosure = visit.locator('details');
+    assert.equal(await disclosure.evaluate(element => element.open), false, 'Visit logistics start collapsed');
+    await disclosure.locator('summary').click();
     await visit.getByText(storeVisit.hours, { exact: true }).waitFor();
     await visit.getByText(storeVisit.address, { exact: true }).waitFor();
     const button = visit.getByRole('button', { name: '复制门店地址' });

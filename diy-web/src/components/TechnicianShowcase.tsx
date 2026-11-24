@@ -1,7 +1,8 @@
-import { Check, ChevronLeft, ChevronRight, Clipboard, Clock3, Expand, Images, MapPin, Store, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Clock3, Expand, Images, MapPin, Store, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { getStoreTechnicians, selectableTechnicians, type PublicTechnician, type SelectableTechnician, type StoreSummary } from '../api';
 import { assetPath, displayProjectName, formatMoney, projectImage, type Project } from '../domain';
+import { safeStoreContact, STORE_CONTACTS } from '../returnEntry';
 import type { TechnicianView } from '../technicianNavigation';
 import './technician-showcase.css';
 
@@ -68,25 +69,30 @@ function DirectoryCard({ person, photo, projectName, requestLabel, canRequest, o
 
 function StoreVisit({ store }: { store: StoreSummary }) {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'manual'>('idle');
-  if (!store.address && !store.business_hours) return null;
+  const address = store.address?.trim();
+  const hours = store.business_hours?.trim();
+  if (!address && !hours) return null;
   const copyAddress = async () => {
     try {
-      await navigator.clipboard.writeText(store.address);
+      if (!address) return;
+      await navigator.clipboard.writeText(address);
       setCopyStatus('copied');
     } catch {
       setCopyStatus('manual');
     }
   };
   return <section className="technician-section technician-visit" aria-label="到店信息">
-    <h2>到店信息</h2>
-    <dl>
-      {store.business_hours && <div><dt><Clock3 size={16} aria-hidden="true" />营业时间</dt><dd>{store.business_hours}</dd></div>}
-      {store.address && <div><dt><MapPin size={16} aria-hidden="true" />门店地址</dt>
-        <dd><span className="technician-address">{store.address}</span>
+    <details>
+      <summary><MapPin size={16} aria-hidden="true" />{address && hours ? '门店地址与营业时间' : address ? '门店地址' : '营业时间'}<ChevronDown size={16} aria-hidden="true" /></summary>
+      <dl>
+      {hours && <div><dt><Clock3 size={16} aria-hidden="true" />营业时间</dt><dd>{hours}</dd></div>}
+      {address && <div><dt><MapPin size={16} aria-hidden="true" />门店地址</dt>
+        <dd><span className="technician-address">{address}</span>
           <button type="button" onClick={() => void copyAddress()} aria-label="复制门店地址"><Clipboard size={14} aria-hidden="true" />复制地址</button>
           {copyStatus !== 'idle' && <small role="status">{copyStatus === 'copied' ? '地址已复制' : '请选中上方地址复制'}</small>}
         </dd></div>}
-    </dl>
+      </dl>
+    </details>
   </section>;
 }
 
@@ -111,6 +117,10 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
   const peers = project ? [...profiles].sort((a, b) => Number(available(b)) - Number(available(a))) : profiles;
   const requestCount = profiles.filter(p => inProject ? available(p) : p.requestable_project_ids.length > 0).length;
   const services = person ? projects.filter(p => person.project_ids.includes(p.id)) : [];
+  if (person && !inProject && canEdit) {
+    const nameable = (service: Project) => person.requestable_project_ids.includes(service.id);
+    services.sort((a, b) => Number(nameable(b)) - Number(nameable(a)));
+  }
   const hasPortrait = (p: PublicTechnician) => Boolean(p.portrait_url && !failedImages.includes(p.portrait_url));
   const markFailed = (url: string) => setFailedImages(urls => urls.includes(url) ? urls : [...urls, url]);
   const photos = person ? [...(person.portrait_url ? [{url: person.portrait_url, caption: person.label + ' · 工作肖像'}] : []), ...person.photos] : [];
@@ -186,9 +196,11 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
   };
 
   const offersNamedService = person && services.some(service => person.requestable_project_ids.includes(service.id));
+  const contactUrl = person && !inProject && !offersNamedService && store?.id === view.storeId
+    ? safeStoreContact(STORE_CONTACTS[view.storeId])?.addUrl : undefined;
   const statusText = person && (inProject
     ? (available(person) ? (canEdit ? '点名由店长确认' : '这份服务暂不能更改技师') : profiles.some(available) ? '这位技师目前不能点名此项目。' : '这个项目由门店安排技师。')
-    : offersNamedService && canEdit ? '可按项目点名' : offersNamedService ? '当前选单仅可查看' : '由门店安排');
+    : offersNamedService && canEdit ? '可按项目点名' : offersNamedService ? '当前选单仅可查看' : '暂不能线上点名');
 
   const directoryGroups = inProject && requestCount > 0 && requestCount < peers.length
     ? [{ title: '本项目可点名', rows: peers.filter(available) }, { title: '其他技师', rows: peers.filter(p => !available(p)) }]
@@ -288,18 +300,18 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
                     {detailMedia}<Expand size={16} aria-hidden="true" />
                   </button>)}
             </section>
+            {person.tags.length > 0 && <section className="technician-style" aria-label="服务风格">
+              <h2>服务风格</h2>
+              <ul className="technician-tags">{person.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>
+            </section>}
             {!inProject && <section className="technician-assignment" aria-label="点名方式">
               <span className="technician-assignment-icon" aria-hidden="true">{offersNamedService && canEdit ? <Check size={19} /> : <Store size={19} />}</span>
               <div><h2>{statusText}</h2>
                 <p>{offersNamedService
-                  ? (canEdit ? '选择下方可点名的项目，提交后由店长确认。' : '可浏览这位技师的服务项目。')
-                  : '想选这位技师，可到店询问前台。'}</p>
+                  ? (canEdit ? '选好项目后，店长会确认这位技师能否接待。' : '可浏览这位技师的服务项目。')
+                  : contactUrl ? '想选' + person.label + '，可先问问本店今天的安排。' : '想选' + person.label + '，到店时可请前台确认。'}</p>
+                {contactUrl && <a className="technician-contact" href={contactUrl} target="_blank" rel="noopener noreferrer">联系本店企微<ChevronRight size={14} aria-hidden="true" /></a>}
               </div>
-            </section>}
-            {(person.tags.length > 0 || person.introduction) && <section className="technician-section">
-              <h2>{person.introduction ? '个人介绍' : '服务风格'}</h2>
-              {person.tags.length > 0 && <ul className="technician-tags" aria-label="服务风格">{person.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>}
-              {person.introduction && <p className="technician-intro">{person.introduction}</p>}
             </section>}
             {services.length > 0 && <section className="technician-section"><h2>可做项目</h2><ul className="technician-services">{services.map(p => {
               const price = p.prices.find(v => v.price_type === 'store')?.amount_cents;
@@ -312,6 +324,7 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
               return <li key={p.id}>{inProject ? <div>{line}</div> : <button type="button" disabled={checking}
                 onClick={() => named ? void requestPerson(p) : onProject(p)}>{line}</button>}</li>;
             })}</ul></section>}
+            {person.introduction && <section className="technician-section"><h2>个人介绍</h2><p className="technician-intro">{person.introduction}</p></section>}
             {person.photos.some(item => !failedImages.includes(item.url)) && <section className="technician-section"><h2><Images size={19} />服务现场</h2>
               <div className="technician-photos">{person.photos.map((picture, i) => !failedImages.includes(picture.url) &&
                 <button type="button" key={picture.url} onClick={() => openPhoto(i + Number(Boolean(person.portrait_url)))}><img src={picture.url} alt="" loading="lazy" onError={() => markFailed(picture.url)} /><span>{picture.caption}</span></button>)}</div>

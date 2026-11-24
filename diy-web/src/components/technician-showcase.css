@@ -133,7 +133,7 @@
 .technician-home-store svg { flex: none; margin-top: 2px; }
 .technician-person h1 {
   margin: 22px 0; max-width: 100%; font-family: "Songti SC", "Noto Serif CJK SC", "STSong", SimSun, serif;
-  font-weight: 600; font-size: clamp(28px, 8vw, 42px); line-height: 1.24; color: var(--profile-ink); overflow-wrap: anywhere;
+  font-weight: 600; font-size: clamp(30px, 8.4vw, 43px); line-height: 1.24; color: var(--profile-ink); overflow-wrap: anywhere;
 }
 .technician-person h1:focus { outline: none; }
 .technician-identity.has-photo h1 { margin-block: auto; padding-block: 16px; }
@@ -141,7 +141,7 @@
 .technician-person .technician-code-suffix { display: block; color: var(--profile-ink); margin-top: 5px; font-size: 15px; line-height: 1.3; }
 .technician-experience { display: grid; gap: 3px; margin: 0; border-top: 1px solid #cddbd1; padding-top: 9px; color: var(--profile-ink); }
 .technician-experience .technician-tenure-label { color: var(--profile-muted); font-size: 12px; }
-.technician-experience strong { font-size: clamp(16px, 4.5vw, 21px); line-height: 1.4; font-weight: 650; font-variant-numeric: tabular-nums; }
+.technician-experience strong { font-size: clamp(18px, 5.2vw, 23px); line-height: 1.4; font-weight: 650; font-variant-numeric: tabular-nums; }
 .technician-portrait { position: relative; display: block; align-self: stretch; width: 100%; min-width: 0; aspect-ratio: 3 / 4; overflow: hidden; margin: 0; padding: 0; border: 0; border-radius: 0; background: #e0ebe3; }
 .technician-portrait img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 33%; }
 .technician-portrait > svg { position: absolute; bottom: 9px; right: 9px; padding: 5px; box-sizing: content-box; border-radius: 50%; color: #fff; background: rgba(17,40,29,.72); }
@@ -152,10 +152,12 @@
 .technician-assignment p { margin: 3px 0 0; color: var(--profile-muted); font-size: 14px; line-height: 1.65; }
 .technician-section { margin-top: 15px; padding: 20px 0 0; border-top: 1px solid var(--profile-line); }
 .technician-section h2 { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; }
+.technician-style { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-top: 16px; }
+.technician-style h2 { margin: 0; color: var(--profile-muted); font-size: 13px; font-weight: 500; }
+.technician-contact { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; color: #275d42; font-size: 14px; font-weight: 600; text-decoration: none; }
 .technician-tags { display: flex; flex-wrap: wrap; gap: 7px; padding: 0; margin: 0; list-style: none; }
 .technician-tags li { padding: 4px 10px; border-radius: 6px; background: #eaf4ed; color: #28523d; font-size: 13px; }
 .technician-intro { margin: 0; color: #394f43; font-size: 15px; line-height: 1.85; overflow-wrap: anywhere; }
-.technician-tags + .technician-intro { margin-top: 11px; }
 .technician-photos { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .technician-photos button { min-width: 0; padding: 0; border: none; color: #41594c; background: none; text-align: left; }
 .technician-photos img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 9px; }
@@ -169,7 +171,16 @@
 .technician-services .technician-service-choice { flex: none; justify-items: end; }
 .technician-service-choice small { display: inline-flex; align-items: center; gap: 2px; color: #24573f; }
 .technician-services strong { color: #184b36; font-variant-numeric: tabular-nums; }
-.technician-visit dl { margin: 0; display: grid; gap: 15px; }
+.technician-visit { padding-top: 0; }
+.technician-visit summary {
+  display: flex; align-items: center; gap: 7px; min-height: 48px; padding-block: 6px;
+  cursor: pointer; color: var(--profile-muted); font-size: 14px; list-style: none;
+}
+.technician-visit summary::-webkit-details-marker { display: none; }
+.technician-visit summary svg:last-child { margin-left: auto; }
+.technician-visit details[open] summary svg:last-child { transform: rotate(180deg); }
+.technician-visit summary:focus-visible, .technician-contact:focus-visible { outline: 2px solid #187755; outline-offset: 2px; }
+.technician-visit dl { margin: 3px 0 0; display: grid; gap: 15px; }
 .technician-visit dl > div { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 18px; align-items: start; }
 .technician-visit dt { display: inline-flex; align-items: center; gap: 7px; color: var(--profile-muted); white-space: nowrap; font-size: 13px; line-height: 24px; }
 .technician-visit dd { margin: 0; color: #293d32; font-size: 14px; line-height: 24px; font-variant-numeric: tabular-nums; }
