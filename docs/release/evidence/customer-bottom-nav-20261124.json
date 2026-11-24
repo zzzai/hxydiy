@@ -1,0 +1,50 @@
+{
+  "release": "server-7ee63ed66081-1795509142",
+  "source_sha": "7ee63ed66081a4b1d5880e1443bc31dece9a208d",
+  "previous_release": "server-03e9eae537a4-1795507528",
+  "verified_at": "2026-11-24T08:36:17.795950+00:00",
+  "health": "ok/production",
+  "menu_entrypoints_verified": [
+    1,
+    2
+  ],
+  "live_assets_sha256": {
+    "/assets/index-DT3QprbD.js": "3cfd8225a5b33ef1708f926060944165a2ddce28a1647543d252060cc4e4111d",
+    "/assets/App-C5ikpVxs.js": "ee1b737ba18d69d2a37b53be43cb65fa92d52a869ae0116aeb3d2371c9bc8cf4",
+    "/assets/App-CY0sfQwi.css": "04069b7f0a9054d98329d9013a67b7956e8c843a19bb9a5a2bf2fb2ec264486a"
+  },
+  "running_api_and_public_roster_match": true,
+  "store_results": [
+    {
+      "store_id": 1,
+      "visible_profiles": 6,
+      "with_photos": 0,
+      "profiles_requestable_for_any_project": 0
+    },
+    {
+      "store_id": 2,
+      "visible_profiles": 6,
+      "with_photos": 0,
+      "profiles_requestable_for_any_project": 0
+    }
+  ],
+  "data_protection": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "backup_sha256": "f5029c6b452fccdb5a2d02648ec6a63c7e951a52137817cb9d345317e6a796b2",
+  "installed_manifest_sha256": "f6c0a1faf54941608fec2f1df8210a34107464a41cfa0ffbee3f97b6b3f0b46b",
+  "production_order_writes_in_acceptance": 0,
+  "customer_test_passed": 412,
+  "customer_test_skipped": 1,
+  "frontend_only": true,
+  "two_store_navigation_verified": true,
+  "mobile_widths_checked": [
+    320,
+    390,
+    430,
+    768
+  ],
+  "physical_wechat_acceptance": false
+}
