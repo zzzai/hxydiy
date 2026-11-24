@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.session import Base
+from app.domain.occupancy import aware
 from app.models import (
     AuditLog,
     PositionOccupancy,
@@ -262,6 +263,85 @@ class OccupancyReleasePolicyTests(unittest.TestCase):
         with self.SessionLocal() as db:
             self.assertEqual(db.get(PositionOccupancy, occupancy.id).status, "waiting_service")
             self.assertEqual(db.get(SelectionSession, session.id).status, "submitted")
+
+
+    def _release_audit(self, occupancy_id: int) -> AuditLog | None:
+        with self.SessionLocal() as db:
+            return db.scalar(select(AuditLog).where(
+                AuditLog.entity_type == "position_occupancy",
+                AuditLog.entity_id == str(occupancy_id),
+                AuditLog.action == "occupancy_auto_released",
+            ))
+
+    def test_auto_release_backfills_service_end_from_expected_end(self):
+        now = datetime(2026, 8, 26, 12, 30, tzinfo=timezone.utc)
+        expected_end = now - timedelta(minutes=40)
+        with self.SessionLocal.begin() as db:
+            occupancy, _ = self.add_occupancy(
+                db, "backfill-expected", occupancy_status="in_service", session_status="confirmed",
+            )
+            occupancy.actual_start_at = now - timedelta(minutes=100)
+            occupancy.expected_end_at = expected_end
+
+        with self.SessionLocal() as db:
+            release_due_occupancies(db, now, trigger="test")
+
+        with self.SessionLocal() as db:
+            saved = db.get(PositionOccupancy, occupancy.id)
+        self.assertEqual(saved.status, "released")
+        self.assertEqual(aware(saved.actual_service_end_at), expected_end)
+        self.assertEqual(self._release_audit(saved.id).detail["actual_service_end_at_source"], "auto_release_expected_end")
+
+    def test_auto_release_backfills_service_end_from_release_time_without_expected_end(self):
+        now = datetime(2026, 8, 26, 12, 30, tzinfo=timezone.utc)
+        with self.SessionLocal.begin() as db:
+            occupancy, _ = self.add_occupancy(
+                db, "backfill-now", occupancy_status="in_service", session_status="confirmed",
+            )
+            occupancy.actual_start_at = now - timedelta(minutes=100)
+            occupancy.expected_end_at = None
+
+        with self.SessionLocal() as db:
+            release_due_occupancies(db, now, trigger="test")
+
+        with self.SessionLocal() as db:
+            saved = db.get(PositionOccupancy, occupancy.id)
+        self.assertEqual(saved.status, "released")
+        self.assertEqual(aware(saved.actual_service_end_at), now)
+        self.assertEqual(self._release_audit(saved.id).detail["actual_service_end_at_source"], "auto_release_released_at")
+
+    def test_auto_release_keeps_existing_service_end(self):
+        now = datetime(2026, 8, 26, 12, 30, tzinfo=timezone.utc)
+        manual_end = now - timedelta(minutes=45)
+        with self.SessionLocal.begin() as db:
+            occupancy, _ = self.add_occupancy(
+                db, "backfill-keep", occupancy_status="post_service_present", session_status="confirmed",
+            )
+            occupancy.actual_start_at = now - timedelta(minutes=100)
+            occupancy.expected_end_at = now - timedelta(minutes=40)
+            occupancy.actual_service_end_at = manual_end
+
+        with self.SessionLocal() as db:
+            release_due_occupancies(db, now, trigger="test")
+
+        with self.SessionLocal() as db:
+            saved = db.get(PositionOccupancy, occupancy.id)
+        self.assertEqual(saved.status, "released")
+        self.assertEqual(aware(saved.actual_service_end_at), manual_end)
+        self.assertIsNone(self._release_audit(saved.id).detail["actual_service_end_at_source"])
+
+    def test_auto_release_skips_backfill_when_service_never_confirmed(self):
+        with self.SessionLocal.begin() as db:
+            occupancy, _ = self.add_occupancy(db, "backfill-skipped")
+
+        with self.SessionLocal() as db:
+            release_due_occupancies(db, NOW, trigger="test")
+
+        with self.SessionLocal() as db:
+            saved = db.get(PositionOccupancy, occupancy.id)
+        self.assertEqual(saved.status, "released")
+        self.assertIsNone(saved.actual_service_end_at)
+        self.assertIsNone(self._release_audit(saved.id).detail["actual_service_end_at_source"])
 
 
 if __name__ == "__main__":
