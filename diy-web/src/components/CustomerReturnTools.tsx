@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Bookmark, CalendarDays, ChevronRight, Copy, MessageSquareText, Search, X } from 'lucide-react';
+import { ArrowRight, Bookmark, CalendarDays, ChevronDown, ChevronRight, Copy, ReceiptText, Search, Store, X } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { MEMBERSHIP_STORE_CONFIRMATION } from '../profile';
 import { returnBannerKey, safeStoreContact, STORE_CONTACTS } from '../returnEntry';
@@ -86,13 +86,22 @@ export function ReturnEntryBanner({ storeId }: { storeId: number }) {
   </>;
 }
 
-export function ProfileReturnTools({ storeId, compact = false, showContact = true }: { storeId: number; compact?: boolean; showContact?: boolean }) {
-  const [panel, setPanel] = useState<Panel>(null);
-  const contact = safeStoreContact(STORE_CONTACTS[storeId]);
-  return <section className={`profile-return-tools ${compact ? 'is-compact' : ''}`} aria-label="门店回访入口">
-    <div className="profile-return-card return-save-card"><Bookmark size={23} aria-hidden="true" /><div><h3>下次从服务号进入</h3><p>荷小悦草本轻养 · 底部菜单</p></div><button type="button" onClick={() => setPanel('save')}>查看入口</button></div>
-    {showContact && <div className="profile-return-card return-contact-card"><MessageSquareText size={23} aria-hidden="true" /><div><small>门店联系</small><h3>{contact?.name || '荷小悦门店联系'}</h3><p>{contact ? '自愿添加，不影响报告和服务。' : '线上联系方式尚未配置'}</p></div><button type="button" onClick={() => setPanel('contact')}>{contact ? '查看联系' : '查看说明'}<ChevronRight size={14} /></button></div>}
-    <details className="profile-tuesday-card"><summary><CalendarDays size={21} aria-hidden="true" /><div><h3>超级星期二</h3><p>有效会员按门店价消费主项，买一赠一。</p></div><span>查看活动</span></summary><div><p>每周二，有效会员按门店价消费任意主项，买一赠一。</p><p>适用主项、赠送搭配、补差和叠加规则，请到店由门店人工确认。</p><p>{MEMBERSHIP_STORE_CONFIRMATION}</p></div></details>
-    <ReturnDialog panel={panel} storeId={storeId} onClose={() => setPanel(null)} />
-  </section>;
+export function ProfileReturnTools({ onReports, onPanel }: {
+  onReports: () => void;
+  onPanel: (panel: Exclude<Panel, null>) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return <nav className="profile-guest-tools" aria-label="其他服务">
+    <div className="profile-guest-links">
+      <button type="button" onClick={onReports}><ReceiptText aria-hidden="true" />检测报告</button>
+      <button type="button" onClick={() => onPanel('contact')}><Store aria-hidden="true" />联系门店</button>
+      <button type="button" aria-expanded={expanded} aria-controls="profile-guest-more" onClick={() => setExpanded(value => !value)}>
+        更多服务<ChevronDown className="profile-guest-chevron" aria-hidden="true" />
+      </button>
+    </div>
+    <div id="profile-guest-more" className="profile-guest-extra" hidden={!expanded}>
+      <button type="button" onClick={() => onPanel('save')}><Bookmark aria-hidden="true" />服务号入口<ChevronRight aria-hidden="true" /></button>
+      <button type="button" onClick={() => onPanel('tuesday')}><CalendarDays aria-hidden="true" />超级星期二<ChevronRight aria-hidden="true" /></button>
+    </div>
+  </nav>;
 }

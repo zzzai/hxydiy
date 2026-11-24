@@ -1,10 +1,10 @@
-import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Store, UserRound, X } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Bookmark, CalendarDays, ChevronRight, Clock3, LogOut, MessageSquareText, ReceiptText, Store, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import { ApiError, cancelOrder, enrollTrustedDevice, getCouponRedeemToken, getMyCoupons, getMySelectionSessions, issueMemberCode, loginByPhone, rebindTrustedDevice, sendPhoneCode, submitCustomerFeedback, type MyCoupon, type Order, type SelectionSession } from '../api';
 import { authFailureAction, clearCustomerAuth, isValidPhone, normalizePhone, writeCustomerAuth, type CustomerAuth } from '../customerAuth';
-import { formatMoney } from '../domain';
+import { assetPath, formatMoney } from '../domain';
 import { useCustomerMembership } from './useCustomerMembership';
 import { useCustomerConsumption } from './useCustomerConsumption';
 import { customerLoginCopy, shouldShowCouponTab } from '../customerCopy';
@@ -178,7 +178,7 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
   if (!open) return null;
 
   return (
-    <div className={`profile-page ${reportsOpen ? 'profile-report-view' : 'profile-home'}`} role="dialog" aria-modal="true" aria-label="个人中心">
+    <div className={`profile-page ${reportsOpen ? 'profile-report-view' : 'profile-home'}${auth ? '' : ' profile-guest'}`} role="dialog" aria-modal="true" aria-label="个人中心">
       <header>
         <button type="button" aria-label={reportsOpen ? onReportsBack ? '返回首页' : '返回我的' : '返回'} onClick={reportsOpen ? onReportsBack || (() => setReportsOpen(false)) : onClose}><ArrowLeft size={22} /></button>
         <strong>{reportsOpen ? '我的检测报告' : '我的'}</strong>
@@ -186,7 +186,12 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
       </header>
 
       {!auth
-        ? <div className="profile-anonymous-body">{reportsOpen ? <p className="my-reports-note">我的检测报告：请先验证检测时使用的手机号。</p> : <button className="profile-pending-task" type="button" onClick={openReports}><span><ReceiptText size={19} /><strong>我的检测报告</strong><small>验证手机号后查看本人结果</small></span><ChevronRight size={18} /></button>}<ProfileLogin onAuthChange={onAuthChange} />{!reportsOpen && <ProfileReturnTools storeId={storeId} compact />}</div>
+        ? <main className="profile-anonymous-body">
+            <div className="profile-guest-content">
+              <ProfileLogin onAuthChange={onAuthChange} forReports={reportsOpen} />
+              {!reportsOpen && <ProfileReturnTools onReports={openReports} onPanel={setReturnPanel} />}
+            </div>
+          </main>
         : reportsOpen ? <MyReports key={auth.token} token={auth.token} onVerify={() => { clearCustomerAuth(); onAuthChange(null); }} /> : (
           <main className="profile-body">
             <ProfileMemberOverview key={auth.token} user={auth.user} membership={membership} consumption={consumption} showMemberCode={SHOW_DYNAMIC_MEMBER_CODE} onShowCode={() => setMemberCodeOpen(true)} />
@@ -215,72 +220,115 @@ export default function ProfilePage({ open, auth, onClose, onAuthChange, initial
             {!auth.user.is_member && <MembershipBanner />}
             {ownsData && selectedRecord && <RecordDetail record={selectedRecord} onClose={() => setSelectedRecord(null)} onFeedback={() => { openFeedback(selectedRecord); setSelectedRecord(null); }} />}
             <FeedbackDialog key={auth.token} open={ownsData && Boolean(feedbackRecord)} submitting={feedbackSubmitting} submitted={Boolean(feedbackRecord?.evaluated)} error={feedbackError} onClose={() => { setFeedbackRecord(null); setFeedbackError(''); }} onSubmit={saveFeedback} />
-            <ReturnDialog panel={returnPanel} storeId={storeId} onClose={() => setReturnPanel(null)} />
             {SHOW_DYNAMIC_MEMBER_CODE && memberCodeOpen && <MemberCodeDialog token={auth.token} phone={auth.user.phone} onTokenReplaced={(token) => { const next = { ...auth, token }; writeCustomerAuth(next); onAuthChange(next); }} onClose={() => setMemberCodeOpen(false)} />}
           </main>
         )}
+      <ReturnDialog panel={returnPanel} storeId={storeId} onClose={() => setReturnPanel(null)} />
       {!reportsOpen && !selectedRecord && !feedbackRecord && !returnPanel && !memberCodeOpen && navigation}
     </div>
   );
 }
 
-function ProfileLogin({ onAuthChange }: { onAuthChange: (auth: CustomerAuth) => void }) {
+function ProfileLogin({ onAuthChange, forReports }: { onAuthChange: (auth: CustomerAuth) => void; forReports: boolean }) {
   const copy = customerLoginCopy('profile');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
+  const [sentTo, setSentTo] = useState('');
   const [seconds, setSeconds] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [pending, setPending] = useState<'send' | 'login' | null>(null);
+  const [error, setError] = useState<{ field: 'phone' | 'code' | 'form'; text: string } | null>(null);
+  const phoneField = useRef<HTMLInputElement>(null);
+  const codeField = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (seconds <= 0) return undefined;
-    const timer = window.setTimeout(() => setSeconds((value) => value - 1), 1000);
+    const timer = window.setTimeout(() => setSeconds(value => value - 1), 1000);
     return () => window.clearTimeout(timer);
   }, [seconds]);
 
+  const checkPhone = () => {
+    if (isValidPhone(phone)) return true;
+    setError({ field: 'phone', text: '请输入正确的 11 位手机号' });
+    phoneField.current?.focus();
+    return false;
+  };
+
   const send = async () => {
-    if (!isValidPhone(phone)) return setError('请输入正确的手机号');
-    setBusy(true);
-    setError('');
+    if (pending || seconds > 0 || !checkPhone()) return;
+    setPending('send');
+    setError(null);
+    setSentTo('');
     try {
       await sendPhoneCode(phone);
       setSeconds(60);
+      setSentTo(phone);
+      codeField.current?.focus();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '验证码发送失败');
+      setError({ field: 'form', text: reason instanceof Error ? reason.message : '验证码发送失败，请重试' });
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   };
 
   const confirm = async () => {
-    if (!isValidPhone(phone) || code.length !== 6) return setError('请输入手机号和 6 位验证码');
-    setBusy(true);
-    setError('');
+    if (pending || !checkPhone()) return;
+    if (code.length !== 6) {
+      setError({ field: 'code', text: '请输入短信中的 6 位验证码' });
+      codeField.current?.focus();
+      return;
+    }
+    setPending('login');
+    setError(null);
     try {
       const result = await loginByPhone(phone, code);
       writeCustomerAuth(result);
       await bindPendingGuestCoupons(result.token);
       onAuthChange(result);
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : '登录失败');
+      setError({ field: 'form', text: reason instanceof Error ? reason.message : '登录失败，请重试' });
     } finally {
-      setBusy(false);
+      setPending(null);
     }
   };
 
   return (
-    <main className="profile-login">
-      <section className="profile-login-hero">
-        <UserRound size={30} />
-        <div><h1>{copy.title}</h1><p>{copy.detail}</p></div>
-      </section>
-      <section className="coupon-login-form">
-        <label><span>手机号</span><input value={phone} inputMode="tel" placeholder="请输入手机号" onChange={(event) => setPhone(normalizePhone(event.target.value))} /></label>
-        <label><span>验证码</span><div><input value={code} inputMode="numeric" maxLength={6} placeholder="6 位验证码" onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} /><button type="button" disabled={busy || seconds > 0} onClick={send}>{seconds > 0 ? `${seconds}s` : '获取验证码'}</button></div></label>
-      </section>
-      {error && <p className="coupon-login-error">{error}</p>}
-      <button className="profile-login-submit" type="button" disabled={busy} onClick={confirm}>{busy ? '正在登录' : copy.action}</button>
-    </main>
+    <form className="profile-login" aria-labelledby="profile-login-title" noValidate
+      onSubmit={event => { event.preventDefault(); void confirm(); }}>
+      <div className="profile-login-heading">
+        <div><h1 id="profile-login-title">{forReports ? '验证手机号' : copy.title}</h1>
+          <p>{forReports ? '用检测时登记的手机号，查看本人报告。' : copy.detail}</p></div>
+        <img src={assetPath('hxy-mascot.webp')} width="78" height="78" alt="" />
+      </div>
+      <div className="profile-login-fields">
+        <div className="profile-login-field">
+          <label htmlFor="profile-login-phone">手机号</label>
+          <div className="profile-input-line">
+            <input id="profile-login-phone" name="phone" ref={phoneField} type="tel" inputMode="tel" autoComplete="tel-national"
+              placeholder={forReports ? '检测时登记的手机号' : '请输入到店使用的手机号'} readOnly={Boolean(pending)} value={phone}
+              aria-invalid={error?.field === 'phone' || undefined} aria-describedby={error?.field === 'phone' ? 'profile-login-error' : undefined}
+              onChange={event => { setPhone(normalizePhone(event.target.value)); setCode(''); setError(null); }} />
+          </div>
+        </div>
+        <div className="profile-login-field">
+          <label htmlFor="profile-login-code">短信验证码</label>
+          <div className="profile-input-line">
+            <input id="profile-login-code" name="code" ref={codeField} type="text" inputMode="numeric" autoComplete="one-time-code"
+              enterKeyHint="go" placeholder="6 位验证码" maxLength={6} readOnly={pending === 'login'} value={code}
+              aria-invalid={error?.field === 'code' || undefined} aria-describedby={error?.field === 'code' ? 'profile-login-error' : undefined}
+              onChange={event => { setCode(event.target.value.replace(/\D/g, '').slice(0, 6)); setError(null); }} />
+            <button className="profile-send-code" type="button" disabled={Boolean(pending) || seconds > 0} onClick={send}>
+              {pending === 'send' ? '发送中…' : seconds > 0 ? `${seconds} 秒后重发` : '获取验证码'}
+            </button>
+          </div>
+        </div>
+      </div>
+      {error ? <p className="profile-login-error" id="profile-login-error" role="alert">{error.text}</p>
+        : sentTo && phone === sentTo && seconds > 0 && <p className="profile-login-sent" role="status">验证码已发送，请查看短信。</p>}
+      <button className="profile-login-submit" type="submit" disabled={Boolean(pending)}>
+        {pending === 'login' ? '正在登录…' : forReports ? '登录并查看报告' : copy.action}
+      </button>
+      <p className="profile-login-registration">首次登录会自动注册。</p>
+    </form>
   );
 }
 

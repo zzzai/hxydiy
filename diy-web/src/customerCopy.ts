@@ -175,7 +175,7 @@ export function customerLoginCopy(kind: 'profile' | 'record'): {
   return kind === 'profile'
     ? {
       title: '登录荷小悦',
-      detail: '查看服务记录、检测报告和券包。首次登录自动注册。',
+      detail: '查看会员权益、储值余额和消费记录。',
       action: '登录',
     }
     : {

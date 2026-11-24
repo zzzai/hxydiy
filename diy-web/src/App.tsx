@@ -72,7 +72,7 @@ import { shareProjectLink } from './projectShare';
 import { configureWeChatProjectShare, isWeChatBrowser } from './wechatShare';
 import PortionTechnicianPicker from './components/PortionTechnicianPicker';
 import TechnicianShowcase from './components/TechnicianShowcase';
-import CustomerBottomNav, { type CustomerTab } from './components/CustomerBottomNav';
+import CustomerBottomNav, { type CustomerTab, type DockOrigin } from './components/CustomerBottomNav';
 import { readTechnicianView, technicianBackSteps, technicianViewState, type TechnicianView } from './technicianNavigation';
 import ProjectDetailPage from './components/ProjectDetailPage';
 import HalfPriceProjectPrice from './components/HalfPriceProjectPrice';
@@ -376,6 +376,7 @@ export default function App() {
   const catalogMainRef = useRef<HTMLElement | null>(null);
   const sectionScrollTargetRef = useRef<string | null>(null);
   const [detailProject, setDetailProject] = useState<Project | null>(null);
+  const dockOrigin = useRef<DockOrigin | null>(null);
   const [technicianView, setTechnicianView] = useState<TechnicianView | null>(null);
   const showcaseProjects = useRef(projects);
   showcaseProjects.current = projects;
@@ -2303,7 +2304,7 @@ export default function App() {
     else window.history.pushState(state, '', window.location.href);
     applyOverlayHistoryState(readOverlayHistoryStack(state), state);
   };
-  const bottomNav = currentTab && <CustomerBottomNav active={currentTab} onSelect={switchTab} />;
+  const bottomNav = currentTab && <CustomerBottomNav active={currentTab} onSelect={switchTab} origin={dockOrigin} />;
 
   return (
     <div className="customer-app with-bottom-nav" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
