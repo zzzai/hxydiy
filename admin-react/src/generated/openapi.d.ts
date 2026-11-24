@@ -4695,6 +4695,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stores/{store_id}/technicians": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Technician Directory */
+        get: operations["get_technician_directory_api_v1_stores__store_id__technicians_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/technician/activate": {
         parameters: {
             query?: never;
@@ -5938,6 +5955,38 @@ export interface components {
             size_bytes: number;
             /** Store Id */
             store_id?: number | null;
+        };
+        /** DirectoryProfile */
+        DirectoryProfile: {
+            /**
+             * Experience
+             * @default
+             */
+            experience: string;
+            /**
+             * Introduction
+             * @default
+             */
+            introduction: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Photos */
+            photos?: components["schemas"]["WorkPhoto"][];
+            /**
+             * Portrait Url
+             * @default
+             */
+            portrait_url: string;
+            /** Project Ids */
+            project_ids?: number[];
+            /** Requestable Project Ids */
+            requestable_project_ids?: number[];
+            /** Tags */
+            tags?: string[];
+            /** Technician Id */
+            technician_id?: number | null;
         };
         /** EntrySessionIn */
         EntrySessionIn: {
@@ -8178,6 +8227,11 @@ export interface components {
             /** Store Id */
             store_id: number;
         };
+        /** TechnicianDirectory */
+        TechnicianDirectory: {
+            /** Items */
+            items: components["schemas"]["DirectoryProfile"][];
+        };
         /** TrackBatch */
         TrackBatch: {
             /** Events */
@@ -8300,6 +8354,13 @@ export interface components {
             feedback?: ("suitable" | "still_unsuitable") | null;
             /** Request */
             request?: ("lower" | "suitable" | "higher") | null;
+        };
+        /** WorkPhoto */
+        WorkPhoto: {
+            /** Caption */
+            caption: string;
+            /** Url */
+            url: string;
         };
         /** WorkspaceGrantOut */
         WorkspaceGrantOut: {
@@ -18643,6 +18704,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_technician_directory_api_v1_stores__store_id__technicians_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                store_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TechnicianDirectory"];
                 };
             };
             /** @description Validation Error */

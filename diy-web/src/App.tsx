@@ -17,6 +17,7 @@ import {
   Sofa,
   Sparkles,
   WifiOff,
+  UsersRound,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -71,6 +72,8 @@ import { readPrivateSelection, writePrivateSelection, clearPrivateSelection, pri
 import { shareProjectLink } from './projectShare';
 import { configureWeChatProjectShare, isWeChatBrowser } from './wechatShare';
 import PortionTechnicianPicker from './components/PortionTechnicianPicker';
+import TechnicianShowcase from './components/TechnicianShowcase';
+import { readTechnicianView, technicianBackSteps, technicianViewState, type TechnicianView } from './technicianNavigation';
 import ProjectDetailPage from './components/ProjectDetailPage';
 import HalfPriceProjectPrice from './components/HalfPriceProjectPrice';
 import { halfPriceForProject } from './halfPriceCoupon';
@@ -373,6 +376,9 @@ export default function App() {
   const catalogMainRef = useRef<HTMLElement | null>(null);
   const sectionScrollTargetRef = useRef<string | null>(null);
   const [detailProject, setDetailProject] = useState<Project | null>(null);
+  const [technicianView, setTechnicianView] = useState<TechnicianView | null>(null);
+  const showcaseProjects = useRef(projects);
+  showcaseProjects.current = projects;
   const [localDetailOpen, setLocalDetailOpen] = useState(false);
   const [seatMapOpen, setSeatMapOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(() => query.profileEntry || query.returnVisit || (!query.serviceHub && shouldRestoreProfileOverlay(window.history.state)));
@@ -415,7 +421,7 @@ export default function App() {
     setCustomerAuthState(auth);
   };
   const feedbackOpen = feedbackMode !== null;
-  const activeOverlay: OverlayHistoryKind | null = feedbackOpen ? 'feedback'
+  const activeOverlay: OverlayHistoryKind | null = technicianView ? 'technicians' : feedbackOpen ? 'feedback'
     : recordLoginOpen ? 'record-login'
       : couponLoginOpen ? 'coupon-login'
           : savingHintOpen ? 'saving-hint'
@@ -558,14 +564,17 @@ export default function App() {
     window.setTimeout(() => setToast(''), 2400);
   };
 
-  const applyOverlayHistoryState = (stack: OverlayHistoryKind[]) => {
+  const applyOverlayHistoryState = (stack: OverlayHistoryKind[], state: unknown = window.history.state) => {
+    setTechnicianView(readTechnicianView(state, query.storeId));
     const includes = (overlay: OverlayHistoryKind) => stack.includes(overlay);
     if (!includes('feedback')) setFeedbackMode(null);
     setRecordLoginOpen(includes('record-login'));
     setCouponLoginOpen(includes('coupon-login'));
     setSavingHintOpen(includes('saving-hint'));
     setSelectionSummaryOpen(includes('selection-summary'));
-    setDetailProject((current) => includes('project-detail') ? current : null);
+    const fromShowcase = (state as { hxyShowcaseProject?: number } | null)?.hxyShowcaseProject;
+    setDetailProject(current => includes('project-detail')
+      ? current ?? showcaseProjects.current.find(p => p.id === fromShowcase) ?? null : null);
     setLocalDetailOpen(includes('local-detail'));
     setSeatMapOpen(includes('seat-map'));
     setProfileOpen(includes('profile'));
@@ -589,6 +598,19 @@ export default function App() {
       return;
     }
     applyOverlayHistoryState([]);
+  };
+
+  const openTechnicians = (view: TechnicianView, replace = false) => {
+    const state = technicianViewState(window.history.state, view, replace);
+    if (replace) window.history.replaceState(state, '', window.location.href);
+    else window.history.pushState(state, '', window.location.href);
+    setTechnicianView(view);
+  };
+
+  const finishTechnicians = () => {
+    const steps = technicianBackSteps(window.history.state);
+    if (steps) window.history.go(-steps);
+    else setTechnicianView(null);
   };
 
   const openProjectDetail = (project: Project, key: string | null = null) => {
@@ -1415,7 +1437,7 @@ export default function App() {
     }
     const restoreOverlay = (event: PopStateEvent) => {
       const stack = readOverlayHistoryStack(event.state);
-      applyOverlayHistoryState(stack);
+      applyOverlayHistoryState(stack, event.state);
       if (stack.length === 0 && isOverlayRootState(event.state) && !isOverlayGuardState(event.state)) {
         window.history.pushState(createOverlayGuardState(event.state), '', window.location.href);
       }
@@ -1818,8 +1840,13 @@ export default function App() {
     setPortions(current => editKey ? current.map(item => item.key === key ? value : item) : [...current, value]);
   };
 
-  const technicianPicker = (project?: Project | null) => project && !readOnly && editKey !== 'legacy'
-    ? <PortionTechnicianPicker key={`${project.id}-${editKey || 'new'}`} storeId={query.storeId} projectId={project.id} value={requestedTechnician} onChange={setRequestedTechnician} /> : null;
+  const technicianPicker = (project?: Project | null) => {
+    if (!project) return null;
+    const browse = () => openTechnicians({ storeId: query.storeId, projectId: project.id });
+    return readOnly || editKey === 'legacy'
+      ? <div className="mini-config-card"><button className="technician-browse" type="button" onClick={browse}><UsersRound size={16} />查看本店技师<ChevronRight size={15} /></button></div>
+      : <PortionTechnicianPicker key={`${project.id}-${editKey || 'new'}`} storeId={query.storeId} projectId={project.id} value={requestedTechnician} onChange={setRequestedTechnician} onBrowse={browse} />;
+  };
 
   const saveLocalParts = (parts: string[]) => {
     if (readOnly) return;
@@ -2265,10 +2292,14 @@ export default function App() {
           <em>{position?.customer_label || '服务位待核对'}</em>
           <small>切换门店</small>
         </button>}
-        <button className="miniapp-profile-entry" type="button" onClick={openProfile}>
-          <CircleUserRound size={18} />
-          <span>{publicBrowsing || customerAuth ? '我的' : '登录'}</span>
-        </button>
+        <nav className="technician-menu-actions" aria-label="门店服务">
+          <button className="miniapp-profile-entry technician-directory-entry" type="button" onClick={() => openTechnicians({ storeId: query.storeId })}>
+            <UsersRound size={17} /><span>本店技师</span>
+          </button>
+          <button className="miniapp-profile-entry" type="button" onClick={openProfile}>
+            <CircleUserRound size={18} /><span>{publicBrowsing || customerAuth ? '我的' : '登录'}</span>
+          </button>
+        </nav>
       </header>
 
       {['ready', 'public-menu'].includes(boot) && hasSubmittedCustomerSession && collaborationMode !== 'browse_only' && <div className="submitted-browse-banner"><span><CheckCircle2 size={16} />{serviceProgress.browseLabel}</span><div className="submitted-browse-actions">{serviceFeedbackActionLabel === '评价本次服务' && <button type="button" onClick={openFeedback}>{serviceFeedbackActionLabel}</button>}<button type="button" onClick={() => setBoot('submitted')}>查看清单</button></div></div>}
@@ -2299,6 +2330,17 @@ export default function App() {
         ))}
       </section>
 
+      {technicianView && <TechnicianShowcase key={technicianView.storeId} view={technicianView} storeName={storeDisplayName} projects={projects}
+        canEdit={!readOnly && editKey !== 'legacy' && technicianView.projectId !== undefined &&
+          technicianView.projectId === (detailProject?.id ?? (localDetailOpen ? localProject?.id : undefined))}
+        navigate={openTechnicians} back={dismissTopOverlay} finish={finishTechnicians}
+        onRequest={technician => { setRequestedTechnician(technician); finishTechnicians(); }}
+        onProject={project => {
+          setTechnicianView(null);
+          if (project.category === 'local-strength') openLocalDetail();
+          else openProjectDetail(project);
+          window.history.replaceState({ ...window.history.state, hxyShowcaseProject: project.id }, '', window.location.href);
+        }} />}
       <ReturnEntryBanner storeId={query.storeId} />
       <div className="catalog-layout miniapp-catalog-layout">
         <nav className="category-nav" aria-label="项目分类">

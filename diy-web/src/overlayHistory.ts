@@ -10,6 +10,7 @@ export const OVERLAY_HISTORY_KINDS = [
   'seat-map',
   'profile',
   'membership',
+  'technicians',
 ] as const;
 
 export type OverlayHistoryKind = (typeof OVERLAY_HISTORY_KINDS)[number];

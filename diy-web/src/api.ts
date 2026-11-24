@@ -255,6 +255,25 @@ export async function selectableTechnicians(storeId: number, projectId: number, 
   return result.items;
 }
 
+
+export type PublicTechnician = {
+  key: string;
+  label: string;
+  technician_id: number | null;
+  experience: string;
+  portrait_url: string;
+  tags: string[];
+  introduction: string;
+  photos: { url: string; caption: string }[];
+  project_ids: number[];
+  requestable_project_ids: number[];
+};
+
+export async function getStoreTechnicians(storeId: number, signal: AbortSignal) {
+  const result = await request<{ items: PublicTechnician[] }>(`/stores/${storeId}/technicians`, { signal, cache: 'no-store' });
+  return result.items;
+}
+
 export async function getAddons(storeId: number): Promise<Addon[]> {
   return request<Addon[]>(`/addons?store_id=${storeId}&sale_mode=attach`);
 }

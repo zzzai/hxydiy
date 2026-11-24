@@ -40,7 +40,8 @@ def candidate(db: Session, store_id: int, project_id: int, technician_id: int) -
 
 def public_label(technician: Technician) -> str:
     label = (technician.name or "").strip()
-    if label and not re.search(r"[0-9]{7,}|@", label):
+    compact = re.sub(r"[\s()+.\-]", "", label)
+    if label and not re.search(r"\d{7,}|@", compact):
         return label
     return f"技师 {technician.id}"
 

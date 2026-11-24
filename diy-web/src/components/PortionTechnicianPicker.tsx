@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ChevronRight, UsersRound } from 'lucide-react';
 import { selectableTechnicians, type SelectableTechnician } from '../api';
 
 type Props = {
@@ -6,9 +7,10 @@ type Props = {
   projectId: number;
   value?: SelectableTechnician;
   onChange: (value?: SelectableTechnician) => void;
+  onBrowse: () => void;
 };
 
-export default function PortionTechnicianPicker({ storeId, projectId, value, onChange }: Props) {
+export default function PortionTechnicianPicker({ storeId, projectId, value, onChange, onBrowse }: Props) {
   const [items, setItems] = useState<SelectableTechnician[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
@@ -34,6 +36,7 @@ export default function PortionTechnicianPicker({ storeId, projectId, value, onC
           </select>
         : <span>{value?.label || '门店安排'}</span>}
     </div>
+    <button className="technician-browse" type="button" onClick={onBrowse}><UsersRound size={16} />查看本店技师<ChevronRight size={15} /></button>
     {value && <p className="portion-hint" role="status">点名后由店长确认</p>}
     {status === 'error' && <div className="portion-hint" role="status">暂时无法加载技师名单 <button type="button" onClick={() => setAttempt(current => current + 1)}>重试</button>{value && <button type="button" onClick={() => onChange(undefined)}>改为门店安排</button>}</div>}
   </section>;

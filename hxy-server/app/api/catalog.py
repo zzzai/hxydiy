@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from datetime import UTC, datetime
 import unicodedata
@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.domain.service_portions import registered_staff, can_request, public_label
 from app.domain.half_price_coupon import half_price_project_cents
 from app.domain.catalog_options import CatalogDomainError, verify_published_catalog_hash
+from app.services.public_technicians import TechnicianDirectory, store_directory
 from app.services.store_lifecycle import OPEN_STORE_STATUSES
 from app.models import Addon, OptionChoicePrice, PageContent, PriceBook, Product, Project, ProjectCatalogVersion, ProjectOptionChoice, ProjectOptionGroup, Store
 from app.schemas.catalog import ProductDetailModule, ProjectListResponse, ProjectOut, StoreOut
@@ -332,6 +333,12 @@ def get_project(project_id: int, db: Session = Depends(get_db)) -> ProjectOut:
     if not project or project.publication_status != "published":
         raise HTTPException(status_code=404, detail="项目不存在或未发布")
     return _project_to_out(db, project)
+
+
+@router.get("/stores/{store_id}/technicians", response_model=TechnicianDirectory)
+def get_technician_directory(store_id: int, response: Response, db: Session = Depends(get_db)) -> TechnicianDirectory:
+    response.headers["Cache-Control"] = "no-store"
+    return store_directory(db, store_id)
 
 
 @router.get("/stores/{store_id}/projects/{project_id}/selectable-technicians")

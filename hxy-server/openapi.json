@@ -1870,6 +1870,79 @@
         "title": "DirectUploadRequest",
         "type": "object"
       },
+      "DirectoryProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "experience": {
+            "default": "",
+            "title": "Experience",
+            "type": "string"
+          },
+          "introduction": {
+            "default": "",
+            "title": "Introduction",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/WorkPhoto"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "portrait_url": {
+            "default": "",
+            "title": "Portrait Url",
+            "type": "string"
+          },
+          "project_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Project Ids",
+            "type": "array"
+          },
+          "requestable_project_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Requestable Project Ids",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "technician_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Technician Id"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "DirectoryProfile",
+        "type": "object"
+      },
       "EntrySessionIn": {
         "properties": {
           "device_label": {
@@ -8058,6 +8131,22 @@
         "title": "TechIn",
         "type": "object"
       },
+      "TechnicianDirectory": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DirectoryProfile"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TechnicianDirectory",
+        "type": "object"
+      },
       "TrackBatch": {
         "properties": {
           "events": {
@@ -8412,6 +8501,24 @@
           }
         },
         "title": "WaterRecord",
+        "type": "object"
+      },
+      "WorkPhoto": {
+        "properties": {
+          "caption": {
+            "title": "Caption",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "caption"
+        ],
+        "title": "WorkPhoto",
         "type": "object"
       },
       "WorkspaceGrantOut": {
@@ -27819,6 +27926,48 @@
         "summary": "Customer Position Map",
         "tags": [
           "service-position-occupancy"
+        ]
+      }
+    },
+    "/api/v1/stores/{store_id}/technicians": {
+      "get": {
+        "operationId": "get_technician_directory_api_v1_stores__store_id__technicians_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "title": "Store Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TechnicianDirectory"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Technician Directory",
+        "tags": [
+          "catalog"
         ]
       }
     },
