@@ -116,7 +116,8 @@ export default function TechnicianShowcase({ view, storeName, projects, canEdit,
 
   const seeService = (p: Project) => inProject ? finish() : onProject(p);
   const statusText = person && (inProject
-    ? (available(person) ? '点名由店长确认' : '这个项目今天由门店安排技师。')
+    ? (available(person) ? '点名由店长确认'
+      : profiles.some(available) ? '这位技师目前不能点名此项目。' : '这个项目今天由门店安排技师。')
     : person.requestable_project_ids.length ? '点名由店长确认' : '今天由门店安排技师。');
 
   const compact = person && !person.portrait_url && !person.tags.length && !person.introduction && !person.photos.length && !services.length;
