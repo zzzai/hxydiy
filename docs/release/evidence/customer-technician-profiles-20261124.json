@@ -1,0 +1,48 @@
+{
+  "release": "server-03e9eae537a4-1795507528",
+  "source_sha": "03e9eae537a49cb8c7017f1372b35d47f1c11645",
+  "previous_release": "server-0aee2e4684c8-1795424538",
+  "verified_at": "2026-11-24T08:12:26.540152+00:00",
+  "health": "ok/production",
+  "menu_entrypoints_verified": [
+    1,
+    2
+  ],
+  "live_assets_sha256": {
+    "/assets/index-CpHaElUw.js": "a5663068795456067f8d3b1a681b2a54dc0a62b3e4a475e53c4f409dd9be33b1",
+    "/assets/App-p2cvdDRx.js": "0af5a23380f5af9871565303aaf424e947aa43821c86b8c06dd2c47efa07110b"
+  },
+  "running_api_and_public_roster_match": true,
+  "store_results": [
+    {
+      "store_id": 1,
+      "visible_profiles": 6,
+      "with_photos": 0,
+      "profiles_requestable_for_any_project": 0
+    },
+    {
+      "store_id": 2,
+      "visible_profiles": 6,
+      "with_photos": 0,
+      "profiles_requestable_for_any_project": 0
+    }
+  ],
+  "data_protection": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "backup_sha256": "ba78b9f1501f59105d1ee519b8132fd0abcbf1236600564c1bf65b0ab6b1431e",
+  "installed_manifest_sha256": "daa9bea20e1a57014d0a0dba54cf2b26ac574fdcb0e114f98eb17d229b88c91a",
+  "production_order_writes_in_acceptance": 0,
+  "customer_test_passed": 412,
+  "customer_test_skipped": 1,
+  "backend_contracts_passed": 50,
+  "release_contracts_passed": 96,
+  "mobile_widths_checked": [
+    320,
+    390,
+    430
+  ],
+  "physical_wechat_acceptance": false
+}
