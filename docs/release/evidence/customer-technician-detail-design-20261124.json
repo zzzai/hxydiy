@@ -1,0 +1,262 @@
+{
+  "release_id": "server-c9c96fd28fda-1795533674",
+  "source_sha": "c9c96fd28fdabbd4ab059fec948d1fea665680fb",
+  "previous_release": "server-ef7381214ba4-1795531245",
+  "baseline": "8d58beb50d3618282e26cab55297ee99944dcdbf",
+  "server_time_utc": "2026-11-24T15:24:58.974674+00:00",
+  "prepared_manifest_sha256": "0e4cfc843de67010a5965262edc67f03dfe6293eebf7a32238d4901e5468cdad",
+  "installed_manifest_sha256": "87419395ad47d3321187783bd87eaea8e042a33662706ce384f0c70cd7580ebe",
+  "matching_manifest_entries": 655,
+  "backup_checksum_verified": true,
+  "isolated_restore_verified_by_release_gate": true,
+  "database_migrations_in_change": false,
+  "schema_verification": {
+    "backup_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "before_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "current_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "equal": true
+  },
+  "protected_business_tables": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "health": {
+    "status": "ok",
+    "environment": "production"
+  },
+  "public_asset_sha256": {
+    "/assets/App-BlgdB5hw.css": "33182e23213a5420795806393d9a629e14f991e3428aea014aa00fb4a8b677b1",
+    "/assets/index-DvJfKSGQ.js": "d2a5daa9ae658005f04c91e0ff82b64b23aab3baeb4a3b18731875dc137c16b3",
+    "/assets/technician-illustration-2-v1.webp": "6ad927d2860174196f363cda70abc37f939c83d7a4f95910c5ffc6fb5aa7ee31",
+    "/assets/technician-illustration-5-v1.webp": "90dcb4eb8354db0d4ac1377af20021b4f26ea9a4bf3a93f6a863772f9fe931a1",
+    "/assets/technician-illustration-3-v1.webp": "803f8e5d202ed50c8fba43cda8cb382569b611963df1f1eb190e11d35e86eed0",
+    "/assets/technician-illustration-4-v1.webp": "08506ecd335c3a554e86b8612196e22659ac11b1b45332ff36a8e2974f163657",
+    "/assets/technician-illustration-1-v1.webp": "8cab213dd8039b96046db2615b4ff4fc598286e8df93c90b6adfbea29a38b86c",
+    "/assets/technician-illustration-6-v1.webp": "2b4101b9e55df37e01eb0bf3c7c09d93e48c19ed5f308d70a02223c9e751d102",
+    "/assets/App-CSsXQSXr.js": "ab807f145c576d56409179d0af2a70d7180db6e456ac0075db0ab007f65dbb43"
+  },
+  "public_browser": [
+    {
+      "store_id": 1,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 0,
+      "two_columns": true,
+      "portrait_beside_identity": true,
+      "verified_store_visit_fields": true,
+      "visit_initially_collapsed": true,
+      "official_contact_scoped": true,
+      "no_invented_sections": true,
+      "illustration_paths": [
+        "/assets/technician-illustration-1-v1.webp",
+        "/assets/technician-illustration-2-v1.webp",
+        "/assets/technician-illustration-3-v1.webp",
+        "/assets/technician-illustration-4-v1.webp",
+        "/assets/technician-illustration-5-v1.webp",
+        "/assets/technician-illustration-6-v1.webp"
+      ],
+      "six_distinct_illustrations": true,
+      "labeled_as_ai": true,
+      "details_and_return": true,
+      "profile_occupies_viewport": true,
+      "return_restores_focus_and_scroll": true,
+      "both_back_actions": true,
+      "no_unrelated_profile_actions": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-BlgdB5hw.css",
+        "/assets/App-CSsXQSXr.js"
+      ]
+    },
+    {
+      "store_id": 2,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 6,
+      "two_columns": true,
+      "portrait_beside_identity": true,
+      "verified_store_visit_fields": true,
+      "visit_initially_collapsed": true,
+      "official_contact_scoped": true,
+      "no_invented_sections": true,
+      "illustration_paths": [
+        "/assets/technician-illustration-1-v1.webp",
+        "/assets/technician-illustration-2-v1.webp",
+        "/assets/technician-illustration-3-v1.webp",
+        "/assets/technician-illustration-4-v1.webp",
+        "/assets/technician-illustration-5-v1.webp",
+        "/assets/technician-illustration-6-v1.webp"
+      ],
+      "six_distinct_illustrations": true,
+      "labeled_as_ai": true,
+      "details_and_return": true,
+      "profile_occupies_viewport": true,
+      "return_restores_focus_and_scroll": true,
+      "both_back_actions": true,
+      "no_unrelated_profile_actions": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-BlgdB5hw.css",
+        "/assets/App-CSsXQSXr.js"
+      ]
+    }
+  ],
+  "isolated_customer_suite": {
+    "passed": 412,
+    "skipped": 1,
+    "failed": 0
+  },
+  "isolated_store_flows": [
+    {
+      "store": 2,
+      "directory": true,
+      "tabCycle": true,
+      "back": true,
+      "orderDraftPreserved": true,
+      "verifiedRequest": false,
+      "browsingOrderWrites": 0,
+      "independentProfile": true,
+      "directNamedProject": false,
+      "returnedToScrolledList": true
+    },
+    {
+      "store": 1,
+      "directory": true,
+      "tabCycle": true,
+      "back": true,
+      "orderDraftPreserved": true,
+      "verifiedRequest": true,
+      "browsingOrderWrites": 0,
+      "independentProfile": true,
+      "directNamedProject": true,
+      "returnedToScrolledList": false
+    }
+  ],
+  "chrome": [
+    {
+      "case": "public",
+      "store": 1,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 1,
+      "width": 614,
+      "height": 884,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "portrait",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "mixed",
+      "store": 2,
+      "width": 320,
+      "height": 600,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "error",
+      "store": 1,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "empty",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 0,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "asset-error",
+      "store": 1,
+      "width": 390,
+      "height": 740,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    }
+  ],
+  "webkit": [
+    {
+      "case": "public",
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "public",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 6,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "portrait",
+      "store": 2,
+      "width": 390,
+      "height": 800,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    },
+    {
+      "case": "mixed",
+      "store": 2,
+      "width": 320,
+      "height": 600,
+      "people": 4,
+      "outside_requests": 0,
+      "navigation_business_writes": 0
+    }
+  ],
+  "physical_wechat_acceptance": false,
+  "profile_fit_first": true,
+  "media_changes": 0
+}
