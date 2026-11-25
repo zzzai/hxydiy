@@ -2287,10 +2287,9 @@ export default function App() {
   let currentTab: CustomerTab | null = null;
   if (!storePickerOpen) {
     if (!activeOverlay) currentTab = 'projects';
-    else if (stack.length === 1 && stack[0] === activeOverlay) {
-      if (activeOverlay === 'profile') currentTab = 'profile';
-      if (activeOverlay === 'technicians' && technicianView && !technicianView.profile && technicianView.projectId === undefined) currentTab = 'technicians';
-    }
+    else if (activeOverlay === 'profile' && stack.length === 1) currentTab = 'profile';
+    else if (activeOverlay === 'technicians' && technicianView && technicianView.projectId === undefined
+      && stack.length > 0 && stack.every(kind => kind === 'technicians')) currentTab = 'technicians';
   }
   const switchTab = (tab: CustomerTab) => {
     if (!currentTab || currentTab === tab) return;

@@ -6,10 +6,6 @@
 .technician-showcase button { font: inherit; cursor: pointer; }
 .technician-showcase button:focus-visible, .technician-browse:focus-visible { outline: 2px solid #187755; outline-offset: -3px; }
 .technician-showcase button:disabled { opacity: .5; cursor: default; }
-.technician-nav { grid-template-columns: minmax(64px,1fr) auto minmax(64px,1fr); border-bottom: 1px solid #e5ece7; }
-.technician-nav > span { color: #55695e; font-size: 12px; }
-.technician-profile-page::backdrop { background: #f3f6f3; }
-.technician-nav > .technician-back-link { display: inline-flex; align-items: center; justify-self: start; gap: 2px; width: auto; min-width: 44px; padding-right: 5px; color: #28563d; font-size: 14px; white-space: nowrap; }
 .technician-directory-head {
   position: relative;
   isolation: isolate;
@@ -115,53 +111,85 @@
   .technician-directory-head.has-cover h1 { grid-row: 1; grid-column: 2; align-self: center; padding: 0; font-size: 25px; }
   .technician-directory-head.has-cover .technician-venue { grid-column: 3; }
 }
-.technician-detail {
+.technician-filters {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 12px;
+}
+.technician-filters button {
+  min-height: 44px; padding: 0 12px; border: 1px solid transparent; border-radius: 999px;
+  color: #475f50; background: transparent; font-size: 13px;
+}
+.technician-filters button[aria-pressed="true"] { background: #eaf4ed; color: #184b36; border-color: #cdded2; }
+.technician-sheet {
   --profile-ink: #163e30;
   --profile-muted: #4e685c;
   --profile-line: #dfe8e2;
-  padding: 18px clamp(16px, 5vw, 28px) max(32px, env(safe-area-inset-bottom));
-  background: #fff;
+  position: fixed; inset: auto 0 0; box-sizing: border-box; width: min(100%, 510px); max-width: 100%;
+  height: min(85.5vh, 815px); height: min(85.5dvh, 815px); max-height: 100%; min-height: 0;
+  margin: auto; padding: 0; border: 0; border-radius: 20px 20px 0 0; overflow: hidden;
+  color: var(--ink, #17211e); background: #fff; box-shadow: 0 12px 32px rgba(15,45,36,.12);
+  overscroll-behavior: contain; font-family: inherit;
 }
-.technician-detail > * { max-width: 528px; margin-inline: auto; }
-.technician-identity {
-  display: grid; align-items: stretch; overflow: hidden;
-  color: var(--profile-ink); background: #edf4ed; border-radius: 16px;
+.technician-sheet[open] { display: flex; flex-direction: column; }
+.technician-sheet::backdrop { background: rgba(23,33,30,.33); }
+.technician-sheet [hidden] { display: none; }
+.technician-sheet-handle { height: 19px; flex: none; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.technician-sheet-handle span { height: 4px; width: 33px; border-radius: 4px; background: #c9d2cb; }
+.technician-sheet-head, .technician-dock {
+  display: flex; flex: none; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 0 clamp(14px, 5vw, 22px) 10px;
 }
-.technician-identity.has-photo { grid-template-columns: minmax(0, 43fr) minmax(0, 57fr); }
-.technician-person { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; padding: clamp(16px, 4.6vw, 26px); }
-.technician-home-store { display: flex; align-items: flex-start; gap: 4px; margin: 0; color: var(--profile-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-.technician-home-store svg { flex: none; margin-top: 2px; }
-.technician-person h1 {
-  margin: 22px 0; max-width: 100%; font-family: "Songti SC", "Noto Serif CJK SC", "STSong", SimSun, serif;
-  font-weight: 600; font-size: clamp(30px, 8.4vw, 43px); line-height: 1.24; color: var(--profile-ink); overflow-wrap: anywhere;
+.technician-sheet-head h2 { margin: 0; font-size: clamp(24px, 6.4vw, 28px); line-height: 1.25; font-weight: 650; overflow-wrap: anywhere; }
+.technician-sheet-head h2:focus { outline: none; }
+.technician-sheet-meta { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 4px 0 0; color: var(--profile-muted); line-height: 1.5; font-size: 13px; }
+.technician-sheet-meta strong { color: var(--profile-ink); font-weight: 600; }
+.technician-sheet-meta strong + span { padding-left: 8px; border-left: 1px solid #c9d2cb; }
+.technician-sheet-close { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; color: #445e4f; background: #f1f6f2; }
+.technician-sheet-body { flex: 1; min-height: 0; padding: 1px clamp(14px, 5vw, 22px) 18px; overflow: auto; overscroll-behavior: contain; }
+.technician-sheet-photos { display: grid; grid-template-columns: minmax(0,2.65fr) minmax(0,1fr); grid-template-rows: 1fr 1fr; gap: 7px; height: clamp(220px,74vw,349px); }
+.technician-sheet-photo {
+  position: relative; min-width: 0; min-height: 0; padding: 0; overflow: hidden; border: 0; border-radius: 10px; background: #eff4ef;
 }
-.technician-person h1:focus { outline: none; }
-.technician-identity.has-photo h1 { margin-block: auto; padding-block: 16px; }
-.technician-person .technician-code { display: block; font: 500 clamp(48px, 15.5vw, 77px)/.99 Georgia, "Times New Roman", serif; letter-spacing: -.045em; font-variant-numeric: lining-nums tabular-nums; }
-.technician-person .technician-code-suffix { display: block; color: var(--profile-ink); margin-top: 5px; font-size: 15px; line-height: 1.3; }
-.technician-experience { display: grid; gap: 3px; margin: 0; border-top: 1px solid #cddbd1; padding-top: 9px; color: var(--profile-ink); }
-.technician-experience .technician-tenure-label { color: var(--profile-muted); font-size: 12px; }
-.technician-experience strong { font-size: clamp(18px, 5.2vw, 23px); line-height: 1.4; font-weight: 650; font-variant-numeric: tabular-nums; }
-.technician-portrait { position: relative; display: block; align-self: stretch; width: 100%; min-width: 0; aspect-ratio: 3 / 4; overflow: hidden; margin: 0; padding: 0; border: 0; border-radius: 0; background: #e0ebe3; }
-.technician-portrait img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 33%; }
-.technician-portrait > svg { position: absolute; bottom: 9px; right: 9px; padding: 5px; box-sizing: content-box; border-radius: 50%; color: #fff; background: rgba(17,40,29,.72); }
-.technician-portrait .technician-photo-caption { left: 8px; bottom: 8px; }
-.technician-assignment { display: flex; align-items: center; gap: 13px; margin-top: 6px; padding-block: 20px 14px; }
-.technician-assignment-icon { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: #35664d; background: #edf5ef; }
-.technician-assignment h2, .technician-section h2 { margin: 0; color: var(--profile-ink); font-size: 18px; line-height: 1.4; font-weight: 650; }
-.technician-assignment p { margin: 3px 0 0; color: var(--profile-muted); font-size: 14px; line-height: 1.65; }
-.technician-section { margin-top: 15px; padding: 20px 0 0; border-top: 1px solid var(--profile-line); }
-.technician-section h2 { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; }
-.technician-style { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-top: 16px; }
-.technician-style h2 { margin: 0; color: var(--profile-muted); font-size: 13px; font-weight: 500; }
+.technician-sheet-photo:first-child, .technician-sheet-photos.count-2 .technician-sheet-photo { grid-row: span 2; }
+.technician-sheet-photos.count-1 { grid-template-columns: 1fr; }
+.technician-sheet-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; }
+.technician-sheet-photo:first-child img { object-position: 50% 32%; }
+.technician-sheet-expand, .technician-photo-count { position: absolute; top: 8px; right: 8px; box-sizing: content-box; padding: 6px; border-radius: 6px; color: #fff; background: rgba(22,35,28,.72); }
+.technician-sheet-photo .technician-photo-caption { max-width: calc(100% - 12px); left: 6px; bottom: 6px; box-sizing: border-box; text-overflow: ellipsis; overflow: hidden; }
+.technician-section { margin-top: 15px; padding: 16px 0 0; border-top: 1px solid var(--profile-line); }
+.technician-sheet-photos + .technician-section, .technician-sheet-body > .technician-section:first-child { border-top: 0; padding-top: 0; }
+.technician-section-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.technician-section h2 { margin: 0; color: var(--ink, #17211e); font-size: 18px; line-height: 1.45; font-weight: 600; }
+.technician-section-head small, .technician-assignment p { margin: 0; color: var(--profile-muted); font-size: 13px; line-height: 1.6; }
+.technician-tags { display: flex; flex-wrap: wrap; gap: 2px 7px; margin: 0; padding: 0; list-style: none; color: #28523d; font-size: 13px; }
+.technician-tags li + li::before { content: '·'; margin-right: 7px; }
+.technician-intro { margin: 8px 0 0; color: #394f43; font-size: 15px; line-height: 1.75; overflow-wrap: anywhere; }
 .technician-contact { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; color: #275d42; font-size: 14px; font-weight: 600; text-decoration: none; }
-.technician-tags { display: flex; flex-wrap: wrap; gap: 7px; padding: 0; margin: 0; list-style: none; }
-.technician-tags li { padding: 4px 10px; border-radius: 6px; background: #eaf4ed; color: #28523d; font-size: 13px; }
-.technician-intro { margin: 0; color: #394f43; font-size: 15px; line-height: 1.85; overflow-wrap: anywhere; }
-.technician-photos { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
-.technician-photos button { min-width: 0; padding: 0; border: none; color: #41594c; background: none; text-align: left; }
-.technician-photos img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 9px; }
-.technician-photos span { display: block; margin-top: 5px; font-size: 13px; }
+.technician-dock { padding-top: 10px; padding-bottom: max(12px,env(safe-area-inset-bottom)); border-top: 1px solid var(--profile-line); background: #fff; }
+.technician-dock-note { display: grid; gap: 3px; min-width: 0; font-size: 14px; line-height: 1.4; }
+.technician-dock-note strong { font-weight: 550; }
+.technician-dock-note small { color: var(--profile-muted); font-size: 12px; }
+.technician-dock button { display: flex; flex: none; justify-content: center; align-items: center; gap: 7px; min-height: 46px; min-width: 43%; padding: 8px 12px; border: 0; border-radius: 9px; font-weight: 600; }
+.technician-primary { color: #fff; background: var(--brand-action, #1b7839); }
+.technician-dock .technician-secondary { color: #24533d; background: #eaf4ed; }
+.technician-sheet.is-viewer { inset: 0; height: 100%; height: 100dvh; border-radius: 0; background: #18211c; color: #fff; }
+.technician-sheet.is-viewer .technician-sheet-head { padding-top: max(12px,env(safe-area-inset-top)); }
+.technician-sheet.is-viewer .technician-sheet-head h2 { font-size: 18px; }
+.technician-sheet.is-viewer .technician-sheet-close { color: #fff; background: #34453b; }
+@media (min-width: 768px) {
+  .technician-sheet:not(.is-viewer) { inset: 0; height: min(90vh,841px); height: min(90dvh,841px); border-radius: 16px; }
+  .technician-sheet-handle { display: none; }
+  .technician-sheet-head { padding-top: 16px; }
+  .technician-sheet.is-viewer { width: min(92%,760px); height: 90%; height: 90dvh; border-radius: 16px; }
+}
+@media (max-height: 450px) {
+  .technician-sheet:not(.is-viewer) { height: 94vh; height: 94dvh; }
+  .technician-sheet-handle { height: 12px; }
+  .technician-sheet-photos { height: 226px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .technician-sheet[open] { animation: technician-sheet-in .21s cubic-bezier(.2,.77,.2,1); }
+  @keyframes technician-sheet-in { from { transform: translateY(20px); opacity: .65; } }
+}
 .technician-services > li + li { border-top: 1px solid var(--profile-line); }
 .technician-services :is(li > button, li > div) { display: flex; width: 100%; min-height: 62px; align-items: center; gap: 11px; padding: 9px 0; border: 0; background: transparent; color: inherit; text-align: left; }
 .technician-service-thumb { flex: none; width: 48px; height: 52px; border-radius: 8px; object-fit: cover; }
@@ -188,22 +216,16 @@
 .technician-visit dd button { display: inline-flex; align-items: center; justify-content: start; gap: 5px; min-height: 44px; padding: 4px 5px 4px 0; border: 0; background: transparent; color: #2b6649; font-size: 13px; font-weight: 600; }
 .technician-visit dd small { display: block; color: var(--profile-muted); font-size: 12px; }
 @media (max-width: 349px) {
-  .technician-person { padding: 13px; }
   .technician-visit dl > div { gap: 12px; }
   .technician-service-thumb { width: 40px; height: 46px; }
 }
-.technician-dock { flex: none; padding: 10px 16px max(12px,env(safe-area-inset-bottom)); border-top: 1px solid #dce7de; background: white; }
-.technician-request-notice { flex: none; margin: 0; padding: 10px 20px max(12px, env(safe-area-inset-bottom)); color: #24543d; background: #eff5f0; font-size: 14px; }
-.technician-dock p { margin: 0 0 7px; color: #53665c; font-size: 13px; }
-.technician-dock button { display: flex; width: 100%; justify-content: center; align-items: center; gap: 6px; min-width: 0; min-height: 48px; padding: 6px 10px; border: 1px solid transparent; border-radius: 10px; line-height: 1.3; }
-.technician-dock .technician-secondary { border-color: #d7e5da; color: #26513d; background: #eff5f0; }
-.technician-primary { color: white; background: #174d37; font-weight: 600; }
 .technician-message { padding: 30px 20px; text-align: center; color: #53665c; }
 .technician-message button, .technician-viewer button { min-height: 44px; min-width: 44px; padding: 8px 12px; border: 1px solid #d5e2d8; border-radius: 9px; color: #205941; background: #fff; }
 .technician-viewer { display: flex; flex-direction: column; flex: 1; min-height: 0; background: #14241b; color: white; touch-action: pan-y; }
 .technician-viewer > img { width: 100%; min-height: 0; flex: 1; object-fit: contain; }
 .technician-viewer .technician-unavailable-photo { flex: 1; display: grid; place-items: center; }
 .technician-viewer > div { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px max(12px,env(safe-area-inset-bottom)); }
+.technician-viewer > div > p:only-child { margin-inline: auto; }
 .technician-viewer p { margin: 0; text-align: center; }
 .technician-viewer small { display: block; margin-top: 3px; font-size: 12px; }
 @media (max-width: 374px) {

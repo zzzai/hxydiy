@@ -1,6 +1,6 @@
 import { createOverlayHistoryState, readOverlayHistoryStack } from './overlayHistory.ts';
 
-export type TechnicianView = { storeId: number; projectId?: number; profile?: string; photo?: number };
+export type TechnicianView = { storeId: number; projectId?: number; profile?: string; photo?: number; directoryTag?: string; directoryTop?: number };
 
 export function technicianViewState(current: unknown, view: TechnicianView, replace = false) {
   const state = replace && readOverlayHistoryStack(current).at(-1) === 'technicians'

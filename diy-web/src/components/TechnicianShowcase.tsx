@@ -1,9 +1,10 @@
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Clock3, Expand, Images, MapPin, Store, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Clock3, MapPin } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { getStoreTechnicians, selectableTechnicians, type PublicTechnician, type SelectableTechnician, type StoreSummary } from '../api';
 import { assetPath, displayProjectName, formatMoney, projectImage, type Project } from '../domain';
 import { safeStoreContact, STORE_CONTACTS } from '../returnEntry';
 import type { TechnicianView } from '../technicianNavigation';
+import TechnicianPhotoSheet, { illustrationCaption, type CardPhoto } from './TechnicianPhotoSheet';
 import './technician-showcase.css';
 
 type Props = {
@@ -31,9 +32,7 @@ function TechnicianName({ label }: { label: string }) {
   return <><span className="technician-code">{number[1]}</span>{' '}<span className="technician-code-suffix">号技师</span></>;
 }
 
-type CardPhoto = { url: string; kind: 'portrait' | 'work' | 'illustration' };
 const illustrationUrls = Array.from({ length: 6 }, (_, i) => assetPath(`technician-illustration-${i + 1}-v1.webp`));
-const illustrationCaption = 'AI 示意 · 非本人';
 
 function DirectoryCard({ person, photo, projectName, requestLabel, canRequest, onOpen, onPhotoError }: {
   person: PublicTechnician;
@@ -47,7 +46,7 @@ function DirectoryCard({ person, photo, projectName, requestLabel, canRequest, o
   const bodyId = useId();
   const caption = photo?.kind === 'illustration' ? illustrationCaption : photo?.kind === 'work' ? '服务现场' : '';
   return <li>
-    <button type="button" className="technician-card" data-profile={person.key} onClick={onOpen}
+    <button type="button" className="technician-card" data-profile={person.key} aria-haspopup="dialog" onClick={onOpen}
       aria-labelledby={caption ? `${bodyId} ${bodyId}-photo` : bodyId}>
       {photo && <span className="technician-card-media">
         <img className="technician-card-photo" src={photo.url} alt="" loading="lazy" onError={() => onPhotoError(photo.url)} />
@@ -98,15 +97,15 @@ function StoreVisit({ store }: { store: StoreSummary }) {
 
 export default function TechnicianShowcase({ view, store, projects, canEdit, navigate, back, finish, onProject, onRequest, directoryFooter }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const detailScroll = useRef<HTMLDivElement>(null);
+  const servicesSection = useRef<HTMLElement>(null);
+  const listPosition = useRef(view.directoryTop ?? 0);
   const listScroll = useRef<HTMLDivElement>(null);
   const lastProfile = useRef<string>();
-  const profileHeading = useRef<HTMLHeadingElement>(null);
-  const swipeX = useRef<number>();
   const check = useRef<AbortController>();
   const [profiles, setProfiles] = useState<PublicTechnician[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
+  const [styleFilter, setStyleFilter] = useState(view.directoryTag ?? '');
   const [failedImages, setFailedImages] = useState<string[]>([]);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState('');
@@ -123,8 +122,6 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
   }
   const hasPortrait = (p: PublicTechnician) => Boolean(p.portrait_url && !failedImages.includes(p.portrait_url));
   const markFailed = (url: string) => setFailedImages(urls => urls.includes(url) ? urls : [...urls, url]);
-  const photos = person ? [...(person.portrait_url ? [{url: person.portrait_url, caption: person.label + ' · 工作肖像'}] : []), ...person.photos] : [];
-  const photo = view.photo === undefined ? undefined : photos[view.photo];
 
   useEffect(() => {
     const el = dialog.current;
@@ -143,18 +140,20 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
   useEffect(() => {
     setChecking(false);
     setNotice('');
-    if (view.profile && view.profile !== lastProfile.current) detailScroll.current?.scrollTo(0, 0);
+    if (view.profile && view.profile !== lastProfile.current) {
+      setStyleFilter(view.directoryTag ?? '');
+      listPosition.current = view.directoryTop ?? 0;
+      if (listScroll.current) listScroll.current.scrollTop = listPosition.current;
+    }
     if (!view.profile && lastProfile.current) {
       const previous = Array.from(listScroll.current?.querySelectorAll<HTMLButtonElement>('button[data-profile]') || [])
         .find(item => item.dataset.profile === lastProfile.current);
+      if (listScroll.current) listScroll.current.scrollTop = listPosition.current;
       previous?.focus({preventScroll: true});
     }
     lastProfile.current = view.profile;
     return () => check.current?.abort();
   }, [view.profile, view.projectId, view.photo, canEdit]);
-  useEffect(() => {
-    if (person && view.photo === undefined) profileHeading.current?.focus({ preventScroll: true });
-  }, [person?.key, view.photo]);
 
   const requestPerson = async (service: Project) => {
     if (!person?.technician_id || !canEdit || checking || !person.requestable_project_ids.includes(service.id)) return;
@@ -182,18 +181,6 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
     }
   };
   const openPhoto = (index: number) => navigate({...view, photo: index}, view.photo !== undefined);
-  const stepPhoto = (step: number) => {
-    const index = (view.photo ?? 0) + step;
-    if (index >= 0 && index < photos.length) openPhoto(index);
-  };
-  const endSwipe = (event: React.TouchEvent) => {
-    event.stopPropagation();
-    const start = swipeX.current;
-    swipeX.current = undefined;
-    if (start === undefined) return;
-    const distance = event.changedTouches[0].clientX - start;
-    if (Math.abs(distance) > 45) stepPhoto(distance < 0 ? 1 : -1);
-  };
 
   const offersNamedService = person && services.some(service => person.requestable_project_ids.includes(service.id));
   const contactUrl = person && !inProject && !offersNamedService && store?.id === view.storeId
@@ -202,9 +189,13 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
     ? (available(person) ? (canEdit ? '点名由店长确认' : '这份服务暂不能更改技师') : profiles.some(available) ? '这位技师目前不能点名此项目。' : '这个项目由门店安排技师。')
     : offersNamedService && canEdit ? '可按项目点名' : offersNamedService ? '当前选单仅可查看' : '暂不能线上点名');
 
+  const tags = Array.from(new Set(peers.flatMap(p => p.tags)));
+  const activeTag = tags.includes(styleFilter) ? styleFilter : '';
+  const shown = activeTag ? peers.filter(p => p.tags.includes(activeTag)) : peers;
+  const shownRequestCount = shown.filter(p => inProject ? available(p) : p.requestable_project_ids.length > 0).length;
   const directoryGroups = inProject && requestCount > 0 && requestCount < peers.length
-    ? [{ title: '本项目可点名', rows: peers.filter(available) }, { title: '其他技师', rows: peers.filter(p => !available(p)) }]
-    : [{ title: '', rows: peers }];
+    ? [{ title: '本项目可点名', rows: shown.filter(available) }, { title: '其他技师', rows: shown.filter(p => !available(p)) }].filter(group => group.rows.length > 0)
+    : [{ title: '', rows: shown }];
   // Use the original roster order even when project eligibility moves cards between groups.
   const illustrations = new Map(profiles.map((p, index) => [p.key, illustrationUrls[index % illustrationUrls.length]]));
   const cardPhoto = (p: PublicTechnician): CardPhoto | undefined => {
@@ -215,13 +206,6 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
     if (illustration && !failedImages.includes(illustration)) return { url: illustration, kind: 'illustration' };
   };
   const detailPhoto = person && cardPhoto(person);
-  const detailMedia = detailPhoto && <>
-    <img src={detailPhoto.url} alt={detailPhoto.kind === 'portrait' ? person?.label + '的工作肖像' : ''}
-      onError={() => markFailed(detailPhoto.url)} />
-    {detailPhoto.kind !== 'portrait' && <span className="technician-photo-caption">
-      {detailPhoto.kind === 'illustration' ? illustrationCaption : '服务现场'}
-    </span>}
-  </>;
   const useCover = status === 'ready' && peers.length > 0 && !peers.some(cardPhoto);
   const renderCard = (p: PublicTechnician) => {
     const canRequest = inProject ? available(p) : p.requestable_project_ids.length > 0;
@@ -230,12 +214,15 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
     return <DirectoryCard key={p.key} person={p} photo={cardPhoto(p)} canRequest={canRequest}
       projectName={firstService ? displayProjectName(firstService) : undefined}
       requestLabel={requestCount ? requestLabel : ''}
-      onOpen={() => navigate({...view, profile: p.key, photo: undefined})}
+      onOpen={() => {
+        listPosition.current = listScroll.current?.scrollTop ?? 0;
+        navigate({...view, profile: p.key, photo: undefined, directoryTag: activeTag, directoryTop: listPosition.current});
+      }}
       onPhotoError={markFailed} />;
   };
   const storeName = store?.name.replace(/^荷小悦[-·]?/, '') || '荷小悦草本泡脚';
   const venue = storeName.replace(/^(?:荷小悦\s*[-·]?\s*)?草本泡脚[（(]([^（）()]+)[）)]$/, '$1');
-  return <dialog className={'technician-showcase' + (view.profile ? ' technician-profile-page' : '')} ref={dialog} aria-labelledby="technician-title"
+  return <dialog className="technician-showcase" ref={dialog} aria-labelledby="technician-title"
     onCancel={event => { event.preventDefault(); back(); }}
     onKeyDown={event => {
       if (event.key !== 'Escape') return;
@@ -244,27 +231,25 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
       event.stopPropagation();
       back();
     }}>
-    {view.profile ? <header className="mini-detail-nav technician-nav">
-      <button type="button" className="technician-back-link" onClick={back} aria-label={photo ? '返回技师主页' : '返回本店技师'}>
-        {photo ? <X size={21} /> : <><ChevronLeft size={19} />技师列表</>}
-      </button>
-      <strong id="technician-title">{photo ? '工作相册' : '技师主页'}</strong>
-      {photo && <span title={storeName}>{venue}</span>}
-    </header> : <header className={'technician-directory-head' + (useCover ? ' has-cover' : '')}>
+    <header className={'technician-directory-head' + (useCover ? ' has-cover' : '')}>
       {useCover && <img className="technician-directory-cover" src={assetPath('technician-team-craft-v1.webp')} alt="" />}
       <button type="button" className="technician-directory-back" onClick={back} aria-label="返回上一页"><ChevronLeft size={23} /></button>
       <p className="technician-venue" title={storeName}><MapPin size={14} aria-hidden="true" />{venue}</p>
       <h1 id="technician-title">本店技师</h1>
-    </header>}
+    </header>
     {status !== 'ready' ? <div className="technician-message" role="status">{status === 'loading' ? '正在加载技师资料…' :
       <><p>技师资料暂时打不开</p><button type="button" onClick={() => setAttempt(n => n + 1)}>重新加载</button></>}</div> :
       <>
-        <div ref={listScroll} className="technician-scroll technician-directory" hidden={Boolean(view.profile)}>
+        <div ref={listScroll} className="technician-scroll technician-directory">
           {peers.length ? <>
             <div className="technician-directory-context">
-              <p>{project && <strong>{displayProjectName(project)}</strong>}<span>共 {peers.length} 位技师</span></p>
-              <span>{requestCount === 0 ? '由门店安排' : inProject ? `${requestCount} 位可点名` : '点名由店长确认'}</span>
+              <p>{project && <strong>{displayProjectName(project)}</strong>}<span>共 {shown.length} 位技师</span></p>
+              <span>{shownRequestCount === 0 ? '由门店安排' : inProject ? `${shownRequestCount} 位可点名` : '点名由店长确认'}</span>
             </div>
+            {tags.length > 0 && <div className="technician-filters" role="group" aria-label="按服务风格筛选">
+              {['', ...tags].map(tag => <button key={tag} type="button" aria-pressed={activeTag === tag}
+                onClick={() => setStyleFilter(tag)}>{tag || '全部'}</button>)}
+            </div>}
             <div className="technician-list">{directoryGroups.map(group => {
               const photographed = group.rows.filter(cardPhoto);
               const names = group.rows.filter(p => !cardPhoto(p));
@@ -283,37 +268,32 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
             </div>}
           </> : <div className="technician-message"><p>本店暂未展示技师资料</p><button type="button" onClick={finish}>返回选项目</button></div>}
         </div>
-        {view.profile && !person && <div className="technician-message"><p>这位技师的资料已下架</p><button type="button" onClick={back}>返回技师列表</button></div>}
-        {person && !photo && <>
-          <div ref={detailScroll} className="technician-scroll technician-detail">
-            <section className={'technician-identity' + (detailPhoto ? ' has-photo' : '')}>
-              <div className="technician-person">
-                {store && <p className="technician-home-store"><MapPin size={14} aria-hidden="true" />{venue}</p>}
-                <h1 ref={profileHeading} tabIndex={-1} aria-label={person.label}><TechnicianName label={person.label} /></h1>
-                {person.experience && <p className="technician-experience"><Tenure value={person.experience} /></p>}
-              </div>
-              {detailPhoto && (detailPhoto.kind === 'illustration'
-                ? <div className="technician-portrait">{detailMedia}</div>
-                : <button type="button" className="technician-portrait"
-                    onClick={() => openPhoto(photos.findIndex(p => p.url === detailPhoto.url))}
-                    aria-label={detailPhoto.kind === 'portrait' ? '放大' + person.label + '的肖像' : '放大服务现场照片'}>
-                    {detailMedia}<Expand size={16} aria-hidden="true" />
-                  </button>)}
-            </section>
-            {person.tags.length > 0 && <section className="technician-style" aria-label="服务风格">
-              <h2>服务风格</h2>
-              <ul className="technician-tags">{person.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>
+        {view.profile && <TechnicianPhotoSheet person={person} venue={venue} lead={detailPhoto} photoIndex={view.photo}
+          failedImages={failedImages} onImageError={markFailed} showPhoto={openPhoto} back={back}
+          footer={<footer className="technician-dock">
+            <div className="technician-dock-note" role="status">
+              <strong>{checking ? '正在确认…' : notice || (inProject ? (project ? displayProjectName(project) : '本份服务') :
+                offersNamedService ? (canEdit ? '可申请点名' : '当前选单仅可查看') : '由门店安排')}</strong>
+              {!checking && !notice && (inProject ? <small>{statusText}</small> : offersNamedService && canEdit && <small>由店长确认安排</small>)}
+            </div>
+            {inProject && person && project && canEdit && available(person)
+              ? <button type="button" className="technician-primary" onClick={() => void requestPerson(project)} disabled={checking}><Check size={16} />本份服务点名</button>
+              : !inProject && offersNamedService && canEdit
+                ? <button type="button" className="technician-primary" onClick={() => {
+                    const first = servicesSection.current?.querySelector<HTMLButtonElement>('button[data-nameable]');
+                    servicesSection.current?.scrollIntoView({block: 'start'});
+                    first?.focus({preventScroll: true});
+                  }}>选项目点名<ChevronRight size={16} /></button>
+                : <button type="button" className="technician-secondary" onClick={inProject ? finish : back}>{inProject ? '返回当前项目' : '返回看技师'}</button>}
+          </footer>}>
+          {person && <>
+            {(person.tags.length > 0 || person.introduction) && <section className="technician-section technician-style" aria-label="服务风格">
+              <header className="technician-section-head"><h2>{person.tags.length ? '服务风格' : '个人介绍'}</h2>
+                {person.tags.length > 0 && <ul className="technician-tags">{person.tags.map(tag => <li key={tag}>{tag}</li>)}</ul>}</header>
+              {person.introduction && <p className="technician-intro">{person.introduction}</p>}
             </section>}
-            {!inProject && <section className="technician-assignment" aria-label="点名方式">
-              <span className="technician-assignment-icon" aria-hidden="true">{offersNamedService && canEdit ? <Check size={19} /> : <Store size={19} />}</span>
-              <div><h2>{statusText}</h2>
-                <p>{offersNamedService
-                  ? (canEdit ? '选好项目后，店长会确认这位技师能否接待。' : '可浏览这位技师的服务项目。')
-                  : contactUrl ? '想选' + person.label + '，可先问问本店今天的安排。' : '想选' + person.label + '，到店时可请前台确认。'}</p>
-                {contactUrl && <a className="technician-contact" href={contactUrl} target="_blank" rel="noopener noreferrer">联系本店企微<ChevronRight size={14} aria-hidden="true" /></a>}
-              </div>
-            </section>}
-            {services.length > 0 && <section className="technician-section"><h2>可做项目</h2><ul className="technician-services">{services.map(p => {
+            {services.length > 0 && <section ref={servicesSection} className="technician-section"><header className="technician-section-head"><h2>{!inProject && offersNamedService && canEdit ? '可点项目' : '服务项目'}</h2>
+                {services.some(p => p.prices.some(price => price.price_type === 'store')) && <small>门店价</small>}</header><ul className="technician-services">{services.map(p => {
               const price = p.prices.find(v => v.price_type === 'store')?.amount_cents;
               const named = canEdit && Boolean(person.technician_id) && person.requestable_project_ids.includes(p.id);
               const image = projectImage(p);
@@ -321,34 +301,16 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
                 <span className="technician-service-choice">{price != null && <strong>{formatMoney(price)}</strong>}
                   {!inProject && <small>{named ? '选项目并点名' : '查看项目'}<ChevronRight size={14} aria-hidden="true" /></small>}
                 </span></>;
-              return <li key={p.id}>{inProject ? <div>{line}</div> : <button type="button" disabled={checking}
+              return <li key={p.id}>{inProject ? <div>{line}</div> : <button type="button" data-nameable={named || undefined} disabled={checking}
                 onClick={() => named ? void requestPerson(p) : onProject(p)}>{line}</button>}</li>;
             })}</ul></section>}
-            {person.introduction && <section className="technician-section"><h2>个人介绍</h2><p className="technician-intro">{person.introduction}</p></section>}
-            {person.photos.some(item => !failedImages.includes(item.url)) && <section className="technician-section"><h2><Images size={19} />服务现场</h2>
-              <div className="technician-photos">{person.photos.map((picture, i) => !failedImages.includes(picture.url) &&
-                <button type="button" key={picture.url} onClick={() => openPhoto(i + Number(Boolean(person.portrait_url)))}><img src={picture.url} alt="" loading="lazy" onError={() => markFailed(picture.url)} /><span>{picture.caption}</span></button>)}</div>
+            {!inProject && !offersNamedService && <section className="technician-section technician-assignment" aria-label="点名方式">
+              <p>{contactUrl ? '想点这位技师，可先向门店询问今天的安排。' : '想点这位技师，到店时可请前台确认。'}</p>
+              {contactUrl && <a className="technician-contact" href={contactUrl} target="_blank" rel="noopener noreferrer">联系本店企微<ChevronRight size={14} aria-hidden="true" /></a>}
             </section>}
             {store && <StoreVisit key={store.id} store={store} />}
-          </div>
-          {!inProject && (notice || checking) && <p className="technician-request-notice" role="status">
-            {checking ? '正在确认能否点名…' : notice}
-          </p>}
-          {inProject && <footer className="technician-dock">
-            <p role="status">{project && <strong>{displayProjectName(project)} · </strong>}{notice || statusText}</p>
-            {canEdit && project && available(person)
-              ? <button type="button" className="technician-primary" onClick={() => void requestPerson(project)} disabled={checking}><Check size={17} />{checking ? '确认中…' : '本份服务点名'}</button>
-              : <button type="button" className="technician-secondary" onClick={finish}>返回当前项目</button>}
-          </footer>}
-        </>}
-        {person && photo && <div className="technician-viewer" onTouchStart={e => {e.stopPropagation(); swipeX.current=e.touches[0]?.clientX;}}
-          onTouchEnd={endSwipe}
-          onKeyDown={e => { if(e.key==='ArrowRight')stepPhoto(1); if(e.key==='ArrowLeft')stepPhoto(-1); }}>
-          {failedImages.includes(photo.url) ? <p className="technician-unavailable-photo" role="status">这张照片暂时打不开</p>
-            : <img src={photo.url} alt={photo.caption} onError={() => markFailed(photo.url)} />}<div><button type="button" aria-label="上一张" disabled={!view.photo} onClick={() => stepPhoto(-1)}><ChevronLeft /></button>
-            <p>{photo.caption}<small>{(view.photo ?? 0) + 1} / {photos.length}</small></p>
-            <button type="button" aria-label="下一张" disabled={view.photo === photos.length - 1} onClick={() => stepPhoto(1)}><ChevronRight /></button></div>
-        </div>}
+          </>}
+        </TechnicianPhotoSheet>}
       </>}
     {directoryFooter && <div className="technician-directory-foot">{directoryFooter}</div>}
   </dialog>;
