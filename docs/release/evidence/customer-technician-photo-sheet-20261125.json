@@ -1,0 +1,208 @@
+{
+  "release_id": "server-c9a3ad73167a-1795587107",
+  "source_sha": "c9a3ad73167acd196721bc6cb5cff87f32e6b8ec",
+  "previous_release": "server-c9c96fd28fda-1795533674",
+  "baseline": "b7176e780c094fdc20128731b56dd9bc583f0673",
+  "server_time_utc": "2026-11-25T06:21:43.779483+00:00",
+  "prepared_manifest_sha256": "398f162c6fcb60e90283efdcd22bbca4414e0f1b4e6a1b24d88ad7dd8fc42ad4",
+  "installed_manifest_sha256": "e0607ddae41d63780c3204d0106ea76031fc5bfe7da7ebe360a350f62f2ba665",
+  "matching_manifest_entries": 655,
+  "backup_checksum_verified": true,
+  "isolated_restore_verified_by_release_gate": true,
+  "database_migrations_in_change": false,
+  "schema_verification": {
+    "backup_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "before_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "current_schema_sha256": "34b092c131e0d782272f5c361f713bf3e285bdf0a721cf79ce122cb4e7199f0b",
+    "equal": true
+  },
+  "protected_business_tables": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "health": {
+    "status": "ok",
+    "environment": "production"
+  },
+  "public_asset_sha256": {
+    "/assets/technician-illustration-1-v1.webp": "8cab213dd8039b96046db2615b4ff4fc598286e8df93c90b6adfbea29a38b86c",
+    "/assets/technician-illustration-3-v1.webp": "803f8e5d202ed50c8fba43cda8cb382569b611963df1f1eb190e11d35e86eed0",
+    "/assets/App-BNiQ1IQL.css": "0e91fb571285dae2a8c4617968c254d18ae2d8cea2afef0b5077ddd07e6f999e",
+    "/assets/App-YoezRBBW.js": "7b6aaa340318a691aad6816b56f9de80361313e645895112f6ee060da2e9a6ce",
+    "/assets/index-DIul666R.js": "0d96b6977e7302c0921c9a68e3896a00f1120ff01210ceb16c9a9895beaead47",
+    "/assets/technician-illustration-2-v1.webp": "6ad927d2860174196f363cda70abc37f939c83d7a4f95910c5ffc6fb5aa7ee31",
+    "/assets/technician-illustration-4-v1.webp": "08506ecd335c3a554e86b8612196e22659ac11b1b45332ff36a8e2974f163657",
+    "/assets/technician-illustration-5-v1.webp": "90dcb4eb8354db0d4ac1377af20021b4f26ea9a4bf3a93f6a863772f9fe931a1",
+    "/assets/technician-illustration-6-v1.webp": "2b4101b9e55df37e01eb0bf3c7c09d93e48c19ed5f308d70a02223c9e751d102"
+  },
+  "public_browser": [
+    {
+      "store_id": 1,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 0,
+      "selected_photo_type": "labeled_illustration",
+      "native_modal": true,
+      "drawer_top_px": 122,
+      "drawer_height_px": 722,
+      "zoom_verified": true,
+      "return_restores_focus_and_scroll": true,
+      "browser_back_verified": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-BNiQ1IQL.css",
+        "/assets/App-YoezRBBW.js"
+      ],
+      "illustration_paths": [
+        "/assets/technician-illustration-1-v1.webp",
+        "/assets/technician-illustration-2-v1.webp",
+        "/assets/technician-illustration-3-v1.webp",
+        "/assets/technician-illustration-4-v1.webp",
+        "/assets/technician-illustration-5-v1.webp",
+        "/assets/technician-illustration-6-v1.webp"
+      ]
+    },
+    {
+      "store_id": 2,
+      "members_displayed": 6,
+      "with_published_photo": 0,
+      "with_confirmed_experience": 6,
+      "selected_photo_type": "labeled_illustration",
+      "native_modal": true,
+      "drawer_top_px": 122,
+      "drawer_height_px": 722,
+      "zoom_verified": true,
+      "return_restores_focus_and_scroll": true,
+      "browser_back_verified": true,
+      "production_write_requests_forwarded": 0,
+      "isolated_menu_sessions": 1,
+      "loaded_app_assets": [
+        "/assets/App-BNiQ1IQL.css",
+        "/assets/App-YoezRBBW.js"
+      ],
+      "illustration_paths": [
+        "/assets/technician-illustration-1-v1.webp",
+        "/assets/technician-illustration-2-v1.webp",
+        "/assets/technician-illustration-3-v1.webp",
+        "/assets/technician-illustration-4-v1.webp",
+        "/assets/technician-illustration-5-v1.webp",
+        "/assets/technician-illustration-6-v1.webp"
+      ]
+    }
+  ],
+  "isolated_customer_suite": {
+    "passed": 412,
+    "skipped": 1,
+    "failed": 0
+  },
+  "isolated_shared_selection_suite": {
+    "passed": 12
+  },
+  "isolated_store_flows": [
+    {
+      "store": 1,
+      "one_room": true,
+      "customers": 2,
+      "service_portions": 2,
+      "distinct_nominations": 2,
+      "manager_confirmations": 2,
+      "browsing_business_writes": 0,
+      "filter_and_scroll_return": true
+    },
+    {
+      "store": 2,
+      "one_room": true,
+      "customers": 2,
+      "service_portions": 2,
+      "distinct_nominations": 2,
+      "manager_confirmations": 2,
+      "browsing_business_writes": 0,
+      "filter_and_scroll_return": true
+    }
+  ],
+  "chrome": [
+    {
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "filter_restored": true,
+      "scroll_restored": true,
+      "focus_restored": true,
+      "distinct_photos": 3,
+      "synthetic_disclosure": true,
+      "shop_price_cents": 8900,
+      "browsing_order_writes": 0,
+      "outside_requests": 0
+    },
+    {
+      "store": 2,
+      "width": 390,
+      "height": 844,
+      "filter_restored": true,
+      "scroll_restored": true,
+      "focus_restored": true,
+      "distinct_photos": 3,
+      "synthetic_disclosure": true,
+      "shop_price_cents": 8900,
+      "browsing_order_writes": 0,
+      "outside_requests": 0
+    },
+    {
+      "store": 1,
+      "width": 900,
+      "height": 780,
+      "filter_restored": true,
+      "scroll_restored": true,
+      "focus_restored": true,
+      "distinct_photos": 3,
+      "synthetic_disclosure": true,
+      "shop_price_cents": 8900,
+      "browsing_order_writes": 0,
+      "outside_requests": 0
+    }
+  ],
+  "webkit": [
+    {
+      "store": 1,
+      "width": 320,
+      "height": 568,
+      "filter_restored": true,
+      "scroll_restored": true,
+      "focus_restored": true,
+      "distinct_photos": 3,
+      "synthetic_disclosure": true,
+      "shop_price_cents": 8900,
+      "browsing_order_writes": 0,
+      "outside_requests": 0
+    },
+    {
+      "store": 2,
+      "width": 390,
+      "height": 844,
+      "filter_restored": true,
+      "scroll_restored": true,
+      "focus_restored": true,
+      "distinct_photos": 3,
+      "synthetic_disclosure": true,
+      "shop_price_cents": 8900,
+      "browsing_order_writes": 0,
+      "outside_requests": 0
+    },
+    {
+      "store": 1,
+      "width": 900,
+      "height": 780,
+      "filter_restored": true,
+      "scroll_restored": true,
+      "focus_restored": true,
+      "distinct_photos": 3,
+      "synthetic_disclosure": true,
+      "shop_price_cents": 8900,
+      "browsing_order_writes": 0,
+      "outside_requests": 0
+    }
+  ],
+  "physical_wechat_acceptance": false
+}
