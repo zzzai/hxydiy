@@ -1,3 +1,4 @@
+import re
 from unittest.mock import patch
 
 import pytest
@@ -83,13 +84,38 @@ def test_display_only_numbers_are_not_accounts(directory_client):
         response = client.get("/api/v1/stores/2/technicians")
         cards = response.json()["items"]
         assert [(p["label"], p["experience"]) for p in cards] == [
-            ("1 号技师", "2 年"), ("6 号技师", "10 年"), ("8 号技师", "新入行"),
+            ("1 号技师", "2 年"), ("6 号技师", "10 年"), ("03 号技师", ""), ("08 号技师", "新入行"),
             ("09 号技师", "10 年以上"), ("18 号技师", "10 年"), ("19 号技师", "10 年")]
         assert all(p["technician_id"] is None and p["project_ids"] == p["requestable_project_ids"] == [] for p in cards)
-        assert not any(p["photos"] or p["portrait_url"] or p["tags"] or p["introduction"] for p in cards)
+        assert not any(p["photos"] or p["tags"] or p["introduction"] for p in cards)
+        photos = {p["key"]: p["portrait_url"] for p in cards if p["portrait_url"]}
+        numbers = {"number-03": "03", "number-8": "08", "number-09": "09", "number-18": "18", "number-19": "19"}
+        assert photos.keys() == numbers.keys()
+        for key, url in photos.items():
+            assert re.fullmatch(rf"/assets/technicians/hxy-anyang-huafu-002/portrait-{numbers[key]}-[a-f0-9]{{12}}\.webp", url)
         assert client.get("/api/v1/stores/2/technicians").json() == response.json()
     with Session(engine) as db:
         assert db.execute(select(Technician.id, Technician.skills, Technician.updated_at)).all() == before
+
+
+def test_ziwei_portrait_numbers_do_not_become_account_ids(directory_client):
+    client, engine = directory_client
+    with Session(engine) as db:
+        db.get(Store, 1).store_code = "hxy-anyang-ziwei-001"
+        db.commit()
+
+    items = client.get("/api/v1/stores/1/technicians").json()["items"]
+    assert len(items) == 6
+    for card, number in zip(items[:4], ("01", "03", "09", "10"), strict=True):
+        assert (card["key"], card["label"]) == (f"number-{number}", f"{number} 号技师")
+        assert re.fullmatch(rf"/assets/technicians/hxy-anyang-ziwei-001/portrait-{number}-[a-f0-9]{{12}}\.webp", card["portrait_url"])
+        assert card["technician_id"] is None
+        assert card["project_ids"] == card["requestable_project_ids"] == []
+    named = items[4:]
+    assert [(p["key"], p["label"], p["portrait_url"]) for p in named] == [
+        ("staff-1", "一号", ""), ("staff-2", "二号", ""),
+    ]
+    assert [p["requestable_project_ids"] for p in named] == [[11], []]
 
 
 def test_editorial_binding_is_store_scoped_and_does_not_duplicate_people(directory_client):

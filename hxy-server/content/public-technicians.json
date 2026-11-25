@@ -11,24 +11,55 @@
       "experience": "10 年"
     },
     {
+      "key": "number-03",
+      "label": "03 号技师",
+      "portrait_url": "/assets/technicians/hxy-anyang-huafu-002/portrait-03-d3a09b1ebd12.webp"
+    },
+    {
       "key": "number-8",
-      "label": "8 号技师",
-      "experience": "新入行"
+      "label": "08 号技师",
+      "experience": "新入行",
+      "portrait_url": "/assets/technicians/hxy-anyang-huafu-002/portrait-08-821269ea0850.webp"
     },
     {
       "key": "number-09",
       "label": "09 号技师",
-      "experience": "10 年以上"
+      "experience": "10 年以上",
+      "portrait_url": "/assets/technicians/hxy-anyang-huafu-002/portrait-09-79b09f835ee5.webp"
     },
     {
       "key": "number-18",
       "label": "18 号技师",
-      "experience": "10 年"
+      "experience": "10 年",
+      "portrait_url": "/assets/technicians/hxy-anyang-huafu-002/portrait-18-ba9c67ffee22.webp"
     },
     {
       "key": "number-19",
       "label": "19 号技师",
-      "experience": "10 年"
+      "experience": "10 年",
+      "portrait_url": "/assets/technicians/hxy-anyang-huafu-002/portrait-19-65bad580e951.webp"
+    }
+  ],
+  "hxy-anyang-ziwei-001": [
+    {
+      "key": "number-01",
+      "label": "01 号技师",
+      "portrait_url": "/assets/technicians/hxy-anyang-ziwei-001/portrait-01-6d020c6e676d.webp"
+    },
+    {
+      "key": "number-03",
+      "label": "03 号技师",
+      "portrait_url": "/assets/technicians/hxy-anyang-ziwei-001/portrait-03-8331de0a6e66.webp"
+    },
+    {
+      "key": "number-09",
+      "label": "09 号技师",
+      "portrait_url": "/assets/technicians/hxy-anyang-ziwei-001/portrait-09-795c8d813d71.webp"
+    },
+    {
+      "key": "number-10",
+      "label": "10 号技师",
+      "portrait_url": "/assets/technicians/hxy-anyang-ziwei-001/portrait-10-9359f79d455b.webp"
     }
   ]
 }

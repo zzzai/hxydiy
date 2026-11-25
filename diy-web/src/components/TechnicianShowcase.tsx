@@ -193,11 +193,17 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
   const activeTag = tags.includes(styleFilter) ? styleFilter : '';
   const shown = activeTag ? peers.filter(p => p.tags.includes(activeTag)) : peers;
   const shownRequestCount = shown.filter(p => inProject ? available(p) : p.requestable_project_ids.length > 0).length;
-  const directoryGroups = inProject && requestCount > 0 && requestCount < peers.length
-    ? [{ title: '本项目可点名', rows: shown.filter(available) }, { title: '其他技师', rows: shown.filter(p => !available(p)) }].filter(group => group.rows.length > 0)
-    : [{ title: '', rows: shown }];
-  // Use the original roster order even when project eligibility moves cards between groups.
-  const illustrations = new Map(profiles.map((p, index) => [p.key, illustrationUrls[index % illustrationUrls.length]]));
+  const byNumber = (p: PublicTechnician) => p.technician_id === null && /^\d+\s*号技师$/.test(p.label);
+  const separateNamedRoster = profiles.some(p => byNumber(p) && p.portrait_url) && profiles.some(p => p.technician_id !== null);
+  let directoryGroups = [{ title: '', rows: shown }];
+  if (inProject && requestCount > 0 && requestCount < peers.length) {
+    directoryGroups = [{ title: '本项目可点名', rows: shown.filter(available) }, { title: '其他技师', rows: shown.filter(p => !available(p)) }];
+  } else if (separateNamedRoster) {
+    directoryGroups = [{ title: '按工号看照片', rows: shown.filter(byNumber) }, { title: '按姓名找技师', rows: shown.filter(p => !byNumber(p)) }];
+  }
+  // Keep named staff illustrations stable when standalone numbered portraits are published.
+  const illustrationOrder = separateNamedRoster ? [...profiles.filter(p => !byNumber(p)), ...profiles.filter(byNumber)] : profiles;
+  const illustrations = new Map(illustrationOrder.map((p, index) => [p.key, illustrationUrls[index % illustrationUrls.length]]));
   const cardPhoto = (p: PublicTechnician): CardPhoto | undefined => {
     if (hasPortrait(p)) return { url: p.portrait_url, kind: 'portrait' };
     const scene = p.photos.find(item => !failedImages.includes(item.url));
@@ -243,15 +249,15 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
         <div ref={listScroll} className="technician-scroll technician-directory">
           {peers.length ? <>
             <div className="technician-directory-context">
-              <p>{project && <strong>{displayProjectName(project)}</strong>}<span>共 {shown.length} 位技师</span></p>
+              <p>{project && <strong>{displayProjectName(project)}</strong>}<span>{separateNamedRoster ? <>{shown.filter(p => p.portrait_url).length} 张工作照</> : <>共 {shown.length} 位技师</>}</span></p>
               <span>{shownRequestCount === 0 ? '由门店安排' : inProject ? `${shownRequestCount} 位可点名` : '点名由店长确认'}</span>
             </div>
             {tags.length > 0 && <div className="technician-filters" role="group" aria-label="按服务风格筛选">
               {['', ...tags].map(tag => <button key={tag} type="button" aria-pressed={activeTag === tag}
                 onClick={() => setStyleFilter(tag)}>{tag || '全部'}</button>)}
             </div>}
-            <div className="technician-list">{directoryGroups.map(group => {
-              const photographed = group.rows.filter(cardPhoto);
+            <div className="technician-list">{directoryGroups.filter(group => group.rows.length > 0).map(group => {
+              const photographed = group.rows.filter(cardPhoto).sort((a, b) => Number(hasPortrait(b)) - Number(hasPortrait(a)));
               const names = group.rows.filter(p => !cardPhoto(p));
               return <section key={group.title} className="technician-group">
                 {group.title && <h2>{group.title}</h2>}
