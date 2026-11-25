@@ -1,0 +1,61 @@
+{
+  "release_id": "server-32c2c6c436f6-1795602807",
+  "source_sha": "32c2c6c436f67af763b43c4e38d34034e5b90a43",
+  "baseline": "30007dfef0de93368732a5b53525051845371508",
+  "previous_release": "server-c9a3ad73167a-1795587107",
+  "verified_at": "2026-11-25T10:40:30.499297+00:00",
+  "stores": [
+    {
+      "store": 1,
+      "numbers": [
+        "01",
+        "03",
+        "09",
+        "10"
+      ],
+      "entries": 10,
+      "previous_profiles_checked": 6
+    },
+    {
+      "store": 2,
+      "numbers": [
+        "03",
+        "08",
+        "09",
+        "18",
+        "19"
+      ],
+      "entries": 7,
+      "previous_profiles_checked": 6
+    }
+  ],
+  "browser": "Chrome mobile viewport, public origin",
+  "list_detail_and_zoom_verified": 9,
+  "sha256_verified_for_every_portrait": true,
+  "forwarded_business_writes": 0,
+  "original_booking_identities_preserved": true,
+  "real_device_wechat_test": false,
+  "health_status": "ok/production",
+  "actual_backup_verified": true,
+  "isolated_restore_verified_by_release_gate": true,
+  "business_tables": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "identical_schema": true,
+  "matching_manifest_entries": 664,
+  "prepared_manifest_sha256": "10d3b8902642d426c28bc0fb92143fd2601ba473356cbea5d051b121b38c91a7",
+  "installed_manifest_sha256": "99ebf86e0300dcbcffe3edcd6516390abd098635de531a16764f913249b79a57",
+  "loaded_assets": {
+    "/assets/index-DBykTIRn.js": "8255eb929ba71b2fa0761f94548397fdc42e7981eac00e9de60194ae9dc852e6",
+    "/assets/App-BNiQ1IQL.css": "0e91fb571285dae2a8c4617968c254d18ae2d8cea2afef0b5077ddd07e6f999e",
+    "/assets/App-C5aEJTuf.js": "61781f4d3e2e6206266e5e7c601faaeafdc9583166bddf9fc3e0018e772cb28e"
+  },
+  "server_tests_passed": 5,
+  "customer_tests": {
+    "pass": 412,
+    "fail": 0,
+    "skip": 1
+  }
+}
