@@ -8,6 +8,10 @@
 
 紫薇壹号店继续使用六点清单。已有版本的日报（含已经打开的当日草稿）继续使用首次创建时的版本。旧五区历史与旧六区日报按其原版本查看或提交，无需补图。新版四间房在 `areas[]` 分别使用 `spa_banxia`、`spa_rendong`、`spa_duruo`、`spa_qingdai` 和可选的 `group=spa_rooms`。仓库与淋浴间分别为 `warehouse`、`shower_room`。`completion.areas_done/areas_total` 统计必拍点，店长可在 SPA 房下看到已拍房间数。
 
+## 店长手机巡检页
+
+首屏显示当日拍摄进度和晨会录音入口。拍摄清单支持按全部、待拍、已拍筛选。华富公共区域与四间 SPA 房分组计数，紫薇使用本店清单。点待拍区域可立即打开现场相机。已有照片的区域可展开原图、逐张审核结果与更换入口，亦可继续补拍至三张。已拍与审核结论分别展示，提交条件沿用各拍摄点的照片和晨会录音。
+
 ## 读写约定
 
 - GET `/api/v1/admin/v2/manager/daily` 返回 `business_date`、`max_photos_per_area`、`completion.areas_done/areas_total` 和每区按槽位排序的 `photos[]`。每张含 `id/slot/media_id/media/note/captured_at`。`photo` 保留首张兼容投影。完成数按有有效照片的区域计算。

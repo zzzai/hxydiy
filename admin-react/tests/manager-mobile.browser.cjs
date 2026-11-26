@@ -148,13 +148,15 @@ async function main() {
         await area.getByText(count + ' 张', { exact: true }).waitFor();
       }
       assert.equal(await camera.count(), 0);
-      assert.equal(await area.getByRole('img', { name: /煮药区照片/ }).count(), 3);
+      await area.getByRole('button', { name: '煮药区照片与审核' }).click();
+      const album = page.getByRole('region', { name: '煮药区已拍照片' });
+      assert.equal(await album.getByRole('img', { name: /煮药区照片/ }).count(), 3);
       page.once('dialog', dialog => dialog.accept());
-      await area.getByRole('button', { name: '更换煮药区第 2 张' }).click();
+      await album.getByRole('button', { name: '更换煮药区第 2 张' }).click();
       await shoot();
-      await area.getByRole('button', { name: '更换煮药区第 2 张' }).waitFor();
+      await album.getByRole('button', { name: '更换煮药区第 2 张' }).waitFor();
       await page.waitForFunction(() => !document.querySelector('.manager-p0-area[aria-label="煮药区"] button')?.disabled);
-      assert.match(await page.locator('.manager-p0-progress-card h2').innerText(), /4\/6/);
+      assert.equal(await page.getByRole('progressbar', { name: '已完成拍摄点' }).getAttribute('value'), '4');
       await noOverflow();
     });
 
@@ -164,14 +166,33 @@ async function main() {
       const rooms = page.getByRole('region', { name: 'SPA 房', exact: true });
       await rooms.waitFor();
       assert.equal(await page.locator('.manager-p0-area').count(), 12);
-      assert.deepEqual(await rooms.locator('.inspection-area-header strong').allTextContents(), ['半夏', '忍冬', '杜若', '青黛']);
+      assert.deepEqual(await rooms.locator('.inspection-point strong').allTextContents(), ['半夏', '忍冬', '杜若', '青黛']);
+      await shot('huafu-inspection-overview');
+      const filters = page.getByRole('group', { name: '筛选拍摄点' });
+      await filters.getByRole('button', { name: /待拍/ }).click();
+      assert.equal(await page.locator('.inspection-point').count(), 9);
+      await filters.getByRole('button', { name: /已拍/ }).click();
+      assert.equal(await page.locator('.inspection-point').count(), 3);
+      await filters.getByRole('button', { name: /全部/ }).click();
       await context.grantPermissions(['camera'], { origin });
       await rooms.locator('[aria-label="杜若"]').getByRole('button', { name: '现场拍照' }).click();
       await page.getByRole('dialog', { name: 'SPA 房·杜若 · 现场拍照' }).getByRole('button', { name: '拍摄并保存' }).click();
       await rooms.getByText('已拍 1/4 间').waitFor();
-      await rooms.locator('[aria-label="青黛"]').getByText('0 张', { exact: true }).waitFor();
+      await rooms.locator('[aria-label="青黛"]').getByText('待拍', { exact: true }).waitFor();
       await rooms.locator('[aria-label="杜若"]').getByText('1 张', { exact: true }).waitFor();
-      await noOverflow(); await shot('huafu-spa-rooms');
+      await filters.getByRole('button', { name: /已拍/ }).click();
+      await rooms.getByRole('button', { name: '杜若照片与审核' }).click();
+      await rooms.getByRole('region', { name: '杜若已拍照片' }).waitFor();
+      await rooms.getByRole('button', { name: '收起杜若照片' }).click();
+      await filters.getByRole('button', { name: /待拍/ }).click();
+      assert.equal(await page.locator('.inspection-point').count(), 8);
+      await filters.getByRole('button', { name: /全部/ }).click();
+      await page.setViewportSize({ width: 320, height: 740 }); await noOverflow();
+      for (const btn of await rooms.locator('.inspection-point button').all()) {
+        const box = await btn.boundingBox(); assert.ok(box && box.width >= 44 && box.height >= 44);
+      }
+      await page.setViewportSize({ width: 375, height: 812 });
+      await rooms.scrollIntoViewIfNeeded(); await noOverflow(); await shot('huafu-spa-rooms');
       await start('normal'); await loaded();
       await page.getByRole('button', { name: /巡检照片/ }).click();
       await page.locator('.manager-p0-area').first().waitFor();
@@ -182,7 +203,8 @@ async function main() {
     await check('inspection-ai-automatic-current-and-past-photos', async () => {
       await start('inspection-ai'); await loaded();
       await page.getByRole('button', { name: /巡检照片/ }).click();
-      const area = page.locator('.manager-p0-area[aria-label="卫生间"]');
+      await page.getByRole('button', { name: '卫生间照片与审核' }).click();
+      const area = page.getByRole('region', { name: '卫生间已拍照片' });
       await area.getByText('等待自动审核').waitFor();
       assert.equal(await page.getByRole('button', { name: /审核这张照片|重试初审|送审/ }).count(), 0);
       await area.getByText('AI 审核 · 需整改').waitFor({ timeout: 26000 });

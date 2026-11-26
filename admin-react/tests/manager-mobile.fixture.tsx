@@ -27,6 +27,7 @@ const stats = { reads: 0, writes: 0, technicianCalls: 0, unexpected: 0, oldReadR
 const imageUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jgggAAAAASUVORK5CYII=';
 let uploadId = 20;
 const inspectionAI = scenario === 'inspection-ai';
+const inspectionDay = scenario === 'huafu-inspection' ? '2026-11-26' : '2026-11-09';
 const inspectionAreas: { key: string; label: string; group?: 'spa_rooms'; photos: InspectionPhoto[] }[] = [
   ['restroom', '卫生间'], ['water_room', '打水房'], ['cashier', '收银台'],
   ['rest_area', '休息区'], ['foot_area', '足疗区'], ['herbal_prep', '煮药区'],
@@ -169,7 +170,7 @@ client.defaults.adapter = async config => {
       areas: [{ ...pastArea, photos: pastArea.photos.map(inspectionSnapshot) }], meetings: [], completion: { submitted: true } });
   }
   if (method === 'get' && path === '/admin/v2/manager/daily') return ok({
-    inspection_ai_enabled: inspectionAI, business_date: '2026-11-09', checkin_id: 1, status: 'draft', submitted_at: null, max_photos_per_area: 3,
+    inspection_ai_enabled: inspectionAI, business_date: inspectionDay, checkin_id: 1, status: 'draft', submitted_at: null, max_photos_per_area: 3,
     areas: inspectionAreas.map(area => ({ ...area, done: !!area.photos.length, photos: area.photos.map(inspectionSnapshot), photo: area.photos[0] || null })),
     meetings, completion: { areas_done: inspectionAreas.filter(area => area.photos.length).length,
       areas_total: inspectionAreas.length, has_meeting: meetings.length > 0, submitted: false },
@@ -199,7 +200,7 @@ client.defaults.adapter = async config => {
       const body = JSON.parse(config.data);
       if (body.capture_receipt !== 'fixture-' + body.media_id) return fail(409, 'Missing capture receipt');
       const area = inspectionAreas.find(item => item.key === body.area);
-      if (!area || body.business_date !== '2026-11-09') return fail(422, 'Invalid area or day');
+      if (!area || body.business_date !== inspectionDay) return fail(422, 'Invalid area or day');
       if (body.mode === 'append' && area.photos.length < 3) {
         area.photos.push({ id: body.media_id, media_id: body.media_id, slot: area.photos.length + 1, media: { url: imageUrl },
           reviewable: inspectionAI, review: inspectionAI ? { state: 'pending', attempt: 0, result: null, manual_verdict: null } : null });
