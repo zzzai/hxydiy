@@ -189,7 +189,7 @@ client.defaults.adapter = async config => {
       return ok({ review: target.review });
     }
   }
-  if ((scenario === 'inspection-photos' || inspectionAI) && method === 'post') {
+  if ((scenario === 'inspection-photos' || scenario === 'huafu-inspection' || inspectionAI) && method === 'post') {
     if (path === '/admin/v2/manager/daily/camera-captures') {
       const frame = config.data.get('file');
       if (!frame || frame.type !== 'image/jpeg' || frame.size < 50) return fail(415, 'Missing camera frame');
