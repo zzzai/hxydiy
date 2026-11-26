@@ -13,6 +13,7 @@ from app.release_static import mount_release_static_files
 from app.services.occupancy_scheduler import start_occupancy_scheduler, stop_occupancy_scheduler
 from app.services.service_anomaly_scheduler import start_service_anomaly_scheduler, stop_service_anomaly_scheduler
 from app.services.inspection_reviews import run_worker as inspect_photos
+from app.services.inspection_dispatch import enabled as inspection_dispatch_enabled, run_dispatcher
 from app.services.daily_ops_retention import start_daily_ops_retention, stop_daily_ops_retention
 
 
@@ -21,9 +22,14 @@ async def lifespan(_: FastAPI):
     start_occupancy_scheduler()
     start_service_anomaly_scheduler()
     inspection_worker = asyncio.create_task(inspect_photos()) if settings.inspection_ai_ready else None
+    delivery_worker = asyncio.create_task(run_dispatcher()) if inspection_dispatch_enabled() else None
     try:
         yield
     finally:
+        if delivery_worker is not None:
+            delivery_worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await delivery_worker
         if inspection_worker is not None:
             inspection_worker.cancel()
             with suppress(asyncio.CancelledError):

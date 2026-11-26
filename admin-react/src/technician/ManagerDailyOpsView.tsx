@@ -6,8 +6,8 @@ import ManagerAreaPhotos from './ManagerAreaPhotos';
 import InspectionHistory from './InspectionHistory';
 
 type Daily = Awaited<ReturnType<typeof getManagerDaily>>['data'];
-export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenRecordings }: {
-  daily: Daily | null; loading: boolean; onRefresh: () => Promise<void>; onOpenRecordings: () => void;
+export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenRecordings, focusIssue }: {
+  focusIssue?: number | null; daily: Daily | null; loading: boolean; onRefresh: () => Promise<void>; onOpenRecordings: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -44,7 +44,7 @@ export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenR
       </button>
     </section>
 
-    <ManagerAreaPhotos areas={daily.areas} reviewEnabled={daily.inspection_ai_enabled === true} limit={daily.max_photos_per_area} businessDate={daily.business_date}
+    <ManagerAreaPhotos areas={daily.areas} issues={daily.open_issues} focusIssue={focusIssue} reviewEnabled={daily.inspection_ai_enabled === true} limit={daily.max_photos_per_area} businessDate={daily.business_date}
       submitted={daily.status === 'submitted'} disabled={submitting || uploading} onBusy={setUploading} onRefresh={onRefresh} />
 
     <section className="inspection-submit">

@@ -4,7 +4,7 @@ import { Button, Input, Modal, message } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined, HomeOutlined, ReloadOutlined, ShopOutlined, GiftOutlined, UserOutlined } from '@ant-design/icons';
 import { createHalfPriceCouponLink, getManagerDaily, getManagerTeam, getManagerWorkbench, getStaff } from '../api';
 import { createCouponPoster } from './couponPoster';
-import { parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
+import { parseInspectionId, takeManagerPendingInspection, parseManagerReview, takeManagerPendingOrder, takeManagerPendingReview, type PendingReview } from '../wecomSession';
 import { useTechnicianSession } from './useTechnicianSession';
 import { isMobileManager } from './managerMobile';
 import ManagerTodayHomeView from './ManagerTodayHomeView';
@@ -44,6 +44,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   const couponRequest = useRef('');
   const couponPending = useRef(false);
   const [couponToken, setCouponToken] = useState('');
+  const [inspectionFocus, setInspectionFocus] = useState<number | null>(null);
   const [reviewFocus, setReviewFocus] = useState<PendingReview | null>(null);
   const [ordersRefresh, setOrdersRefresh] = useState(0);
   const uiState = useRef({ tab, subview });
@@ -106,7 +107,11 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
   }, [load]);
 
   useEffect(() => {
-    const coupon = new URLSearchParams(window.location.search).get('coupon');
+    const params = new URLSearchParams(window.location.search);
+    const pendingInspection = takeManagerPendingInspection();
+    const issue = parseInspectionId(params.get('inspection')) ?? pendingInspection;
+    if (issue) { setInspectionFocus(issue); setSubview('ops'); return; }
+    const coupon = params.get('coupon');
     if (coupon) { setCouponToken(coupon); setSubview('coupons'); return; }
     const directReview = new URLSearchParams(window.location.search).get('review');
     const pendingReview = takeManagerPendingReview();
@@ -209,7 +214,7 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
     {subview === 'orders' && <ManagerServiceOrdersView refreshKey={ordersRefresh} onOpenPositions={() => openTab('floor')} />}
     {subview === 'tasks' && <ManagerTasksView onOpenReviews={() => setSubview('reviews')} onOpenPositions={() => openTab('floor')} onOpenOrders={() => setSubview('orders')} />}
     {subview === 'reviews' && <ManagerReviewsView focus={reviewFocus} onFocusConsumed={() => setReviewFocus(null)} onChanged={() => void load(true)} onFocusError={() => message.error('评价链接已失效')} />}
-    {subview === 'ops' && <ManagerDailyOpsView daily={daily} loading={loading} onRefresh={refreshInspection} onOpenRecordings={() => {
+    {subview === 'ops' && <ManagerDailyOpsView daily={daily} loading={loading} focusIssue={inspectionFocus} onRefresh={refreshInspection} onOpenRecordings={() => {
       navigate('/store', { replace: true, state: { resumeInspection: true } });
       openRecordings();
     }} />}

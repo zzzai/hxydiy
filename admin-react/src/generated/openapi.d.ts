@@ -1572,6 +1572,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/v2/manager/daily/issues/{root_id}/followups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Followup */
+        post: operations["save_followup_api_v1_admin_v2_manager_daily_issues__root_id__followups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/v2/manager/daily/meeting": {
         parameters: {
             query?: never;
@@ -5701,6 +5718,8 @@ export interface components {
             business_date: string;
             /** File */
             file: string;
+            /** Issue Id */
+            issue_id?: number | null;
         };
         /** Body_upload_media_api_v1_admin_media_post */
         Body_upload_media_api_v1_admin_media_post: {
@@ -6074,6 +6093,15 @@ export interface components {
             rating: number;
             /** Tags */
             tags?: string[];
+        };
+        /** FollowupIn */
+        FollowupIn: {
+            /** Capture Receipt */
+            capture_receipt: string;
+            /** Expected Review Id */
+            expected_review_id: number;
+            /** Media Id */
+            media_id: number;
         };
         /** GuestClaimIn */
         GuestClaimIn: {
@@ -11744,6 +11772,43 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_followup_api_v1_admin_v2_manager_daily_issues__root_id__followups_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                root_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowupIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

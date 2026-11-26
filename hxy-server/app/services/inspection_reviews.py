@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models import DailyAreaPhoto, DailyAreaPhotoReview, DailyStoreCheckin, MediaAsset
+from app.services.inspection_issues import roots_query
+from app.models import InspectionFollowup
 from app.services.inspection_vision import AREA_RUBRICS, MODEL, RUBRIC_VERSION, VisionError, inspect_photo, inspection_jpeg
 from app.services.media_storage import MediaStorageError, get_media_storage
 
@@ -112,10 +114,20 @@ def _claim(factory):
         return job.id, job.attempt, job.photo_id, job.media_id
 
 
-def _source(factory, photo_id, media_id):
+def _source(factory, job_id, photo_id, media_id):
     with factory() as db:
+        link = db.get(InspectionFollowup, job_id) if settings.inspection_workflow_from else None
+        if link is not None:
+            root = db.execute(roots_query().where(DailyAreaPhotoReview.id == link.root_id,
+                                                   DailyAreaPhoto.id == photo_id)).one_or_none()
+            media = db.get(MediaAsset, media_id)
+            if (root is None or media is None or media.deleted_at or media.store_id != root[2].store_id
+                    or media.purpose != "daily_area" or media.media_type != "image"):
+                return None
+            return root[1].area, media.object_key, root[3].object_key, root[0].result
         source = _eligible_photos(datetime.now(UTC)).with_only_columns(DailyAreaPhoto.area, MediaAsset.object_key)
-        return db.execute(source.where(DailyAreaPhoto.id == photo_id, DailyAreaPhoto.media_id == media_id)).one_or_none()
+        current = db.execute(source.where(DailyAreaPhoto.id == photo_id, DailyAreaPhoto.media_id == media_id)).one_or_none()
+        return (current.area, current.object_key, None, None) if current else None
 
 
 def process_next(factory=SessionLocal, *, provider=inspect_photo, storage=None) -> bool:
@@ -127,13 +139,16 @@ def process_next(factory=SessionLocal, *, provider=inspect_photo, storage=None) 
     job_id, attempt, photo_id, media_id = claim
     state, result, error = "superseded", None, None
     try:
-        source = _source(factory, photo_id, media_id)
-        if source is not None and source.area in AREA_RUBRICS:
+        source = _source(factory, job_id, photo_id, media_id)
+        if source is not None:
+            area, key, before_key, original = source
             reader = storage if storage is not None else get_media_storage(settings)
-            content = reader.read(source.object_key, settings.media_max_size_bytes)
-            jpeg = inspection_jpeg(content, settings.media_max_pixels)
-            if _source(factory, photo_id, media_id) is not None:
-                result = provider(source.area, jpeg, settings.inspection_ai_api_key)
+            def jpeg_for(object_key):
+                return inspection_jpeg(reader.read(object_key, settings.media_max_size_bytes), settings.media_max_pixels)
+            jpeg = jpeg_for(key)
+            comparison = {"before": jpeg_for(before_key), "original_result": original} if before_key else {}
+            if _source(factory, job_id, photo_id, media_id) is not None:
+                result = provider(area, jpeg, settings.inspection_ai_api_key, **comparison)
                 state = "done"
     except VisionError as exc:
         state, error = "failed", exc.code

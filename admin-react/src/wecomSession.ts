@@ -10,6 +10,17 @@ export function parseManagerReview(raw: string | null): PendingReview | null {
   return { type: match[1] as PendingReview['type'], id: Number(match[2]) };
 }
 const PENDING_KEY = 'hxy_wecom_pending';
+const MANAGER_INSPECTION_KEY = 'hxy_manager_pending_inspection';
+export function parseInspectionId(value: string | null): number | null {
+  return value && /^[1-9][0-9]{0,15}$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null;
+}
+export function takeManagerPendingInspection(): number | null {
+  try {
+    const value = sessionStorage.getItem(MANAGER_INSPECTION_KEY);
+    sessionStorage.removeItem(MANAGER_INSPECTION_KEY);
+    return parseInspectionId(value);
+  } catch { return null; }
+}
 const MANAGER_ORDER_KEY = 'hxy_manager_pending_order';
 const MANAGER_REVIEW_KEY = 'hxy_manager_pending_review';
 const listeners = new Set<() => void>();
@@ -77,7 +88,7 @@ export function takeManagerPendingOrder(): string | null {
   } catch { return null; }
 }
 export function hasManagerPendingDeepLink(): boolean {
-  try { return Boolean(sessionStorage.getItem(MANAGER_ORDER_KEY) || sessionStorage.getItem(MANAGER_REVIEW_KEY)); }
+  try { return Boolean(sessionStorage.getItem(MANAGER_ORDER_KEY) || sessionStorage.getItem(MANAGER_REVIEW_KEY) || sessionStorage.getItem(MANAGER_INSPECTION_KEY)); }
   catch { return false; }
 }
 export function isWecomEntryPending(): boolean { return pendingEntry() !== null; }
@@ -123,6 +134,9 @@ async function post(path: string, body: object): Promise<Record<string, any>> {
   return data;
 }
 export async function beginWecomEntry(): Promise<void> {
+  const inspection = parseInspectionId(new URLSearchParams(window.location.search).get('inspection'));
+  sessionStorage.removeItem(MANAGER_INSPECTION_KEY);
+  if (inspection) sessionStorage.setItem(MANAGER_INSPECTION_KEY, String(inspection));
   rememberManagerOrder();
   rememberManagerReview();
   const entry_path = browserPathname();

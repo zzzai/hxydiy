@@ -53,7 +53,7 @@ def _items_text(items: list[dict] | None) -> str:
     return "、".join(names) or "未填写项目"
 
 
-def manager_userids(db: Session, store_id: int, *, allowlist: str | None = None) -> list[str]:
+def verified_manager_bindings(db: Session, store_id: int) -> list[StaffExternalIdentity]:
     """Active store managers with a verified WeCom binding and exactly one store grant."""
     active_grant = select(StaffScopeAssignment.id).where(
         StaffScopeAssignment.staff_id == Staff.id,
@@ -77,15 +77,19 @@ def manager_userids(db: Session, store_id: int, *, allowlist: str | None = None)
         )
         .order_by(StaffExternalIdentity.userid)
     ).scalars().all()
-    userids = []
+    verified = []
     for identity in rows:
         try:
             local_binding(db, identity)
         except Exception:
             # Match the login boundary, including expired or ambiguous grants.
             continue
-        userids.append(identity.userid.lower())
-    userids = sorted(set(userids))
+        verified.append(identity)
+    return verified
+
+
+def manager_userids(db: Session, store_id: int, *, allowlist: str | None = None) -> list[str]:
+    userids = sorted({i.userid.lower() for i in verified_manager_bindings(db, store_id)})
     configured_value = settings.wecom_order_notify_userids if allowlist is None else allowlist
     configured = [value.strip().lower() for value in configured_value.split(",") if value.strip()]
     if allowlist is not None and not configured:

@@ -20,6 +20,7 @@ from app.db.session import SessionLocal, get_db
 from app.models import (
     DailyAreaPhoto,
     DailyAreaPhotoReview,
+    InspectionFollowup,
     DailyMeetingRecording,
     DailyStoreCheckin,
     LearningCourseVersion,
@@ -31,7 +32,8 @@ from app.models import (
     TrainingAssessment,
 )
 from app.services.inspection_reviews import find_review, image_changed, queue_photo, review_view
-from app.services.inspection_vision import Verdict
+from app.services.inspection_issues import followup_media_for_checkin, followups_by_root, issue_status, latest_review, lock_root, roots_query
+from app.services.inspection_vision import MODEL, RUBRIC_VERSION, Verdict
 from app.services.asr import AsrError, AsrNotConfigured, transcribe_audio
 from app.services.media_storage import MediaStorageError, get_media_storage
 
@@ -68,6 +70,13 @@ class ReviewRequestIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     media_id: int = Field(gt=0)
     expected_attempt: int = Field(ge=0)
+
+
+class FollowupIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    media_id: int = Field(gt=0)
+    expected_review_id: int = Field(gt=0)
+    capture_receipt: str = Field(max_length=1600)
 
 
 class ManualReviewIn(BaseModel):
@@ -178,9 +187,26 @@ def _meeting_view(db: Session, item: DailyMeetingRecording) -> dict:
     }
 
 
-def _daily_view(db: Session, checkin: DailyStoreCheckin | None, business_date: date) -> dict:
+def _daily_view(db: Session, checkin: DailyStoreCheckin | None, business_date: date, issue_store_id: int | None = None) -> dict:
     labels = CHECKLISTS[_checklist_version(checkin, business_date)]
     by_area = {key: [] for key in labels}
+    issues = {}
+    if checkin is not None and issue_store_id == checkin.store_id and settings.inspection_workflow_from is not None:
+        query = roots_query().where(DailyStoreCheckin.store_id == checkin.store_id)
+        if business_date != _today():
+            query = query.where(DailyStoreCheckin.id == checkin.id)
+        rows = db.execute(query.order_by(DailyStoreCheckin.business_date.desc(), DailyAreaPhoto.id)).all()
+        history = followups_by_root(db, [root.id for root, *_ in rows])
+        for root, photo, day, media in rows:
+            followups = history[root.id]
+            last = latest_review(root, followups)
+            issues[photo.id] = {
+                "id": root.id, "business_date": day.business_date, "area": photo.area,
+                "label": CHECKLISTS[3][photo.area], "status": issue_status(last),
+                "expected_review_id": last.id, "original": root.result, "original_media": _media_view(media),
+                "last_review": review_view(last), "followup_count": len(followups),
+                "last_media": _media_view(followups[-1][2]) if followups and followups[-1][2].store_id == day.store_id else None,
+            }
     meetings = []
     if checkin is not None:
         records = db.execute(
@@ -196,7 +222,7 @@ def _daily_view(db: Session, checkin: DailyStoreCheckin | None, business_date: d
                 by_area[photo.area].append({
                     "id": photo.id, "slot": photo.slot, "media_id": photo.media_id,
                     "media": _media_view(media) if media.media_type == "image" else None,
-                    "review": review_view(review),
+                    "review": review_view(review), "issue": issues.get(photo.id),
                     "reviewable": media.purpose == "daily_area" and not media.deleted_at and media.media_type == "image"
                                   and _utc(checkin.created_at) >= datetime.now(UTC) - timedelta(days=RETENTION_DAYS),
                     "note": photo.note, "captured_at": _utc(photo.captured_at).isoformat() if photo.captured_at else None,
@@ -213,6 +239,7 @@ def _daily_view(db: Session, checkin: DailyStoreCheckin | None, business_date: d
         "business_date": business_date.isoformat(), "checkin_id": checkin.id if checkin else None,
         "status": checkin.status if checkin else "draft",
         "submitted_at": _utc(checkin.submitted_at).isoformat() if checkin and checkin.submitted_at else None,
+        "open_issues": [issue for issue in issues.values() if issue["status"] != "closed"],
         "areas": areas, "max_photos_per_area": PHOTO_LIMIT, "inspection_ai_enabled": settings.inspection_ai_ready,
         "meetings": [_meeting_view(db, item) for item in meetings],
         "completion": {
@@ -231,14 +258,15 @@ def _purge_expired(db: Session, store_id: int) -> None:
     for checkin in old_checkins:
         photos = list(db.scalars(select(DailyAreaPhoto).where(DailyAreaPhoto.checkin_id == checkin.id)))
         meetings = list(db.scalars(select(DailyMeetingRecording).where(DailyMeetingRecording.checkin_id == checkin.id)))
-        for item in [*photos, *meetings]:
-            media = db.get(MediaAsset, item.media_id)
+        original_media = [db.get(MediaAsset, item.media_id) for item in [*photos, *meetings]]
+        for media in [*original_media, *followup_media_for_checkin(db, checkin)]:
             if media and not media.deleted_at:
                 try:
                     get_media_storage(settings).delete(media.object_key)
                 except MediaStorageError:
                     pass
                 media.deleted_at = datetime.now(UTC)
+        for item in [*photos, *meetings]:
             db.delete(item)
         db.delete(checkin)
     if old_checkins:
@@ -286,7 +314,7 @@ def get_daily(
         _purge_expired(db, store_id)
     item = _checkin(db, store_id, staff.id, business_date, create=is_today)
     db.commit()
-    return _daily_view(db, item, business_date)
+    return _daily_view(db, item, business_date, staff.store_id)
 
 
 CAPTURE_AUDIENCE = "inspection-camera"
@@ -298,17 +326,18 @@ def _capture_claims(store_id: int, staff_id: int, area: str, day: date, media_id
             "day": day.isoformat(), "media": media_id}
 
 
-def _capture_receipt(store_id: int, staff_id: int, area: str, day: date, media_id: int) -> str:
+def _capture_receipt(store_id: int, staff_id: int, area: str, day: date, media_id: int, issue_id: int | None = None) -> str:
     claims = _capture_claims(store_id, staff_id, area, day, media_id)
-    return jwt.encode({**claims, "exp": datetime.now(UTC) + CAPTURE_TTL}, settings.jwt_secret, algorithm="HS256")
+    return jwt.encode({**claims, "issue_id": issue_id, "exp": datetime.now(UTC) + CAPTURE_TTL}, settings.jwt_secret, algorithm="HS256")
 
 
-def _require_capture(body: AreaPhotoIn, media: MediaAsset, staff: Staff, store_id: int, day: date) -> None:
-    expected = _capture_claims(store_id, staff.id, body.area, day, media.id)
+def _require_capture(body: AreaPhotoIn | FollowupIn, media: MediaAsset, staff: Staff, store_id: int, day: date,
+                     *, area: str, issue_id: int | None = None) -> None:
+    expected = _capture_claims(store_id, staff.id, area, day, media.id)
     try:
         claims = jwt.decode(body.capture_receipt or "", settings.jwt_secret, algorithms=["HS256"],
                             audience=CAPTURE_AUDIENCE, options={"require_exp": True})
-        if (all(claims.get(key) == value for key, value in expected.items())
+        if (claims.get("issue_id") == issue_id and all(claims.get(key) == value for key, value in expected.items())
                 and media.created_by_staff_id == staff.id and media.purpose == "daily_area"):
             return
     except JWTError:
@@ -319,7 +348,7 @@ def _require_capture(body: AreaPhotoIn, media: MediaAsset, staff: Staff, store_i
 
 @router.post("/camera-captures", status_code=201)
 async def upload_camera_frame(
-    file: UploadFile, area: str = Form(...), business_date: date = Form(...),
+    file: UploadFile, area: str = Form(...), business_date: date = Form(...), issue_id: int | None = Form(None, gt=0),
     db: Session = Depends(get_db), authorization: str | None = Header(None),
 ):
     staff = _current_staff(authorization, db)
@@ -334,12 +363,18 @@ async def upload_camera_frame(
         version = new_checklist_version(store_code)
     else:
         version = _checklist_version(checkin, day)
-    if area not in CHECKLISTS[version]:
+    if issue_id is not None:
+        if staff.store_id != store_id:
+            raise HTTPException(403, detail={"code": "STORE_SCOPE_REQUIRED", "message": "请使用本店店长账号复拍"})
+        row = db.execute(roots_query().where(DailyAreaPhotoReview.id == issue_id, DailyStoreCheckin.store_id == store_id)).one_or_none()
+        if row is None or row[1].area != area:
+            raise HTTPException(404, detail={"code": "ISSUE_NOT_FOUND", "message": "本店没有这项巡检问题"})
+    elif area not in CHECKLISTS[version]:
         raise HTTPException(422, detail={"code": "AREA_INVALID", "message": "该次巡检没有这个区域"})
     if file.content_type != "image/jpeg":
         raise HTTPException(415, detail="请使用现场相机拍摄")
     media = await upload_media(file=file, purpose="daily_area", store_id=store_id, db=db, authorization=authorization)
-    return {"media_id": media["id"], "capture_receipt": _capture_receipt(store_id, staff.id, area, day, media["id"])}
+    return {"media_id": media["id"], "capture_receipt": _capture_receipt(store_id, staff.id, area, day, media["id"], issue_id)}
 
 
 @router.post("/photos")
@@ -370,7 +405,7 @@ def save_area_photo(
     same_media = next((p for p in area_photos if p.media_id == media.id), None)
     if body.mode == "append":
         if same_media:
-            return _daily_view(db, checkin, today)
+            return _daily_view(db, checkin, today, staff.store_id)
         if len(area_photos) >= PHOTO_LIMIT:
             raise HTTPException(409, detail={"code": "AREA_PHOTO_LIMIT", "message": "每个区域最多保存 3 张照片"})
         used_slots = {p.slot for p in area_photos}
@@ -381,7 +416,7 @@ def save_area_photo(
         if target is None:
             raise HTTPException(404, detail={"code": "PHOTO_NOT_FOUND", "message": "该区域没有这张照片"})
         if target.media_id == media.id:
-            return _daily_view(db, checkin, today)
+            return _daily_view(db, checkin, today, staff.store_id)
         if target.media_id != body.expected_media_id:
             raise HTTPException(409, detail={"code": "PHOTO_CHANGED", "message": "照片已更新，请刷新后重试"})
         slot = target.slot
@@ -395,9 +430,14 @@ def save_area_photo(
         raise HTTPException(409, detail={"code": "PHOTO_ALREADY_USED", "message": "这张照片已用于本次巡检"})
     new_image = target is None or target.media_id != media.id
     if new_image:
-        _require_capture(body, media, staff, store_id, today)
+        if target and settings.inspection_workflow_from:
+            db.scalar(select(DailyAreaPhotoReview.id).where(DailyAreaPhotoReview.photo_id == target.id,
+                      DailyAreaPhotoReview.media_id == target.media_id).with_for_update())
+            if db.execute(roots_query().where(DailyAreaPhoto.id == target.id)).first():
+                raise HTTPException(409, detail={"code": "INSPECTION_FOLLOWUP_REQUIRED", "message": "请从原问题现场复拍"})
+        _require_capture(body, media, staff, store_id, today, area=body.area)
     elif body.mode == "cover":
-        return _daily_view(db, checkin, today)
+        return _daily_view(db, checkin, today, staff.store_id)
     if target is None:
         target = DailyAreaPhoto(checkin_id=checkin.id, area=body.area, slot=slot)
         db.add(target)
@@ -416,7 +456,7 @@ def save_area_photo(
         "store_id": store_id, "area": body.area, "slot": slot, "media_id": media.id, "mode": body.mode,
     })
     db.commit()
-    return _daily_view(db, checkin, today)
+    return _daily_view(db, checkin, today, staff.store_id)
 
 
 def _review_photo(db: Session, authorization: str | None, photo_id: int, media_id: int):
@@ -463,22 +503,50 @@ def request_photo_review(photo_id: int, body: ReviewRequestIn, db: Session = Dep
     return {"review": review_view(item)}
 
 
+@router.post("/issues/{root_id}/followups")
+def save_followup(root_id: int, body: FollowupIn, db: Session = Depends(get_db), authorization: str | None = Header(None)):
+    staff = _current_staff(authorization, db)
+    _require_admin(staff)
+    store_id = _resolve_target_store_id(db, staff, None)
+    if staff.store_id != store_id:
+        raise HTTPException(403, detail={"code": "STORE_SCOPE_REQUIRED", "message": "请使用本店店长账号复拍"})
+    row = lock_root(db, store_id, root_id)
+    if row is None:
+        raise HTTPException(404, detail={"code": "ISSUE_NOT_FOUND", "message": "本店没有这项巡检问题"})
+    root, photo, _, _ = row
+    history = followups_by_root(db, [root.id])[root.id]
+    previous_id = root.id
+    for link, review, media in history:
+        if media.id == body.media_id and link.staff_id == staff.id and previous_id == body.expected_review_id:
+            return {"review_id": review.id, "status": issue_status(review)}
+        previous_id = review.id
+    last = latest_review(root, history)
+    if (last.id != body.expected_review_id or issue_status(last) in {"closed", "reviewing"}
+            or review_view(last)["retry_scheduled"]):
+        raise HTTPException(409, detail={"code": "ISSUE_CHANGED", "message": "处理状态已更新，请刷新"})
+    media = db.get(MediaAsset, body.media_id)
+    if (not media or media.store_id != store_id or media.deleted_at or media.media_type != "image"
+            or media.purpose != "daily_area"):
+        raise HTTPException(404, detail={"code": "MEDIA_NOT_FOUND", "message": "本店没有这张现场照片"})
+    _require_capture(body, media, staff, store_id, _today(), issue_id=root.id, area=photo.area)
+    if find_review(db, photo.id, media.id):
+        raise HTTPException(409, detail={"code": "PHOTO_ALREADY_USED", "message": "请重新拍摄本次处理结果"})
+    item = DailyAreaPhotoReview(photo_id=photo.id, media_id=media.id, model=MODEL, rubric=RUBRIC_VERSION)
+    db.add(item)
+    db.flush()
+    db.add(InspectionFollowup(root_id=root.id, review_id=item.id, sequence=len(history) + 1, staff_id=staff.id))
+    _audit(db, staff, "inspection_followup_captured", "daily_area_photo", str(photo.id),
+           {"store_id": store_id, "root_review_id": root.id, "review_id": item.id})
+    db.commit()
+    return {"review_id": item.id, "status": issue_status(item)}
+
+
 @router.post("/photos/{photo_id}/manual-review")
 def manual_photo_review(photo_id: int, body: ManualReviewIn, db: Session = Depends(get_db),
                         authorization: str | None = Header(None)):
-    staff, photo = _review_photo(db, authorization, photo_id, body.media_id)
-    item = find_review(db, photo.id, photo.media_id)
-    if not item or item.state not in {"done", "failed"}:
-        raise HTTPException(409, detail={"code": "REVIEW_PENDING", "message": "请刷新初审结果后复核"})
-    if item.manual_verdict:
-        if item.manual_verdict == body.verdict:
-            return {"review": review_view(item)}
-        raise HTTPException(409, detail={"code": "REVIEW_CHANGED", "message": "本张照片已有复核结论，请刷新"})
-    item.manual_verdict, item.manual_staff_id, item.manual_at = body.verdict, staff.id, datetime.now(UTC)
-    _audit(db, staff, "inspection_review_confirmed", "daily_area_photo", str(photo.id),
-           {"store_id": staff.store_id, "media_id": photo.media_id, "verdict": body.verdict})
-    db.commit()
-    return {"review": review_view(item)}
+    _review_photo(db, authorization, photo_id, body.media_id)
+    raise HTTPException(409, detail={"code": "INSPECTION_SYSTEM_REVIEW_ONLY",
+                                     "message": "请现场复拍，由系统复查处理结果。"})
 
 
 @router.post("/meeting")
@@ -514,7 +582,7 @@ def save_meeting(
         "store_id": store_id, "media_id": media.id, "duration_seconds": body.duration_seconds,
     })
     db.commit()
-    return _daily_view(db, checkin, checkin.business_date)
+    return _daily_view(db, checkin, checkin.business_date, staff.store_id)
 
 
 @router.post("/meetings/{meeting_id}/retry-transcribe")
@@ -550,7 +618,7 @@ def submit_daily(db: Session = Depends(get_db), authorization: str | None = Head
     checkin = _checkin(db, store_id, staff.id, _today(), create=True)
     assert checkin is not None
     if checkin.status == "submitted":
-        return _daily_view(db, checkin, checkin.business_date)
+        return _daily_view(db, checkin, checkin.business_date, staff.store_id)
     version = _checklist_version(checkin, checkin.business_date)
     labels = CHECKLISTS[version]
     photographed = set(db.scalars(select(DailyAreaPhoto.area).join(MediaAsset, MediaAsset.id == DailyAreaPhoto.media_id)
@@ -569,7 +637,7 @@ def submit_daily(db: Session = Depends(get_db), authorization: str | None = Head
     checkin.submitted_at = datetime.now(UTC)
     _audit(db, staff, "manager_daily_submit", "daily_checkin", str(checkin.id), {"store_id": store_id})
     db.commit()
-    return _daily_view(db, checkin, checkin.business_date)
+    return _daily_view(db, checkin, checkin.business_date, staff.store_id)
 
 
 @router.get("/history")

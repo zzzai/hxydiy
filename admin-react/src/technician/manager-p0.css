@@ -210,3 +210,10 @@
   .inspection-point-pair { gap: 6px; }
   .inspection-point-summary, .inspection-point-empty { padding-inline: 8px; }
 }
+
+.inspection-issue-list { display: grid; gap: .75rem; margin-bottom: 1.25rem; }
+.inspection-issue-list h3 small, .inspection-issue small { color: #596a60; font-size: .8rem; font-weight: 400; }
+.inspection-issue { padding: .85rem; border: 1px solid #dce6df; border-radius: .75rem; background: #fff; }
+.inspection-issue > div:first-child, .inspection-issue-evidence { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.inspection-issue p { margin: .4rem 0; overflow-wrap: anywhere; }
+.inspection-issue-evidence > button { min-height: 44px; margin-left: auto; }

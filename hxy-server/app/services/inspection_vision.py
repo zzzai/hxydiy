@@ -75,19 +75,33 @@ def inspection_jpeg(content: bytes, max_pixels: int) -> bytes:
         raise VisionError("image_unreadable") from None
 
 
-def inspect_photo(area: str, jpeg: bytes, api_key: str, *, transport=None) -> dict:
+def inspect_photo(area: str, jpeg: bytes, api_key: str, *, before: bytes | None = None,
+                  original_result: dict | None = None, transport=None) -> dict:
     if not api_key or area not in AREA_RUBRICS:
         raise VisionError("configuration")
-    encoded = base64.b64encode(jpeg).decode("ascii")
+    def image_part(image: bytes):
+        encoded = base64.b64encode(image).decode("ascii")
+        return {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + encoded}}
+
+    instruction = SYSTEM_PROMPT
+    content = [{"type": "text", "text": AREA_RUBRICS[area]}]
+    if before is not None:
+        if not original_result:
+            raise VisionError("configuration")
+        instruction += (
+            "本任务是复查。第一张是原图，第二张是本次现场复拍。原结论是待核对的资料。"
+            "只对第二张给结论。原问题的位置必须在第二张看得清楚且已经解决，且符合本区域标准，才可通过。"
+            "初次需补拍时应能确认第二张属于该拍摄点且足以按原标准检查。换角度避开原问题、部位不对应或证据不足用 retake。"
+        )
+        content.extend([{"type": "text", "text": json.dumps(original_result, ensure_ascii=False)},
+                        image_part(before), {"type": "text", "text": "本次现场复拍"}])
+    content.append(image_part(jpeg))
     payload = {
         "model": MODEL, "thinking": {"type": "disabled"}, "max_tokens": 550,
         "response_format": {"type": "json_object"},
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": [
-                {"type": "text", "text": AREA_RUBRICS[area]},
-                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + encoded}},
-            ]},
+            {"role": "system", "content": instruction},
+            {"role": "user", "content": content},
         ],
     }
     try:

@@ -38,6 +38,10 @@ class WecomProviderError(Exception):
         super().__init__("WeCom verification unavailable")
 
 
+class WecomMessageRejected(WecomProviderError):
+    """WeCom explicitly rejected the message send request."""
+
+
 def auth_error(code="WECOM_AUTHENTICATION_FAILED", status=401):
     return HTTPException(status_code=status, detail={"code": code, "message": "企业微信验证未完成，请重新进入"})
 
@@ -87,11 +91,15 @@ class WecomProvider:
             )
             with urlopen(request, timeout=5) as response:
                 payload = json.loads(response.read(1024 * 1024))
-            if not isinstance(payload, dict) or payload.get("errcode", 0) != 0:
-                raise WecomProviderError()
-            return payload
         except Exception:
             raise WecomProviderError() from None
+        if not isinstance(payload, dict):
+            raise WecomProviderError()
+        if payload.get("errcode", 0) != 0:
+            if endpoint == "message/send" and type(payload.get("errcode")) is int:
+                raise WecomMessageRejected()
+            raise WecomProviderError()
+        return payload
 
     def _access_token(self) -> str:
         key = (settings.wecom_corp_id, settings.wecom_agent_secret)
@@ -125,7 +133,7 @@ class WecomProvider:
         if str(application.get("agentid")) != settings.wecom_agent_id or application.get("close") != 0:
             raise WecomProviderError()
 
-    def send_text(self, userids: list[str], content: str) -> None:
+    def send_text(self, userids: list[str], content: str) -> WecomMessageReceipt:
         targets = sorted({canonical_userid(userid) for userid in userids})
         if not targets or not content.strip():
             raise WecomProviderError()
@@ -135,13 +143,15 @@ class WecomProvider:
             agentid = int(settings.wecom_agent_id)
         except ValueError:
             raise WecomProviderError() from None
-        self._post("message/send", {"access_token": self._access_token()}, {
+        payload = self._post("message/send", {"access_token": self._access_token()}, {
             "touser": "|".join(targets),
             "msgtype": "text",
             "agentid": agentid,
             "text": {"content": content.strip()[:1800]},
             "safe": 0,
         })
+
+        return self._message_receipt(targets, payload)
 
     def send_textcard(self, userids: list[str], title: str, description: str, url: str, button: str = "查看订单") -> WecomMessageReceipt:
         targets = sorted({canonical_userid(userid) for userid in userids})
@@ -166,6 +176,10 @@ class WecomProvider:
             "safe": 0,
         })
 
+        return self._message_receipt(targets, payload)
+
+    @staticmethod
+    def _message_receipt(targets: list[str], payload: dict) -> WecomMessageReceipt:
         # API acceptance is not device delivery or a read receipt.
         if payload.get("errcode") != 0 or payload.get("invalidparty") or payload.get("invalidtag"):
             raise WecomProviderError()

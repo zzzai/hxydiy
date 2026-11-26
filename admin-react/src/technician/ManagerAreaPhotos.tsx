@@ -1,13 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Image, message, Modal } from 'antd';
 import { CameraOutlined, DownOutlined } from '@ant-design/icons';
-import { client, saveManagerAreaPhoto, uploadInspectionCapture, type InspectionArea, type InspectionPhoto } from '../api';
+import { client, saveInspectionFollowup, saveManagerAreaPhoto, uploadInspectionCapture, type InspectionArea, type InspectionIssue, type InspectionPhoto } from '../api';
 import { mediaPreviewSource } from '../mediaPreview';
 import { requestErrorMessage } from '../requestError';
 import InspectionPhotoReview from './InspectionPhotoReview';
 import { attachCameraPreview } from './cameraPreview';
 
-function PhotoPreview({ photo, label }: { photo: InspectionPhoto; label: string }) {
+function PhotoPreview({ photo, label }: { photo: Pick<InspectionPhoto, 'media'>; label: string }) {
   const url = photo.media?.url;
   const [src, setSrc] = useState<string>();
   useEffect(() => {
@@ -101,11 +101,12 @@ function InspectionCamera({ label, emptyRoom, onSave, onClose }: {
 
 type Props = {
   areas: InspectionArea[]; reviewEnabled: boolean; limit?: number; businessDate: string; submitted: boolean; disabled: boolean;
+  issues?: InspectionIssue[]; focusIssue?: number | null;
   historical?: boolean; onBusy?: (value: boolean) => void; onRefresh: () => Promise<void>;
 };
 
-export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, businessDate, submitted, disabled, historical = false, onBusy, onRefresh }: Props) {
-  const [target, setTarget] = useState<{ area: InspectionArea; photo?: InspectionPhoto }>();
+export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, businessDate, submitted, disabled, historical = false, issues = [], focusIssue, onBusy, onRefresh }: Props) {
+  const [target, setTarget] = useState<{ area: Pick<InspectionArea, 'key' | 'label' | 'group'>; photo?: InspectionPhoto; issue?: InspectionIssue }>();
   const [busyArea, setBusyArea] = useState('');
   const [filter, setFilter] = useState<'all' | 'missing' | 'done'>('all');
   const [expanded, setExpanded] = useState<string | null>(historical && areas.length === 1 ? areas[0].key : null);
@@ -128,12 +129,17 @@ export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, busines
     setBusyArea(area.key);
     onBusy?.(true);
     try {
-      const { data } = await uploadInspectionCapture(frame, area.key, businessDate);
-      const base = { area: area.key, business_date: businessDate, ...data };
-      await saveManagerAreaPhoto(photo
-        ? { ...base, mode: 'replace', photo_id: photo.id, expected_media_id: photo.media_id }
-        : { ...base, mode: 'append' });
-      message.success(area.label + '照片已保存');
+      const { data } = await uploadInspectionCapture(frame, area.key, businessDate, target.issue?.id);
+      if (target.issue) {
+        await saveInspectionFollowup(target.issue, data);
+        message.success('复拍已提交，系统正在复查');
+      } else {
+        const base = { area: area.key, business_date: businessDate, ...data };
+        await saveManagerAreaPhoto(photo
+          ? { ...base, mode: 'replace', photo_id: photo.id, expected_media_id: photo.media_id }
+          : { ...base, mode: 'append' });
+        message.success(area.label + '照片已保存');
+      }
     } catch (error) {
       message.error(requestErrorMessage(error));
     } finally {
@@ -154,7 +160,7 @@ export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, busines
   function renderPoint(area: InspectionArea) {
     const photos = photosFor(area);
     const open = expanded === area.key;
-    const flags = photos.map(p => p.review?.manual_verdict ?? p.review?.result?.verdict);
+    const flags = photos.map(p => p.issue?.status ?? p.review?.manual_verdict ?? p.review?.result?.verdict);
     const issue = flags.includes('fix') ? '需整改' : flags.includes('retake') ? '需补拍' : '';
     const cameraName = '现场拍照 · ' + area.label;
     return <div key={area.key} className={'manager-p0-area inspection-point' + (open ? ' is-open' : '')} aria-label={area.label}>
@@ -181,8 +187,9 @@ export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, busines
         <button type="button" aria-label={'收起' + area.label + '照片'} onClick={() => setExpanded(null)}>收起</button></div>
       <div className="inspection-photos">{photosFor(area).map((p, i) => <div className="inspection-photo-row" key={p.id}>
         <div className="inspection-thumb"><PhotoPreview key={p.media_id} photo={p} label={area.label + '照片 ' + (p.slot || i + 1)} />
-          {writable && <button type="button" disabled={locked} aria-label={'更换' + area.label + '第 ' + p.slot + ' 张'} onClick={() => pick(area, p)}>更换</button>}</div>
-        <InspectionPhotoReview key={p.media_id} photo={p} enabled={reviewEnabled} disabled={locked} onRefresh={onRefresh} />
+          {writable && !p.issue && <button type="button" disabled={locked} aria-label={'更换' + area.label + '第 ' + p.slot + ' 张'} onClick={() => pick(area, p)}>更换</button>}</div>
+        <div><InspectionPhotoReview key={p.media_id} photo={p} enabled={reviewEnabled} />
+          {p.issue?.status === 'closed' && <strong className="inspection-verdict pass">复查通过 · 已结案</strong>}</div>
       </div>)}</div>
     </section>;
   }
@@ -200,6 +207,25 @@ export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, busines
   }
 
   return <section className="inspection-checklist" aria-label={historical ? '历史巡检照片' : '拍摄清单'}>
+    {!historical && issues.length > 0 && <section className="inspection-issue-list" aria-label="本店待处理巡检">
+      <h3>待处理巡检 <small>{issues.length}</small></h3>
+      {[...issues].sort((a, b) => Number(b.id === focusIssue) - Number(a.id === focusIssue)).map(issue => {
+        const latest = issue.last_review.result ?? issue.original;
+        const reviewing = issue.status === 'reviewing' || issue.last_review.retry_scheduled;
+        const status = reviewing ? '复查中' : issue.status === 'fix' ? '需整改' : issue.status === 'retake' ? '需补拍' : '审核未完成';
+        return <article key={issue.id} className="inspection-issue">
+          <div><strong>{issue.label} · {status}</strong><small>{issue.business_date}</small></div>
+          <p>{latest.location} · {latest.evidence}</p>{latest.action && <p>{latest.action}</p>}
+          <div className="inspection-issue-evidence"><PhotoPreview photo={{ media: issue.original_media }} label={issue.label + '原图'} />
+            {issue.last_media && <PhotoPreview photo={{ media: issue.last_media }} label={issue.label + '最近复拍'} />}
+            {!reviewing && <button type="button" className="manager-p0-text-link" disabled={locked || !writable}
+              onClick={() => setTarget({ area: { key: issue.area, label: issue.label,
+                group: issue.area.startsWith('spa_') ? 'spa_rooms' : undefined }, issue })}>现场复拍</button>}
+          </div>
+        </article>;
+      })}
+    </section>}
+    {!historical && focusIssue && !issues.some(issue => issue.id === focusIssue) && <p role="status">本店当前待办中没有这项巡检。</p>}
     <div className="inspection-section-head"><h3>{historical ? businessDate + ' 巡检照片' : '拍摄清单'}</h3>
       {!historical && <span>{writable ? '每处 1～3 张' : '请刷新后上传'}</span>}</div>
     {!historical && <div className="inspection-filters" role="group" aria-label="筛选拍摄点">

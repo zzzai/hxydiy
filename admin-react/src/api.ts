@@ -503,21 +503,28 @@ export type InspectionReview = {
   result: { verdict: InspectionVerdict; location: string; evidence: string; action: string } | null;
   manual_verdict: InspectionVerdict | null; retry_scheduled?: boolean;
 };
+export type InspectionIssue = {
+  id: number; business_date: string; area: string; label: string;
+  status: 'fix' | 'retake' | 'reviewing' | 'unreviewed' | 'closed';
+  expected_review_id: number; original: NonNullable<InspectionReview['result']>;
+  original_media: { url: string } | null; last_media: { url: string } | null;
+  last_review: InspectionReview; followup_count: number;
+};
 export type InspectionPhoto = {
   id: number; slot: number; media_id: number; media?: { url: string } | null;
-  reviewable?: boolean; review?: InspectionReview | null;
+  reviewable?: boolean; review?: InspectionReview | null; issue?: InspectionIssue | null;
 };
-export const confirmInspectionReview = (photo: InspectionPhoto, verdict: InspectionVerdict) => client.post(
-  '/admin/v2/manager/daily/photos/' + photo.id + '/manual-review', { media_id: photo.media_id, verdict },
-);
 export type InspectionArea = { key: string; label: string; group?: 'spa_rooms'; done: boolean; photos?: InspectionPhoto[]; photo?: InspectionPhoto | null };
-export const uploadInspectionCapture = (frame: Blob, area: string, businessDate: string) => {
+export const uploadInspectionCapture = (frame: Blob, area: string, businessDate: string, issueId?: number) => {
   const form = new FormData();
   form.append('file', frame, 'inspection.jpg');
   form.append('area', area);
   form.append('business_date', businessDate);
+  if (issueId !== undefined) form.append('issue_id', String(issueId));
   return client.post<{ media_id: number; capture_receipt: string }>('/admin/v2/manager/daily/camera-captures', form);
 };
+export const saveInspectionFollowup = (issue: InspectionIssue, frame: { media_id: number; capture_receipt: string }) =>
+  client.post(`/admin/v2/manager/daily/issues/${issue.id}/followups`, { ...frame, expected_review_id: issue.expected_review_id });
 type InspectionPhotoInput = { area: string; media_id: number; capture_receipt: string; note?: string; business_date?: string } & (
   | { mode?: 'cover' | 'append' }
   | { mode: 'replace'; photo_id: number; expected_media_id: number }

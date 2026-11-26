@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.models import DailyAreaPhoto, DailyMeetingRecording, DailyStoreCheckin, MediaAsset
+from app.services.inspection_issues import followup_media_for_checkin
 from app.services.media_storage import MediaStorageError, get_media_storage
 
 logger = logging.getLogger("app.daily_ops_retention")
@@ -37,8 +38,8 @@ def cleanup_expired_daily_ops() -> dict:
         for checkin in checkins:
             photos = list(db.scalars(select(DailyAreaPhoto).where(DailyAreaPhoto.checkin_id == checkin.id)))
             meetings = list(db.scalars(select(DailyMeetingRecording).where(DailyMeetingRecording.checkin_id == checkin.id)))
-            for item in [*photos, *meetings]:
-                media = db.get(MediaAsset, item.media_id)
+            original_media = [db.get(MediaAsset, item.media_id) for item in [*photos, *meetings]]
+            for media in [*original_media, *followup_media_for_checkin(db, checkin)]:
                 if media and not media.deleted_at:
                     if storage is not None:
                         try:
@@ -47,6 +48,7 @@ def cleanup_expired_daily_ops() -> dict:
                             logger.warning("daily_ops_media_delete_failed media=%s: %s", media.id, exc)
                     media.deleted_at = datetime.now(UTC)
                     deleted_media += 1
+            for item in [*photos, *meetings]:
                 db.delete(item)
             db.delete(checkin)
             deleted_checkins += 1

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { App, ConfigProvider } from 'antd';
 import { AxiosError } from 'axios';
-import { client, getStaff, type InspectionPhoto } from '../src/api';
+import { client, getStaff, type InspectionIssue, type InspectionPhoto } from '../src/api';
 import { commitStaffSession, getSessionEpoch } from '../src/wecomSession';
 import { writeStaffSession } from '../src/staffSession';
 import TechnicianMobileApp from '../src/technician/TechnicianMobileApp';
@@ -55,6 +55,22 @@ function inspectionSnapshot(photo: InspectionPhoto) {
       ? { verdict: 'pass', location: '接水台', evidence: '水桶摆放整齐', action: '' }
       : { verdict: 'fix', location: '洗手台左侧', evidence: '台面散落纸巾', action: '清走纸巾后擦净台面' } };
   return { ...photo };
+}
+
+const issueCaptures = new Set<number>();
+let correction: { id: number; submittedAt: number } | null = null;
+function sampleIssue(photo: InspectionPhoto): InspectionIssue | null {
+  if (photo.id !== 1 || photo.review?.result?.verdict !== 'fix') return null;
+  const resolved = correction !== null && Date.now() - correction.submittedAt >= 1500;
+  return {
+    id: 101, area: 'restroom', label: '卫生间', business_date: inspectionDay,
+    status: correction ? resolved ? 'closed' : 'reviewing' : 'fix',
+    original: photo.review.result, original_media: { url: imageUrl }, last_media: correction ? { url: imageUrl } : null,
+    expected_review_id: correction?.id ?? 101, followup_count: correction ? 1 : 0,
+    last_review: correction ? { state: resolved ? 'done' : 'pending', attempt: resolved ? 1 : 0,
+      result: resolved ? { verdict: 'pass', location: '洗手台左侧', evidence: '原位置已清理', action: '' } : null,
+      manual_verdict: null } : photo.review,
+  };
 }
 
 const entries = Array.from({ length: 42 }, (_, i) => ({
@@ -172,30 +188,40 @@ client.defaults.adapter = async config => {
   }
   if (method === 'get' && path === '/admin/v2/manager/daily') return ok({
     inspection_ai_enabled: inspectionAI, business_date: inspectionDay, checkin_id: 1, status: 'draft', submitted_at: null, max_photos_per_area: 3,
-    areas: inspectionAreas.map(area => ({ ...area, done: !!area.photos.length, photos: area.photos.map(inspectionSnapshot), photo: area.photos[0] || null })),
+    areas: inspectionAreas.map(area => ({ ...area, done: !!area.photos.length, photos: area.photos.map(photo => {
+      const snapshot = inspectionSnapshot(photo);
+      return { ...snapshot, issue: inspectionAI ? sampleIssue(snapshot) : null };
+    }), photo: area.photos[0] || null })),
+    open_issues: inspectionAI ? inspectionAreas.flatMap(area => area.photos.map(sampleIssue))
+      .filter(issue => issue && issue.status !== 'closed') : [],
     meetings, completion: { areas_done: inspectionAreas.filter(area => area.photos.length).length,
       areas_total: inspectionAreas.length, has_meeting: meetings.length > 0, submitted: false },
   });
   if (inspectionAI && method === 'post') {
     const match = path.match(/^\/admin\/v2\/manager\/daily\/photos\/(\d+)\/(review|manual-review)$/);
     if (match) {
-      if (match[2] === 'review') {
-        ++stats.unexpected;
-        return fail(409, 'Manager UI must not submit photos for review');
-      }
-      const target = [...inspectionAreas.flatMap(area => area.photos), ...pastArea.photos].find(photo => photo.id === Number(match[1]));
+      ++stats.unexpected;
+      return fail(409, 'Only the automatic worker can review');
+    }
+    if (path === '/admin/v2/manager/daily/issues/101/followups') {
       const body = JSON.parse(config.data);
-      if (!target || target.media_id !== body.media_id) return fail(409, 'Photo changed');
-      if (target.review?.state === 'done') target.review.manual_verdict = body.verdict;
-      else return fail(409, 'Pending');
-      return ok({ review: target.review });
+      if (body.expected_review_id !== 101 || !issueCaptures.has(body.media_id) ||
+          body.capture_receipt !== 'fixture-' + body.media_id || correction) return fail(409, 'Stale or invalid recapture');
+      correction = { id: body.media_id, submittedAt: Date.now() };
+      return ok({ ok: true });
     }
   }
   if ((scenario === 'inspection-photos' || scenario === 'huafu-inspection' || inspectionAI) && method === 'post') {
     if (path === '/admin/v2/manager/daily/camera-captures') {
       const frame = config.data.get('file');
       if (!frame || frame.type !== 'image/jpeg' || frame.size < 50) return fail(415, 'Missing camera frame');
-      return ok({ media_id: ++uploadId, capture_receipt: 'fixture-' + uploadId });
+      uploadId += 1;
+      if (config.data.has('issue_id')) {
+        if (config.data.get('issue_id') !== '101' || config.data.get('area') !== 'restroom'
+            || config.data.get('business_date') !== inspectionDay) return fail(409, 'Wrong issue');
+        issueCaptures.add(uploadId);
+      }
+      return ok({ media_id: uploadId, capture_receipt: 'fixture-' + uploadId });
     }
     if (path === '/admin/v2/manager/daily/photos') {
       const body = JSON.parse(config.data);

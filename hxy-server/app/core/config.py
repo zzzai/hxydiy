@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import AwareDatetime
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +15,10 @@ class Settings(BaseSettings):
     staff_learning_enabled: bool = False
     inspection_ai_enabled: bool = False
     inspection_ai_api_key: str = ""
+    inspection_workflow_from: AwareDatetime | None = None
+    inspection_wecom_enabled: bool = False
+    inspection_weekly_binding_id: int | None = None
+    inspection_weekly_binding_version: int | None = None
 
     @property
     def inspection_ai_ready(self) -> bool:

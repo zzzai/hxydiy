@@ -82,8 +82,12 @@ def test_historical_review_runs_without_a_request_and_preserves_store_scope(dail
     for principal, code in [(other, 404), (tech, 403)]:
         assert client.post(manual, headers=principal, json=decision).status_code == code
     for _ in range(2):
-        view = client.post(manual, headers=headers["manager"], json=decision).json()["review"]
-        assert view["manual_verdict"] == "pass" and view["result"] == FIX
+        rejected = client.post(manual, headers=headers["manager"], json=decision)
+        assert rejected.status_code == 409
+        assert rejected.json()["detail"]["code"] == "INSPECTION_SYSTEM_REVIEW_ONLY"
+    with factory() as db:
+        review = db.query(DailyAreaPhotoReview).one()
+        assert review.manual_verdict is None and review.result == FIX
     assert client.post(manual, headers=headers["manager"], json={**decision, "verdict": "retake"}).status_code == 409
     assert client.post(url, headers=headers["manager"], json=req).json()["review"]["attempt"] == 1
     with factory() as db:
@@ -197,6 +201,19 @@ def test_image_and_provider_contract():
         assert prefix == "data:image/jpeg;base64" and base64.b64decode(encoded) == body
         return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(FIX)}}]})
     assert inspect_photo("herbal_prep", body, "synthetic", transport=httpx.MockTransport(provider)) == FIX
+
+    def compare(request):
+        system, message = json.loads(request.content)["messages"]
+        assert "第一张是原图" in system["content"] and "原问题的位置" in system["content"]
+        assert json.loads(message["content"][1]["text"]) == FIX
+        images = [base64.b64decode(part["image_url"]["url"].split(",", 1)[1])
+                  for part in message["content"] if part["type"] == "image_url"]
+        assert images == [body, second]
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(FIX)}}]})
+
+    second = inspection_jpeg(png(), 2048)
+    assert inspect_photo("herbal_prep", second, "synthetic", before=body, original_result=FIX,
+                         transport=httpx.MockTransport(compare)) == FIX
     with pytest.raises(VisionError, match="image_unreadable"):
         inspection_jpeg(raw.getvalue(), 100)
     with pytest.raises(ValueError):

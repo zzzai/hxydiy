@@ -1166,6 +1166,18 @@
             "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
+          },
+          "issue_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Id"
           }
         },
         "required": [
@@ -2169,6 +2181,33 @@
           "rating"
         ],
         "title": "FeedbackIn",
+        "type": "object"
+      },
+      "FollowupIn": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_receipt": {
+            "maxLength": 1600,
+            "title": "Capture Receipt",
+            "type": "string"
+          },
+          "expected_review_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Review Id",
+            "type": "integer"
+          },
+          "media_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Media Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "media_id",
+          "expected_review_id",
+          "capture_receipt"
+        ],
+        "title": "FollowupIn",
         "type": "object"
       },
       "GuestClaimIn": {
@@ -15436,6 +15475,72 @@
           }
         },
         "summary": "Daily History",
+        "tags": [
+          "manager-daily"
+        ]
+      }
+    },
+    "/api/v1/admin/v2/manager/daily/issues/{root_id}/followups": {
+      "post": {
+        "operationId": "save_followup_api_v1_admin_v2_manager_daily_issues__root_id__followups_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "root_id",
+            "required": true,
+            "schema": {
+              "title": "Root Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowupIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Followup",
         "tags": [
           "manager-daily"
         ]
