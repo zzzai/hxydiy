@@ -6068,6 +6068,8 @@ export interface components {
             attempt_id: string;
             /** Entry Nonce */
             entry_nonce: string;
+            /** Inspection Notice */
+            inspection_notice?: string | null;
         };
         /** FeedbackFollowUpIn */
         FeedbackFollowUpIn: {
