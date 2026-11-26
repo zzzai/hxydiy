@@ -225,6 +225,7 @@ async function main() {
       await page.getByRole('button', { name: '拍摄并保存' }).click();
       await tasks.getByText('卫生间 · 复查中').waitFor();
       await area.getByText('复查通过 · 已结案').waitFor({ timeout: 26000 });
+      await page.getByRole('status').filter({ hasText: '卫生间复查通过，已结案。' }).waitFor();
       assert.equal(await tasks.count(), 0);
       await area.getByText('AI 审核 · 需整改').waitFor();
       await noOverflow(); await shot('inspection-original-and-verified-recapture');

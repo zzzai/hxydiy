@@ -110,6 +110,7 @@ export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, busines
   const [busyArea, setBusyArea] = useState('');
   const [filter, setFilter] = useState<'all' | 'missing' | 'done'>('all');
   const [expanded, setExpanded] = useState<string | null>(historical && areas.length === 1 ? areas[0].key : null);
+  const focusedPhoto = focusIssue ? areas.flatMap(area => area.photos ?? []).find(photo => photo.issue?.id === focusIssue) : null;
   const panelId = useId();
   const saving = useRef(false);
   const writable = !historical && limit === 3;
@@ -225,7 +226,10 @@ export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, busines
         </article>;
       })}
     </section>}
-    {!historical && focusIssue && !issues.some(issue => issue.id === focusIssue) && <p role="status">本店当前待办中没有这项巡检。</p>}
+    {!historical && focusIssue && !issues.some(issue => issue.id === focusIssue) && <p role="status">
+      {focusedPhoto?.issue?.status === 'closed' ? focusedPhoto.issue.label + '复查通过，已结案。'
+        : '这条巡检已不在本店待办中。可按通知上的日期查看过往巡检照片。'}
+    </p>}
     <div className="inspection-section-head"><h3>{historical ? businessDate + ' 巡检照片' : '拍摄清单'}</h3>
       {!historical && <span>{writable ? '每处 1～3 张' : '请刷新后上传'}</span>}</div>
     {!historical && <div className="inspection-filters" role="group" aria-label="筛选拍摄点">

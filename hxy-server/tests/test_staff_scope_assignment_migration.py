@@ -25,6 +25,7 @@ class StaffScopeAssignmentMigrationTests(unittest.TestCase):
                 # Feedback batch reflection also requires these legacy FK targets.
                 connection.execute(text("CREATE TABLE rooms (id INTEGER PRIMARY KEY)"))
                 connection.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY)"))
+                connection.execute(text("CREATE TABLE media_assets (id INTEGER PRIMARY KEY)"))
                 # SQLite batch reflection needs the legacy identity FK target.
                 connection.execute(text("CREATE TABLE technicians (id INTEGER PRIMARY KEY)"))
                 connection.execute(text("""

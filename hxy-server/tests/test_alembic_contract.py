@@ -58,7 +58,7 @@ class AlembicContractTests(unittest.TestCase):
         scripts = ScriptDirectory.from_config(config)
 
         self.assertEqual(len(scripts.get_heads()), 1, scripts.get_heads())
-        self.assertEqual(scripts.get_heads(), ["20261126_inspection_areas"])
+        self.assertEqual(scripts.get_heads(), ["20261126_inspection_workflow"])
 
     def test_upgrade_verifier_runs_outside_the_repository_directory(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -87,7 +87,7 @@ class AlembicContractTests(unittest.TestCase):
         project_root = Path(__file__).resolve().parents[1]
         previous_metadata = MetaData()
         excluded_tables = {
-            "daily_area_photo_reviews",
+            "inspection_followups", "inspection_deliveries", "daily_area_photo_reviews",
             "learning_course_versions", "staff_learning_assignments", "staff_learning_events",
             "service_position_qrs", "customer_profile_records", "customer_profile_consents",
             "customer_profile_current", "media_assets", "customer_trusted_devices", "membership_codes", "visit_feedback",
@@ -258,6 +258,11 @@ class AlembicContractTests(unittest.TestCase):
                 "service_position_qrs",
                 inspector.get_table_names(),
             )
+            self.assertTrue({"inspection_followups", "inspection_deliveries"}.issubset(inspector.get_table_names()))
+            uniques = inspector.get_unique_constraints("inspection_followups")
+            self.assertIn(["root_id", "sequence"], [item["column_names"] for item in uniques])
+            delivery_keys = inspector.get_unique_constraints("inspection_deliveries")
+            self.assertIn(["event_key", "binding_id"], [item["column_names"] for item in delivery_keys])
             self.assertTrue(
                 {
                     "follow_up_status",
@@ -276,7 +281,7 @@ class AlembicContractTests(unittest.TestCase):
     def test_catalog_option_migration_upgrades_the_previous_schema(self):
         project_root = Path(__file__).resolve().parents[1]
         new_tables = {
-            "daily_area_photo_reviews",
+            "inspection_followups", "inspection_deliveries", "daily_area_photo_reviews",
             "learning_course_versions", "staff_learning_assignments", "staff_learning_events",
             "project_catalog_versions",
             "project_option_groups",

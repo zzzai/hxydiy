@@ -28,6 +28,7 @@ class OccupancyRetentionMigrationTests(unittest.TestCase):
                 "operational_exceptions",
                 "technician_shifts",
                 "learning_course_versions", "staff_learning_assignments", "staff_learning_events",
+                "inspection_followups", "inspection_deliveries", "daily_area_photo_reviews",
                 "daily_store_checkins", "daily_area_photos", "daily_meeting_recordings", "training_assessments",
                 "coupon_poster_links",
                 "membership_consumption_batches", "membership_consumption_bills",
