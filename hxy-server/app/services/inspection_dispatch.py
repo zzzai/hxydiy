@@ -14,6 +14,7 @@ from app.domain.inspection_checklist import CHECKLISTS
 from app.models import DailyAreaPhotoReview, InspectionDelivery
 from app.models.staff_external_identity import StaffExternalIdentity
 from app.services.inspection_issues import PROBLEMS, followups_by_root, latest_review, roots_query, verdict
+from app.services.inspection_receipts import notice_key
 from app.services.inspection_weekly import SHANGHAI, weekly_due, weekly_text
 from app.services.wecom_notify import verified_manager_bindings
 from app.services.wecom_staff import WecomMessageRejected, WecomProviderError, get_wecom_provider, local_binding
@@ -85,6 +86,7 @@ def deliver_next(factory=SessionLocal, *, provider=None, now=None):
         identity = db.get(StaffExternalIdentity, item.binding_id)
         valid = identity and identity.binding_version == item.binding_version and identity.status == "active"
         valid = valid and identity.provider == "wecom" and identity.corp_id == settings.wecom_corp_id
+        entry = f"{settings.h5_public_base_url.rstrip('/')}/technician/store/wecom?notice={notice_key(item)}"
         card = None
         summary = None
         if item.week_start:
@@ -97,6 +99,11 @@ def deliver_next(factory=SessionLocal, *, provider=None, now=None):
                     valid = False
                 summary = item.summary_text
                 valid = valid and bool(summary)
+                if summary:
+                    link = f"\n\n查看完整周报：{entry}"
+                    if len((summary + link).encode("utf-8")) > 2000:
+                        summary = summary.splitlines()[0] + "\n两店巡检覆盖、整改和下周重点见完整周报。"
+                    summary += link
         elif valid:
             row = db.execute(roots_query(now).where(DailyAreaPhotoReview.id == item.root_id)).one_or_none()
             valid = row is not None and identity.id != settings.inspection_weekly_binding_id
@@ -110,7 +117,7 @@ def deliver_next(factory=SessionLocal, *, provider=None, now=None):
                     card = (f"{CHECKLISTS[3][photo.area]} · {action}",
                             f"{day.business_date} 巡检\n{escape(last.result['location'])} · {escape(last.result['evidence'])}"
                             f"\n{escape(last.result['action'])}",
-                            f"{settings.h5_public_base_url.rstrip('/')}/technician/store/wecom?inspection={root.id}")
+                            f"{entry}&inspection={root.id}")
         if not valid:
             item.state, item.finished_at = "cancelled", now
             return True

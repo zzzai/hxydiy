@@ -112,3 +112,9 @@
   .technician-layout .technician-mobile-content { padding-inline: 12px; }
   .technician-layout .technician-history-toolbar { gap: var(--tech-space-xs); }
 }
+
+.inspection-weekly-report { max-width: 38rem; margin: 0 auto; padding: 24px 20px 40px; color: #213a2e; }
+.inspection-weekly-report h1 { margin: 0 0 24px; font-size: 22px; line-height: 1.4; }
+.inspection-weekly-report section { border-top: 1px solid #dce7df; padding: 16px 0; }
+.inspection-weekly-report h2 { margin: 0 0 8px; font-size: 17px; }
+.inspection-weekly-report p { margin: 5px 0; line-height: 1.65; }

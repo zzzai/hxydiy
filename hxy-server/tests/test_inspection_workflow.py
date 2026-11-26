@@ -4,6 +4,7 @@ from io import BytesIO
 import os
 from threading import Barrier, Event
 from uuid import uuid4
+from urllib.parse import parse_qs, urlsplit
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -160,7 +161,8 @@ def test_recipient_separation_weekly_cutoff_and_idempotent_delivery(daily, monke
             pass
     assert len(service.calls) == 2
     card = next(c for c in service.calls if c[0] == "store")
-    assert card[1] == ["store-recipient"] and card[2].endswith(f"?inspection={issue['id']}")
+    query = parse_qs(urlsplit(card[2]).query)
+    assert card[1] == ["store-recipient"] and query["inspection"] == [str(issue["id"])] and query["notice"]
     summary = next(c for c in service.calls if c[0] == "weekly")
     assert summary[1] == ["weekly-recipient"] and "没有已提交日报" in summary[2]
     with factory() as db:
@@ -168,7 +170,10 @@ def test_recipient_separation_weekly_cutoff_and_idempotent_delivery(daily, monke
         metrics = summarize_week(db, start, as_of=monday)["hxy-anyang-huafu-002"]
         assert metrics["outstanding"] == 1 and metrics["closed"] == 0 and metrics["fix"] == 1
         assert metrics["no_record"] == 6
-        assert db.query(InspectionDelivery).filter_by(week_start=start).one().summary_text == summary[2]
+        weekly_message = db.query(InspectionDelivery).filter_by(week_start=start).one()
+        assert weekly_message.summary_text == summary[2].split("\n\n查看完整周报：")[0]
+        assert weekly_message.opened_at is None
+        assert parse_qs(urlsplit(summary[2].split("查看完整周报：")[1]).query)["notice"] != query["notice"]
 
 
 def test_other_store_and_historical_manual_corrections(daily, monkeypatch):

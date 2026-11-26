@@ -38,6 +38,7 @@ class InspectionDelivery(Base):
     week_start: Mapped[date | None] = mapped_column(Date)
     summary_text: Mapped[str | None] = mapped_column(Text)
     state: Mapped[str] = mapped_column(String(12), default="pending", index=True)
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

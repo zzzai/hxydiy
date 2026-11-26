@@ -2,21 +2,27 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { technicianMobileHome } from './technicianMobile';
-import { beginWecomEntry, clearStaffSession, completeWecomEntry, hasManagerPendingDeepLink, wecomLoginPath } from '../wecomSession';
+import { beginWecomEntry, clearStaffSession, completeWecomEntry, getSessionEpoch, hasManagerPendingDeepLink, wecomLoginPath } from '../wecomSession';
 
 export default function TechnicianWecomGate({ complete = false }: { complete?: boolean }) {
   const navigate = useNavigate();
   const loginPath = useRef(wecomLoginPath()).current;
   const verifiedRole = useRef<'technician' | 'manager'>();
+  const weekly = useRef<{ text: string; epoch: number }>();
+  const [showWeekly, setShowWeekly] = useState(false);
   const pending = useRef<Promise<boolean | void>>();
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    pending.current ||= complete ? completeWecomEntry(role => { verifiedRole.current = role; }) : beginWecomEntry();
+    pending.current ||= complete ? completeWecomEntry((role, summary) => {
+      verifiedRole.current = role;
+      if (summary) weekly.current = { text: summary, epoch: getSessionEpoch() };
+    }) : beginWecomEntry();
     void pending.current.then((accepted) => {
       if (!active || !complete) return;
       if (accepted && verifiedRole.current) {
+        if (weekly.current) { setShowWeekly(true); return; }
         const managerStaff = (() => {
           try { return JSON.parse(localStorage.getItem('hxy_admin_staff') || 'null') as { technician_id?: number | null } | null; }
           catch { return null; }
@@ -33,6 +39,17 @@ export default function TechnicianWecomGate({ complete = false }: { complete?: b
     return () => { active = false; };
   }, [complete, navigate, attempt]);
 
+  if (showWeekly && weekly.current?.epoch === getSessionEpoch()) {
+    const [heading, ...stores] = weekly.current.text.split('\n\n');
+    return <main className="inspection-weekly-report">
+      <h1>{heading}</h1>
+      {stores.map(section => {
+        const [store, ...details] = section.split('\n');
+        return <section key={store}><h2>{store}</h2>{details.map(line => <p key={line}>{line}</p>)}</section>;
+      })}
+      <Button onClick={() => navigate('/store', { replace: true })}>返回工作台</Button>
+    </main>;
+  }
   return <main className="technician-login-page"><section className="technician-login-card">
     <h1>正在验证企业微信身份</h1>
     <p>验证完成后进入当前账号的服务工作台。</p>

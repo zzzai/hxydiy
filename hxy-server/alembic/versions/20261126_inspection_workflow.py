@@ -29,6 +29,7 @@ def upgrade():
         sa.Column("week_start", sa.Date()),
         sa.Column("summary_text", sa.Text()),
         sa.Column("state", sa.String(12), nullable=False),
+        sa.Column("opened_at", sa.DateTime(timezone=True)),
         sa.Column("attempted_at", sa.DateTime(timezone=True)),
         sa.Column("finished_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),

@@ -91,6 +91,46 @@ def test_manager_with_technician_keeps_both_technician_and_manager_capabilities(
     assert manager.client.get('/technician-only', headers=headers).status_code == 200
 
 
+@pytest.mark.parametrize('scope', ['own', 'other', 'revoked', 'rejected', 'tampered'])
+def test_inspection_open_requires_recipient_oauth(manager, monkeypatch, scope):
+    from app.models import InspectionDelivery
+    from app.services.inspection_receipts import notice_key
+
+    monkeypatch.setattr(settings, 'inspection_wecom_enabled', True)
+    with manager.sessions.begin() as db:
+        binding = db.get(StaffExternalIdentity, manager.identity_id)
+        if scope == 'other':
+            other = StaffExternalIdentity(provider='wecom', corp_id='synthetic-corp', userid='user-other',
+                staff_id=manager.staff_id, technician_id=manager.tech_id, store_id=manager.store_id)
+            db.add(other)
+            db.flush()
+            binding = other
+        version = binding.binding_version + int(scope == 'revoked')
+        mark = datetime.now(timezone.utc)
+        msg = InspectionDelivery(event_key='weekly/sample', binding_id=binding.id, binding_version=version,
+            week_start=mark.date(), summary_text='Synthetic weekly report', attempted_at=mark,
+            state='rejected' if scope == 'rejected' else 'accepted')
+        db.add(msg)
+        db.flush()
+        key, row_id = notice_key(msg), msg.id
+        monkeypatch.setattr(settings, 'inspection_weekly_binding_id', binding.id)
+        monkeypatch.setattr(settings, 'inspection_weekly_binding_version', version)
+    if scope == 'tampered':
+        key = key[:-1] + ('0' if key[-1] != '0' else '1')
+    observed = []
+    for _ in range(2):
+        attempt, state = manager.authorize()
+        assert manager.callback(state).status_code == 303
+        response = manager.client.post('/api/v1/auth/wecom/exchange', json={
+            'attempt_id': attempt, 'entry_nonce': 'n' * 32, 'inspection_notice': key})
+        assert response.status_code == 200
+        assert response.json().get('inspection_weekly_summary') == ('Synthetic weekly report' if scope == 'own' else None)
+        with manager.sessions() as db:
+            observed.append(db.get(InspectionDelivery, row_id).opened_at)
+    assert (observed[0] is not None) == (scope == 'own')
+    assert observed[0] == observed[1]
+
+
 def test_manager_with_technician_still_receives_store_notifications(manager):
     with manager.sessions.begin() as db:
         tech = Technician(store_id=manager.store_id, code='notify-manager-tech', name='Notify manager', status='available')

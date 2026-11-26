@@ -195,6 +195,26 @@ test('a store inspection link survives OAuth only for the manager entry and is c
   }
 });
 
+test('the designated weekly report link survives manager OAuth for this exchange only', async () => {
+  reset();
+  const notice = '15.' + 'a'.repeat(32);
+  Object.assign(window.location, { pathname: '/technician/store/wecom', search: '?notice=' + notice });
+  try {
+    globalThis.fetch = async () => reply({ attempt_id: 'weekly-attempt', authorization_url: 'https://open.weixin.qq.com/connect/oauth2/authorize' });
+    await beginWecomEntry();
+    globalThis.fetch = async (_url, init) => {
+      assert.equal(JSON.parse(String(init?.body)).inspection_notice, notice);
+      return reply({ ...managerResponse, inspection_weekly_summary: '本周巡检' });
+    };
+    let shown: string | undefined;
+    assert.equal(await completeWecomEntry((_role, summary) => { shown = summary; }), true);
+    assert.equal(shown, '本周巡检');
+    assert.equal(await completeWecomEntry(), false);
+  } finally {
+    Object.assign(window.location, { pathname: '/technician/today', search: '' }); reset();
+  }
+});
+
 test('QR review survives the real OAuth entry and consumes the pending target once', async () => {
   reset();
   const location = window.location;

@@ -5,7 +5,10 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
+from app.models.staff_external_identity import StaffOAuthAttempt
+from app.services.inspection_receipts import record_notice_open
 from app.services.wecom_staff import ATTEMPT_TTL, CALLBACK_PATH, COOKIE_PATH, WecomProvider, attempt_cookie, begin_attempt, complete_callback, configured_urls, exchange_attempt, get_wecom_provider
 
 
@@ -28,6 +31,7 @@ class AuthorizeRequest(BaseModel):
 
 class ExchangeRequest(AuthorizeRequest):
     attempt_id: str = Field(min_length=36, max_length=36)
+    inspection_notice: str | None = Field(default=None, pattern=r"^[1-9][0-9]{0,9}\.[0-9a-f]{32}$")
 
 
 @router.post("/authorize")
@@ -49,6 +53,11 @@ def callback(request: Request, code: str = "", state: str = "", db: Session = De
 @router.post("/exchange")
 def exchange(body: ExchangeRequest, request: Request, response: Response, db: Session = Depends(get_db), provider: WecomProvider = Depends(get_wecom_provider)):
     result = exchange_attempt(db, body.attempt_id, body.entry_nonce, request.cookies, provider)
+    if body.inspection_notice and settings.inspection_wecom_enabled:
+        attempt = db.get(StaffOAuthAttempt, body.attempt_id)
+        summary = record_notice_open(db, attempt, body.inspection_notice)
+        if summary:
+            result["inspection_weekly_summary"] = summary
     response.delete_cookie(attempt_cookie(body.attempt_id), path=COOKIE_PATH, secure=True, httponly=True, samesite="lax")
     response.headers["Cache-Control"] = "no-store"
     return result
