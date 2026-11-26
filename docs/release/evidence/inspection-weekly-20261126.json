@@ -1,0 +1,41 @@
+{
+  "release_id": "server-2de18abfedf5-1795700978",
+  "source_sha": "2de18abfedf5fc7cafadda4ea3e3175e78703fe9",
+  "previous_release": "server-4f9787220105-1795680945",
+  "verified_at": "2026-11-26T13:57:20.909567+00:00",
+  "manifest_sha256": "8a565c2a11e8b69eaa8984e501d6c27a5c3ecc81666c3318d0b5870c86abbffb",
+  "installed_manifest_sha256": "9ea3854fa814c6de7ae2aef913de9665cb482ea88a433ae3531f08978f6a7a78",
+  "migration": "20261126_inspection_workflow",
+  "previous_business_tables": 75,
+  "previous_rows": 12688,
+  "previous_rows_unchanged": true,
+  "previous_schema_ownership_and_grants_unchanged": true,
+  "added_tables": {
+    "inspection_deliveries": 0,
+    "inspection_followups": 0
+  },
+  "snapshot_backup_sha256": "cf1dd01004dc054ae8994f6f03c788174926247b18812f08d70c14b8db130c7b",
+  "deployment_backup_sha256": "d5285a689badc0a3961112fe630f52e9f31d7bbc19a45745b163b2a12d1b32c7",
+  "isolated_restore_and_upgrade": "passed",
+  "active_from": "2026-11-26T13:56:07+00:00",
+  "store_manager_counts": {
+    "hxy-anyang-ziwei-001": 1,
+    "hxy-anyang-huafu-002": 1
+  },
+  "weekly_recipient_verified": true,
+  "first_week_due": "2026-11-30T09:00:00+08:00",
+  "eligible_issues_checked": 0,
+  "real_delivery_count_at_check": 0,
+  "actual_recipient_opens_at_check": 0,
+  "real_receipt_status": "awaiting first production events",
+  "authenticated_recipient_check": "The original signed message link was opened after WeCom OAuth for the same binding and version.",
+  "health": "ok/production",
+  "public_entries_verified": [
+    "/technician/store",
+    "/technician/store/wecom",
+    "/admin/",
+    "/?store=1&view=menu"
+  ],
+  "mobile_store_scenarios": 13,
+  "weekly_mobile_synthetic": true
+}
