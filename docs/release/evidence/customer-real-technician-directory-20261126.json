@@ -1,0 +1,71 @@
+{
+  "release_id": "server-6871862d129b-1795666376",
+  "source_sha": "6871862d129ba35a9dd9881e39e0e5e01c6008f0",
+  "baseline": "3ba3569f153833bdf12ed90b44b1653febc5d7a5",
+  "previous_release": "server-32c2c6c436f6-1795602807",
+  "verified_at": "2026-11-26T04:17:50.706158+00:00",
+  "stores": [
+    {
+      "store": 1,
+      "numbers": [
+        "01",
+        "03",
+        "09",
+        "10"
+      ],
+      "entries": 4,
+      "illustrated_entries_removed": 6
+    },
+    {
+      "store": 2,
+      "numbers": [
+        "03",
+        "08",
+        "09",
+        "18",
+        "19"
+      ],
+      "entries": 5,
+      "illustrated_entries_removed": 2
+    }
+  ],
+  "browser": "Chrome mobile viewport, public origin",
+  "list_detail_and_zoom_verified": 9,
+  "sha256_verified_for_every_portrait": true,
+  "forwarded_business_writes": 0,
+  "original_booking_identities_preserved": true,
+  "real_device_wechat_test": false,
+  "health_status": "ok/production",
+  "actual_backup_verified": true,
+  "isolated_restore_verified_by_release_gate": true,
+  "business_tables": {
+    "table_count": 76,
+    "identical_rows_and_counts": 76,
+    "differences": []
+  },
+  "identical_schema": true,
+  "matching_manifest_entries": 658,
+  "prepared_manifest_sha256": "6047e68d82d5a0427e787143a593d332388ebf382fd2c79eff8f0f43bb9ad53b",
+  "installed_manifest_sha256": "ca5443d29f43b5f9a3bc79cd647a6c8630c953f3c0ef13206310ec060209435c",
+  "loaded_assets": {
+    "/assets/index-lYeph06d.js": "982ad3ecf82979c91874635a4baf79749cbe156eb9e25523b6333b46fbeca5f2",
+    "/assets/App-BhodGfre.js": "75ff96a43a082c9c8cd0db2cb90fedc71e337be42ce2c42be02711940c13dd8e",
+    "/assets/App-OMZ53lpO.css": "78d0dfd678efd6c53d3b716c1c4f2f42e5fd279a8380a34cd493e861ff7f40bf"
+  },
+  "server_tests_passed": 17,
+  "retired_static_images": {
+    "technician-illustration-1-v1.webp": 404,
+    "technician-illustration-2-v1.webp": 404,
+    "technician-illustration-3-v1.webp": 404,
+    "technician-illustration-4-v1.webp": 404,
+    "technician-illustration-5-v1.webp": 404,
+    "technician-illustration-6-v1.webp": 404
+  },
+  "unchanged_project_selection_lists": 28,
+  "illustration_requests": 0,
+  "customer_tests": {
+    "pass": 412,
+    "fail": 0,
+    "skip": 1
+  }
+}
