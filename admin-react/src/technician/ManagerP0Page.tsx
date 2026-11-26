@@ -174,7 +174,9 @@ export default function ManagerP0Page(_props: { learningEntry?: React.ReactNode 
       <div>
         <button type="button" className="manager-p0-back" onClick={() => setSubview(null)}><ArrowLeftOutlined /> 返回</button>
         <h1>{title}</h1>
-        <p>{subview === 'coupon-history' ? '发券、领取与核销记录' : subview === 'ops' ? '今日巡检' : '店长工作台'}</p>
+        {subview === 'ops'
+          ? daily?.business_date && <time className="inspection-business-date" dateTime={daily.business_date}>{daily.business_date.slice(5).replace('-', '月')}日</time>
+          : <p>{subview === 'coupon-history' ? '发券、领取与核销记录' : '店长工作台'}</p>}
       </div>
       {subview !== 'coupon-history' && <Button aria-label="刷新" icon={<ReloadOutlined />} loading={loading} onClick={() => void load(true)} />}
     </header> : null}

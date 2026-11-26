@@ -11,7 +11,8 @@ import TechnicianMobileApp from '../src/technician/TechnicianMobileApp';
 const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') || 'normal';
 const technician = { id: 7, role: 'technician', technician_id: 7, store_id: 1, name: '合成技师', store_name: '合成门店' };
-const manager = { id: 3, role: 'manager', technician_id: null, store_id: 1, name: '合成店长', store_name: '合成门店' };
+const manager = { id: 3, role: 'manager', technician_id: null, store_id: scenario === 'huafu-inspection' ? 2 : 1,
+  name: '合成店长', store_name: scenario === 'huafu-inspection' ? '华富世家店' : '合成门店' };
 const callback = scenario === 'callback' || scenario === 'callback-wait';
 if (params.has('reset') || !sessionStorage.getItem('manager-fixture-ready')) {
   for (const key of ['hxy_admin_token', 'hxy_admin_staff', 'hxy_staff_auth_method', 'hxy_technician_token', 'hxy_technician_staff', 'hxy_technician_auth_method']) localStorage.removeItem(key);
@@ -296,7 +297,7 @@ function Fixture() {
   const [, refresh] = useState(0);
   useEffect(() => { const id = setInterval(() => refresh(v => v + 1), 500); return () => clearInterval(id); }, []);
   return <ConfigProvider theme={{ token: { colorPrimary: '#164f3c', borderRadius: 10 } }}><App>
-    <aside style={{ padding: '8px 12px', background: '#fff4d9', color: '#57451a', fontSize: 11, overflowWrap: 'anywhere' }}>
+    <aside data-fixture-controls style={{ padding: '8px 12px', background: '#fff4d9', color: '#57451a', fontSize: 11, overflowWrap: 'anywhere' }}>
       合成预览 · 不连接生产 · {scenario}<br />
       列表读取 {stats.reads} · 操作 {stats.writes} · 技师接口 {stats.technicianCalls} · 非白名单 {stats.unexpected} · 旧读释放 {String(stats.oldReadReleased)} · 座位读取 {stats.mapReads} · 座位挂起 {String(stats.mapPending)} · 座位释放 {String(stats.mapReleased)}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>

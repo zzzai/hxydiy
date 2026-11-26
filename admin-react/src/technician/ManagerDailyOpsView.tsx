@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Spin, message } from 'antd';
-import { AudioOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
+import { AudioOutlined, RightOutlined } from '@ant-design/icons';
 import { getManagerDaily, submitManagerDaily, type InspectionArea } from '../api';
 import ManagerAreaPhotos from './ManagerAreaPhotos';
 import InspectionHistory from './InspectionHistory';
@@ -34,9 +34,7 @@ export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenR
   const canSubmit = total > 0 && done === total && !uploading && !submitting && daily.completion.has_meeting && daily.status !== 'submitted';
   return <div className="manager-p0-stack inspection-workspace">
     <section className="inspection-summary manager-p0-progress-card">
-      <div className="inspection-section-head"><h2>今日巡检</h2><div className="inspection-day"><time dateTime={daily.business_date}>{daily.business_date.slice(5).replace('-', '月')}日</time>
-        <button type="button" onClick={() => void onRefresh()} aria-label="刷新今日记录"><ReloadOutlined /></button></div></div>
-      <div className="inspection-progress-label"><span>拍摄进度</span><strong>{done}<small> / {total}</small></strong></div>
+      <div className="inspection-progress-label"><h2>拍摄进度</h2><strong>{done}<small> / {total}</small></strong></div>
       <progress className="inspection-progress" value={done} max={total || 1} aria-label="已完成拍摄点" />
       {remaining.length > 0 && remaining.length <= 3 && <p className="inspection-camera-note">
         待拍：{remaining.map(area => area.group === 'spa_rooms' ? 'SPA 房·' + area.label : area.label).join('、')}

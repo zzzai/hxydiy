@@ -21,7 +21,8 @@ async function check(name, fn) {
 }
 async function shot(name) {
   const file = name + '.png';
-  await page.screenshot({ path: path.join(out, file), fullPage: false, animations: 'disabled' });
+  await page.screenshot({ path: path.join(out, file), fullPage: false, animations: 'disabled',
+    style: '[data-fixture-controls], .ant-message { display: none !important; }' });
   report.screenshots.push(file);
 }
 async function start(scenario = 'normal', width = 375, route = '/technician/store') {
@@ -150,6 +151,7 @@ async function main() {
       assert.equal(await camera.count(), 0);
       await area.getByRole('button', { name: '煮药区照片与审核' }).click();
       const album = page.getByRole('region', { name: '煮药区已拍照片' });
+      await album.getByRole('img', { name: '煮药区照片 3' }).waitFor();
       assert.equal(await album.getByRole('img', { name: /煮药区照片/ }).count(), 3);
       page.once('dialog', dialog => dialog.accept());
       await album.getByRole('button', { name: '更换煮药区第 2 张' }).click();
