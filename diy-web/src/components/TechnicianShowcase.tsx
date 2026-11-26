@@ -1,10 +1,10 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Clock3, MapPin } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { getStoreTechnicians, selectableTechnicians, type PublicTechnician, type SelectableTechnician, type StoreSummary } from '../api';
-import { assetPath, displayProjectName, formatMoney, projectImage, type Project } from '../domain';
+import { displayProjectName, formatMoney, projectImage, type Project } from '../domain';
 import { safeStoreContact, STORE_CONTACTS } from '../returnEntry';
 import type { TechnicianView } from '../technicianNavigation';
-import TechnicianPhotoSheet, { illustrationCaption, type CardPhoto } from './TechnicianPhotoSheet';
+import TechnicianPhotoSheet from './TechnicianPhotoSheet';
 import './technician-showcase.css';
 
 type Props = {
@@ -32,7 +32,7 @@ function TechnicianName({ label }: { label: string }) {
   return <><span className="technician-code">{number[1]}</span>{' '}<span className="technician-code-suffix">号技师</span></>;
 }
 
-const illustrationUrls = Array.from({ length: 6 }, (_, i) => assetPath(`technician-illustration-${i + 1}-v1.webp`));
+type CardPhoto = { url: string; kind: 'portrait' | 'work' };
 
 function DirectoryCard({ person, photo, projectName, requestLabel, canRequest, onOpen, onPhotoError }: {
   person: PublicTechnician;
@@ -44,7 +44,7 @@ function DirectoryCard({ person, photo, projectName, requestLabel, canRequest, o
   onPhotoError: (url: string) => void;
 }) {
   const bodyId = useId();
-  const caption = photo?.kind === 'illustration' ? illustrationCaption : photo?.kind === 'work' ? '服务现场' : '';
+  const caption = photo?.kind === 'work' ? '服务现场' : '';
   return <li>
     <button type="button" className="technician-card" data-profile={person.key} aria-haspopup="dialog" onClick={onOpen}
       aria-labelledby={caption ? `${bodyId} ${bodyId}-photo` : bodyId}>
@@ -133,7 +133,9 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
     setStatus('loading');
     setProfiles([]);
     getStoreTechnicians(view.storeId, request.signal).then(items => {
-      if (!request.signal.aborted) { setProfiles(items); setStatus('ready'); }
+      if (request.signal.aborted) return;
+      setProfiles(items.filter(p => p.portrait_url || p.photos.some(photo => photo.url)));
+      setStatus('ready');
     }).catch(() => { if (!request.signal.aborted) setStatus('error'); });
     return () => request.abort();
   }, [view.storeId, attempt]);
@@ -195,24 +197,18 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
   const shownRequestCount = shown.filter(p => inProject ? available(p) : p.requestable_project_ids.length > 0).length;
   const byNumber = (p: PublicTechnician) => p.technician_id === null && /^\d+\s*号技师$/.test(p.label);
   const separateNamedRoster = profiles.some(p => byNumber(p) && p.portrait_url) && profiles.some(p => p.technician_id !== null);
+  const directoryCount = separateNamedRoster ? `共 ${shown.length} 份技师资料` : `共 ${shown.length} 位技师`;
   let directoryGroups = [{ title: '', rows: shown }];
   if (inProject && requestCount > 0 && requestCount < peers.length) {
     directoryGroups = [{ title: '本项目可点名', rows: shown.filter(available) }, { title: '其他技师', rows: shown.filter(p => !available(p)) }];
   } else if (separateNamedRoster) {
     directoryGroups = [{ title: '按工号看照片', rows: shown.filter(byNumber) }, { title: '按姓名找技师', rows: shown.filter(p => !byNumber(p)) }];
   }
-  // Keep named staff illustrations stable when standalone numbered portraits are published.
-  const illustrationOrder = separateNamedRoster ? [...profiles.filter(p => !byNumber(p)), ...profiles.filter(byNumber)] : profiles;
-  const illustrations = new Map(illustrationOrder.map((p, index) => [p.key, illustrationUrls[index % illustrationUrls.length]]));
   const cardPhoto = (p: PublicTechnician): CardPhoto | undefined => {
     if (hasPortrait(p)) return { url: p.portrait_url, kind: 'portrait' };
-    const scene = p.photos.find(item => !failedImages.includes(item.url));
+    const scene = p.photos.find(item => item.url && !failedImages.includes(item.url));
     if (scene) return { url: scene.url, kind: 'work' };
-    const illustration = illustrations.get(p.key);
-    if (illustration && !failedImages.includes(illustration)) return { url: illustration, kind: 'illustration' };
   };
-  const detailPhoto = person && cardPhoto(person);
-  const useCover = status === 'ready' && peers.length > 0 && !peers.some(cardPhoto);
   const renderCard = (p: PublicTechnician) => {
     const canRequest = inProject ? available(p) : p.requestable_project_ids.length > 0;
     const requestLabel = canRequest ? (inProject ? '可点名' : '可按项目点名') : '门店安排';
@@ -237,8 +233,7 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
       event.stopPropagation();
       back();
     }}>
-    <header className={'technician-directory-head' + (useCover ? ' has-cover' : '')}>
-      {useCover && <img className="technician-directory-cover" src={assetPath('technician-team-craft-v1.webp')} alt="" />}
+    <header className="technician-directory-head">
       <button type="button" className="technician-directory-back" onClick={back} aria-label="返回上一页"><ChevronLeft size={23} /></button>
       <p className="technician-venue" title={storeName}><MapPin size={14} aria-hidden="true" />{venue}</p>
       <h1 id="technician-title">本店技师</h1>
@@ -249,7 +244,7 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
         <div ref={listScroll} className="technician-scroll technician-directory">
           {peers.length ? <>
             <div className="technician-directory-context">
-              <p>{project && <strong>{displayProjectName(project)}</strong>}<span>{separateNamedRoster ? <>{shown.filter(p => p.portrait_url).length} 张工作照</> : <>共 {shown.length} 位技师</>}</span></p>
+              <p>{project && <strong>{displayProjectName(project)}</strong>}<span>{directoryCount}</span></p>
               <span>{shownRequestCount === 0 ? '由门店安排' : inProject ? `${shownRequestCount} 位可点名` : '点名由店长确认'}</span>
             </div>
             {tags.length > 0 && <div className="technician-filters" role="group" aria-label="按服务风格筛选">
@@ -274,7 +269,7 @@ export default function TechnicianShowcase({ view, store, projects, canEdit, nav
             </div>}
           </> : <div className="technician-message"><p>本店暂未展示技师资料</p><button type="button" onClick={finish}>返回选项目</button></div>}
         </div>
-        {view.profile && <TechnicianPhotoSheet person={person} venue={venue} lead={detailPhoto} photoIndex={view.photo}
+        {view.profile && <TechnicianPhotoSheet person={person} venue={venue} photoIndex={view.photo}
           failedImages={failedImages} onImageError={markFailed} showPhoto={openPhoto} back={back}
           footer={<footer className="technician-dock">
             <div className="technician-dock-note" role="status">

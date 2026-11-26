@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.service_portions import can_request, public_label
+from app.domain.service_portions import can_request
 from app.models import Project, Staff, Store, Technician
 from app.services.store_lifecycle import OPEN_STORE_STATUSES
 
@@ -66,6 +66,11 @@ def store_directory(db: Session, store_id: int) -> TechnicianDirectory:
     store = db.get(Store, store_id)
     if store is None or store.status not in OPEN_STORE_STATUSES:
         raise HTTPException(404, "门店暂未开放")
+    cards = [card for card in published_cards().get(store.store_code, [])
+             if card.portrait_url or any(photo.url for photo in card.photos)]
+    if not cards:
+        return TechnicianDirectory(items=[])
+
     staff = db.scalars(select(Technician).join(Staff, Staff.technician_id == Technician.id).where(
         Technician.store_id == store.id, Staff.store_id == store.id,
         Staff.role == "technician", Staff.status == "active",
@@ -79,10 +84,6 @@ def store_directory(db: Session, store_id: int) -> TechnicianDirectory:
         Project.store_id == store.id, Project.publication_status == "published",
         Project.independently_visible.is_(True),
     ).order_by(Project.display_order, Project.id)).all()
-    cards = published_cards().get(store.store_code, [])
-    bound = {card.technician_id for card in cards}
-    cards = [*cards, *(ProfileCard(key=f"staff-{person.id}", label=public_label(person),
-                                   technician_id=person.id) for person in roster.values() if person.id not in bound)]
     items = []
     for card in cards:
         person = roster.get(card.technician_id)

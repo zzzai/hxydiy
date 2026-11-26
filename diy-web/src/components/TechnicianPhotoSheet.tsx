@@ -2,13 +2,9 @@ import { ChevronLeft, ChevronRight, Expand, X } from 'lucide-react';
 import { useId, useLayoutEffect, useRef, type MouseEvent, type ReactNode } from 'react';
 import type { PublicTechnician } from '../api';
 
-export type CardPhoto = { url: string; kind: 'portrait' | 'work' | 'illustration' };
-export const illustrationCaption = 'AI 示意 · 非本人';
-
 type Props = {
   person?: PublicTechnician;
   venue: string;
-  lead?: CardPhoto;
   photoIndex?: number;
   failedImages: string[];
   onImageError: (url: string) => void;
@@ -18,7 +14,7 @@ type Props = {
   footer: ReactNode;
 };
 
-export default function TechnicianPhotoSheet({ person, venue, lead, photoIndex, failedImages,
+export default function TechnicianPhotoSheet({ person, venue, photoIndex, failedImages,
   onImageError, showPhoto, back, children, footer }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -31,9 +27,8 @@ export default function TechnicianPhotoSheet({ person, venue, lead, photoIndex, 
   const zoomed = photoIndex !== undefined;
   const photos = person ? [
     ...(person.portrait_url ? [{ url: person.portrait_url, caption: '工作肖像' }] : []),
-    ...person.photos.filter(p => p.url !== person.portrait_url),
+    ...person.photos.filter(p => p.url && p.url !== person.portrait_url),
   ] : [];
-  if (lead?.kind === 'illustration') photos.push({ url: lead.url, caption: illustrationCaption });
   const visible = photos.map((p, index) => ({ ...p, index })).filter(p => !failedImages.includes(p.url));
   const photo = photoIndex === undefined ? undefined : photos[photoIndex];
 

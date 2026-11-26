@@ -53,25 +53,34 @@ def directory_client():
 
 def test_public_roster_visibility_and_request_qualification(directory_client):
     client, _ = directory_client
-    response = client.get("/api/v1/stores/1/technicians")
+    path = "/api/v1/stores/1/technicians"
+    assert client.get(path).json() == {"items": []}
+    profiles = [
+        ProfileCard(key="portrait", label="一号", technician_id=1,
+                    portrait_url="/assets/technicians/showcase-one/one.webp"),
+        ProfileCard(key="work", label="二号", technician_id=2,
+                    photos=[{"url": "/assets/technicians/showcase-one/two.webp", "caption": "服务现场"}]),
+    ]
+    with patch("app.services.public_technicians.published_cards", return_value={"showcase-one": profiles}):
+        response = client.get(path)
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     items = response.json()["items"]
     assert [p["label"] for p in items] == ["一号", "二号"]
     assert [p["project_ids"] for p in items] == [[11], [11]]
     assert [p["requestable_project_ids"] for p in items] == [[11], []]
-    assert all(p["experience"] == p["portrait_url"] == p["introduction"] == "" and not p["tags"] for p in items)
+    assert items[1]["photos"] == [{"url": "/assets/technicians/showcase-one/two.webp", "caption": "服务现场"}]
     assert all(value not in response.text for value in ("internal-only", "private", "commission", "username", "hire_date"))
     assert client.get("/api/v1/stores/3/technicians").status_code == 404
     assert client.get("/api/v1/stores/999/technicians").status_code == 404
 
 
-def test_phone_shaped_names_are_redacted_on_both_public_routes(directory_client):
+def test_unpictured_staff_stays_selectable_without_exposing_phone(directory_client):
     client, engine = directory_client
     with Session(engine) as db:
         db.get(Technician, 1).name = "130-0000-0123"
         db.commit()
-    assert client.get("/api/v1/stores/1/technicians").json()["items"][0]["label"] == "技师 1"
+    assert client.get("/api/v1/stores/1/technicians").json() == {"items": []}
     eligible = client.get("/api/v1/stores/1/projects/11/selectable-technicians").json()["items"]
     assert eligible[0]["label"] == "技师 1"
 
@@ -84,7 +93,7 @@ def test_display_only_numbers_are_not_accounts(directory_client):
         response = client.get("/api/v1/stores/2/technicians")
         cards = response.json()["items"]
         assert [(p["label"], p["experience"]) for p in cards] == [
-            ("1 号技师", "2 年"), ("6 号技师", "10 年"), ("03 号技师", ""), ("08 号技师", "新入行"),
+            ("03 号技师", ""), ("08 号技师", "新入行"),
             ("09 号技师", "10 年以上"), ("18 号技师", "10 年"), ("19 号技师", "10 年")]
         assert all(p["technician_id"] is None and p["project_ids"] == p["requestable_project_ids"] == [] for p in cards)
         assert not any(p["photos"] or p["tags"] or p["introduction"] for p in cards)
@@ -100,22 +109,21 @@ def test_display_only_numbers_are_not_accounts(directory_client):
 
 def test_ziwei_portrait_numbers_do_not_become_account_ids(directory_client):
     client, engine = directory_client
+    selection_url = "/api/v1/stores/1/projects/11/selectable-technicians"
+    before = client.get(selection_url).json()
+    assert any(p["id"] == 1 and p["label"] == "一号" for p in before["items"])
     with Session(engine) as db:
         db.get(Store, 1).store_code = "hxy-anyang-ziwei-001"
         db.commit()
 
     items = client.get("/api/v1/stores/1/technicians").json()["items"]
-    assert len(items) == 6
-    for card, number in zip(items[:4], ("01", "03", "09", "10"), strict=True):
+    for card, number in zip(items, ("01", "03", "09", "10"), strict=True):
         assert (card["key"], card["label"]) == (f"number-{number}", f"{number} 号技师")
         assert re.fullmatch(rf"/assets/technicians/hxy-anyang-ziwei-001/portrait-{number}-[a-f0-9]{{12}}\.webp", card["portrait_url"])
         assert card["technician_id"] is None
         assert card["project_ids"] == card["requestable_project_ids"] == []
-    named = items[4:]
-    assert [(p["key"], p["label"], p["portrait_url"]) for p in named] == [
-        ("staff-1", "一号", ""), ("staff-2", "二号", ""),
-    ]
-    assert [p["requestable_project_ids"] for p in named] == [[11], []]
+    assert client.get(selection_url).json() == before
+
 
 
 def test_editorial_binding_is_store_scoped_and_does_not_duplicate_people(directory_client):
@@ -123,11 +131,12 @@ def test_editorial_binding_is_store_scoped_and_does_not_duplicate_people(directo
     profile = ProfileCard(key="number-42", technician_id=1, label="42 号技师", experience="3 年",
                           introduction="按您的习惯交流", tags=["安静型"], portrait_url="/assets/technicians/showcase-one/portrait.webp",
                           photos=[{"url": "/assets/technicians/showcase-one/work.webp", "caption": "服务现场"}])
-    hidden = ProfileCard(key="retired", technician_id=6, label="离职")
+    hidden = ProfileCard(key="retired", technician_id=6, label="离职", portrait_url=profile.portrait_url)
+    text_only = ProfileCard(key="text-only", label="01 号技师", experience="2 年")
     with patch("app.services.public_technicians.published_cards", return_value={
-        "showcase-one": [profile, hidden], "hxy-anyang-huafu-002": [profile]}):
+        "showcase-one": [profile, hidden, text_only], "hxy-anyang-huafu-002": [profile]}):
         cards = client.get("/api/v1/stores/1/technicians").json()["items"]
-        assert [p["key"] for p in cards] == ["number-42", "staff-2"]
+        assert [p["key"] for p in cards] == ["number-42"]
         assert cards[0]["tags"] == ["安静型"] and len(cards[0]["photos"]) == 1
         assert cards[0]["requestable_project_ids"] == [11]
         assert client.get("/api/v1/stores/2/technicians").json()["items"] == []
