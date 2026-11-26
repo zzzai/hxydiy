@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, Spin, Tag, message } from 'antd';
 import { AudioOutlined, ReloadOutlined } from '@ant-design/icons';
-import { getManagerDaily, submitManagerDaily } from '../api';
+import { getManagerDaily, submitManagerDaily, type InspectionArea } from '../api';
 import ManagerAreaPhotos from './ManagerAreaPhotos';
 import InspectionHistory from './InspectionHistory';
 
@@ -30,11 +30,15 @@ export default function ManagerDailyOpsView({ daily, loading, onRefresh, onOpenR
 
   const done = daily.completion.areas_done;
   const total = daily.completion.areas_total;
+  const remaining = (daily.areas as InspectionArea[]).filter(area => !area.done);
   const canSubmit = total > 0 && done === total && !uploading && !submitting && daily.completion.has_meeting && daily.status !== 'submitted';
   return <div className="manager-p0-stack">
     <section className="manager-p0-card manager-p0-progress-card">
-      <div className="manager-p0-card-head"><div><small>今日经营</small><h2>{done}/{total} 区域</h2></div><Tag color={daily.status === 'submitted' ? 'green' : 'gold'}>{daily.status === 'submitted' ? '已提交' : '进行中'}</Tag></div>
+      <div className="manager-p0-card-head"><div><small>今日经营</small><h2>{done}/{total} 个拍摄点</h2></div><Tag color={daily.status === 'submitted' ? 'green' : 'gold'}>{daily.status === 'submitted' ? '已提交' : '进行中'}</Tag></div>
       <div className="manager-p0-progress"><i style={{ width: `${total ? done / total * 100 : 0}%` }} /></div>
+      {remaining.length > 0 && remaining.length <= 3 && <p className="inspection-camera-note">
+        待拍：{remaining.map(area => area.group === 'spa_rooms' ? 'SPA 房·' + area.label : area.label).join('、')}
+      </p>}
       <div className="manager-p0-actions-inline"><span>{daily.completion.has_meeting ? '晨会已录音' : '晨会待录音'}</span><Button size="small" icon={<AudioOutlined />} onClick={onOpenRecordings}>{daily.completion.has_meeting ? '查看录音' : '去录音'}</Button></div>
     </section>
 

@@ -139,27 +139,38 @@ export default function ManagerAreaPhotos({ areas, reviewEnabled, limit, busines
     }
   };
 
+  const spaRooms = areas.filter(area => area.group === 'spa_rooms');
+  const renderArea = (area: InspectionArea) => {
+    const photos = area.photos ?? (area.photo ? [area.photo] : []);
+    const locked = disabled || !!busyArea || (!writable && !historical);
+    return <div key={area.key} className="manager-p0-area" aria-label={area.label}>
+      <div className="inspection-area-header"><strong>{area.label}</strong><small aria-live="polite">
+        {busyArea === area.key ? '保存中…' : photos.length + ' 张'}
+      </small></div>
+      {!historical && area.key === 'shower_room' && <p className="inspection-camera-note">确认无人使用后再拍摄。</p>}
+      {!!photos.length && <div className="inspection-photos">{photos.map((p, i) => <div className="inspection-photo-row" key={p.id}>
+        <div className="inspection-thumb"><PhotoPreview key={p.media_id} photo={p} label={area.label + '照片 ' + (p.slot || i + 1)} />
+        {writable && <button type="button" disabled={locked} aria-label={'更换' + area.label + '第 ' + p.slot + ' 张'} onClick={() => pick(area, p)}>更换</button>}</div>
+        <InspectionPhotoReview key={p.media_id} photo={p} enabled={reviewEnabled} disabled={locked} onRefresh={onRefresh} />
+      </div>)}</div>}
+      {writable && photos.length < limit && <div className="inspection-actions">
+        <button type="button" disabled={locked} onClick={() => pick(area)}><CameraOutlined /> 现场拍照</button>
+      </div>}
+    </div>;
+  };
+
   return <section className="manager-p0-card">
     <div className="manager-p0-card-head"><h3>{historical ? businessDate + ' 巡检照片' : '区域照片'}</h3>{!historical && <small>{writable ? '每区 1～3 张' : '请刷新后上传'}</small>}</div>
     {reviewEnabled && !historical && <p className="inspection-camera-note">照片会自动审核。拍摄时请避开人脸、付款码和单据。</p>}
-    {target && writable && <InspectionCamera key={target.area.key + businessDate} label={target.area.label}
+    {target && writable && <InspectionCamera key={target.area.key + businessDate} label={(target.area.group === 'spa_rooms' ? 'SPA 房·' : '') + target.area.label}
       onSave={save} onClose={() => { if (!saving.current) setTarget(undefined); }} />}
-    <div className="manager-p0-area-grid">{areas.map((area) => {
-      const photos = area.photos ?? (area.photo ? [area.photo] : []);
-      const locked = disabled || !!busyArea || (!writable && !historical);
-      return <div key={area.key} className="manager-p0-area" aria-label={area.label}>
-        <div className="inspection-area-header"><strong>{area.label}</strong><small aria-live="polite">
-          {busyArea === area.key ? '保存中…' : photos.length + ' 张'}
-        </small></div>
-        {!!photos.length && <div className="inspection-photos">{photos.map((p, i) => <div className="inspection-photo-row" key={p.id}>
-          <div className="inspection-thumb"><PhotoPreview key={p.media_id} photo={p} label={area.label + '照片 ' + (p.slot || i + 1)} />
-          {writable && <button type="button" disabled={locked} aria-label={'更换' + area.label + '第 ' + p.slot + ' 张'} onClick={() => pick(area, p)}>更换</button>}</div>
-          <InspectionPhotoReview key={p.media_id} photo={p} enabled={reviewEnabled} disabled={locked} onRefresh={onRefresh} />
-        </div>)}</div>}
-        {writable && photos.length < limit && <div className="inspection-actions">
-          <button type="button" disabled={locked} onClick={() => pick(area)}><CameraOutlined /> 现场拍照</button>
-        </div>}
-      </div>;
-    })}</div>
+    <div className="manager-p0-area-grid">{areas.filter(area => area.group !== 'spa_rooms').map(renderArea)}</div>
+    {spaRooms.length > 0 && <section className="inspection-spa-rooms" aria-label="SPA 房">
+      <div className="inspection-area-header"><h4>SPA 房</h4>
+        {!historical && <small aria-live="polite">已拍 {spaRooms.filter(area => area.done).length}/{spaRooms.length} 间</small>}
+      </div>
+      {!historical && <p className="inspection-camera-note">每间 1～3 张，请在空房时拍摄。</p>}
+      <div className="manager-p0-area-grid">{spaRooms.map(renderArea)}</div>
+    </section>}
   </section>;
 }

@@ -320,3 +320,76 @@ def test_team_and_hq_spot_check(daily):
                           headers=headers["admin"], json={"hq_status": "passed", "note": "总部抽检通过"})
     assert checked.status_code == 200, checked.text
     assert checked.json()["hq_status"] == "passed"
+
+
+def test_huafu_named_rooms_are_separate_required_camera_points(daily, monkeypatch):
+    from io import BytesIO
+    from PIL import Image
+    from app.core.config import settings
+    from app.models import DailyAreaPhotoReview
+
+    client, factory, ids, headers = daily
+    auth = headers["manager"]
+    monkeypatch.setattr(settings, "inspection_ai_enabled", True)
+    monkeypatch.setattr(settings, "inspection_ai_api_key", "synthetic")
+    with factory() as db:
+        db.get(Store, ids["store"]).store_code = "hxy-anyang-huafu-002"
+        audio = _media(db, ids["store"], ids["manager"], "audio")
+        db.commit()
+    buf = BytesIO()
+    Image.new("RGB", (30, 20), "green").save(buf, format="JPEG")
+    files = {"file": ("frame.jpg", buf.getvalue(), "image/jpeg")}
+    def capture(area):
+        response = client.post(BASE + "/camera-captures", headers=auth, files=files,
+                               data={"area": area, "business_date": _today().isoformat()})
+        assert response.status_code == 201, response.text
+        return response.json()
+    def append(area, receipt):
+        return client.post(BASE + "/photos", headers=auth, json={"area": area, "mode": "append", **receipt})
+    first = capture("spa_banxia")
+    assert append("spa_duruo", first).status_code == 409
+    assert append("spa_banxia", first).status_code == 200
+    assert append("spa_banxia", first).status_code == 200
+    view = client.get(BASE, headers=auth).json()
+    assert view["completion"]["areas_total"] == 12
+    rooms = {a["key"]: a["label"] for a in view["areas"] if a.get("group") == "spa_rooms"}
+    assert rooms == {"spa_banxia": "半夏", "spa_rendong": "忍冬", "spa_duruo": "杜若", "spa_qingdai": "青黛"}
+    for _ in range(2):
+        assert append("spa_banxia", capture("spa_banxia")).status_code == 200
+    assert append("spa_banxia", capture("spa_banxia")).status_code == 409
+    for point in view["areas"]:
+        if point["key"] not in {"spa_banxia", "spa_qingdai"}:
+            assert append(point["key"], capture(point["key"])).status_code == 200
+    assert client.post(BASE + "/meeting", headers=auth, json={"media_id": audio, "duration_seconds": 60}).is_success
+    missing = client.post(BASE + "/submit", headers=auth)
+    assert missing.status_code == 409
+    assert missing.json()["detail"]["message"] == "请补齐SPA 房·青黛"
+    assert missing.json()["detail"]["areas_done"] == 11
+    assert append("spa_qingdai", capture("spa_qingdai")).is_success
+    submitted = client.post(BASE + "/submit", headers=auth).json()
+    assert submitted["status"] == "submitted" and submitted["completion"]["areas_done"] == 12
+    assert client.post(BASE + "/submit", headers=auth).json()["submitted_at"] == submitted["submitted_at"]
+    with factory() as db:
+        assert db.query(DailyStoreCheckin).one().checklist_version == 3
+        assert db.query(DailyAreaPhoto).count() == db.query(DailyAreaPhotoReview).count() == 14
+
+
+def test_huafu_checklist_is_store_scoped_and_frozen_per_day(daily):
+    client, factory, ids, headers = daily
+    auth = headers["manager"]
+    today = _today()
+    yesterday = today - timedelta(days=1)
+    with factory() as db:
+        db.get(Store, ids["store"]).store_code = "hxy-anyang-ziwei-001"
+        db.commit()
+    assert len(client.get(BASE, headers=auth).json()["areas"]) == 6
+    assert client.post(BASE + "/photos", headers=auth, json={"area": "warehouse", "media_id": 99}).status_code == 422
+    with factory() as db:
+        db.get(Store, ids["store"]).store_code = "hxy-anyang-huafu-002"
+        db.add(DailyStoreCheckin(store_id=ids["store"], manager_staff_id=ids["manager"],
+                                 business_date=yesterday, checklist_version=2, status="submitted"))
+        db.commit()
+    assert len(client.get(BASE, headers=auth).json()["areas"]) == 6
+    past = client.get(BASE, headers=auth, params={"date": yesterday.isoformat()}).json()
+    assert past["status"] == "submitted" and len(past["areas"]) == 6
+    assert all("group" not in area for area in past["areas"])

@@ -22,7 +22,7 @@ export default function ManagerTodayView({ daily, team, workbench, onOpenFloor, 
     <section className="manager-p0-hero">
       <div className="manager-p0-hero-top"><div><small>今日经营</small><h1>早上好，店长</h1></div><Tag color={daily?.status === 'submitted' ? 'green' : 'gold'}>{daily?.status === 'submitted' ? '今日已提交' : '进行中'}</Tag></div>
       <div className="manager-p0-ring-row">
-        <div className="manager-p0-ring" style={{ background: `conic-gradient(#145545 ${completion}%, #e7f0eb ${completion}% 100%)` }}><div><strong>{done}<small>/{total || "—"}</small></strong><span>区域</span></div></div>
+        <div className="manager-p0-ring" style={{ background: `conic-gradient(#145545 ${completion}%, #e7f0eb ${completion}% 100%)` }}><div><strong>{done}<small>/{total || "—"}</small></strong><span>拍摄点</span></div></div>
         <div className="manager-p0-hero-copy"><strong>{hasMeeting ? '晨会已录音' : '晨会待录音'}</strong><p>{daily?.status === 'submitted' ? '今天的经营动作已经留痕。' : '照片、晨会、评价，一件件完成。'}</p><Button size="small" onClick={onOpenOps}>继续完成</Button></div>
       </div>
     </section>
@@ -35,7 +35,7 @@ export default function ManagerTodayView({ daily, team, workbench, onOpenFloor, 
     </div>
 
     <div className="manager-p0-quick-grid">
-      <button type="button" onClick={onOpenOps}><CameraOutlined /><strong>拍照巡检</strong><small>{total ? total + " 个区域" : "区域照片"}</small></button>
+      <button type="button" onClick={onOpenOps}><CameraOutlined /><strong>拍照巡检</strong><small>{total ? total + " 个拍摄点" : "区域照片"}</small></button>
       <button type="button" onClick={onOpenOps}><AudioOutlined /><strong>开会录音</strong><small>晨会 / 交接</small></button>
       <button type="button" onClick={onOpenCoupons}><GiftOutlined /><strong>发券</strong><small>100 张上限</small></button>
       <button type="button" onClick={onOpenReviews}><StarOutlined /><strong>看评价</strong><small>本店评价</small></button>

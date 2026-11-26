@@ -66,6 +66,8 @@
 .manager-p0-area:last-child { border: 0; padding-bottom: 0; }
 .inspection-area-header, .inspection-actions, .inspection-photos { display: flex; align-items: center; gap: 10px; }
 .inspection-area-header { justify-content: space-between; }
+.inspection-spa-rooms { border-top: 1px solid #e3ebe6; margin-top: 14px; padding-top: 14px; }
+.inspection-spa-rooms h4 { margin: 0; font-size: 16px; color: #173a2f; }
 .inspection-area-header strong { font-size: 14px; }
 .inspection-area-header small { color: #607369; font-variant-numeric: tabular-nums; }
 .inspection-actions, .inspection-photos { flex-wrap: wrap; margin-top: 8px; }

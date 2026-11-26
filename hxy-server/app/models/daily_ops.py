@@ -47,7 +47,8 @@ class DailyAreaPhoto(Base):
         UniqueConstraint("checkin_id", "area", "slot", name="uq_daily_area_photo_slot"),
         CheckConstraint("slot BETWEEN 1 AND 3", name="ck_daily_area_photo_slot"),
         CheckConstraint(
-            "area IN ('restroom', 'water_room', 'cashier', 'rest_area', 'foot_area', 'herbal_prep')",
+            "area IN ('restroom', 'water_room', 'cashier', 'rest_area', 'foot_area', 'herbal_prep', "
+            "'warehouse', 'shower_room', 'spa_banxia', 'spa_rendong', 'spa_duruo', 'spa_qingdai')",
             name="ck_daily_area_photo_area",
         ),
     )

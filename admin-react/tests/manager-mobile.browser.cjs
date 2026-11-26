@@ -158,6 +158,27 @@ async function main() {
       await noOverflow();
     });
 
+    await check('huafu-four-independent-spa-rooms', async () => {
+      await start('huafu-inspection'); await loaded();
+      await page.getByRole('button', { name: /巡检照片/ }).click();
+      const rooms = page.getByRole('region', { name: 'SPA 房', exact: true });
+      await rooms.waitFor();
+      assert.equal(await page.locator('.manager-p0-area').count(), 12);
+      assert.deepEqual(await rooms.locator('.inspection-area-header strong').allTextContents(), ['半夏', '忍冬', '杜若', '青黛']);
+      await context.grantPermissions(['camera'], { origin });
+      await rooms.locator('[aria-label="杜若"]').getByRole('button', { name: '现场拍照' }).click();
+      await page.getByRole('dialog', { name: 'SPA 房·杜若 · 现场拍照' }).getByRole('button', { name: '拍摄并保存' }).click();
+      await rooms.getByText('已拍 1/4 间').waitFor();
+      await rooms.locator('[aria-label="青黛"]').getByText('0 张', { exact: true }).waitFor();
+      await rooms.locator('[aria-label="杜若"]').getByText('1 张', { exact: true }).waitFor();
+      await noOverflow(); await shot('huafu-spa-rooms');
+      await start('normal'); await loaded();
+      await page.getByRole('button', { name: /巡检照片/ }).click();
+      await page.locator('.manager-p0-area').first().waitFor();
+      assert.equal(await rooms.count(), 0);
+      assert.equal(await page.locator('.manager-p0-area').count(), 6);
+    });
+
     await check('inspection-ai-automatic-current-and-past-photos', async () => {
       await start('inspection-ai'); await loaded();
       await page.getByRole('button', { name: /巡检照片/ }).click();

@@ -14,6 +14,7 @@ from app.api.admin import _current_staff
 from app.api.media import upload_media
 from app.api.admin_v2 import _audit, _require_admin, _require_headquarters_admin, _resolve_target_store_id
 from app.core.config import settings
+from app.domain.inspection_checklist import CHECKLISTS, HUAFU_SPA_ROOMS, new_checklist_version
 from app.domain.learning_daily import SHANGHAI, daily_projection
 from app.db.session import SessionLocal, get_db
 from app.models import (
@@ -37,13 +38,6 @@ from app.services.media_storage import MediaStorageError, get_media_storage
 router = APIRouter(prefix="/admin/v2/manager/daily", tags=["manager-daily"])
 hq_router = APIRouter(prefix="/admin/v2/headquarters/assessments", tags=["headquarters-assessments"])
 
-AREA_LABELS = {
-    "restroom": "卫生间",
-    "water_room": "打水房",
-    "cashier": "收银台",
-    "rest_area": "休息区",
-    "foot_area": "足疗区",
-}
 PHOTO_LIMIT = 3
 RETENTION_DAYS = 90
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -128,11 +122,12 @@ def _checkin(db: Session, store_id: int, manager_id: int, business_date: date, *
     if item is None and create:
         # FOR NO KEY UPDATE serializes first creators without blocking the
         # store foreign-key checks made by audit inserts on an existing check-in.
-        db.execute(select(Store.id).where(Store.id == store_id).with_for_update(key_share=True))
+        store_code = db.execute(select(Store.store_code).where(Store.id == store_id)
+                                .with_for_update(key_share=True)).scalar_one()
         item = db.scalar(query.with_for_update())
         if item is None:
             item = DailyStoreCheckin(store_id=store_id, business_date=business_date,
-                                     manager_staff_id=manager_id, checklist_version=2)
+                                     manager_staff_id=manager_id, checklist_version=new_checklist_version(store_code))
             db.add(item)
             db.flush()
     return item
@@ -144,10 +139,6 @@ def _checklist_version(checkin: DailyStoreCheckin | None, business_date: date) -
     if business_date != _today() or (checkin is not None and checkin.status == "submitted"):
         return 1
     return 2
-
-
-def _area_labels(version: int) -> dict[str, str]:
-    return {**AREA_LABELS, "herbal_prep": "煮药区"} if version == 2 else AREA_LABELS
 
 
 def _media_url(media: MediaAsset) -> str:
@@ -188,7 +179,7 @@ def _meeting_view(db: Session, item: DailyMeetingRecording) -> dict:
 
 
 def _daily_view(db: Session, checkin: DailyStoreCheckin | None, business_date: date) -> dict:
-    labels = _area_labels(_checklist_version(checkin, business_date))
+    labels = CHECKLISTS[_checklist_version(checkin, business_date)]
     by_area = {key: [] for key in labels}
     meetings = []
     if checkin is not None:
@@ -216,6 +207,7 @@ def _daily_view(db: Session, checkin: DailyStoreCheckin | None, business_date: d
     areas = [{
         "key": key, "label": label, "done": any(p["media"] for p in by_area[key]),
         "photos": by_area[key], "photo": next(iter(by_area[key]), None),
+        **({"group": "spa_rooms"} if key in HUAFU_SPA_ROOMS else {}),
     } for key, label in labels.items()]
     return {
         "business_date": business_date.isoformat(), "checkin_id": checkin.id if checkin else None,
@@ -337,7 +329,12 @@ async def upload_camera_frame(
     if business_date != day:
         raise HTTPException(409, detail={"code": "DAILY_DATE_CHANGED", "message": "营业日期已变，请刷新巡检"})
     checkin = _checkin(db, store_id, staff.id, day, create=False)
-    if area not in _area_labels(_checklist_version(checkin, day)):
+    if checkin is None:
+        store_code = db.execute(select(Store.store_code).where(Store.id == store_id)).scalar_one()
+        version = new_checklist_version(store_code)
+    else:
+        version = _checklist_version(checkin, day)
+    if area not in CHECKLISTS[version]:
         raise HTTPException(422, detail={"code": "AREA_INVALID", "message": "该次巡检没有这个区域"})
     if file.content_type != "image/jpeg":
         raise HTTPException(415, detail="请使用现场相机拍摄")
@@ -360,7 +357,7 @@ def save_area_photo(
     checkin = _checkin(db, store_id, staff.id, today, create=True)
     assert checkin is not None
     version = _checklist_version(checkin, today)
-    if body.area not in _area_labels(version):
+    if body.area not in CHECKLISTS[version]:
         raise HTTPException(422, detail={"code": "AREA_INVALID", "message": "该次巡检没有这个区域"})
     media = db.get(MediaAsset, body.media_id)
     if not media or media.deleted_at or media.store_id != store_id or media.media_type != "image" or (
@@ -555,11 +552,12 @@ def submit_daily(db: Session = Depends(get_db), authorization: str | None = Head
     if checkin.status == "submitted":
         return _daily_view(db, checkin, checkin.business_date)
     version = _checklist_version(checkin, checkin.business_date)
-    labels = _area_labels(version)
+    labels = CHECKLISTS[version]
     photographed = set(db.scalars(select(DailyAreaPhoto.area).join(MediaAsset, MediaAsset.id == DailyAreaPhoto.media_id)
         .where(DailyAreaPhoto.checkin_id == checkin.id, MediaAsset.store_id == store_id,
                MediaAsset.deleted_at.is_(None), MediaAsset.media_type == "image").distinct()))
-    missing = [label for key, label in labels.items() if key not in photographed]
+    missing = [f"SPA 房·{label}" if key in HUAFU_SPA_ROOMS else label
+               for key, label in labels.items() if key not in photographed]
     meeting = db.scalar(select(DailyMeetingRecording.id).where(DailyMeetingRecording.checkin_id == checkin.id).limit(1))
     if missing or meeting is None:
         raise HTTPException(409, detail={

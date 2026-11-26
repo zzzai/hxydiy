@@ -510,7 +510,7 @@ export type InspectionPhoto = {
 export const confirmInspectionReview = (photo: InspectionPhoto, verdict: InspectionVerdict) => client.post(
   '/admin/v2/manager/daily/photos/' + photo.id + '/manual-review', { media_id: photo.media_id, verdict },
 );
-export type InspectionArea = { key: string; label: string; done: boolean; photos?: InspectionPhoto[]; photo?: InspectionPhoto | null };
+export type InspectionArea = { key: string; label: string; group?: 'spa_rooms'; done: boolean; photos?: InspectionPhoto[]; photo?: InspectionPhoto | null };
 export const uploadInspectionCapture = (frame: Blob, area: string, businessDate: string) => {
   const form = new FormData();
   form.append('file', frame, 'inspection.jpg');

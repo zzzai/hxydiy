@@ -9,6 +9,8 @@ import httpx
 from PIL import Image, ImageOps
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.domain.inspection_checklist import HUAFU_SPA_ROOMS
+
 MODEL = "deepseek-flash"
 RUBRIC_VERSION = "store-visual-v1"
 ENDPOINT = "https://api.deepseek.com/chat/completions"
@@ -19,6 +21,10 @@ AREA_RUBRICS = {
     "rest_area": "休息区：座椅与茶几是否整齐，座面、地面有无垃圾和遗留物。",
     "foot_area": "足疗区：足桶、毛巾和工具是否归位，床椅与地面有无可见污物。",
     "herbal_prep": "煮药区：锅台、锅沿、料架及用具有无外溢药渣、明显积水，器具是否归位。",
+    "warehouse": "仓库：检查可见的货架、纸箱和通道，留意散落杂物、倾倒堆放和堵住通道的物品。",
+    "shower_room": "淋浴间：空场拍摄。查看可见地面、排水口和置物台有无垃圾、明显积水或散落用品。反光不作为积水依据。",
+    **{key: f"SPA 房·{room}：空场拍摄。查看可见的床面、布草、推车与通道，有无明显污渍、散落用品或阻碍通行的杂物。"
+       for key, room in HUAFU_SPA_ROOMS.items()},
 }
 Verdict = Literal["pass", "fix", "retake"]
 SYSTEM_PROMPT = (

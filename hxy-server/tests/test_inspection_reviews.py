@@ -285,3 +285,19 @@ def test_unsuccessful_provider_has_no_verdict(status, body, code):
     provider = httpx.MockTransport(lambda request: httpx.Response(status, json=body))
     with pytest.raises(VisionError, match=code):
         inspect_photo("restroom", b"synthetic", "synthetic", transport=provider)
+
+
+@pytest.mark.parametrize(("area", "location"), [
+    ("warehouse", "仓库"), ("shower_room", "淋浴间"), ("spa_banxia", "半夏"),
+    ("spa_rendong", "忍冬"), ("spa_duruo", "杜若"), ("spa_qingdai", "青黛"),
+])
+def test_huafu_camera_uses_point_specific_visible_checks(area, location):
+    result = {"verdict": "pass", "location": "可见区域", "evidence": "物品摆放整齐", "action": ""}
+
+    def provider(request):
+        assert str(request.url) == ENDPOINT
+        content = json.loads(request.content)["messages"][1]["content"]
+        assert location in next(part["text"] for part in content if part["type"] == "text")
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(result)}}]})
+
+    assert inspect_photo(area, inspection_jpeg(png(), 2048), "synthetic", transport=httpx.MockTransport(provider)) == result

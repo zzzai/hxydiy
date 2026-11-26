@@ -27,11 +27,18 @@ const stats = { reads: 0, writes: 0, technicianCalls: 0, unexpected: 0, oldReadR
 const imageUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jgggAAAAASUVORK5CYII=';
 let uploadId = 20;
 const inspectionAI = scenario === 'inspection-ai';
-const inspectionAreas: { key: string; label: string; photos: InspectionPhoto[] }[] = [
+const inspectionAreas: { key: string; label: string; group?: 'spa_rooms'; photos: InspectionPhoto[] }[] = [
   ['restroom', '卫生间'], ['water_room', '打水房'], ['cashier', '收银台'],
   ['rest_area', '休息区'], ['foot_area', '足疗区'], ['herbal_prep', '煮药区'],
 ].map(([key, label], i) => ({ key, label, photos: i < 3
   ? [{ id: i + 1, slot: 1, media_id: i + 1, reviewable: inspectionAI, media: { url: imageUrl } }] : [] }));
+
+if (scenario === 'huafu-inspection') {
+  inspectionAreas.push({ key: 'warehouse', label: '仓库', photos: [] }, { key: 'shower_room', label: '淋浴间', photos: [] });
+  for (const [key, label] of [['spa_banxia', '半夏'], ['spa_rendong', '忍冬'], ['spa_duruo', '杜若'], ['spa_qingdai', '青黛']]) {
+    inspectionAreas.push({ key, label, group: 'spa_rooms', photos: [] });
+  }
+}
 
 const pastArea = { key: 'water_room', label: '打水房', photos: [
   { id: 81, media_id: 81, slot: 1, reviewable: true, media: { url: imageUrl } } as InspectionPhoto,
