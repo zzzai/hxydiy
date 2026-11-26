@@ -27,7 +27,10 @@ async function shot(name) {
 }
 async function start(scenario = 'normal', width = 375, route = '/technician/store') {
   await page.setViewportSize({ width, height: 812 });
-  await page.goto(origin + route + '?scenario=' + scenario + '&reset=1', { waitUntil: 'domcontentloaded' });
+  const entry = new URL(route, origin);
+  entry.searchParams.set('scenario', scenario);
+  entry.searchParams.set('reset', '1');
+  await page.goto(entry.href, { waitUntil: 'domcontentloaded' });
   await page.locator('aside').waitFor();
 }
 async function loaded() { await page.locator('.manager-p0-page').waitFor(); }
@@ -203,8 +206,8 @@ async function main() {
     });
 
     await check('inspection-ai-automatic-current-and-past-photos', async () => {
-      await start('inspection-ai'); await loaded();
-      await page.getByRole('button', { name: /巡检照片/ }).click();
+      await start('inspection-ai', 375, '/technician/store?inspection=101'); await loaded();
+      await page.getByRole('heading', { name: '拍摄进度' }).waitFor();
       await page.getByRole('button', { name: '卫生间照片与审核' }).click();
       const area = page.getByRole('region', { name: '卫生间已拍照片' });
       await area.getByText('等待自动审核').waitFor();

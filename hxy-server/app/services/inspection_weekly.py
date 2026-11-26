@@ -34,7 +34,7 @@ def summarize_week(db, start: date, *, as_of: datetime):
     for store in db.scalars(select(Store).where(Store.store_code.in_(STORE_CODES)).order_by(Store.id)):
         data = dict(store=store.name, submitted=0, draft=0, points=0, expected=0, photos=0,
                     passed=0, fix=0, retake=0, unreviewed=0, failed=0, legacy_manual=0,
-                    closed=0, outstanding=0, repeated=[], draft_points=0, draft_expected=0, no_record=0)
+                    closed=0, outstanding=0, followup_failed=0, repeated=[], draft_points=0, draft_expected=0, no_record=0)
         days = db.scalars(select(DailyStoreCheckin).where(
             DailyStoreCheckin.store_id == store.id, DailyStoreCheckin.business_date >= start,
             DailyStoreCheckin.business_date < stop, DailyStoreCheckin.created_at < cutoff)).all()
@@ -89,6 +89,9 @@ def summarize_week(db, start: date, *, as_of: datetime):
                               if verdict(review) == "pass" and review.finished_at and utc(review.finished_at) < cutoff), None)
             if completed is None:
                 data["outstanding"] += 1
+                visible = [review for link, review, _ in chain[root.id] if utc(link.created_at) < cutoff]
+                if visible and visible[-1].state == "failed" and visible[-1].finished_at and utc(visible[-1].finished_at) < cutoff:
+                    data["followup_failed"] += 1
             elif utc(completed.finished_at) >= beginning:
                 data["closed"] += 1
         result[store.store_code] = data
@@ -110,6 +113,8 @@ def weekly_text(db, start, *, as_of):
         if row["draft"]:
             lines.append(f"草稿已拍 {row['draft_points']}/{row['draft_expected']} 个点位。")
         lines.append(f"系统复查完成 {row['closed']} 项，期末仍待处理 {row['outstanding']} 项。")
+        if row["followup_failed"]:
+            lines.append(f"待处理问题中有 {row['followup_failed']} 项复查失败，需检查审核服务。")
         if row["legacy_manual"]:
             lines.append(f"旧版人工更正 {row['legacy_manual']} 张，单独列示。")
         if row["repeated"]:
@@ -122,4 +127,6 @@ def weekly_text(db, start, *, as_of):
         old_judged = old.get("passed", 0) + old.get("fix", 0)
         if judged and old_judged:
             lines.append(f"能判断现场的照片中，需整改 {row['fix']}/{judged} 张，上周 {old['fix']}/{old_judged} 张。")
+        elif judged:
+            lines.append("上周缺少可比较的初审照片。")
     return "\n".join(lines)

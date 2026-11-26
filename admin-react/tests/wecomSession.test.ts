@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { beginWecomEntry, clearStaffSession, commitStaffSession, completeWecomEntry, getSessionEpoch, parseManagerReview, hasManagerPendingDeepLink, isWecomEntryPending, isWecomSession, subscribeSessionEpoch, takeManagerPendingOrder, takeManagerPendingReview } from '../src/wecomSession.ts';
+import { beginWecomEntry, clearStaffSession, commitStaffSession, completeWecomEntry, getSessionEpoch, parseInspectionId, parseManagerReview, hasManagerPendingDeepLink, isWecomEntryPending, isWecomSession, subscribeSessionEpoch, takeManagerPendingInspection, takeManagerPendingOrder, takeManagerPendingReview } from '../src/wecomSession.ts';
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -172,6 +172,26 @@ test('review deep links validate both source types without rounding IDs', () => 
   assert.deepEqual(parseManagerReview('service_review:17'), { type: 'service_review', id: 17 });
   for (const value of ['visit_feedback:0', 'visit_feedback:01', 'visit_feedback:-1', 'visit_feedback:9007199254740993', 'unknown:1', 'visit_feedback:2x', null]) {
     assert.equal(parseManagerReview(value), null);
+  }
+});
+
+test('a store inspection link survives OAuth only for the manager entry and is consumed once', async () => {
+  reset();
+  const location = window.location;
+  globalThis.fetch = async () => reply({ attempt_id: 'inspection-entry', authorization_url: 'https://open.weixin.qq.com/connect/oauth2/authorize?state=synthetic', expires_in: 300 });
+  try {
+    Object.assign(location, { pathname: '/technician/store/wecom', search: '?inspection=101' });
+    await beginWecomEntry();
+    assert.equal(hasManagerPendingDeepLink(), true);
+    assert.equal(takeManagerPendingInspection(), 101);
+    assert.equal(takeManagerPendingInspection(), null);
+    for (const malformed of [null, '', '00', '-1', '9x', '9007199254740993']) assert.equal(parseInspectionId(malformed), null);
+    Object.assign(location, { pathname: '/technician/wecom', search: '?inspection=101' });
+    await beginWecomEntry();
+    assert.equal(hasManagerPendingDeepLink(), false);
+  } finally {
+    Object.assign(location, { pathname: '/technician/today', search: '' });
+    reset();
   }
 });
 

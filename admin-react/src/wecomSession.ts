@@ -134,7 +134,8 @@ async function post(path: string, body: object): Promise<Record<string, any>> {
   return data;
 }
 export async function beginWecomEntry(): Promise<void> {
-  const inspection = parseInspectionId(new URLSearchParams(window.location.search).get('inspection'));
+  const inspection = isManagerMobilePath(browserPathname())
+    ? parseInspectionId(new URLSearchParams(window.location.search).get('inspection')) : null;
   sessionStorage.removeItem(MANAGER_INSPECTION_KEY);
   if (inspection) sessionStorage.setItem(MANAGER_INSPECTION_KEY, String(inspection));
   rememberManagerOrder();
