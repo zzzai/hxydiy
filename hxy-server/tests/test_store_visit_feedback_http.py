@@ -47,10 +47,17 @@ def test_store_entry_and_submission_over_real_http(tmp_path):
                 entry = client.post("/api/v1/visit-feedback/store-entry", json={"store_id": 1})
                 assert entry.status_code == 200, entry.text
                 assert client.cookies.get("hxy_browser_token")
-                body = {"visit_feedback_token": entry.json()["visit_feedback_token"], "rating": 5, "note": "Synthetic HTTP feedback"}
+                callback = "13900000071"
+                body = {
+                    "visit_feedback_token": entry.json()["visit_feedback_token"], "rating": 5,
+                    "note": "Synthetic HTTP feedback", "callback_phone": callback,
+                }
                 headers = {"Idempotency-Key": "real-http-feedback-key"}
                 saved = client.post("/api/v1/visit-feedback", headers=headers, json=body)
                 assert saved.status_code == 200, saved.text
+                assert callback not in saved.text and "callback_phone" not in saved.json()
+                conflict = client.post("/api/v1/visit-feedback", headers=headers, json={**body, "callback_phone": "13900000073"})
+                assert conflict.status_code == 409 and callback not in conflict.text
                 assert client.post("/api/v1/visit-feedback", headers=headers, json=body).json()["id"] == saved.json()["id"]
                 no_rating = client.post("/api/v1/visit-feedback", headers={"Idempotency-Key": "real-http-missing-rating"}, json={"visit_feedback_token": body["visit_feedback_token"]})
                 assert no_rating.status_code == 422
@@ -59,6 +66,7 @@ def test_store_entry_and_submission_over_real_http(tmp_path):
             with Session(engine) as db:
                 rows = list(db.scalars(select(VisitFeedback)))
                 assert len(rows) == 1 and rows[0].room_id is None and rows[0].source == "store_qr"
+                assert rows[0].callback_phone == callback and rows[0].customer_id is None
                 for table in ("selection_sessions", "orders", "position_occupancies", "service_feedback"):
                     assert db.scalar(select(func.count()).select_from(Base.metadata.tables[table])) == 0
         finally:

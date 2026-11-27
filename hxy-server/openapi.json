@@ -8467,6 +8467,18 @@
       "VisitFeedbackIn": {
         "additionalProperties": false,
         "properties": {
+          "callback_phone": {
+            "anyOf": [
+              {
+                "maxLength": 11,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Callback Phone"
+          },
           "note": {
             "default": "",
             "maxLength": 300,

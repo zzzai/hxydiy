@@ -7,6 +7,7 @@ import ts from 'typescript';
 import * as api from '../src/api.ts';
 import * as profile from '../src/profile.ts';
 import * as copy from '../src/customerCopy.ts';
+import * as visitFeedback from '../src/visitFeedback.ts';
 import * as customerAuth from '../src/customerAuth.ts';
 import * as domain from '../src/domain.ts';
 
@@ -25,7 +26,7 @@ async function subject({ sessions = [record()], load = undefined as undefined | 
   const modules: Record<string, unknown> = {
     react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react'), 'qrcode.react': { QRCodeSVG: () => null },
     '../api': { ...api, getMySelectionSessions: (token: string) => load ? load(token) : Promise.resolve(rows), getMyCoupons: async (token: string) => { coupons.push(token); return []; }, submitCustomerFeedback: async (...args: any[]) => { saved.push(args); const result = await save(); rows = rows.map(row => row.id === args[0] ? { ...row, evaluated: true } : row); return result; } },
-    '../profile': profile, '../domain': domain, '../customerCopy': copy,
+    '../profile': profile, '../domain': domain, '../customerCopy': copy, '../visitFeedback': visitFeedback,
     '../guestCoupon': { bindPendingGuestCoupons: async () => undefined, GUEST_COUPON_KEY_PREFIX: 'hxy_coupon_guest_' },
     '../customerAuth': { ...customerAuth, clearCustomerAuth() {} },
     './MembershipBanner': { __esModule: true, default: () => null }, './useCustomerMembership': { useCustomerMembership: () => membership ?? { data: null, loading: false, error: '', retry() {} } }, './useCustomerConsumption': { useCustomerConsumption: () => consumption ?? { data: null, bills: [], loading: false, loadingMore: false, hasMore: false, error: '', retry() {}, loadMore() {} } }, './MyReports': { __esModule: true, default: () => React.createElement('p', null, '报告页面') },
@@ -36,7 +37,7 @@ async function subject({ sessions = [record()], load = undefined as undefined | 
     const compiled = ts.transpileModule(fs.readFileSync(new URL(`../src/components/${name}.tsx`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
     new vm.Script(compiled).runInContext(vm.createContext({ exports, URL, URLSearchParams, Error, console, localStorage: storage,
       window: { location: new URL('https://synthetic.invalid/?store=1&view=menu&page=projects'), confirm: () => false, setTimeout, clearTimeout, setInterval, clearInterval, matchMedia: () => ({ matches: true }) },
-      require: (path: string) => { if (path.endsWith('.css')) return {}; if (['./FeedbackDialog', './ProfileMemberOverview'].includes(path)) return { __esModule: true, default: loadComponent(path.slice(2)) }; assert.ok(path in modules, path); return modules[path]; },
+      require: (path: string) => { if (path.endsWith('.css')) return {}; if (['./FeedbackDialog', './FeedbackCallbackField', './ProfileMemberOverview'].includes(path)) return { __esModule: true, default: loadComponent(path.slice(2)) }; assert.ok(path in modules, path); return modules[path]; },
     }));
     return (exports as any).default;
   }
@@ -76,7 +77,10 @@ test('feedback failures stay visible and preserve the written suggestion for ret
   let attempts = 0;
   const page = await subject({ save: async () => { if (++attempts === 1) throw new Error('网络暂时不稳定'); return { id: 1 }; } });
   try {
-    await page.click('待评价'); await page.click('去评价'); await page.click('4星');
+    await page.click('待评价'); await page.click('去评价');
+    assert.equal(page.app.root.findAllByProps({ type: 'tel' }).length, 0);
+    assert.equal(page.button('提交评价').props.disabled, true);
+    await page.click('4星');
     await act(async () => page.app.root.findByType('textarea').props.onChange({ target: { value: '合成测试建议' } }));
     await page.click('提交评价'); assert.match(page.text(), /网络暂时不稳定/); assert.equal(page.app.root.findByType('textarea').props.value, '合成测试建议');
     await page.click('提交评价'); assert.match(page.text(), /感谢您的评价/); assert.equal(page.saved.length, 2);

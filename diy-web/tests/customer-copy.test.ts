@@ -175,7 +175,7 @@ test('评价页不预设五星，并按已选评分展示对应体验标签', ()
   const dialog = fs.readFileSync(new URL('../src/components/FeedbackDialog.tsx', import.meta.url), 'utf8');
   assert.match(dialog, /useState<FeedbackDraft>\(\{ rating: null, tags: \[\], note: '' \}\)/);
   assert.match(dialog, /feedbackTagsForRating\(rating\)/);
-  assert.match(dialog, /disabled=\{submitting \|\| !canSubmitFeedback\(rating\)\}/);
+  assert.match(dialog, /disabled=\{submitting \|\| !canSubmitFeedback\(rating\) \|\| !phoneValid\}/);
 });
 
 test('项目详情提供无敏感参数的分享入口', () => {

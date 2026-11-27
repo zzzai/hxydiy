@@ -38,6 +38,7 @@ client.defaults.adapter = async config => {
       if (failSave) {failSave = false; throw new AxiosError('Synthetic save failure', 'ERR_NETWORK', config);}
       Object.assign(row, JSON.parse(config.data));
     }
+    if (method === 'get' && match[1] === 'visit_feedback') return ok({...row, callback_phone: '13900000007'});
     return ok({...row});
   }
   if (path === '/admin/v2/service-anomalies/sync') return ok({detected: 0});

@@ -2,7 +2,8 @@ import { CheckCircle2, ChevronLeft, Star, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { canSubmitFeedback, feedbackRatingLabel, feedbackTagsForRating, isLowFeedbackRating, MAX_FEEDBACK_TAGS } from '../customerCopy';
-import type { FeedbackDraft } from '../visitFeedback';
+import { callbackPhonePayload, validCallbackPhone, type FeedbackDraft } from '../visitFeedback';
+import FeedbackCallbackField from './FeedbackCallbackField';
 
 export default function FeedbackDialog({
   open,
@@ -17,6 +18,7 @@ export default function FeedbackDialog({
   successTitle = '感谢您的评价',
   successMessage = '已记录到本次到店服务。您的反馈会帮助我们持续改进体验。',
   continueLabel = '再次选购',
+  allowCallback = false,
   value,
   onChange,
   error,
@@ -26,7 +28,7 @@ export default function FeedbackDialog({
   submitting: boolean;
   submitted: boolean;
   onClose: () => void;
-  onSubmit: (input: { rating: number; tags: string[]; note: string }) => void;
+  onSubmit: (input: { rating: number; tags: string[]; note: string; callback_phone?: string }) => void;
   onViewRecord?: () => void;
   onContinueShopping?: () => void;
   title?: string;
@@ -34,12 +36,14 @@ export default function FeedbackDialog({
   successTitle?: string;
   successMessage?: string;
   continueLabel?: string;
+  allowCallback?: boolean;
   value?: FeedbackDraft;
   onChange?: (value: FeedbackDraft) => void;
 }) {
   const [internalValue, setInternalValue] = useState<FeedbackDraft>({ rating: null, tags: [], note: '' });
   const currentValue = value || internalValue;
-  const { rating, tags, note } = currentValue;
+  const { rating, tags, note, callback_phone } = currentValue;
+  const phoneValid = !allowCallback || validCallbackPhone(callback_phone);
   const updateValue = (next: FeedbackDraft) => {
     if (submitting) return;
     if (!value) setInternalValue(next);
@@ -96,10 +100,12 @@ export default function FeedbackDialog({
               ))}
             </div>
             {rating !== null && <><div className="feedback-tag-heading"><strong>{isLowFeedbackRating(rating) ? '哪些地方没有达到预期？' : rating === 3 ? '哪些地方可以做得更好？' : '哪些地方让您满意？'}</strong><span>可多选，最多3项</span></div><div className="feedback-tags">{availableTags.map((tag) => <button key={tag} type="button" className={tags.includes(tag) ? 'selected' : ''} disabled={submitting} onClick={() => toggleTag(tag)}>{tag}</button>)}</div></>}
-            {isLowFeedbackRating(rating) && <p className="feedback-follow-up-note">如需处理本次体验问题，请在到店后联系门店工作人员；顾客端暂不承诺自动回访。</p>}
-            <label className="feedback-note"><span>还有想告诉我们的吗？（选填）</span><textarea value={note} maxLength={300} disabled={submitting} onChange={(event) => updateValue({ ...currentValue, note: event.target.value })} placeholder="请勿填写手机号或其他隐私信息" /><small>{note.length}/300</small></label>
+            {!allowCallback && isLowFeedbackRating(rating) && <p className="feedback-follow-up-note">如需处理本次体验问题，请在到店后联系门店工作人员；顾客端暂不承诺自动回访。</p>}
+            <label className="feedback-note"><span>还有想告诉我们的吗？（选填）</span><textarea value={note} maxLength={300} disabled={submitting} onChange={(event) => updateValue({ ...currentValue, note: event.target.value })} placeholder={allowCallback ? '说说您的感受' : '请勿填写手机号或其他隐私信息'} /><small>{note.length}/300</small></label>
+            {allowCallback && <FeedbackCallbackField value={callback_phone || ''} disabled={submitting}
+              onChange={phone => updateValue({ ...currentValue, callback_phone: phone })} />}
             {error && <p className="feedback-submit-error" role="alert">{error}</p>}
-            <button type="button" className="primary-action feedback-submit" disabled={submitting || !canSubmitFeedback(rating)} onClick={() => { if (canSubmitFeedback(rating)) onSubmit({ rating, tags, note }); }}>{submitting ? '正在提交' : '提交评价'}</button>
+            <button type="button" className="primary-action feedback-submit" disabled={submitting || !canSubmitFeedback(rating) || !phoneValid} onClick={() => { if (canSubmitFeedback(rating) && phoneValid) onSubmit({ rating, tags, note, ...(allowCallback ? callbackPhonePayload(callback_phone) : {}) }); }}>{submitting ? '正在提交' : '提交评价'}</button>
           </div>
         )}
       </section>

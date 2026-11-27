@@ -134,6 +134,7 @@ export type ServiceFeedback = {
 
 export type VisitFeedbackInput = {
   visit_feedback_token: string;
+  callback_phone?: string;
   rating: number;
   tags: string[];
   note: string;

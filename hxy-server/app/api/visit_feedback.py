@@ -2,10 +2,11 @@
 
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -35,6 +36,20 @@ class VisitFeedbackIn(BaseModel):
     rating: int = Field(ge=1, le=5)
     tags: list[str] = Field(default_factory=list, max_length=3)
     note: str = Field(default="", max_length=300)
+    callback_phone: str | None = Field(default=None, max_length=11)
+
+    @field_validator("callback_phone", mode="before")
+    @classmethod
+    def validate_callback_phone(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            phone = value.strip()
+            if not phone:
+                return None
+            if re.fullmatch(r"1[3-9][0-9]{9}", phone):
+                return phone
+        raise _error(422, "FEEDBACK_PHONE_INVALID", "请输入有效的11位手机号")
 
 
 class VisitFeedbackEntryIn(BaseModel):
@@ -205,6 +220,8 @@ def submit_visit_feedback(
         "tags": body.tags,
         "note": normalized_note,
     }
+    if body.callback_phone:
+        fingerprint_payload["callback_phone"] = body.callback_phone
     if store_scope:
         fingerprint_payload.update(scope="store", store_id=store_id)
     fingerprint = _hash(json.dumps(fingerprint_payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True))
@@ -245,6 +262,7 @@ def submit_visit_feedback(
         rating=body.rating,
         tags=body.tags,
         note=normalized_note,
+        callback_phone=body.callback_phone,
     )
     db.add(feedback)
     try:

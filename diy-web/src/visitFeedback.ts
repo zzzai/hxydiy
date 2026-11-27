@@ -4,6 +4,7 @@ export type FeedbackDraft = {
   rating: number | null;
   tags: string[];
   note: string;
+  callback_phone?: string;
 };
 
 export type VisitFeedbackIntent = {
@@ -20,8 +21,18 @@ export function shouldEnterDirectFeedback(entry: { positionCode: string; source:
   return false;
 }
 
-function draftSignature(draft: FeedbackDraft) {
-  return JSON.stringify(draft);
+export function validCallbackPhone(value = ''): boolean {
+  const phone = value.trim();
+  return !phone || /^1[3-9][0-9]{9}$/.test(phone);
+}
+
+export function callbackPhonePayload(value = ''): { callback_phone?: string } {
+  const phone = value.trim();
+  return phone ? { callback_phone: phone } : {};
+}
+
+function draftSignature({ callback_phone, ...draft }: FeedbackDraft) {
+  return JSON.stringify({ ...draft, ...callbackPhonePayload(callback_phone) });
 }
 
 export function createVisitFeedbackIntent(keyFactory = defaultKeyFactory): VisitFeedbackIntent {
@@ -53,6 +64,7 @@ export function visitFeedbackErrorMessage(error: unknown): string {
       ? String(error.code)
       : '';
   if (code === 'FEEDBACK_RATE_LIMITED') return '提交得有点快，请稍后再试';
+  if (code === 'FEEDBACK_PHONE_INVALID') return '请输入有效的11位手机号，或留空提交';
   if (code === 'FEEDBACK_TAG_INVALID') return '评价选项已更新，请重新选择后提交';
   if (code === 'IDEMPOTENCY_KEY_INVALID') return '提交信息已更新，请再次提交';
   if (code === 'VISIT_FEEDBACK_TOKEN_INVALID') return '本次到店信息已变化，请重新扫码后再提交';

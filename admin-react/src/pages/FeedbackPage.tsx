@@ -10,6 +10,7 @@ type FeedbackRow = {
   rating: number; tags: string[]; note: string; source: string;
   follow_up_status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
   follow_up_staff_id: number | null; follow_up_note: string;
+  callback_phone?: string | null;
   followed_up_at: string | null; created_at: string | null;
 };
 const statusText: Record<string, string> = { open: '待跟进', in_progress: '处理中', resolved: '已解决', dismissed: '无需跟进' };
@@ -72,7 +73,7 @@ export default function FeedbackPage() {
     const version = detailVersion.current;
     try {
       const { data } = await updateFeedbackFollowUp(selected.feedback_type, selected.id, { follow_up_status: draftStatus, follow_up_note: draftNote.trim() });
-      if (version === detailVersion.current) { setSelected(data); setDraftStatus(data.follow_up_status); setDraftNote(data.follow_up_note || ''); }
+      if (version === detailVersion.current) { setSelected({ ...data, callback_phone: selected.callback_phone }); setDraftStatus(data.follow_up_status); setDraftNote(data.follow_up_note || ''); }
       message.success('处理状态和说明已一并保存');
       await load();
     } catch { if (version === detailVersion.current) setDetailError('保存未完成，填写内容已保留。请重试保存。'); }
@@ -110,6 +111,7 @@ export default function FeedbackPage() {
             { label: '评分', children: `${selected.rating} 星` },
             { label: '标签', children: selected.tags.join('、') || '未选择标签' },
             { label: '顾客反馈', children: selected.note || '未填写文字反馈' },
+            ...(selected.callback_phone ? [{ label: '回访手机号', children: <a href={'tel:' + selected.callback_phone}>{selected.callback_phone}</a> }] : []),
             { label: '提交时间', children: selected.created_at ? new Date(selected.created_at).toLocaleString('zh-CN') : '未提供' },
             ...(feedbackUsesServiceLink(selected) ? [{ label: '关联服务', children: selected.selection_session_id }] : []),
           ]} />

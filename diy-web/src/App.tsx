@@ -2061,7 +2061,7 @@ export default function App() {
     }
   };
 
-  const submitOpenVisitFeedback = async (input: { rating: number; tags: string[]; note: string }) => {
+  const submitOpenVisitFeedback = async (input: { rating: number; tags: string[]; note: string; callback_phone?: string }) => {
     if (visitFeedbackLock.current || feedbackSubmitting) return;
     if (!visitFeedbackToken) {
       flash('请重新扫描门店二维码后提交评价');
@@ -2180,6 +2180,7 @@ export default function App() {
         open={feedbackMode === 'visit'}
         submitting={feedbackSubmitting}
         submitted={visitFeedbackSubmitted}
+        allowCallback
         title="反馈本次到店体验"
         lead="这次到店感觉怎么样？"
         successTitle="感谢您的反馈"
@@ -2548,6 +2549,7 @@ export default function App() {
         open={feedbackMode === 'visit'}
         submitting={feedbackSubmitting}
         submitted={visitFeedbackSubmitted}
+        allowCallback
         title="反馈本次到店体验"
         lead="这次到店感觉怎么样？"
         successTitle="感谢您的反馈"

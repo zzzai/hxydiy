@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import time
+from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,7 +19,9 @@ from app.core.security import create_access_token
 from app.db.session import Base, get_db
 from app.domain.visit_feedback_tokens import create_visit_feedback_token
 from app.main import app
-from app.models import EventLog, Room, ServicePositionQr, Staff, Store, User, VisitFeedback
+from app.models import AuditLog, EventLog, Room, ServicePositionQr, Staff, Store, Technician, User, VisitFeedback
+from app.services import wecom_notify
+from app.services.wecom_staff import WecomMessageReceipt
 
 
 @pytest.fixture
@@ -274,7 +277,162 @@ def test_legacy_vf1_frozen_fingerprint_still_replays(feedback_client):
         ))
     response = submit(client, token, key="legacy-replay-key")
     assert response.status_code == 200 and response.json()["id"] == 1
+    assert submit(client, token, key="legacy-replay-key", callback_phone=None).json()["id"] == 1
+    assert submit(client, token, key="legacy-replay-key", callback_phone="13900000071").status_code == 409
     assert submit(client, enter(client), key="legacy-replay-key").status_code == 409
     with sessions() as db:
         assert db.scalar(select(func.count()).select_from(VisitFeedback)) == 1
         assert db.scalar(select(func.count()).select_from(EventLog)) == 0
+
+
+@pytest.mark.parametrize("logged_in", [False, True])
+def test_callback_phone_does_not_bind_or_replace_a_customer_account(feedback_client, logged_in):
+    client, sessions = feedback_client
+    callback = "13900000071"
+    account_phone = "13800000072"
+    with sessions.begin() as db:
+        account = User(openid="feedback-account-owner", phone=account_phone)
+        db.add_all([account, User(openid="feedback-other-account", phone=callback)])
+        db.flush()
+        customer_id = account.id if logged_in else None
+        if logged_in:
+            client.headers["Authorization"] = "Bearer " + create_access_token(
+                str(account.id), account.openid, account.customer_login_version,
+            )
+    token = enter(client)
+    account_state = select(User.id, User.openid, User.phone).order_by(User.id)
+    with sessions() as db:
+        original_accounts = db.execute(account_state).all()
+
+    saved = submit(client, token, callback_phone=callback)
+    assert saved.status_code == 200, saved.text
+    assert "callback_phone" not in saved.json() and callback not in saved.text
+    replay = submit(client, enter(client), callback_phone=callback)
+    assert replay.status_code == 200 and replay.json() == saved.json()
+    for changes in ({"callback_phone": "13900000073"}, {"callback_phone": None}, {}):
+        conflict = submit(client, token, **changes)
+        assert conflict.status_code == 409 and callback not in conflict.text
+        assert conflict.json()["detail"]["code"] == "IDEMPOTENCY_KEY_REUSED"
+
+    with sessions() as db:
+        row = db.scalars(select(VisitFeedback)).one()
+        assert (row.id, row.callback_phone, row.customer_id) == (saved.json()["id"], callback, customer_id)
+        assert db.execute(account_state).all() == original_accounts
+        assert db.scalar(select(func.count()).select_from(EventLog)) == 1
+    manager = {"Authorization": "Bearer " + create_staff_token(1, "manager")}
+    detail = client.get(f"/api/v1/admin/v2/feedback/visit_feedback/{row.id}", headers=manager)
+    assert detail.status_code == 200
+    assert detail.json()["callback_phone"] == callback
+    assert detail.json()["customer_phone"] == (account_phone if logged_in else None)
+
+
+@pytest.mark.parametrize("value, marker", [
+    ("12800000071", "12800000071"),
+    ("1390000071", "1390000071"),
+    ("139000000710", "139000000710"),
+    ("+8613900000071", "13900000071"),
+    ("139-0000-0071", "139-0000-0071"),
+    ("1390000007x", "1390000007x"),
+    ("139００００００７１", "139００００００７１"),
+    (13900000071, "13900000071"),
+    ({"phone": "13900000071"}, "13900000071"),
+])
+def test_invalid_callback_phone_is_rejected_without_echo_or_record(feedback_client, value, marker):
+    client, sessions = feedback_client
+    response = submit(client, enter(client), callback_phone=value)
+    assert response.status_code == 422
+    assert marker not in json.dumps(response.json(), ensure_ascii=False)
+    with sessions() as db:
+        assert db.scalar(select(func.count()).select_from(VisitFeedback)) == 0
+        assert db.scalar(select(func.count()).select_from(EventLog)) == 0
+
+
+def test_empty_callback_phone_creates_anonymous_feedback(feedback_client):
+    client, sessions = feedback_client
+    token = enter(client)
+    for index, changes in enumerate(({}, {"callback_phone": None}, {"callback_phone": ""}, {"callback_phone": "  "})):
+        saved = submit(client, token, key=f"empty-phone-{index}", **changes)
+        assert saved.status_code == 200, saved.text
+        assert "callback_phone" not in saved.json()
+    with sessions() as db:
+        assert db.execute(select(VisitFeedback.callback_phone, VisitFeedback.customer_id)).all() == [(None, None)] * 4
+    manager = {"Authorization": "Bearer " + create_staff_token(1, "manager")}
+    detail = client.get(f"/api/v1/admin/v2/feedback/visit_feedback/{saved.json()['id']}", headers=manager)
+    assert detail.status_code == 200 and detail.json()["callback_phone"] is None
+
+
+def test_pre_callback_phone_store_fingerprint_is_still_replayable(feedback_client):
+    client, sessions = feedback_client
+    token = enter(client)
+    browser = client.cookies.get("hxy_browser_token")
+    legacy_payload = b'{"note":"helpful","qr_id":null,"rating":5,"room_id":null,"scope":"store","store_id":1,"tags":[]}'
+    key = "pre-callback-store-key"
+    with sessions.begin() as db:
+        db.add(VisitFeedback(
+            id=81, store_id=1, source="store_qr", rating=5, tags=[], note="helpful",
+            identity_hash=hashlib.sha256(f"browser:{browser}".encode()).hexdigest(),
+            idempotency_key_hash=hashlib.sha256(key.encode()).hexdigest(),
+            request_fingerprint=hashlib.sha256(legacy_payload).hexdigest(),
+        ))
+    for changes in ({}, {"callback_phone": None}, {"callback_phone": ""}):
+        replay = submit(client, token, key=key, **changes)
+        assert replay.status_code == 200 and replay.json()["id"] == 81
+        assert "callback_phone" not in replay.json()
+    assert submit(client, token, key=key, callback_phone="13900000071").status_code == 409
+    with sessions() as db:
+        assert db.scalar(select(func.count()).select_from(VisitFeedback)) == 1
+        assert db.scalar(select(func.count()).select_from(EventLog)) == 0
+
+
+def test_only_own_manager_detail_discloses_the_callback_phone(feedback_client):
+    client, sessions = feedback_client
+    callback = "13900000071"
+    with sessions.begin() as db:
+        technician = Technician(id=6, code="feedback-privacy-tech", name="Synthetic technician", store_id=1)
+        db.add(technician)
+        db.flush()
+        db.add(Staff(id=3, username="feedback-privacy-tech", password_hash="unused", role="technician", store_id=1, technician_id=technician.id))
+    saved = submit(client, enter(client), callback_phone=callback)
+    assert saved.status_code == 200, saved.text
+    detail_url = f"/api/v1/admin/v2/feedback/visit_feedback/{saved.json()['id']}"
+    manager = {"Authorization": "Bearer " + create_staff_token(1, "manager")}
+    other_manager = {"Authorization": "Bearer " + create_staff_token(2, "manager")}
+    technician = {"Authorization": "Bearer " + create_staff_token(3, "technician")}
+    for headers, expected_status in (({}, 401), (technician, 403), (other_manager, 404)):
+        denied = client.get(detail_url, headers=headers)
+        assert denied.status_code == expected_status and callback not in denied.text
+    for params in ({}, {"feedback_type": "visit_feedback"}):
+        listing = client.get("/api/v1/admin/v2/feedback", params=params, headers=manager)
+        assert listing.status_code == 200 and listing.json()["total"] == 1
+        assert "callback_phone" not in listing.json()["items"][0] and callback not in listing.text
+    changed = client.patch(detail_url, headers=manager, json={"follow_up_status": "in_progress"})
+    assert changed.status_code == 200 and "callback_phone" not in changed.json() and callback not in changed.text
+    detail = client.get(detail_url, headers=manager)
+    assert detail.status_code == 200 and detail.json()["callback_phone"] == callback
+    with sessions() as db:
+        follow_up_audit = db.scalars(select(AuditLog).where(AuditLog.action == "update_feedback_follow_up")).one()
+        assert callback not in json.dumps(follow_up_audit.detail)
+
+
+def test_callback_phone_is_absent_from_wecom_card_and_audits(feedback_client, monkeypatch):
+    client, sessions = feedback_client
+    callback = "13900000071"
+    provider = Mock()
+    provider.send_textcard.return_value = WecomMessageReceipt("accepted", 1, 0)
+    monkeypatch.setattr(settings, "wecom_staff_enabled", True)
+    monkeypatch.setattr(settings, "wecom_visit_feedback_notify_enabled", True)
+    monkeypatch.setattr(wecom_notify, "SessionLocal", sessions)
+    monkeypatch.setattr(wecom_notify, "manager_userids", lambda *args, **kwargs: ["synthetic-manager"])
+    monkeypatch.setattr(wecom_notify, "get_wecom_provider", lambda: provider)
+    token = enter(client)
+    saved = submit(client, token, callback_phone=callback)
+    assert saved.status_code == 200, saved.text
+    assert submit(client, token, callback_phone=callback).json() == saved.json()
+    provider.send_textcard.assert_called_once()
+    assert callback not in str(provider.send_textcard.call_args)
+    with sessions() as db:
+        audits = db.scalars(select(AuditLog).where(AuditLog.action == "wecom_feedback_notify").order_by(AuditLog.id)).all()
+        assert [row.detail["status"] for row in audits] == ["started", "accepted"]
+        assert callback not in json.dumps([row.detail for row in audits])
+        events = db.scalars(select(EventLog)).all()
+        assert len(events) == 1 and callback not in json.dumps(events[0].data)

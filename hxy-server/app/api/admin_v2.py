@@ -2096,6 +2096,8 @@ def get_feedback_detail(
         raise HTTPException(status_code=404, detail="评价不存在")
     customer = db.get(User, feedback.customer_id) if feedback.customer_id else None
     result = _feedback_view(feedback, feedback_type)
+    if isinstance(feedback, VisitFeedback):
+        result["callback_phone"] = feedback.callback_phone
     result["customer_phone"] = customer.phone if customer and customer.phone else None
     return result
 

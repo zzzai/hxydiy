@@ -7,7 +7,7 @@ const out = process.env.EVIDENCE_DIR;
 const report = {passed:false,cases:[],unexpectedRequests:[],pageErrors:[],productionWrites:0,synthetic:true};
 (async()=>{
   await fs.mkdir(out,{recursive:true});
-  const browser=await chromium.launch({channel:"chrome",headless:true,args:['--js-flags=--max-old-space-size=192','--disable-background-networking']});
+  const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL || 'chrome',headless:true,args:['--js-flags=--max-old-space-size=192','--disable-background-networking']});
   try {
     const context=await browser.newContext({viewport:{width:375,height:812},serviceWorkers:'block'});
     await context.route('**/*',route=>{
@@ -23,20 +23,26 @@ const report = {passed:false,cases:[],unexpectedRequests:[],pageErrors:[],produc
     await page.getByRole('dialog').waitFor();
     assert.equal(await page.getByRole('dialog').getByText('到店扫码评价',{exact:true}).count(),1);
     assert.equal(await page.locator('.manager-review-card').count(),2);
+    const callback = page.getByRole('dialog').getByRole('link', {name:'13900000007'});
+    assert.equal(await callback.getAttribute('href'), 'tel:13900000007');
+    assert.equal(await page.locator('.manager-review-card').filter({hasText:'13900000007'}).count(),0);
     report.cases.push('QR deep link opens correct review while same-ID service review remains distinct');
     await page.getByRole('textbox').fill('合成跟进：已核实并处理');
     await page.getByRole('button',{name:'保存跟进',exact:true}).evaluate(b=>{b.click();b.click();});
     await page.waitForFunction(()=>document.querySelector('.ant-drawer-footer button.ant-btn-primary')?.disabled===true);
     assert.equal(await page.evaluate(()=>window.reviewStats.saves),1,'Repeated click must save once');
+    assert.equal(await callback.getAttribute('href'), 'tel:13900000007');
     await page.getByRole('button',{name:'关闭详情',exact:true}).click();
     await page.getByRole('dialog').waitFor({state:'hidden'});
     await page.locator('.manager-review-card').filter({hasText:'合成扫码反馈'}).click();
     assert.equal(await page.getByRole('textbox').inputValue(),'合成跟进：已核实并处理');
-    report.cases.push('Follow-up saves once and reads back without changing original feedback');
+    assert.equal(await callback.getAttribute('href'), 'tel:13900000007');
+    report.cases.push('Callback is detail-only, dialable from QR deep link and list, and survives follow-up');
     await page.screenshot({path:path.join(out,'qr-review-followup.png')});
     await open('review=service_review%3A7');
     await page.getByRole('dialog').getByText('服务评价',{exact:true}).waitFor();
     assert.equal(await page.getByRole('textbox').inputValue(),'');
+    assert.equal(await page.getByRole('dialog').locator('a[href^="tel:"]').count(),0);
     report.cases.push('Service deep link does not open same-ID QR review');
     await open('review=visit_feedback%3A7&mode=save-failure');
     await page.getByRole('dialog').waitFor();

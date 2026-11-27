@@ -193,6 +193,7 @@ approved_migrations=(
   '20261122_inspection_ai.py'
   '20261126_inspection_areas.py'
   '20261126_inspection_workflow.py'
+  '20261127_visit_callback_phone.py'
 )
 if ! diff -q \
   <(find "$previous_release/hxy-server/alembic/versions" -maxdepth 1 -type f -printf '%f\n' | sort) \

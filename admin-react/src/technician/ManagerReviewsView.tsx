@@ -16,6 +16,7 @@ type Review = {
   followed_up_at: string | null;
   created_at: string | null;
   customer_phone?: string | null;
+  callback_phone?: string | null;
 };
 
 const statusText: Record<string, string> = { open: '待跟进', in_progress: '处理中', resolved: '已解决', dismissed: '已忽略' };
@@ -38,7 +39,12 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
   const [saveError, setSaveError] = useState('');
   const selectedRef = useRef<Review | null>(null);
   selectedRef.current = selected;
-  const { modal } = App.useApp();
+  const [picked, setPicked] = useState<PendingReview | null>(null);
+  const target = focus ?? picked;
+  const fromLink = Boolean(focus);
+  const focusHandlers = useRef({ onFocusConsumed, onFocusError });
+  focusHandlers.current = { onFocusConsumed, onFocusError };
+  const { modal, message } = App.useApp();
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -75,14 +81,22 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
     };
   }, [load]);
   useEffect(() => {
-    if (!focus) return;
+    if (!target) return;
     let active = true;
-    void getFeedbackDetail(focus.type, focus.id)
+    void getFeedbackDetail(target.type, target.id)
       .then(response => { if (active) { setSelected(response.data); setInitial(response.data); setSaveError(''); } })
-      .catch(() => { if (active) onFocusError?.(); })
-      .finally(() => { if (active) onFocusConsumed?.(); });
+      .catch(() => {
+        if (!active) return;
+        if (fromLink) focusHandlers.current.onFocusError?.();
+        else void message.error('评价详情加载失败，请重试');
+      })
+      .finally(() => {
+        if (!active) return;
+        setPicked(null);
+        if (fromLink) focusHandlers.current.onFocusConsumed?.();
+      });
     return () => { active = false; };
-  }, [focus?.id, focus?.type, onFocusConsumed, onFocusError]);
+  }, [target?.id, target?.type, fromLink, message]);
 
   const save = async () => {
     if (!selected || savingRef.current) return;
@@ -93,8 +107,9 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
         follow_up_status: selected.follow_up_status,
         follow_up_note: selected.follow_up_note,
       });
-      setSelected(response.data);
-      setInitial(response.data);
+      const updated = { ...response.data, callback_phone: selected.callback_phone };
+      setSelected(updated);
+      setInitial(updated);
       setSaveError('');
       await load(true);
       onChanged?.();
@@ -130,7 +145,7 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     {loading && !rows.length ? <div className="manager-empty"><Spin size="small" /><span>正在加载评价</span></div>
       : !rows.length ? <div className="manager-empty"><strong>暂无评价</strong><span>顾客提交的服务评价和到店扫码评价会在这里显示</span></div>
-        : <div className="manager-review-list">{rows.map(row => <button type="button" className="manager-review-card" key={`${row.feedback_type}:${row.id}`} onClick={() => { setSelected(row); setInitial(row); setSaveError(''); }}>
+        : <div className="manager-review-list">{rows.map(row => <button type="button" className="manager-review-card" key={`${row.feedback_type}:${row.id}`} onClick={() => setPicked({ type: row.feedback_type, id: row.id })}>
           <div className="manager-review-top"><Tag color={row.rating <= 2 ? 'red' : 'gold'}>{row.rating} 星</Tag><Tag color={statusColor[row.follow_up_status]}>{statusText[row.follow_up_status] || row.follow_up_status}</Tag></div>
           <p>{row.note || row.tags.join('、') || '顾客未填写文字'}</p>
           <div className="manager-review-meta"><span>{row.tags.join('、') || '未选择标签'}{row.customer_phone ? ' · ' + row.customer_phone : ''}</span><time>{timeText(row.created_at)}</time></div>
@@ -143,7 +158,8 @@ export default function ManagerReviewsView({ focus, onFocusConsumed, onChanged, 
         <dl className="manager-detail-meta">
           <div><dt>来源</dt><dd>{selected.feedback_type === 'visit_feedback' ? '到店扫码评价' : '服务评价'}</dd></div>
           <div><dt>标签</dt><dd>{selected.tags.join('、') || '未选择标签'}</dd></div>
-          <div><dt>手机号</dt><dd>{selected.customer_phone || '未手机号登录'}</dd></div>
+          {selected.callback_phone && <div><dt>回访手机号</dt><dd><a href={'tel:' + selected.callback_phone}>{selected.callback_phone}</a></dd></div>}
+          {selected.customer_phone && selected.customer_phone !== selected.callback_phone && <div><dt>账号手机号</dt><dd>{selected.customer_phone}</dd></div>}
           <div><dt>时间</dt><dd>{timeText(selected.created_at)}</dd></div>
           <div><dt>订单</dt><dd>{selected.selection_session_id ? selected.selection_session_id.slice(-8) : '未关联服务单'}</dd></div>
         </dl>

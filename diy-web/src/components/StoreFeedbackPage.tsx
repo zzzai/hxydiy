@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createStoreVisitFeedbackEntry, submitVisitFeedback } from '../api';
 import { canSubmitFeedback, feedbackRatingLabel, feedbackTagsForRating, MAX_FEEDBACK_TAGS } from '../customerCopy';
 import { reportEntryUrl, serviceAccountEntry } from '../returnEntry';
-import { createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldRenewVisitFeedbackToken, updateVisitFeedbackDraft, visitFeedbackErrorMessage, type FeedbackDraft } from '../visitFeedback';
+import FeedbackCallbackField from './FeedbackCallbackField';
+import { callbackPhonePayload, validCallbackPhone, createVisitFeedbackIntent, markVisitFeedbackAttempt, shouldRenewVisitFeedbackToken, updateVisitFeedbackDraft, visitFeedbackErrorMessage, type FeedbackDraft } from '../visitFeedback';
 
 type StoreAccess = Awaited<ReturnType<typeof createStoreVisitFeedbackEntry>>;
 
@@ -74,13 +75,13 @@ export default function StoreFeedbackPage() {
   }
 
   async function submit() {
-    if (busy.current || !access || submitted || !canSubmitFeedback(rating)) return;
+    if (busy.current || !access || submitted || !canSubmitFeedback(rating) || !validCallbackPhone(intent.draft.callback_phone)) return;
     busy.current = true;
     setSubmitting(true);
     setError('');
     const attempted = markVisitFeedbackAttempt(intent);
     setIntent(attempted);
-    const input = { rating, tags, note };
+    const input = { rating, tags, note, ...callbackPhonePayload(intent.draft.callback_phone) };
     try {
       let result;
       try {
@@ -135,9 +136,11 @@ export default function StoreFeedbackPage() {
             <div className="feedback-tag-heading"><strong>{rating <= 2 ? '哪些地方没有达到预期？' : rating === 3 ? '哪些地方可以做得更好？' : '哪些地方让您满意？'}</strong><span>选填 · 最多3项</span></div>
             <div className="feedback-tags">{feedbackTagsForRating(rating).map((tag) => <button key={tag} type="button" aria-pressed={tags.includes(tag)} className={tags.includes(tag) ? 'selected' : ''} disabled={submitting} onClick={() => updateDraft({ ...intent.draft, tags: tags.includes(tag) ? tags.filter((item) => item !== tag) : tags.length < MAX_FEEDBACK_TAGS ? [...tags, tag] : tags })}>{tag}{tags.includes(tag) && <Check size={13} aria-hidden="true" />}</button>)}</div>
           </div>}
-          <label className="store-feedback-note"><span>评价与建议 <small>选填</small></span><textarea value={note} maxLength={300} disabled={submitting} onChange={(event) => updateDraft({ ...intent.draft, note: event.target.value })} placeholder="说说您的感受，请勿填写手机号等隐私信息" /><small>{note.length}/300</small></label>
+          <label className="store-feedback-note"><span>评价与建议 <small>选填</small></span><textarea value={note} maxLength={300} disabled={submitting} onChange={(event) => updateDraft({ ...intent.draft, note: event.target.value })} placeholder="说说您的感受" /><small>{note.length}/300</small></label>
+          <FeedbackCallbackField value={intent.draft.callback_phone || ''} disabled={submitting}
+            onChange={phone => updateDraft({ ...intent.draft, callback_phone: phone })} />
           {error && <p className="store-feedback-error" role="alert">{error}</p>}
-          <button type="button" className="primary-action feedback-submit" disabled={submitting || !canSubmitFeedback(rating)} onClick={() => void submit()}>{submitting ? '正在提交…' : '提交评价'}</button>
+          <button type="button" className="primary-action feedback-submit" disabled={submitting || !canSubmitFeedback(rating) || !validCallbackPhone(intent.draft.callback_phone)} onClick={() => void submit()}>{submitting ? '正在提交…' : '提交评价'}</button>
         </section>
       )}
     </main>

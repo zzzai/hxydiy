@@ -8364,6 +8364,8 @@ export interface components {
         };
         /** VisitFeedbackIn */
         VisitFeedbackIn: {
+            /** Callback Phone */
+            callback_phone?: string | null;
             /**
              * Note
              * @default

@@ -46,6 +46,7 @@ class VisitFeedback(Base):
     rating: Mapped[int] = mapped_column()
     tags: Mapped[list] = mapped_column(JSON, default=list)
     note: Mapped[str] = mapped_column(String(300), default="")
+    callback_phone: Mapped[str | None] = mapped_column(String(11), nullable=True)
     follow_up_status: Mapped[str] = mapped_column(String(16), default="open", index=True)
     follow_up_staff_id: Mapped[int | None] = mapped_column(ForeignKey("staff.id"), nullable=True, index=True)
     follow_up_note: Mapped[str] = mapped_column(String(1000), default="")

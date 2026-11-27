@@ -35,7 +35,12 @@ async function subject({ search = '?store=1&view=feedback', entryHandler = (() =
       return entryHandler(call, calls.filter(item => item.path === call.path).length);
     }
     if (call.path === '/api/v1/visit-feedback') {
-      assert.deepEqual(Object.keys(call.body).sort(), ['note', 'rating', 'tags', 'visit_feedback_token']);
+      const keys = ['note', 'rating', 'tags', 'visit_feedback_token'];
+      if ('callback_phone' in call.body) {
+        assert.match(String(call.body.callback_phone), /^1[3-9][0-9]{9}$/);
+        keys.unshift('callback_phone');
+      }
+      assert.deepEqual(Object.keys(call.body).sort(), keys);
       assert.ok(new Headers(options.headers).get('Idempotency-Key'));
       return submitHandler(call, calls.filter(item => item.path === call.path).length);
     }
@@ -54,6 +59,7 @@ async function subject({ search = '?store=1&view=feedback', entryHandler = (() =
     new vm.Script(code).runInContext(vm.createContext({ exports, URL, URLSearchParams, Error, crypto,
       window: { location, history }, document: { getElementById: () => ({}) },
       require: (name: string) => {
+        if (name === './FeedbackCallbackField') return load('../src/components/FeedbackCallbackField.tsx');
         if (name === './components/StoreFeedbackPage') return load('../src/components/StoreFeedbackPage.tsx');
         if (name === './App' || name === './components/ReportEntryPage') {
           loaded.push(name); return { __esModule: true, default: () => React.createElement('p', null, name) };
@@ -79,6 +85,7 @@ async function subject({ search = '?store=1&view=feedback', entryHandler = (() =
     submissions: () => calls.filter(call => call.path === '/api/v1/visit-feedback'),
     text: () => JSON.stringify(app.toJSON()),
     async click(label: string) { await act(async () => button(label).props.onClick()); await drain(); },
+    async phone(value: string) { await act(async () => app.root.findByType('input').props.onChange({ target: { value } })); },
     async note(value: string) { await act(async () => app.root.findByType('textarea').props.onChange({ target: { value } })); },
     async close() { await act(async () => app.unmount()); globalThis.fetch = originalFetch; },
   };
@@ -122,9 +129,36 @@ test('optional tags remain limited to three, rating change resets them, and note
     assert.equal(page.app.root.findAllByProps({ 'aria-pressed': true }).length, 1);
     assert.equal(page.app.root.findByType('textarea').props.maxLength, 300);
     await page.click('提交评价');
+    assert.ok(!('callback_phone' in page.submissions()[0].body));
     assert.equal(page.submissions()[0].body.rating, 2);
     assert.deepEqual(page.submissions()[0].body.tags, []);
     assert.equal(page.submissions()[0].body.note, '');
+  } finally { await page.close(); }
+});
+
+test('callback is optional, invalid numbers stay local, and a valid number survives a retry', async () => {
+  const page = await subject({ submitHandler: (_, count) => {
+    if (count === 1) throw new TypeError('Temporary network failure');
+    return submittedResponse();
+  } });
+  try {
+    await page.click('5星');
+    await page.phone('123');
+    await act(async () => page.app.root.findByType('input').props.onBlur());
+    assert.equal(page.button('提交评价').props.disabled, true);
+    assert.match(page.text(), /请输入有效的11位手机号/);
+    assert.equal(page.submissions().length, 0);
+    await page.phone('');
+    assert.equal(page.button('提交评价').props.disabled, false);
+    await page.phone('13900000000');
+    await page.click('提交评价');
+    assert.equal(page.app.root.findByType('input').props.value, '13900000000');
+    await page.click('提交评价');
+    const [first, retry] = page.submissions();
+    assert.equal(first.body.callback_phone, '13900000000');
+    assert.deepEqual(first.body, retry.body);
+    assert.equal(new Headers(first.options.headers).get('Idempotency-Key'), new Headers(retry.options.headers).get('Idempotency-Key'));
+    assert.doesNotMatch(page.text(), /13900000000/);
   } finally { await page.close(); }
 });
 
