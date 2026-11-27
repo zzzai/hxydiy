@@ -1,0 +1,62 @@
+{
+  "release_id": "server-886e776b868a-1795778092",
+  "previous_release": "server-2de18abfedf5-1795700978",
+  "code_sha": "886e776b868a52b3f76e58649d59943f2aa918ff",
+  "checked_at": "2026-11-27T11:21:14.996760+00:00",
+  "stores": [
+    1,
+    2
+  ],
+  "migration": "20261127_visit_callback_phone",
+  "backup_sha256": "43adeafa6147815c26d701b46d0affd413c3703e3954b45b043d2cd09dd658a8",
+  "restore_verified": true,
+  "old_business_tables": 77,
+  "old_business_rows": 12713,
+  "prior_feedback_rows": 10,
+  "prior_rows_with_callback": 0,
+  "changed_old_tables": [],
+  "prior_schema_and_acl_verified": true,
+  "public_health": "ok/production",
+  "anonymous_detail_status": 401,
+  "matched_runtime_modules": 4,
+  "customer_browser_cases": [
+    {
+      "store": 1,
+      "entry": "table",
+      "provided": false,
+      "feedbackSubmits": 1
+    },
+    {
+      "store": 2,
+      "entry": "table",
+      "provided": true,
+      "feedbackSubmits": 1
+    },
+    {
+      "store": 1,
+      "entry": "sofa",
+      "provided": true,
+      "feedbackSubmits": 1
+    },
+    {
+      "store": 2,
+      "entry": "room",
+      "provided": false,
+      "feedbackSubmits": 1
+    }
+  ],
+  "manager_browser_cases": 6,
+  "backend_regressions": 103,
+  "frontend_tests": {
+    "customer": 413,
+    "manager": 328
+  },
+  "backend_suite": {
+    "passed": 1511,
+    "skipped": 38
+  },
+  "release_tests": 96,
+  "actual_customer_submissions_created_by_acceptance": 0,
+  "wecom_messages_sent_by_acceptance": 0,
+  "field_acceptance": "Actual customer and WeCom recipient device interaction was not tested in production."
+}
